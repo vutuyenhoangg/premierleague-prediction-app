@@ -22,7 +22,9 @@ import plotly.express as px
 from streamlit_extras.stylable_container import stylable_container
 import secrets
 from streamlit_cookies_controller import CookieController
-
+import re
+from google import genai
+from google.genai import types
 
 # ============================================================
 # 1. CONFIG
@@ -44,6 +46,8 @@ COOKIE_NAME = "wc_session_token"
 SESSION_DAYS = 30
 HOPE_STARS_PER_USER = 5
 SUPER_STARS_PER_USER = 1
+GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
+GEMINI_MODEL_NAME = st.secrets.get("GEMINI_MODEL_NAME", "gemini-2.5-flash")
 
 AVATAR_FOLDER = "data/static/avatars"
 DEFAULT_AVATAR_KEY = "avatar_default_1.png"
@@ -1015,6 +1019,144 @@ def inject_mobile_goal_scorer_panel_css():
 
 inject_mobile_goal_scorer_panel_css()
 
+def inject_ai_summary_button_css():
+    ai_summary_icon_svg = """
+    <svg xmlns="http://www.w3.org/2000/svg"
+         width="24"
+         height="24"
+         viewBox="0 0 24 24"
+         fill="none"
+         stroke="currentColor"
+         stroke-width="1"
+         stroke-linecap="round"
+         stroke-linejoin="round"
+         class="icon icon-tabler icons-tabler-outline icon-tabler-file-text-ai">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M14 3v4a1 1 0 0 0 1 1h4" />
+      <path d="M10 21h-3a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v3.5" />
+      <path d="M9 9h1" />
+      <path d="M9 13h2.5" />
+      <path d="M9 17h1" />
+      <path d="M14 21v-4a2 2 0 1 1 4 0v4" />
+      <path d="M14 19h4" />
+      <path d="M21 15v6" />
+    </svg>
+    """
+
+    ai_summary_icon_base64 = base64.b64encode(
+        ai_summary_icon_svg.encode("utf-8")
+    ).decode("utf-8")
+
+    st.markdown(
+        f"""
+        <style>
+        div[class*="st-key-ai_summary_button_"] {{
+            display: flex !important;
+            justify-content: flex-end !important;
+            width: 100% !important;
+
+            margin-top: -25px !important;
+            margin-bottom: 7px !important;
+        }}
+
+        div[class*="st-key-ai_summary_button_"] button {{
+            width: auto !important;
+            min-width: 0 !important;
+            height: 30px !important;
+            min-height: 30px !important;
+
+            padding: 5px 10px !important;
+            margin-left: auto !important;
+
+            border-radius: 10px !important;
+            border: 1px solid rgba(166, 109, 255, 0.42) !important;
+
+            background: rgba(255, 255, 255, 0.92) !important;
+            color: #334155 !important;
+
+            box-shadow: 0 2px 7px rgba(15, 23, 42, 0.045) !important;
+
+            font-size: 12px !important;
+            font-weight: 400 !important;
+            letter-spacing: 0 !important;
+            line-height: 1 !important;
+            white-space: nowrap !important;
+
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 5px !important;
+
+            transition:
+                border-color 0.16s ease,
+                background 0.16s ease,
+                box-shadow 0.16s ease,
+                transform 0.16s ease !important;
+        }}
+
+        div[class*="st-key-ai_summary_button_"] button::before {{
+            content: "";
+            display: inline-block;
+            width: 13px;
+            height: 13px;
+            flex: 0 0 auto;
+
+            background: linear-gradient(135deg, #6CCBFF 0%, #A855F7 100%);
+            -webkit-mask: url("data:image/svg+xml;base64,{ai_summary_icon_base64}") center / contain no-repeat;
+            mask: url("data:image/svg+xml;base64,{ai_summary_icon_base64}") center / contain no-repeat;
+        }}
+
+        div[class*="st-key-ai_summary_button_"] button:hover {{
+            background: #FFFFFF !important;
+            border-color: rgba(168, 85, 247, 0.68) !important;
+            box-shadow: 0 4px 10px rgba(15, 23, 42, 0.07) !important;
+            transform: translateY(-1px) !important;
+            color: #1F2937 !important;
+        }}
+
+        div[class*="st-key-ai_summary_button_"] button:active {{
+            transform: translateY(0) scale(0.99) !important;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05) !important;
+        }}
+
+        div[class*="st-key-ai_summary_button_"] button * {{
+            color: #334155 !important;
+            white-space: nowrap !important;
+            word-break: keep-all !important;
+            overflow-wrap: normal !important;
+            line-height: 1 !important;
+            font-size: inherit !important;
+            font-weight: 400 !important;
+            letter-spacing: 0 !important;
+        }}
+
+        @media (max-width: 768px) {{
+            div[class*="st-key-ai_summary_button_"] {{
+                margin-top: -25px !important;
+                margin-bottom: -5px !important;
+            }}
+
+            div[class*="st-key-ai_summary_button_"] button {{
+                height: 28px !important;
+                min-height: 28px !important;
+                padding: 4px 9px !important;
+                border-radius: 9px !important;
+                font-size: 11.5px !important;
+                gap: 4px !important;
+            }}
+
+            div[class*="st-key-ai_summary_button_"] button::before {{
+                width: 12px;
+                height: 12px;
+            }}
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+inject_ai_summary_button_css()
+
 def get_prediction_radio_css():
     return """
     label[data-baseweb="radio"] {
@@ -1087,6 +1229,44 @@ def get_prediction_radio_css():
     }
     """
 
+def get_star_radio_css(
+    disable_hope: bool = False,
+    disable_super: bool = False
+) -> str:
+    css = get_prediction_radio_css()
+
+    if disable_hope:
+        css += """
+        label[data-baseweb="radio"]:nth-of-type(2) {
+            opacity: 0.48 !important;
+            pointer-events: none !important;
+            color: #94A3B8 !important;
+            background: rgba(148, 163, 184, 0.08) !important;
+            border-color: rgba(148, 163, 184, 0.16) !important;
+        }
+
+        label[data-baseweb="radio"]:nth-of-type(2) * {
+            color: #94A3B8 !important;
+        }
+        """
+
+    if disable_super:
+        css += """
+        label[data-baseweb="radio"]:nth-of-type(3) {
+            opacity: 0.48 !important;
+            pointer-events: none !important;
+            color: #94A3B8 !important;
+            background: rgba(148, 163, 184, 0.08) !important;
+            border-color: rgba(148, 163, 184, 0.16) !important;
+        }
+
+        label[data-baseweb="radio"]:nth-of-type(3) * {
+            color: #94A3B8 !important;
+        }
+        """
+
+    return css
+
 def get_prediction_action_spacing_css():
     return """
     {
@@ -1133,6 +1313,9 @@ def inject_sidebar_menu_radio_css():
 
             color: #F8FAFC !important;
             font-weight: 800 !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
+            cursor: pointer !important;
         }
 
         section[data-testid="stSidebar"] div[class*="st-key-selected_page"] label[data-baseweb="radio"]:has(input:checked) {
@@ -2481,6 +2664,41 @@ def can_edit_prediction(kickoff_time_utc) -> bool:
 
     return now < kickoff
 
+def is_match_locked_for_star(kickoff_time_utc, is_finished=False) -> bool:
+    """
+    Một sao chỉ được tính là đã dùng thật khi trận đã khóa dự đoán:
+    - Đã có kết quả, hoặc
+    - Đã qua giờ kickoff.
+    """
+    if to_bool(is_finished):
+        return True
+
+    kickoff = parse_utc_datetime(kickoff_time_utc)
+
+    if pd.isna(kickoff):
+        return True
+
+    now = pd.Timestamp.now(tz="UTC")
+
+    return now >= kickoff
+
+
+def is_match_open_for_star_transfer(kickoff_time_utc, is_finished=False) -> bool:
+    """
+    Trận còn mở dự đoán thì sao trên trận đó chỉ là giữ tạm,
+    có thể chuyển sang trận khác.
+    """
+    if to_bool(is_finished):
+        return False
+
+    kickoff = parse_utc_datetime(kickoff_time_utc)
+
+    if pd.isna(kickoff):
+        return False
+
+    now = pd.Timestamp.now(tz="UTC")
+
+    return now < kickoff
 
 def is_unknown_team(team_name) -> bool:
     if team_name is None or pd.isna(team_name):
@@ -2604,13 +2822,21 @@ def format_star_short(star_type) -> str:
 def get_user_star_usage(user_id: int, exclude_match_id: int | None = None) -> dict:
     """
     Dùng cho UI.
-    Tính quota sao từ load_predictions() đã cache để giảm query database khi render nhiều card.
+
+    Logic mới:
+    - locked_used: chỉ tính sao ở các trận đã khóa dự đoán.
+    - reserved_used: sao đang giữ tạm ở các trận chưa diễn ra.
+    - left: số sao còn lại theo kho chính thức, chỉ trừ locked_used.
+    - free_left: số sao còn trống để gắn ngay, đã trừ cả reserved_used.
     """
     predictions = load_predictions()
+    matches = load_matches()
 
-    if predictions.empty:
-        hope_used = 0
-        super_used = 0
+    if predictions.empty or matches.empty:
+        hope_locked_used = 0
+        super_locked_used = 0
+        hope_reserved_used = 0
+        super_reserved_used = 0
     else:
         user_predictions = predictions[
             predictions["user_id"].astype(int) == int(user_id)
@@ -2622,21 +2848,81 @@ def get_user_star_usage(user_id: int, exclude_match_id: int | None = None) -> di
             ]
 
         if user_predictions.empty:
-            hope_used = 0
-            super_used = 0
+            hope_locked_used = 0
+            super_locked_used = 0
+            hope_reserved_used = 0
+            super_reserved_used = 0
         else:
-            star_series = user_predictions["star_type"].apply(normalize_star_type)
+            match_cols = [
+                "match_id",
+                "kickoff_time_utc",
+                "is_finished"
+            ]
 
-            hope_used = int((star_series == STAR_TYPE_HOPE).sum())
-            super_used = int((star_series == STAR_TYPE_SUPER).sum())
+            match_info = matches[match_cols].copy()
+
+            df = user_predictions.merge(
+                match_info,
+                on="match_id",
+                how="left"
+            )
+
+            df["star_type"] = df["star_type"].apply(normalize_star_type)
+
+            df["is_star_locked"] = df.apply(
+                lambda row: is_match_locked_for_star(
+                    row.get("kickoff_time_utc"),
+                    row.get("is_finished")
+                ),
+                axis=1
+            )
+
+            df["is_star_reserved"] = df.apply(
+                lambda row: is_match_open_for_star_transfer(
+                    row.get("kickoff_time_utc"),
+                    row.get("is_finished")
+                ),
+                axis=1
+            )
+
+            hope_locked_used = int(
+                ((df["star_type"] == STAR_TYPE_HOPE) & df["is_star_locked"]).sum()
+            )
+
+            super_locked_used = int(
+                ((df["star_type"] == STAR_TYPE_SUPER) & df["is_star_locked"]).sum()
+            )
+
+            hope_reserved_used = int(
+                ((df["star_type"] == STAR_TYPE_HOPE) & df["is_star_reserved"]).sum()
+            )
+
+            super_reserved_used = int(
+                ((df["star_type"] == STAR_TYPE_SUPER) & df["is_star_reserved"]).sum()
+            )
+
+    hope_left = max(0, HOPE_STARS_PER_USER - hope_locked_used)
+    super_left = max(0, SUPER_STARS_PER_USER - super_locked_used)
+
+    hope_free_left = max(0, hope_left - hope_reserved_used)
+    super_free_left = max(0, super_left - super_reserved_used)
 
     return {
-        "hope_used": hope_used,
-        "super_used": super_used,
-        "hope_left": max(0, HOPE_STARS_PER_USER - hope_used),
-        "super_left": max(0, SUPER_STARS_PER_USER - super_used)
-    }
+        "hope_used": hope_locked_used,
+        "super_used": super_locked_used,
 
+        "hope_locked_used": hope_locked_used,
+        "super_locked_used": super_locked_used,
+
+        "hope_reserved_used": hope_reserved_used,
+        "super_reserved_used": super_reserved_used,
+
+        "hope_left": hope_left,
+        "super_left": super_left,
+
+        "hope_free_left": hope_free_left,
+        "super_free_left": super_free_left
+    }
 
 def validate_star_quota(user_id: int, match_id: int, star_type: str):
     star_type = normalize_star_type(star_type)
@@ -2659,23 +2945,15 @@ def get_available_star_options(
     current_star_type: str,
     usage: dict | None = None
 ) -> list[str]:
-    current_star_type = normalize_star_type(current_star_type)
-
-    if usage is None:
-        usage = get_user_star_usage(
-            user_id=user_id,
-            exclude_match_id=match_id
-        )
-
-    options = [STAR_TYPE_NONE]
-
-    if current_star_type == STAR_TYPE_HOPE or usage["hope_left"] > 0:
-        options.append(STAR_TYPE_HOPE)
-
-    if current_star_type == STAR_TYPE_SUPER or usage["super_left"] > 0:
-        options.append(STAR_TYPE_SUPER)
-
-    return options
+    """
+    Luôn hiển thị đủ các option bổ trợ.
+    Option hết thật sẽ được xử lý bằng label xám + validate khi lưu.
+    """
+    return [
+        STAR_TYPE_NONE,
+        STAR_TYPE_HOPE,
+        STAR_TYPE_SUPER
+    ]
 
 
 def format_star_option_label(
@@ -2683,6 +2961,15 @@ def format_star_option_label(
     current_star_type: str,
     usage: dict
 ) -> str:
+    """
+    Format label cho option bổ trợ.
+
+    Quy ước hiển thị:
+    - Kho còn lại = tổng sao - sao đã khóa/mất.
+      Sao đang giữ tạm ở các trận chưa khóa vẫn nằm trong kho này.
+    - Đang dùng = số sao đang giữ tạm ở các trận chưa khóa.
+    - free_left vẫn chỉ dùng ngầm cho logic chuyển sao, không đưa lên label.
+    """
     star_type = normalize_star_type(star_type)
     current_star_type = normalize_star_type(current_star_type)
 
@@ -2692,18 +2979,32 @@ def format_star_option_label(
     if star_type == STAR_TYPE_HOPE:
         hope_label = STAR_CONFIG[STAR_TYPE_HOPE]["label"]
 
-        if current_star_type == STAR_TYPE_HOPE:
-            return f"{hope_label} (đang dùng)"
+        hope_left = int(usage.get("hope_left", 0))
+        hope_using = int(usage.get("hope_reserved_used", 0))
 
-        return f"{hope_label} (còn {usage['hope_left']}/{HOPE_STARS_PER_USER})"
+        if hope_left <= 0 and current_star_type != STAR_TYPE_HOPE:
+            return f"{hope_label} (đã hết)"
+
+        return (
+            f"{hope_label} "
+            f"(Kho còn lại: {hope_left}/{HOPE_STARS_PER_USER}; "
+            f"Đang dùng: {hope_using}/{HOPE_STARS_PER_USER})"
+        )
 
     if star_type == STAR_TYPE_SUPER:
         super_label = STAR_CONFIG[STAR_TYPE_SUPER]["label"]
 
-        if current_star_type == STAR_TYPE_SUPER:
-            return f"{super_label} (đang dùng)"
+        super_left = int(usage.get("super_left", 0))
+        super_using = int(usage.get("super_reserved_used", 0))
 
-        return f"{super_label} (còn {usage['super_left']}/{SUPER_STARS_PER_USER})"
+        if super_left <= 0 and current_star_type != STAR_TYPE_SUPER:
+            return f"{super_label} (đã hết)"
+
+        return (
+            f"{super_label} "
+            f"(Kho còn lại: {super_left}/{SUPER_STARS_PER_USER}; "
+            f"Đang dùng: {super_using}/{SUPER_STARS_PER_USER})"
+        )
 
     return STAR_CONFIG[star_type]["label"]
 
@@ -3970,14 +4271,21 @@ def get_user_prediction_from_db(user_id: int, match_id: int):
 def get_user_star_usage_from_db(user_id: int, exclude_match_id: int | None = None) -> dict:
     """
     Dùng cho validate khi lưu dự đoán.
-    Luôn đọc trực tiếp database để tránh sai quota sao.
+
+    Logic mới:
+    - Sao ở trận đã khóa mới tính là đã dùng thật.
+    - Sao ở trận chưa diễn ra tính là đang giữ tạm.
     """
     query = """
         SELECT
-            COALESCE(SUM(CASE WHEN star_type = 'hope' THEN 1 ELSE 0 END), 0) AS hope_used,
-            COALESCE(SUM(CASE WHEN star_type = 'super' THEN 1 ELSE 0 END), 0) AS super_used
-        FROM predictions
-        WHERE user_id = :user_id
+            p.star_type,
+            p.match_id,
+            m.kickoff_time_utc,
+            m.is_finished
+        FROM predictions p
+        JOIN matches m
+          ON p.match_id = m.match_id
+        WHERE p.user_id = :user_id
     """
 
     params = {
@@ -3985,19 +4293,72 @@ def get_user_star_usage_from_db(user_id: int, exclude_match_id: int | None = Non
     }
 
     if exclude_match_id is not None:
-        query += " AND match_id <> :exclude_match_id"
+        query += " AND p.match_id <> :exclude_match_id"
         params["exclude_match_id"] = exclude_match_id
 
-    row = fetch_one(query, params)
+    df = read_sql(query, params)
 
-    hope_used = int(row["hope_used"]) if row else 0
-    super_used = int(row["super_used"]) if row else 0
+    if df.empty:
+        hope_locked_used = 0
+        super_locked_used = 0
+        hope_reserved_used = 0
+        super_reserved_used = 0
+    else:
+        df["star_type"] = df["star_type"].apply(normalize_star_type)
+
+        df["is_star_locked"] = df.apply(
+            lambda row: is_match_locked_for_star(
+                row.get("kickoff_time_utc"),
+                row.get("is_finished")
+            ),
+            axis=1
+        )
+
+        df["is_star_reserved"] = df.apply(
+            lambda row: is_match_open_for_star_transfer(
+                row.get("kickoff_time_utc"),
+                row.get("is_finished")
+            ),
+            axis=1
+        )
+
+        hope_locked_used = int(
+            ((df["star_type"] == STAR_TYPE_HOPE) & df["is_star_locked"]).sum()
+        )
+
+        super_locked_used = int(
+            ((df["star_type"] == STAR_TYPE_SUPER) & df["is_star_locked"]).sum()
+        )
+
+        hope_reserved_used = int(
+            ((df["star_type"] == STAR_TYPE_HOPE) & df["is_star_reserved"]).sum()
+        )
+
+        super_reserved_used = int(
+            ((df["star_type"] == STAR_TYPE_SUPER) & df["is_star_reserved"]).sum()
+        )
+
+    hope_left = max(0, HOPE_STARS_PER_USER - hope_locked_used)
+    super_left = max(0, SUPER_STARS_PER_USER - super_locked_used)
+
+    hope_free_left = max(0, hope_left - hope_reserved_used)
+    super_free_left = max(0, super_left - super_reserved_used)
 
     return {
-        "hope_used": hope_used,
-        "super_used": super_used,
-        "hope_left": max(0, HOPE_STARS_PER_USER - hope_used),
-        "super_left": max(0, SUPER_STARS_PER_USER - super_used)
+        "hope_used": hope_locked_used,
+        "super_used": super_locked_used,
+
+        "hope_locked_used": hope_locked_used,
+        "super_locked_used": super_locked_used,
+
+        "hope_reserved_used": hope_reserved_used,
+        "super_reserved_used": super_reserved_used,
+
+        "hope_left": hope_left,
+        "super_left": super_left,
+
+        "hope_free_left": hope_free_left,
+        "super_free_left": super_free_left
     }
 
 def update_user_avatar(user_id: int, avatar_key: str):
@@ -4090,10 +4451,355 @@ def get_match_by_id(match_id: int):
         }
     )
 
+@st.cache_resource(show_spinner=False)
+def get_gemini_client():
+    if not GEMINI_API_KEY:
+        raise ValueError("Chưa cấu hình GEMINI_API_KEY trong Streamlit Secrets.")
+
+    return genai.Client(api_key=GEMINI_API_KEY)
+
+
+def normalize_ai_summary_text(text: str) -> str:
+    text = str(text or "").strip()
+
+    text = re.sub(r"<[^>]+>", "", text)
+    text = text.replace("```", "")
+    text = text.replace("AI Summary:", "")
+    text = text.replace("AI summary:", "")
+    text = text.replace("AI tổng kết:", "")
+    text = text.replace("Nguồn:", "")
+    text = text.replace("Sources:", "")
+    text = text.replace("**", "")
+    text = text.replace("__", "")
+    text = text.replace("* ", "")
+    text = re.sub(r"^\s*[-*•]\s*", "", text, flags=re.MULTILINE)
+
+    # Giữ lại toàn bộ nội dung, chỉ chuẩn hóa khoảng trắng
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = text.strip()
+
+    return text
+
+
+def build_ai_match_summary_prompt(match_row: dict) -> str:
+    home_name = match_row.get("home_team_name")
+    away_name = match_row.get("away_team_name")
+    match_name = f"{home_name} vs {away_name}"
+
+    actual_home = to_optional_int(match_row.get("home_score_for_prediction"))
+    actual_away = to_optional_int(match_row.get("away_score_for_prediction"))
+
+    round_name = match_row.get("round_name", "")
+    date_text = match_row.get(
+        "kickoff_date_display_vietnam",
+        match_row.get("kickoff_date_vietnam", "")
+    )
+    time_text = match_row.get("kickoff_time_vietnam", "")
+    venue = match_row.get("venue", "")
+
+    app_context_parts = [
+        f"Trận đấu trong app: {match_name}",
+        f"Vòng đấu: {round_name}",
+        f"Thời gian theo Việt Nam: {date_text} {time_text}",
+    ]
+
+    if actual_home is not None and actual_away is not None:
+        app_context_parts.append(f"Tỉ số trong app: {actual_home} - {actual_away}")
+
+    if venue is not None and not pd.isna(venue) and str(venue).strip():
+        app_context_parts.append(f"Sân vận động: {venue}")
+
+    app_context = "\n".join(app_context_parts)
+
+    prompt = (
+        "Bạn là một chuyên gia cập nhật tin tức bóng đá và World Cup 2026. "
+        "Trước khi trả lời, hãy sử dụng Google Search để tìm thông tin cập nhật về trận đấu này. "
+        f"Hãy viết summary về trận đấu giữa {match_name} trong khuôn khổ World Cup 2026. "
+        "Mục tiêu là giúp người xem hiểu thêm diễn biến, tình huống trận đấu và thế trận, "
+        "bổ sung thêm thông tin so với việc chỉ nhìn tỉ số và cầu thủ ghi bàn. "
+        "Chỉ trả lời bằng tiếng Việt, không quá 80 chữ. "
+        "Chỉ trả lời bằng văn bản thuần, không dùng HTML, CSS, Markdown, bảng, bullet point, code block hoặc thẻ div. "
+        "Không thêm tiêu đề, không thêm nhãn 'AI Summary', không thêm phần 'Nguồn'. "
+        "Có thể viết đầy đủ nhiều câu nếu cần, miễn là rõ ràng và dễ hiểu.\n\n"
+        "Thông tin gợi ý từ app để đối chiếu khi tìm kiếm:\n"
+        f"{app_context}\n\n"
+        "Nếu kết quả tìm kiếm có nhiều trận trùng tên, hãy ưu tiên trận đúng World Cup 2026, đúng tỉ số và đúng vòng đấu ở trên."
+    )
+
+    return prompt
+
+
+def get_ai_match_summary_from_db(match_id: int):
+    return fetch_one(
+        """
+        SELECT
+            match_id,
+            summary_text,
+            model_name,
+            created_at,
+            updated_at
+        FROM match_ai_summaries
+        WHERE match_id = :match_id
+        """,
+        {
+            "match_id": int(match_id)
+        }
+    )
+
+
+def save_ai_match_summary_to_db(
+    match_id: int,
+    summary_text: str,
+    model_name: str
+):
+    now_text = now_utc_iso()
+
+    execute_sql(
+        """
+        INSERT INTO match_ai_summaries (
+            match_id,
+            summary_text,
+            model_name,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            :match_id,
+            :summary_text,
+            :model_name,
+            :created_at,
+            :updated_at
+        )
+        ON CONFLICT (match_id)
+        DO UPDATE SET
+            summary_text = EXCLUDED.summary_text,
+            model_name = EXCLUDED.model_name,
+            updated_at = EXCLUDED.updated_at
+        """,
+        {
+            "match_id": int(match_id),
+            "summary_text": summary_text,
+            "model_name": model_name,
+            "created_at": now_text,
+            "updated_at": now_text
+        }
+    )
+
+
+def generate_ai_match_summary(match_row: dict) -> str:
+    client = get_gemini_client()
+    prompt = build_ai_match_summary_prompt(match_row)
+
+    grounding_tool = types.Tool(
+        google_search=types.GoogleSearch()
+    )
+
+    config = types.GenerateContentConfig(
+        tools=[grounding_tool]
+    )
+
+    try:
+        response = client.models.generate_content(
+            model=GEMINI_MODEL_NAME,
+            contents=prompt,
+            config=config
+        )
+
+    except Exception as e:
+        error_text = str(e)
+
+        if (
+            "prepayment credits are depleted" in error_text.lower()
+            or "resource_exhausted" in error_text.lower()
+            or "too_many_requests" in error_text.lower()
+            or "429" in error_text
+        ):
+            raise ValueError(
+                "Gemini API đã hết credit hoặc vượt giới hạn quota. "
+                "Hãy kiểm tra billing/quota trong Google AI Studio."
+            )
+
+        raise
+
+    summary_text = normalize_ai_summary_text(getattr(response, "text", ""))
+
+    if not summary_text:
+        raise ValueError("Gemini không trả về nội dung summary hợp lệ.")
+
+    bad_markers = [
+        "chưa diễn ra",
+        "chưa có thông tin",
+        "không tìm thấy thông tin",
+        "không có dữ liệu",
+        "không thể xác nhận"
+    ]
+
+    lowered_summary = summary_text.lower()
+
+    if any(marker in lowered_summary for marker in bad_markers):
+        raise ValueError(
+            "Gemini chưa tìm được thông tin đủ chắc chắn về trận này. "
+            "Summary chưa được lưu để tránh lưu nội dung sai."
+        )
+
+    return summary_text
 
 # ============================================================
 # 7. PREDICTION SAVE + SCORING
 # ============================================================
+def get_star_transfer_candidates(
+    user_id: int,
+    target_match_id: int,
+    star_type: str
+) -> list[dict]:
+    """
+    Lấy các trận đang giữ tạm loại sao này và còn mở dự đoán,
+    để người chơi có thể chọn chuyển sao sang trận hiện tại.
+    """
+    star_type = normalize_star_type(star_type)
+
+    if star_type == STAR_TYPE_NONE:
+        return []
+
+    df = read_sql(
+        """
+        SELECT
+            p.prediction_id,
+            p.match_id,
+            p.star_type,
+            m.home_team_name,
+            m.away_team_name,
+            m.round_name,
+            m.kickoff_date_display_vietnam,
+            m.kickoff_date_vietnam,
+            m.kickoff_time_vietnam,
+            m.kickoff_time_utc,
+            m.is_finished
+        FROM predictions p
+        JOIN matches m
+          ON p.match_id = m.match_id
+        WHERE p.user_id = :user_id
+          AND p.match_id <> :target_match_id
+          AND p.star_type = :star_type
+        ORDER BY m.kickoff_time_utc
+        """,
+        {
+            "user_id": int(user_id),
+            "target_match_id": int(target_match_id),
+            "star_type": star_type
+        }
+    )
+
+    if df.empty:
+        return []
+
+    candidates = []
+
+    for _, row in df.iterrows():
+        if not is_match_open_for_star_transfer(
+            row.get("kickoff_time_utc"),
+            row.get("is_finished")
+        ):
+            continue
+
+        date_text = row.get(
+            "kickoff_date_display_vietnam",
+            row.get("kickoff_date_vietnam", "")
+        )
+
+        label = (
+            f"{row.get('home_team_name')} vs {row.get('away_team_name')}"
+            f" | {row.get('round_name')}"
+            f" | {date_text} {row.get('kickoff_time_vietnam', '')}"
+        )
+
+        candidates.append({
+            "prediction_id": int(row["prediction_id"]),
+            "match_id": int(row["match_id"]),
+            "label": label
+        })
+
+    return candidates
+
+
+def get_star_save_plan(
+    user_id: int,
+    match_id: int,
+    selected_star_type: str,
+    current_star_type: str
+) -> dict:
+    """
+    Quyết định khi lưu:
+    - save_direct: lưu thẳng.
+    - exhausted: sao đã hết thật.
+    - transfer_required: cần hỏi chuyển sao từ trận khác.
+    """
+    selected_star_type = normalize_star_type(selected_star_type)
+    current_star_type = normalize_star_type(current_star_type)
+
+    if selected_star_type == STAR_TYPE_NONE:
+        return {
+            "status": "save_direct",
+            "candidates": []
+        }
+
+    if selected_star_type == current_star_type:
+        return {
+            "status": "save_direct",
+            "candidates": []
+        }
+
+    usage = get_user_star_usage_from_db(
+        user_id=user_id,
+        exclude_match_id=match_id
+    )
+
+    if selected_star_type == STAR_TYPE_HOPE:
+        left_key = "hope_left"
+        free_key = "hope_free_left"
+        star_name = "Ngôi sao hy vọng"
+
+    elif selected_star_type == STAR_TYPE_SUPER:
+        left_key = "super_left"
+        free_key = "super_free_left"
+        star_name = "Siêu sao"
+
+    else:
+        return {
+            "status": "save_direct",
+            "candidates": []
+        }
+
+    if usage[left_key] <= 0:
+        return {
+            "status": "exhausted",
+            "message": f"Bạn đã dùng hết {star_name}.",
+            "candidates": []
+        }
+
+    if usage[free_key] > 0:
+        return {
+            "status": "save_direct",
+            "candidates": []
+        }
+
+    candidates = get_star_transfer_candidates(
+        user_id=user_id,
+        target_match_id=match_id,
+        star_type=selected_star_type
+    )
+
+    if not candidates:
+        return {
+            "status": "exhausted",
+            "message": f"Hiện không còn {star_name} trống để dùng cho trận này.",
+            "candidates": []
+        }
+
+    return {
+        "status": "transfer_required",
+        "candidates": candidates
+    }
 
 def save_prediction(
     user_id: int,
@@ -4263,6 +4969,75 @@ def save_prediction(
             )
 
     clear_data_cache()
+
+def transfer_star_and_save_prediction(
+    user_id: int,
+    source_match_id: int,
+    target_match_id: int,
+    predicted_home_score: int,
+    predicted_away_score: int,
+    predicted_winner_team_id: int | None,
+    star_type: str
+):
+    """
+    Gỡ sao khỏi trận nguồn rồi lưu sao cho trận đích.
+    Chỉ cho chuyển từ trận còn mở dự đoán.
+    """
+    star_type = normalize_star_type(star_type)
+
+    if star_type == STAR_TYPE_NONE:
+        raise ValueError("Không có bổ trợ nào cần chuyển.")
+
+    source_match = get_match_by_id(source_match_id)
+
+    if source_match is None:
+        raise ValueError("Không tìm thấy trận đang giữ sao.")
+
+    if not can_edit_prediction(source_match["kickoff_time_utc"]):
+        raise ValueError("Trận đang giữ sao đã khóa, không thể chuyển sao nữa.")
+
+    source_prediction = get_user_prediction_from_db(
+        user_id=user_id,
+        match_id=source_match_id
+    )
+
+    if source_prediction is None:
+        raise ValueError("Trận được chọn không còn giữ bổ trợ này.")
+
+    if normalize_star_type(source_prediction.get("star_type")) != star_type:
+        raise ValueError("Trận được chọn không còn giữ đúng loại bổ trợ này.")
+
+    execute_sql(
+        """
+        UPDATE predictions
+        SET
+            star_type = 'none',
+            base_points = NULL,
+            star_bonus_points = NULL,
+            points = NULL,
+            updated_at = :updated_at
+        WHERE user_id = :user_id
+          AND match_id = :source_match_id
+          AND star_type = :star_type
+        """,
+        {
+            "updated_at": now_utc_iso(),
+            "user_id": int(user_id),
+            "source_match_id": int(source_match_id),
+            "star_type": star_type
+        }
+    )
+
+    clear_data_cache()
+
+    save_prediction(
+        user_id=user_id,
+        match_id=target_match_id,
+        predicted_home_score=predicted_home_score,
+        predicted_away_score=predicted_away_score,
+        predicted_winner_team_id=predicted_winner_team_id,
+        star_type=star_type
+    )
 
 def delete_prediction(user_id: int, match_id: int):
     """
@@ -4722,6 +5497,472 @@ def render_match_venue_footer(row, match_id: int):
         unsafe_allow_html=True
     )
 
+def render_pending_star_transfer_box(user_id: int, match_id: int):
+    pending = st.session_state.get("pending_star_transfer")
+
+    if not pending:
+        return
+
+    if int(pending.get("target_match_id")) != int(match_id):
+        return
+
+    star_type = normalize_star_type(pending.get("star_type"))
+    star_label = format_star_short(star_type)
+    candidates = pending.get("candidates", [])
+
+    if not candidates:
+        st.session_state.pop("pending_star_transfer", None)
+        return
+
+    candidate_options = {
+        candidate["label"]: candidate
+        for candidate in candidates
+    }
+
+    with stylable_container(
+        key=f"star_transfer_confirm_box_{match_id}",
+        css_styles="""
+        {
+            margin-top: 18px;
+            margin-bottom: 18px;
+            padding: 18px 20px;
+            border-radius: 20px;
+            border: 1px solid rgba(245, 158, 11, 0.42);
+            background:
+                radial-gradient(circle at top left, rgba(245, 197, 66, 0.18), transparent 34%),
+                linear-gradient(135deg, rgba(255, 251, 235, 0.98), rgba(255, 255, 255, 0.96));
+            box-shadow: 0 18px 42px rgba(15, 23, 42, 0.12);
+        }
+
+        div[data-testid="stSelectbox"] label {
+            color: #07111F !important;
+            font-weight: 850 !important;
+        }
+        """
+    ):
+        st.markdown(
+            f"""
+            <div style="
+                color:#07111F;
+                font-weight:950;
+                font-size:18px;
+                margin-bottom:6px;
+            ">
+                Xác nhận chuyển bổ trợ
+            </div>
+
+            <div style="
+                color:#475569;
+                font-size:14px;
+                line-height:1.55;
+                margin-bottom:14px;
+            ">
+                Bạn đang muốn dùng <b>{html.escape(star_label)}</b> cho trận
+                <b>{html.escape(str(pending.get("target_label")))}</b>.
+                Tuy nhiên bổ trợ còn lại này đang được đặt ở trận khác chưa diễn ra.
+                Hãy chọn trận muốn gỡ sao để chuyển sang trận hiện tại.
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        selected_source_label = st.selectbox(
+            "Chọn trận muốn chuyển sao từ:",
+            options=list(candidate_options.keys()),
+            key=f"star_transfer_source_{match_id}"
+        )
+
+        confirm_col, cancel_col = st.columns([1, 1])
+
+        with confirm_col:
+            confirm_transfer = st.button(
+                "Xác nhận chuyển sao",
+                key=f"confirm_star_transfer_{match_id}",
+                use_container_width=True
+            )
+
+        with cancel_col:
+            cancel_transfer = st.button(
+                "Hủy",
+                key=f"cancel_star_transfer_{match_id}",
+                use_container_width=True
+            )
+
+        if confirm_transfer:
+            selected_candidate = candidate_options[selected_source_label]
+
+            try:
+                transfer_star_and_save_prediction(
+                    user_id=user_id,
+                    source_match_id=int(selected_candidate["match_id"]),
+                    target_match_id=int(pending["target_match_id"]),
+                    predicted_home_score=int(pending["predicted_home_score"]),
+                    predicted_away_score=int(pending["predicted_away_score"]),
+                    predicted_winner_team_id=pending["predicted_winner_team_id"],
+                    star_type=star_type
+                )
+
+                st.session_state.pop("pending_star_transfer", None)
+                st.success("Đã chuyển bổ trợ và lưu dự đoán.")
+                st.rerun()
+
+            except ValueError as e:
+                st.error(str(e))
+
+        if cancel_transfer:
+            st.session_state.pop("pending_star_transfer", None)
+            st.rerun()
+
+@st.dialog("Xác nhận chuyển bổ trợ")
+def render_star_transfer_dialog(user_id: int):
+    pending = st.session_state.get("pending_star_transfer")
+
+    if not pending:
+        st.write("Không có bổ trợ nào cần chuyển.")
+        if st.button("Đóng", use_container_width=True):
+            st.rerun()
+        return
+
+    star_type = normalize_star_type(pending.get("star_type"))
+    star_label = format_star_short(star_type)
+    target_label = str(pending.get("target_label", "trận hiện tại"))
+
+    candidates = pending.get("candidates", [])
+
+    if not candidates:
+        st.session_state.pop("pending_star_transfer", None)
+        st.warning("Không còn trận hợp lệ để chuyển bổ trợ.")
+        if st.button("Đóng", use_container_width=True):
+            st.rerun()
+        return
+
+    candidate_options = {
+        candidate["label"]: candidate
+        for candidate in candidates
+    }
+
+    st.markdown(
+        f"""
+        <div style="
+            color:#475569;
+            font-size:14px;
+            line-height:1.5;
+            margin-bottom:14px;
+        ">
+            <b>{html.escape(star_label)}</b> đã được đặt hết.
+            Chọn trận muốn gỡ sao để chuyển sang
+            <b>{html.escape(target_label)}</b>.
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    selected_source_label = st.selectbox(
+        "Chuyển từ trận:",
+        options=list(candidate_options.keys()),
+        key="star_transfer_source_modal"
+    )
+
+    col_confirm, col_cancel = st.columns([1, 1])
+
+    with col_confirm:
+        confirm_transfer = st.button(
+            "Chuyển sao",
+            type="primary",
+            use_container_width=True,
+            key="confirm_star_transfer_modal"
+        )
+
+    with col_cancel:
+        cancel_transfer = st.button(
+            "Hủy",
+            use_container_width=True,
+            key="cancel_star_transfer_modal"
+        )
+
+    if cancel_transfer:
+        st.session_state.pop("pending_star_transfer", None)
+        st.rerun()
+
+    if confirm_transfer:
+        selected_candidate = candidate_options[selected_source_label]
+        source_match_id = int(selected_candidate["match_id"])
+        target_match_id = int(pending["target_match_id"])
+
+        try:
+            source_match = get_match_by_id(source_match_id)
+
+            if source_match is None:
+                raise ValueError("Không tìm thấy trận đang giữ bổ trợ.")
+
+            if not can_edit_prediction(source_match["kickoff_time_utc"]):
+                raise ValueError(
+                    "Trận đang giữ bổ trợ đã khóa, không thể chuyển sao."
+                )
+
+            target_match = get_match_by_id(target_match_id)
+
+            if target_match is None:
+                raise ValueError("Không tìm thấy trận cần chuyển bổ trợ sang.")
+
+            if not can_edit_prediction(target_match["kickoff_time_utc"]):
+                raise ValueError(
+                    "Trận này vừa khóa dự đoán, không thể chuyển sao."
+                )
+
+            source_prediction = get_user_prediction_from_db(
+                user_id=user_id,
+                match_id=source_match_id
+            )
+
+            if source_prediction is None:
+                raise ValueError("Trận được chọn không còn giữ bổ trợ này.")
+
+            if normalize_star_type(source_prediction.get("star_type")) != star_type:
+                raise ValueError("Trận được chọn không còn giữ đúng loại bổ trợ này.")
+
+            execute_sql(
+                """
+                UPDATE predictions
+                SET
+                    star_type = 'none',
+                    base_points = NULL,
+                    star_bonus_points = NULL,
+                    points = NULL,
+                    updated_at = :updated_at
+                WHERE user_id = :user_id
+                  AND match_id = :source_match_id
+                  AND star_type = :star_type
+                """,
+                {
+                    "updated_at": now_utc_iso(),
+                    "user_id": int(user_id),
+                    "source_match_id": source_match_id,
+                    "star_type": star_type
+                }
+            )
+
+            clear_data_cache()
+
+            save_prediction(
+                user_id=user_id,
+                match_id=target_match_id,
+                predicted_home_score=int(pending["predicted_home_score"]),
+                predicted_away_score=int(pending["predicted_away_score"]),
+                predicted_winner_team_id=pending["predicted_winner_team_id"],
+                star_type=star_type
+            )
+
+            st.session_state.pop("pending_star_transfer", None)
+            st.session_state["star_transfer_success_message"] = (
+                "Đã chuyển bổ trợ và lưu dự đoán."
+            )
+
+            st.rerun()
+
+        except ValueError as e:
+            st.error(str(e))
+
+@st.dialog("AI tổng kết trận đấu")
+def render_ai_match_summary_dialog(match_id: int):
+    match_id = int(match_id)
+
+    match = get_match_by_id(match_id)
+
+    if match is None:
+        st.error("Không tìm thấy trận đấu.")
+        if st.button(
+            "Đóng",
+            use_container_width=True,
+            key=f"close_ai_summary_missing_{match_id}"
+        ):
+            st.session_state.pop("ai_summary_match_id", None)
+            st.rerun()
+        return
+
+    if not to_bool(match.get("is_finished")):
+        st.warning("Chỉ có thể tạo AI tổng kết cho trận đã có kết quả.")
+        if st.button(
+            "Đóng",
+            use_container_width=True,
+            key=f"close_ai_summary_unfinished_{match_id}"
+        ):
+            st.session_state.pop("ai_summary_match_id", None)
+            st.rerun()
+        return
+
+    home_name = match.get("home_team_name")
+    away_name = match.get("away_team_name")
+
+    actual_home = to_optional_int(match.get("home_score_for_prediction"))
+    actual_away = to_optional_int(match.get("away_score_for_prediction"))
+
+    score_text = ""
+    if actual_home is not None and actual_away is not None:
+        score_text = f"{actual_home}-{actual_away}"
+
+    st.markdown(
+        f"""
+        <div style="
+            color:#07111F;
+            font-weight:900;
+            font-size:18px;
+            line-height:1.3;
+            margin-bottom:10px;
+            letter-spacing:-0.02em;
+        ">
+            {html.escape(str(home_name))} vs {html.escape(str(away_name))}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    if score_text:
+        st.markdown(
+            f"""
+            <div style="
+                display:inline-flex;
+                align-items:center;
+                gap:6px;
+                margin-bottom:16px;
+                padding:7px 12px;
+                border-radius:999px;
+                background:#F8FAFC;
+                border:1px solid rgba(15,23,42,0.08);
+                color:#07111F;
+                font-size:13px;
+                font-weight:850;
+            ">
+                Kết quả: {html.escape(score_text)}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    try:
+        existing_summary = get_ai_match_summary_from_db(match_id)
+    except Exception as e:
+        st.error(
+            "Chưa đọc được bảng match_ai_summaries. Hãy kiểm tra xem bạn đã tạo bảng trong Supabase chưa."
+        )
+        st.caption(str(e))
+        return
+
+    if existing_summary is not None:
+        summary_text = existing_summary.get("summary_text", "")
+    else:
+        with st.spinner("AI đang tìm kiếm và tổng hợp diễn biến trận đấu..."):
+            try:
+                summary_text = generate_ai_match_summary(match)
+
+                save_ai_match_summary_to_db(
+                    match_id=match_id,
+                    summary_text=summary_text,
+                    model_name=GEMINI_MODEL_NAME
+                )
+            except Exception as e:
+                st.error("Không tạo được AI summary cho trận này.")
+                st.caption(str(e))
+                return
+
+    safe_summary = html.escape(str(summary_text)).replace("\n", "<br>")
+
+    st.markdown(
+        f"""
+        <div style="
+            color:#334155;
+            font-size:15.5px;
+            line-height:1.75;
+            font-weight:400;
+            margin-bottom:18px;
+            white-space:normal;
+            word-break:normal;
+            overflow-wrap:anywhere;
+        ">
+            {safe_summary}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+def normalize_venue_text(value) -> str:
+    """
+    Chuẩn hóa tên SVĐ/địa điểm để hiển thị ở cuối card.
+    """
+    if value is None:
+        return ""
+
+    try:
+        if pd.isna(value):
+            return ""
+    except TypeError:
+        pass
+
+    return str(value).strip()
+
+
+def render_match_venue_footer(row, match_id: int):
+    """
+    Hiển thị thông tin sân vận động/địa điểm ở cuối card trận đấu.
+
+    Chỉ hiển thị dạng:
+    Icon: Tên sân vận động
+
+    Không nằm trong form dự đoán.
+    Không ảnh hưởng logic lưu/cập nhật/xóa dự đoán.
+    """
+    venue = normalize_venue_text(row.get("venue"))
+
+    if not venue:
+        return
+
+    safe_venue = html.escape(venue)
+
+    soccer_field_icon_svg = """
+    <svg xmlns="http://www.w3.org/2000/svg"
+         width="24"
+         height="24"
+         viewBox="0 0 24 24"
+         fill="none"
+         stroke="currentColor"
+         stroke-width="1"
+         stroke-linecap="round"
+         stroke-linejoin="round"
+         style="display:inline-block; vertical-align:-6px;">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <path d="M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"/>
+      <path d="M3 9h3v6h-3l0 -6"/>
+      <path d="M18 9h3v6h-3l0 -6"/>
+      <path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10"/>
+      <path d="M12 5l0 14"/>
+    </svg>
+    """
+
+    st.markdown(
+        f"""
+        <div style="
+            margin-top: 20px;
+            margin-bottom: 0;
+            color: #64748B;
+            font-size: 14.5px;
+            font-weight: 700;
+            line-height: 1.35;
+        ">
+            <span style="
+                color: #64748B;
+                margin-right: 6px;
+            ">
+                {soccer_field_icon_svg}:
+            </span>
+            <span style="
+                color: #64748B;
+                font-style: italic;
+            ">{safe_venue}</span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
 def render_match_card(
     row,
     user_id: int,
@@ -4747,6 +5988,83 @@ def render_match_card(
 
     status_info = get_match_status_info(row)
     card_css = get_match_card_css(status_info)
+
+    def load_transfer_candidates_for_card(star_type: str) -> list[dict]:
+        """
+        Lấy các trận đang giữ tạm loại sao này và vẫn còn mở dự đoán,
+        để người chơi có thể chọn chuyển sao sang trận hiện tại.
+        """
+        star_type = normalize_star_type(star_type)
+
+        if star_type == STAR_TYPE_NONE:
+            return []
+
+        try:
+            df_candidates = read_sql(
+                """
+                SELECT
+                    p.prediction_id,
+                    p.match_id,
+                    p.star_type,
+                    m.home_team_name,
+                    m.away_team_name,
+                    m.round_name,
+                    m.kickoff_date_display_vietnam,
+                    m.kickoff_date_vietnam,
+                    m.kickoff_time_vietnam,
+                    m.kickoff_time_utc,
+                    m.is_finished
+                FROM predictions p
+                JOIN matches m
+                  ON p.match_id = m.match_id
+                WHERE p.user_id = :user_id
+                  AND p.match_id <> :target_match_id
+                  AND p.star_type = :star_type
+                ORDER BY m.kickoff_time_utc
+                """,
+                {
+                    "user_id": int(user_id),
+                    "target_match_id": int(match_id),
+                    "star_type": star_type
+                }
+            )
+        except Exception:
+            return []
+
+        if df_candidates.empty:
+            return []
+
+        candidates = []
+
+        for _, candidate_row in df_candidates.iterrows():
+            candidate_match_id = int(candidate_row["match_id"])
+
+            candidate_is_open = (
+                not to_bool(candidate_row.get("is_finished"))
+                and can_edit_prediction(candidate_row.get("kickoff_time_utc"))
+            )
+
+            if not candidate_is_open:
+                continue
+
+            date_text = candidate_row.get(
+                "kickoff_date_display_vietnam",
+                candidate_row.get("kickoff_date_vietnam", "")
+            )
+
+            label = (
+                f"{candidate_row.get('home_team_name')} vs {candidate_row.get('away_team_name')}"
+                f" | {candidate_row.get('round_name')}"
+                f" | {date_text} {candidate_row.get('kickoff_time_vietnam', '')}"
+            )
+
+            candidates.append({
+                "prediction_id": int(candidate_row["prediction_id"]),
+                "match_id": candidate_match_id,
+                "label": label
+            })
+
+        return candidates
 
     with stylable_container(
         key=f"match_card_{match_id}",
@@ -4804,7 +6122,17 @@ def render_match_card(
                 and score_pen_home is not None
                 and score_pen_away is not None
             )
+            if is_finished:
+                ai_summary_clicked = st.button(
+                    "AI tóm tắt",
+                    key=f"ai_summary_button_{match_id}",
+                    type="secondary",
+                    use_container_width=True
+                )
 
+                if ai_summary_clicked:
+                    st.session_state["ai_summary_match_id"] = match_id
+                    st.rerun()
             if is_finished and actual_home is not None and actual_away is not None:
                 result_text = f"{actual_home} - {actual_away}"
 
@@ -5022,24 +6350,24 @@ def render_match_card(
                     home_name: home_team_id,
                     away_name: away_team_id
                 }
-            
+
                 winner_option_names = list(winner_options.keys())
-            
+
                 if input_home > input_away:
                     default_index = 0
                     winner_radio_key = f"winner_{match_id}_auto_home"
-            
+
                 elif input_away > input_home:
                     default_index = 1
                     winner_radio_key = f"winner_{match_id}_auto_away"
-            
+
                 else:
                     default_index = 0
                     winner_radio_key = f"winner_{match_id}_draw"
-            
+
                     if pred_winner_team_id == away_team_id:
                         default_index = 1
-            
+
                 with stylable_container(
                     key=f"winner_radio_style_shell_{match_id}",
                     css_styles=get_prediction_radio_css()
@@ -5050,75 +6378,220 @@ def render_match_card(
                         index=default_index,
                         horizontal=True,
                         key=winner_radio_key
-                    ) 
-            
-                # Khi lưu, vẫn chốt đúng theo logic tỉ số.
-                # Nếu tỉ số lệch, đội thắng chung cuộc phải là đội có nhiều bàn hơn.
-                # Nếu tỉ số hòa, lấy lựa chọn thực sự của người chơi.
+                    )
+
                 if input_home > input_away:
                     predicted_winner_team_id = home_team_id
                     predicted_winner_team_name = home_name
-            
+
                 elif input_away > input_home:
                     predicted_winner_team_id = away_team_id
                     predicted_winner_team_name = away_name
-            
+
                 else:
                     predicted_winner_team_id = winner_options[selected_winner_name]
                     predicted_winner_team_name = selected_winner_name
 
-            star_usage_for_card = get_user_star_usage(
+            # Dùng cho HIỂN THỊ label:
+            # Không exclude match hiện tại để "Đang dùng" tính cả sao đang gắn
+            # ở chính trận này nếu trận đó chưa khóa.
+            star_usage_for_display = get_user_star_usage(
+                user_id=user_id,
+                exclude_match_id=None
+            )
+
+            # Dùng cho LOGIC quota khi lưu/cập nhật:
+            # Exclude match hiện tại để không tự tính trùng sao đang sửa.
+            star_usage_for_quota = get_user_star_usage(
                 user_id=user_id,
                 exclude_match_id=match_id
             )
 
-            star_options = get_available_star_options(
-                user_id=user_id,
-                match_id=match_id,
-                current_star_type=current_star_type,
-                usage=star_usage_for_card
+            # HIỂN THỊ:
+            # Kho còn lại = tổng sao - sao đã khóa/mất.
+            # Sao đang dùng ở trận chưa khóa vẫn nằm trong kho này.
+            hope_display_left = int(star_usage_for_display.get("hope_left", 0))
+            super_display_left = int(star_usage_for_display.get("super_left", 0))
+
+            # Đang dùng = sao đang giữ tạm ở các trận chưa khóa.
+            hope_display_using = int(
+                star_usage_for_display.get("hope_reserved_used", 0)
             )
+            super_display_using = int(
+                star_usage_for_display.get("super_reserved_used", 0)
+            )
+
+            # QUOTA:
+            # Dùng để disable option khi đã hết thật.
+            # Vẫn dựa trên dữ liệu đã exclude match hiện tại.
+            hope_left_for_quota = int(
+                star_usage_for_quota.get("hope_left", 0)
+            )
+            super_left_for_quota = int(
+                star_usage_for_quota.get("super_left", 0)
+            )
+
+            star_options = [
+                STAR_TYPE_NONE,
+                STAR_TYPE_HOPE,
+                STAR_TYPE_SUPER
+            ]
 
             star_radio_index = (
                 star_options.index(current_star_type)
                 if current_star_type in star_options
                 else 0
             )
-            
+
             star_radio_key = f"star_type_{match_id}_{current_star_type}"
-            
+
+            disable_hope_option = (
+                hope_left_for_quota <= 0
+                and current_star_type != STAR_TYPE_HOPE
+            )
+
+            disable_super_option = (
+                super_left_for_quota <= 0
+                and current_star_type != STAR_TYPE_SUPER
+            )
+
+            star_radio_shell_class = f'div[class*="st-key-star_radio_style_shell_{match_id}"]'
+            star_radio_css = get_prediction_radio_css()
+
+            if disable_hope_option:
+                star_radio_css += f"""
+                {star_radio_shell_class} label[data-baseweb="radio"]:nth-of-type(2) {{
+                    opacity: 0.46 !important;
+                    pointer-events: none !important;
+                    color: #94A3B8 !important;
+                    background: transparent !important;
+                    border-color: transparent !important;
+                    box-shadow: none !important;
+                }}
+
+                {star_radio_shell_class} label[data-baseweb="radio"]:nth-of-type(2) * {{
+                    color: #94A3B8 !important;
+                }}
+
+                {star_radio_shell_class} label[data-baseweb="radio"]:nth-of-type(2) > div:first-child {{
+                    border-color: #CBD5E1 !important;
+                    background: #F8FAFC !important;
+                    box-shadow: none !important;
+                }}
+
+                {star_radio_shell_class} label[data-baseweb="radio"]:nth-of-type(2):hover {{
+                    background: transparent !important;
+                    border-color: transparent !important;
+                    box-shadow: none !important;
+                }}
+
+                {star_radio_shell_class} label[data-baseweb="radio"]:nth-of-type(2):hover > div:first-child {{
+                    border-color: #CBD5E1 !important;
+                    background: #F8FAFC !important;
+                    box-shadow: none !important;
+                }}
+                """
+
+            if disable_super_option:
+                star_radio_css += f"""
+                {star_radio_shell_class} label[data-baseweb="radio"]:nth-of-type(3) {{
+                    opacity: 0.46 !important;
+                    pointer-events: none !important;
+                    color: #94A3B8 !important;
+                    background: transparent !important;
+                    border-color: transparent !important;
+                    box-shadow: none !important;
+                }}
+
+                {star_radio_shell_class} label[data-baseweb="radio"]:nth-of-type(3) * {{
+                    color: #94A3B8 !important;
+                }}
+
+                {star_radio_shell_class} label[data-baseweb="radio"]:nth-of-type(3) > div:first-child {{
+                    border-color: #CBD5E1 !important;
+                    background: #F8FAFC !important;
+                    box-shadow: none !important;
+                }}
+
+                {star_radio_shell_class} label[data-baseweb="radio"]:nth-of-type(3):hover {{
+                    background: transparent !important;
+                    border-color: transparent !important;
+                    box-shadow: none !important;
+                }}
+
+                {star_radio_shell_class} label[data-baseweb="radio"]:nth-of-type(3):hover > div:first-child {{
+                    border-color: #CBD5E1 !important;
+                    background: #F8FAFC !important;
+                    box-shadow: none !important;
+                }}
+                """
+
+            def format_star_option_label_for_card(star_type):
+                star_type = normalize_star_type(star_type)
+
+                if star_type == STAR_TYPE_NONE:
+                    return "Không dùng sao"
+
+                if star_type == STAR_TYPE_HOPE:
+                    hope_label = STAR_CONFIG[STAR_TYPE_HOPE]["label"]
+
+                    if (
+                        hope_left_for_quota <= 0
+                        and current_star_type != STAR_TYPE_HOPE
+                    ):
+                        return f"{hope_label} (đã hết)"
+
+                    return (
+                        f"{hope_label} "
+                        f"(Kho còn lại: {hope_display_left}/{HOPE_STARS_PER_USER}; "
+                        f"Đang dùng: {hope_display_using}/{HOPE_STARS_PER_USER})"
+                    )
+
+                if star_type == STAR_TYPE_SUPER:
+                    super_label = STAR_CONFIG[STAR_TYPE_SUPER]["label"]
+
+                    if (
+                        super_left_for_quota <= 0
+                        and current_star_type != STAR_TYPE_SUPER
+                    ):
+                        return f"{super_label} (đã hết)"
+
+                    return (
+                        f"{super_label} "
+                        f"(Kho còn lại: {super_display_left}/{SUPER_STARS_PER_USER}; "
+                        f"Đang dùng: {super_display_using}/{SUPER_STARS_PER_USER})"
+                    )
+
+                return STAR_CONFIG[star_type]["label"]
+
             with stylable_container(
                 key=f"star_radio_style_shell_{match_id}",
-                css_styles=get_prediction_radio_css()
+                css_styles=star_radio_css
             ):
                 selected_star_type = st.radio(
                     "Chọn bổ trợ cho trận này:",
                     options=star_options,
                     index=star_radio_index,
-                    format_func=lambda star: format_star_option_label(
-                        star,
-                        current_star_type=current_star_type,
-                        usage=star_usage_for_card
-                    ),
+                    format_func=format_star_option_label_for_card,
                     horizontal=False,
                     key=star_radio_key
                 )
 
             submitted = False
             delete_submitted = False
-            
+
             if existing:
                 with stylable_container(
                     key=f"prediction_action_spacing_shell_{match_id}",
                     css_styles=get_prediction_action_spacing_css()
                 ):
                     save_col, spacer_col, delete_col = st.columns([1.45, 6.8, 0.85])
-            
+
                     with save_col:
                         submitted = st.form_submit_button(
                             "Cập nhật dự đoán"
                         )
-            
+
                     with delete_col:
                         with stylable_container(
                             key=f"delete_prediction_button_shell_{match_id}",
@@ -5136,7 +6609,7 @@ def render_match_card(
                                 border-radius: 999px !important;
                                 white-space: nowrap !important;
                             }
-            
+
                             button:hover {
                                 color: #B91C1C !important;
                                 border-color: rgba(185, 28, 28, 0.68) !important;
@@ -5144,7 +6617,7 @@ def render_match_card(
                                 transform: none !important;
                                 box-shadow: none !important;
                             }
-            
+
                             button:active {
                                 transform: none !important;
                                 box-shadow: none !important;
@@ -5155,7 +6628,7 @@ def render_match_card(
                                 "Xóa dự đoán",
                                 help="Xóa dự đoán đã lưu cho trận này."
                             )
-            
+
             else:
                 with stylable_container(
                     key=f"prediction_action_spacing_shell_{match_id}",
@@ -5164,39 +6637,101 @@ def render_match_card(
                     submitted = st.form_submit_button(
                         "Lưu dự đoán"
                     )
-            
+
             if submitted:
                 try:
-                    save_prediction(
-                        user_id=user_id,
-                        match_id=match_id,
-                        predicted_home_score=int(input_home),
-                        predicted_away_score=int(input_away),
-                        predicted_winner_team_id=predicted_winner_team_id,
-                        star_type=selected_star_type
-                    )
-            
-                    st.success(
-                        "Đã lưu dự đoán. Bạn vẫn có thể cập nhật dự đoán cho đến trước giờ bóng lăn."
-                    )
-                    st.rerun()
-            
+                    selected_star_type = normalize_star_type(selected_star_type)
+
+                    should_save_directly = True
+
+                    if (
+                        selected_star_type != STAR_TYPE_NONE
+                        and selected_star_type != current_star_type
+                    ):
+                        latest_usage = get_user_star_usage_from_db(
+                            user_id=user_id,
+                            exclude_match_id=match_id
+                        )
+
+                        if selected_star_type == STAR_TYPE_HOPE:
+                            latest_left = int(latest_usage.get("hope_left", 0))
+                            latest_free_left = int(
+                                latest_usage.get("hope_free_left", latest_left)
+                            )
+                            star_display_name = "Ngôi sao hy vọng"
+
+                        elif selected_star_type == STAR_TYPE_SUPER:
+                            latest_left = int(latest_usage.get("super_left", 0))
+                            latest_free_left = int(
+                                latest_usage.get("super_free_left", latest_left)
+                            )
+                            star_display_name = "Siêu sao"
+
+                        else:
+                            latest_left = 0
+                            latest_free_left = 0
+                            star_display_name = "bổ trợ"
+
+                        if latest_left <= 0:
+                            should_save_directly = False
+                            st.error(f"Bạn đã dùng hết {star_display_name}.")
+
+                        elif latest_free_left <= 0:
+                            should_save_directly = False
+
+                            transfer_candidates = load_transfer_candidates_for_card(
+                                selected_star_type
+                            )
+
+                            if not transfer_candidates:
+                                st.error(
+                                    f"Hiện không còn {star_display_name} trống để dùng cho trận này."
+                                )
+                            else:
+                                st.session_state["pending_star_transfer"] = {
+                                    "target_match_id": match_id,
+                                    "target_label": f"{home_name} vs {away_name}",
+                                    "predicted_home_score": int(input_home),
+                                    "predicted_away_score": int(input_away),
+                                    "predicted_winner_team_id": predicted_winner_team_id,
+                                    "star_type": selected_star_type,
+                                    "candidates": transfer_candidates
+                                }
+
+                                st.rerun()
+
+                    if should_save_directly:
+                        save_prediction(
+                            user_id=user_id,
+                            match_id=match_id,
+                            predicted_home_score=int(input_home),
+                            predicted_away_score=int(input_away),
+                            predicted_winner_team_id=predicted_winner_team_id,
+                            star_type=selected_star_type
+                        )
+
+                        st.session_state.pop("pending_star_transfer", None)
+
+                        st.success(
+                            "Đã lưu dự đoán. Bạn vẫn có thể cập nhật dự đoán cho đến trước giờ bóng lăn."
+                        )
+                        st.rerun()
+
                 except ValueError as e:
                     st.error(str(e))
-            
+
             if delete_submitted:
                 try:
                     delete_prediction(
                         user_id=user_id,
                         match_id=match_id
                     )
-            
+
+                    st.session_state.pop("pending_star_transfer", None)
+
                     st.success("Đã xóa dự đoán.")
                     st.rerun()
-            
-                except ValueError as e:
-                    st.error(str(e))
-            
+
                 except ValueError as e:
                     st.error(str(e))
 
@@ -5223,6 +6758,22 @@ def page_matches():
     render_kpi_tiles(matches)
 
     user_id = st.session_state["user"]["user_id"]
+    success_message = st.session_state.pop(
+        "star_transfer_success_message",
+        None
+    )
+    
+    if success_message:
+        st.success(success_message)
+    
+    if st.session_state.get("pending_star_transfer"):
+        render_star_transfer_dialog(user_id)
+    
+    if st.session_state.get("ai_summary_match_id"):
+        render_ai_match_summary_dialog(
+            int(st.session_state["ai_summary_match_id"])
+        )
+    
     render_star_balance(user_id)
     render_scoring_rules()
 
@@ -5692,9 +7243,26 @@ def build_leaderboard_df():
     ).fillna(0)
 
     df["star_type"] = df["star_type"].apply(normalize_star_type)
-
-    df["hope_star_used"] = df["star_type"] == STAR_TYPE_HOPE
-    df["super_star_used"] = df["star_type"] == STAR_TYPE_SUPER
+    
+    # Chỉ tính sao là đã dùng thật khi trận đã khóa dự đoán.
+    # Sao đang đặt ở trận chưa diễn ra không bị trừ khỏi kho sao thực tế.
+    df["is_star_locked_for_usage"] = df.apply(
+        lambda row: is_match_locked_for_star(
+            row.get("kickoff_time_utc"),
+            row.get("is_finished")
+        ),
+        axis=1
+    )
+    
+    df["hope_star_used"] = (
+        (df["star_type"] == STAR_TYPE_HOPE)
+        & df["is_star_locked_for_usage"]
+    )
+    
+    df["super_star_used"] = (
+        (df["star_type"] == STAR_TYPE_SUPER)
+        & df["is_star_locked_for_usage"]
+    )
 
     summary = (
         df
