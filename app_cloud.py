@@ -1029,8 +1029,7 @@ def inject_ai_summary_button_css():
          stroke="currentColor"
          stroke-width="1"
          stroke-linecap="round"
-         stroke-linejoin="round"
-         class="icon icon-tabler icons-tabler-outline icon-tabler-file-text-ai">
+         stroke-linejoin="round">
       <path stroke="none" d="M0 0h24v24H0z" fill="none" />
       <path d="M14 3v4a1 1 0 0 0 1 1h4" />
       <path d="M10 21h-3a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v3.5" />
@@ -1051,55 +1050,58 @@ def inject_ai_summary_button_css():
         f"""
         <style>
         div[class*="st-key-ai_summary_button_"] {{
-            margin-bottom: 14px !important;
+            margin: 0 !important;
+            padding: 0 !important;
         }}
 
         div[class*="st-key-ai_summary_button_"] button {{
             width: 100% !important;
-            min-height: 48px !important;
-            padding: 10px 18px !important;
+            height: 32px !important;
+            min-height: 32px !important;
+            max-height: 32px !important;
+            padding: 0 12px !important;
 
-            border-radius: 14px !important;
-            border: 1.6px solid transparent !important;
+            border-radius: 999px !important;
+            border: 1.4px solid transparent !important;
 
             background:
                 linear-gradient(#FFFFFF, #FFFFFF) padding-box,
                 linear-gradient(90deg, #69D2FF 0%, #B66DFF 100%) border-box !important;
 
-            color: #1F2937 !important;
-            box-shadow: 0 3px 10px rgba(15, 23, 42, 0.06) !important;
+            color: #07111F !important;
+            box-shadow: 0 3px 8px rgba(15, 23, 42, 0.06) !important;
 
-            font-size: 14px !important;
-            font-weight: 700 !important;
+            font-size: 12px !important;
+            font-weight: 850 !important;
             line-height: 1 !important;
             white-space: nowrap !important;
 
             display: inline-flex !important;
             align-items: center !important;
             justify-content: center !important;
-            gap: 10px !important;
+            gap: 6px !important;
 
             transition:
-                transform 0.18s ease,
-                box-shadow 0.18s ease,
-                filter 0.18s ease !important;
+                transform 0.16s ease,
+                box-shadow 0.16s ease,
+                filter 0.16s ease !important;
         }}
 
         div[class*="st-key-ai_summary_button_"] button::before {{
             content: "";
             display: inline-block;
-            width: 18px;
-            height: 18px;
+            width: 14px;
+            height: 14px;
             flex: 0 0 auto;
 
-            background: linear-gradient(135deg, #6CCBFF 0%, #A855F7 100%);
+            background: linear-gradient(135deg, #69D2FF 0%, #A855F7 100%);
             -webkit-mask: url("data:image/svg+xml;base64,{ai_summary_icon_base64}") center / contain no-repeat;
             mask: url("data:image/svg+xml;base64,{ai_summary_icon_base64}") center / contain no-repeat;
         }}
 
         div[class*="st-key-ai_summary_button_"] button:hover {{
             transform: translateY(-1px) !important;
-            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.10) !important;
+            box-shadow: 0 5px 12px rgba(15, 23, 42, 0.10) !important;
             filter: brightness(0.995) !important;
         }}
 
@@ -1108,7 +1110,7 @@ def inject_ai_summary_button_css():
         }}
 
         div[class*="st-key-ai_summary_button_"] button * {{
-            color: #1F2937 !important;
+            color: #07111F !important;
             white-space: nowrap !important;
             word-break: keep-all !important;
             overflow-wrap: normal !important;
@@ -1119,15 +1121,16 @@ def inject_ai_summary_button_css():
 
         @media (max-width: 768px) {{
             div[class*="st-key-ai_summary_button_"] button {{
-                min-height: 45px !important;
-                padding: 9px 14px !important;
-                font-size: 13px !important;
-                border-radius: 13px !important;
+                height: 31px !important;
+                min-height: 31px !important;
+                max-height: 31px !important;
+                padding: 0 10px !important;
+                font-size: 11.5px !important;
             }}
 
             div[class*="st-key-ai_summary_button_"] button::before {{
-                width: 17px;
-                height: 17px;
+                width: 13px;
+                height: 13px;
             }}
         }}
         </style>
@@ -3376,6 +3379,73 @@ def render_status_badge(status_info):
         unsafe_allow_html=True
     )
 
+def render_match_status_header(status_info, match_id: int, is_finished: bool):
+    """
+    Hiển thị badge trạng thái và nút AI cùng một hàng.
+
+    Chỉ hiện nút AI với trận đã có kết quả.
+    Không ảnh hưởng layout kết quả bên phải, form dự đoán hoặc scoring.
+    """
+    if not is_finished:
+        render_status_badge(status_info)
+        return
+
+    with stylable_container(
+        key=f"match_status_ai_header_{match_id}",
+        css_styles="""
+        {
+            margin-bottom: 10px !important;
+            padding: 0 !important;
+        }
+
+        div[data-testid="stHorizontalBlock"] {
+            align-items: center !important;
+            gap: 8px !important;
+        }
+
+        div[data-testid="column"] {
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+        }
+
+        div[data-testid="stMarkdownContainer"] {
+            margin: 0 !important;
+        }
+
+        div[data-testid="stMarkdownContainer"] p {
+            margin: 0 !important;
+        }
+
+        @media (max-width: 768px) {
+            {
+                margin-bottom: 12px !important;
+            }
+
+            div[data-testid="stHorizontalBlock"] {
+                gap: 7px !important;
+            }
+        }
+        """
+    ):
+        status_col, ai_col, spacer_col = st.columns(
+            [1.05, 1.75, 9.2],
+            gap="small"
+        )
+
+        with status_col:
+            render_status_badge(status_info)
+
+        with ai_col:
+            ai_summary_clicked = st.button(
+                "AI tổng kết trận đấu",
+                key=f"ai_summary_button_{match_id}",
+                type="secondary",
+                use_container_width=True
+            )
+
+            if ai_summary_clicked:
+                st.session_state["ai_summary_match_id"] = int(match_id)
+                st.rerun()
 
 def render_match_status_box(status_info):
     """
@@ -5981,8 +6051,12 @@ def render_match_card(
         key=f"match_card_{match_id}",
         css_styles=card_css
     ):
-        render_status_badge(status_info)
-
+        render_match_status_header(
+            status_info=status_info,
+            match_id=match_id,
+            is_finished=is_finished
+        )
+    
         top_left, top_right = st.columns([3, 1])
 
         with top_left:
@@ -6033,17 +6107,6 @@ def render_match_card(
                 and score_pen_home is not None
                 and score_pen_away is not None
             )
-            if is_finished:
-                ai_summary_clicked = st.button(
-                    "AI tổng kết trận đấu",
-                    key=f"ai_summary_button_{match_id}",
-                    type="secondary",
-                    use_container_width=True
-                )
-
-                if ai_summary_clicked:
-                    st.session_state["ai_summary_match_id"] = match_id
-                    st.rerun()
             if is_finished and actual_home is not None and actual_away is not None:
                 result_text = f"{actual_home} - {actual_away}"
 
