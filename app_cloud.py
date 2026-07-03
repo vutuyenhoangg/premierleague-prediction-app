@@ -4512,7 +4512,7 @@ def build_ai_match_summary_prompt(match_row: dict) -> str:
     app_context = "\n".join(app_context_parts)
 
     prompt = (
-        "Bạn là một chuyên gia cập nhật tin tức bóng đá và World Cup 2026. "
+        "Bạn là một chuyên gia cập nhật tin tức bóng đá và World Cup 2026. Bạn rất am hiểu bóng đá. "
         "Trước khi trả lời, hãy sử dụng Google Search để tìm thông tin cập nhật về trận đấu này. "
         f"Hãy viết summary về trận đấu giữa {match_name} trong khuôn khổ World Cup 2026. "
         "Mục tiêu là giúp người xem hiểu thêm diễn biến, tình huống trận đấu và thế trận, "
@@ -6769,9 +6769,11 @@ def page_matches():
     if st.session_state.get("pending_star_transfer"):
         render_star_transfer_dialog(user_id)
     
-    if st.session_state.get("ai_summary_match_id"):
+    ai_summary_match_id = st.session_state.pop("ai_summary_match_id", None)
+    
+    if ai_summary_match_id is not None:
         render_ai_match_summary_dialog(
-            int(st.session_state["ai_summary_match_id"])
+            int(ai_summary_match_id)
         )
     
     render_star_balance(user_id)
