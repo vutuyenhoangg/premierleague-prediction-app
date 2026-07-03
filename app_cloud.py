@@ -2713,7 +2713,8 @@ def is_unknown_team(team_name) -> bool:
     if team_name is None or pd.isna(team_name):
         return True
 
-    text = str(team_name).lower()
+    raw_text = str(team_name).strip()
+    text = raw_text.lower()
 
     unknown_keywords = [
         "tbd",
@@ -2726,7 +2727,19 @@ def is_unknown_team(team_name) -> bool:
         "1st group"
     ]
 
-    return any(keyword in text for keyword in unknown_keywords)
+    if any(keyword in text for keyword in unknown_keywords):
+        return True
+
+    # Bắt các placeholder kiểu W87, L87, W 87, L 87
+    # Thường nghĩa là Winner/Loser của match số 87, tức đội chưa xác định.
+    if re.fullmatch(r"[wl]\s*\d+", text):
+        return True
+
+    # Bắt thêm các dạng có ký hiệu kèm theo như "W87 / L88" nếu sau này data có biến thể.
+    if re.search(r"\b[wl]\s*\d+\b", text):
+        return True
+
+    return False
 
 
 def get_outcome(home_score, away_score):
