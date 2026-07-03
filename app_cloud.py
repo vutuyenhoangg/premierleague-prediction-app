@@ -1053,16 +1053,18 @@ def inject_ai_summary_button_css():
             margin: 0 !important;
             padding: 0 !important;
             width: auto !important;
+            position: relative !important;
+            top: -3px !important;
         }}
 
         div[class*="st-key-ai_summary_button_"] button {{
             width: auto !important;
-            min-width: 44px !important;
-            height: 22px !important;
-            min-height: 22px !important;
-            max-height: 22px !important;
+            min-width: 74px !important;
+            height: 21px !important;
+            min-height: 21px !important;
+            max-height: 21px !important;
 
-            padding: 0 8px !important;
+            padding: 0 7px !important;
             border-radius: 999px !important;
             border: 1px solid transparent !important;
 
@@ -1073,8 +1075,8 @@ def inject_ai_summary_button_css():
             color: #07111F !important;
             box-shadow: none !important;
 
-            font-size: 10.5px !important;
-            font-weight: 850 !important;
+            font-size: 10px !important;
+            font-weight: 400 !important;
             line-height: 1 !important;
             white-space: nowrap !important;
 
@@ -1092,8 +1094,8 @@ def inject_ai_summary_button_css():
         div[class*="st-key-ai_summary_button_"] button::before {{
             content: "";
             display: inline-block;
-            width: 10px;
-            height: 10px;
+            width: 9px;
+            height: 9px;
             flex: 0 0 auto;
 
             background: linear-gradient(135deg, #69D2FF 0%, #A855F7 100%);
@@ -1119,7 +1121,7 @@ def inject_ai_summary_button_css():
             overflow-wrap: normal !important;
             line-height: 1 !important;
             font-size: inherit !important;
-            font-weight: inherit !important;
+            font-weight: 400 !important;
         }}
         </style>
         """,
@@ -6174,10 +6176,10 @@ def render_match_card(
 
                     with ai_button_col:
                         ai_summary_clicked = st.button(
-                            "AI",
+                            "AI tóm tắt",
                             key=f"ai_summary_button_{match_id}",
                             type="secondary",
-                            help="AI tổng kết trận đấu"
+                            help="AI tóm tắt trận đấu"
                         )
 
                         if ai_summary_clicked:
