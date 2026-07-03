@@ -1133,7 +1133,7 @@ def inject_ai_summary_button_css():
         @media (max-width: 768px) {{
             div[class*="st-key-ai_summary_button_"] {{
                 margin-top: -25px !important;
-                margin-bottom: 8px !important;
+                margin-bottom: 0px !important;
             }}
 
             div[class*="st-key-ai_summary_button_"] button {{
