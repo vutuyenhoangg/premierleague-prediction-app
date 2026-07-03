@@ -1055,7 +1055,7 @@ def inject_ai_summary_button_css():
             justify-content: flex-end !important;
             width: 100% !important;
 
-            margin-top: -30px !important;
+            margin-top: -25px !important;
             margin-bottom: 7px !important;
         }}
 
@@ -1132,7 +1132,7 @@ def inject_ai_summary_button_css():
 
         @media (max-width: 768px) {{
             div[class*="st-key-ai_summary_button_"] {{
-                margin-top: -30px !important;
+                margin-top: -25px !important;
                 margin-bottom: -5px !important;
             }}
 
