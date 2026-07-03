@@ -1055,8 +1055,7 @@ def inject_ai_summary_button_css():
             justify-content: flex-end !important;
             width: 100% !important;
 
-            /* Đẩy nút lên trên. Muốn lên thêm thì giảm tiếp giá trị này. */
-            margin-top: -16px !important;
+            margin-top: -30px !important;
             margin-bottom: 7px !important;
         }}
 
@@ -1133,7 +1132,7 @@ def inject_ai_summary_button_css():
 
         @media (max-width: 768px) {{
             div[class*="st-key-ai_summary_button_"] {{
-                margin-top: -10px !important;
+                margin-top: -18px !important;
                 margin-bottom: 8px !important;
             }}
 
