@@ -877,6 +877,74 @@ def inject_mobile_match_title_css():
 
 inject_mobile_match_title_css()
 
+def inject_mobile_fixed_result_box_css():
+    st.markdown(
+        """
+        <style>
+        /* Card match là mốc để box kết quả mobile bám cố định vào. */
+        div[class*="st-key-match_card_"] {
+            position: relative !important;
+            overflow: visible !important;
+        }
+
+        /* Desktop dùng box kết quả trong cột phải như bình thường. */
+        div[class*="st-key-desktop_result_box_"] {
+            display: block !important;
+        }
+
+        /* Mobile fixed box mặc định ẩn trên desktop. */
+        div[class*="st-key-mobile_fixed_result_box_"] {
+            display: none !important;
+        }
+
+        /* Safe zone mặc định không tác động desktop. */
+        div[class*="st-key-mobile_header_safe_zone_"] {
+            padding-right: 0 !important;
+            min-height: auto !important;
+        }
+
+        @media (max-width: 768px) {
+            /* Trên mobile chỉ dùng box fixed, ẩn box desktop để không bị nhảy layout. */
+            div[class*="st-key-desktop_result_box_"] {
+                display: none !important;
+            }
+
+            div[class*="st-key-mobile_fixed_result_box_"] {
+                display: block !important;
+                position: absolute !important;
+                top: 102px !important;
+                right: 16px !important;
+                width: 168px !important;
+                z-index: 20 !important;
+            }
+
+            /* Chừa vùng bên phải cho box kết quả, giúp title/date/nút cầu thủ không đè vào box. */
+            div[class*="st-key-mobile_header_safe_zone_"] {
+                padding-right: 184px !important;
+                min-height: 198px !important;
+                box-sizing: border-box !important;
+            }
+        }
+
+        @media (max-width: 390px) {
+            div[class*="st-key-mobile_fixed_result_box_"] {
+                top: 100px !important;
+                right: 14px !important;
+                width: 166px !important;
+            }
+
+            div[class*="st-key-mobile_header_safe_zone_"] {
+                padding-right: 176px !important;
+                min-height: 196px !important;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+inject_mobile_fixed_result_box_css()
 def inject_mobile_goal_scorer_button_css():
     """
     CSS riêng cho nút Xem cầu thủ ghi bàn trên mobile.
@@ -1053,38 +1121,35 @@ def inject_ai_summary_button_css():
             margin: 0 !important;
             padding: 0 !important;
             width: auto !important;
+            display: flex !important;
+            justify-content: flex-end !important;
+            align-items: center !important;
             position: relative !important;
-            top: -3px !important;
+            top: -4px !important;
         }}
 
         div[class*="st-key-ai_summary_button_"] button {{
             width: auto !important;
-            min-width: 74px !important;
-            height: 21px !important;
-            min-height: 21px !important;
-            max-height: 21px !important;
-
+            min-width: 72px !important;
+            height: 20px !important;
+            min-height: 20px !important;
+            max-height: 20px !important;
             padding: 0 7px !important;
             border-radius: 999px !important;
             border: 1px solid transparent !important;
-
             background:
                 linear-gradient(#FFFFFF, #FFFFFF) padding-box,
                 linear-gradient(90deg, #69D2FF 0%, #B66DFF 100%) border-box !important;
-
             color: #07111F !important;
             box-shadow: none !important;
-
             font-size: 10px !important;
             font-weight: 400 !important;
             line-height: 1 !important;
             white-space: nowrap !important;
-
             display: inline-flex !important;
             align-items: center !important;
             justify-content: center !important;
             gap: 4px !important;
-
             transition:
                 transform 0.14s ease,
                 box-shadow 0.14s ease,
@@ -1097,7 +1162,6 @@ def inject_ai_summary_button_css():
             width: 9px;
             height: 9px;
             flex: 0 0 auto;
-
             background: linear-gradient(135deg, #69D2FF 0%, #A855F7 100%);
             -webkit-mask: url("data:image/svg+xml;base64,{ai_summary_icon_base64}") center / contain no-repeat;
             mask: url("data:image/svg+xml;base64,{ai_summary_icon_base64}") center / contain no-repeat;
@@ -1123,6 +1187,26 @@ def inject_ai_summary_button_css():
             font-size: inherit !important;
             font-weight: 400 !important;
         }}
+
+        @media (max-width: 768px) {{
+            div[class*="st-key-ai_summary_button_"] {{
+                top: -5px !important;
+            }}
+
+            div[class*="st-key-ai_summary_button_"] button {{
+                min-width: 70px !important;
+                height: 19px !important;
+                min-height: 19px !important;
+                max-height: 19px !important;
+                padding: 0 6px !important;
+                font-size: 9.5px !important;
+            }}
+
+            div[class*="st-key-ai_summary_button_"] button::before {{
+                width: 8px;
+                height: 8px;
+            }}
+        }}
         </style>
         """,
         unsafe_allow_html=True
@@ -1130,7 +1214,6 @@ def inject_ai_summary_button_css():
 
 
 inject_ai_summary_button_css()
-
 def get_prediction_radio_css():
     return """
     label[data-baseweb="radio"] {
@@ -6037,250 +6120,290 @@ def render_match_card(
 
         return candidates
 
+    actual_home = to_optional_int(row.get("home_score_for_prediction"))
+    actual_away = to_optional_int(row.get("away_score_for_prediction"))
+
+    score_et_home = to_optional_int(row.get("score_et_home"))
+    score_et_away = to_optional_int(row.get("score_et_away"))
+
+    score_pen_home = to_optional_int(row.get("score_pen_home"))
+    score_pen_away = to_optional_int(row.get("score_pen_away"))
+
+    has_extra_time = (
+        is_knockout
+        and score_et_home is not None
+        and score_et_away is not None
+    )
+
+    has_penalty = (
+        is_knockout
+        and score_pen_home is not None
+        and score_pen_away is not None
+    )
+
+    result_text = None
+    final_winner_text = None
+
+    if is_finished and actual_home is not None and actual_away is not None:
+        result_text = f"{actual_home} - {actual_away}"
+
+        if has_extra_time or has_penalty:
+            result_text = f"{result_text} (a.e.t)"
+
+        winner_name = row.get("winner_team_name")
+
+        winner_name_is_valid = (
+            winner_name is not None
+            and not pd.isna(winner_name)
+            and str(winner_name).strip().lower() not in ["", "nan", "none"]
+        )
+
+        if winner_name_is_valid:
+            final_winner_text = str(winner_name).strip()
+
+        elif not is_knockout and actual_home == actual_away:
+            final_winner_text = "2 đội hòa nhau"
+
+        elif has_penalty and score_pen_home > score_pen_away:
+            final_winner_text = str(home_name)
+
+        elif has_penalty and score_pen_away > score_pen_home:
+            final_winner_text = str(away_name)
+
+        elif actual_home > actual_away:
+            final_winner_text = str(home_name)
+
+        elif actual_away > actual_home:
+            final_winner_text = str(away_name)
+
+        elif is_knockout:
+            final_winner_text = "Chưa xác định"
+
+        else:
+            final_winner_text = "2 đội hòa nhau"
+
+    def render_result_box_with_ai(
+        container_key: str,
+        button_key: str,
+        show_winner_inside: bool = True
+    ):
+        if not result_text:
+            return
+
+        result_font_size = "26px" if "(a.e.t)" in result_text else "32px"
+
+        with stylable_container(
+            key=container_key,
+            css_styles="""
+            {
+                width: 100%;
+                box-sizing: border-box;
+                background: rgba(255,255,255,0.88);
+                border: 1px solid rgba(15,23,42,0.08);
+                border-radius: 16px;
+                padding: 12px 14px;
+                box-shadow: 0 6px 18px rgba(15,23,42,0.04);
+                min-width: 168px;
+            }
+
+            div[data-testid="stHorizontalBlock"] {
+                align-items: center !important;
+                gap: 6px !important;
+            }
+
+            div[data-testid="column"] {
+                padding: 0 !important;
+            }
+
+            div[data-testid="stMarkdownContainer"] {
+                margin: 0 !important;
+            }
+
+            div[data-testid="stMarkdownContainer"] p {
+                margin: 0 !important;
+            }
+            """
+        ):
+            result_label_col, ai_button_col = st.columns(
+                [0.90, 1.05],
+                gap="small"
+            )
+
+            with result_label_col:
+                st.markdown(
+                    """
+                    <div style="
+                        color:#64748B;
+                        font-size:12px;
+                        font-weight:800;
+                        line-height:1;
+                        margin-bottom:6px;
+                    ">
+                        Kết quả
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+            with ai_button_col:
+                ai_summary_clicked = st.button(
+                    "AI tóm tắt",
+                    key=button_key,
+                    type="secondary",
+                    help="AI tóm tắt trận đấu"
+                )
+
+                if ai_summary_clicked:
+                    st.session_state["ai_summary_match_id"] = match_id
+                    st.rerun()
+
+            st.markdown(
+                f"""
+                <div style="
+                    color:#07111F;
+                    font-size:{result_font_size};
+                    font-weight:950;
+                    line-height:1.1;
+                    letter-spacing:-0.03em;
+                    white-space:nowrap;
+                    margin-top:0;
+                ">
+                    {html.escape(result_text)}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+            if has_penalty:
+                st.markdown(
+                    f"""
+                    <div style="
+                        margin-top:10px;
+                        padding-top:9px;
+                        border-top:1px solid rgba(15,23,42,0.08);
+                        color:#64748B;
+                        font-size:13px;
+                        font-weight:750;
+                        line-height:1.25;
+                    ">
+                        Penalty:
+                        <span style="
+                            color:#07111F;
+                            font-weight:950;
+                            margin-left:4px;
+                        ">
+                            {score_pen_home} - {score_pen_away}
+                        </span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+            if show_winner_inside and final_winner_text:
+                st.markdown(
+                    f"""
+                    <div style="
+                        margin-top:10px;
+                        color:#64748B;
+                        font-size:12px;
+                        line-height:1.35;
+                    ">
+                        Thắng chung cuộc:
+                        <span style="
+                            color:#475569;
+                            font-weight:750;
+                        ">
+                            {html.escape(final_winner_text)}
+                        </span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
     with stylable_container(
         key=f"match_card_{match_id}",
         css_styles=card_css
     ):
         render_status_badge(status_info)
-    
+
+        if is_finished and result_text:
+            render_result_box_with_ai(
+                container_key=f"mobile_fixed_result_box_{match_id}",
+                button_key=f"ai_summary_button_mobile_{match_id}",
+                show_winner_inside=True
+            )
+
         top_left, top_right = st.columns([3, 1])
 
         with top_left:
-            render_match_title(home_name, away_name, match_id)
+            with stylable_container(
+                key=f"mobile_header_safe_zone_{match_id}",
+                css_styles="""
+                {
+                }
+                """
+            ):
+                render_match_title(home_name, away_name, match_id)
 
-            st.caption(
-                f"{row.get('round_name')} | "
-                f"{row.get('kickoff_weekday_vietnam', '')} "
-                f"{row.get('kickoff_date_display_vietnam', row.get('kickoff_date_vietnam', ''))} "
-                f"lúc {row.get('kickoff_time_vietnam', '')}"
-            )
-
-            if is_finished:
-                actual_home_for_goal_button = to_optional_int(
-                    row.get("home_score_for_prediction")
-                )
-                actual_away_for_goal_button = to_optional_int(
-                    row.get("away_score_for_prediction")
-                )
-
-                has_any_goal = (
-                    actual_home_for_goal_button is not None
-                    and actual_away_for_goal_button is not None
-                    and (actual_home_for_goal_button + actual_away_for_goal_button) > 0
+                st.caption(
+                    f"{row.get('round_name')} | "
+                    f"{row.get('kickoff_weekday_vietnam', '')} "
+                    f"{row.get('kickoff_date_display_vietnam', row.get('kickoff_date_vietnam', ''))} "
+                    f"lúc {row.get('kickoff_time_vietnam', '')}"
                 )
 
-                if has_any_goal:
-                    render_goal_scorers_for_match(match_id)
-
-        with top_right:
-            actual_home = to_optional_int(row.get("home_score_for_prediction"))
-            actual_away = to_optional_int(row.get("away_score_for_prediction"))
-
-            score_et_home = to_optional_int(row.get("score_et_home"))
-            score_et_away = to_optional_int(row.get("score_et_away"))
-
-            score_pen_home = to_optional_int(row.get("score_pen_home"))
-            score_pen_away = to_optional_int(row.get("score_pen_away"))
-
-            has_extra_time = (
-                is_knockout
-                and score_et_home is not None
-                and score_et_away is not None
-            )
-
-            has_penalty = (
-                is_knockout
-                and score_pen_home is not None
-                and score_pen_away is not None
-            )
-            if is_finished and actual_home is not None and actual_away is not None:
-                result_text = f"{actual_home} - {actual_away}"
-
-                if has_extra_time or has_penalty:
-                    result_text = f"{result_text} (a.e.t)"
-
-                penalty_line_html = ""
-
-                if has_penalty:
-                    penalty_line_html = (
-                        '<div style="'
-                        'margin-top:10px;'
-                        'padding-top:9px;'
-                        'border-top:1px solid rgba(15,23,42,0.08);'
-                        'color:#64748B;'
-                        'font-size:13px;'
-                        'font-weight:750;'
-                        'line-height:1.25;'
-                        '">'
-                        'Penalty:'
-                        '<span style="'
-                        'color:#07111F;'
-                        'font-weight:950;'
-                        'margin-left:4px;'
-                        '">'
-                        f'{score_pen_home} - {score_pen_away}'
-                        '</span>'
-                        '</div>'
+                if is_finished:
+                    actual_home_for_goal_button = to_optional_int(
+                        row.get("home_score_for_prediction")
+                    )
+                    actual_away_for_goal_button = to_optional_int(
+                        row.get("away_score_for_prediction")
                     )
 
+                    has_any_goal = (
+                        actual_home_for_goal_button is not None
+                        and actual_away_for_goal_button is not None
+                        and (actual_home_for_goal_button + actual_away_for_goal_button) > 0
+                    )
+
+                    if has_any_goal:
+                        render_goal_scorers_for_match(match_id)
+
+        with top_right:
+            if is_finished and result_text:
                 with stylable_container(
-                    key=f"result_card_with_ai_{match_id}",
+                    key=f"desktop_result_box_{match_id}",
                     css_styles="""
                     {
-                        background: rgba(255,255,255,0.86);
-                        border: 1px solid rgba(15,23,42,0.08);
-                        border-radius: 16px;
-                        padding: 13px 15px;
-                        box-shadow: 0 6px 18px rgba(15,23,42,0.04);
-                        min-width: 180px;
-                    }
-
-                    div[data-testid="stHorizontalBlock"] {
-                        align-items: center !important;
-                        gap: 6px !important;
-                    }
-
-                    div[data-testid="column"] {
-                        padding: 0 !important;
-                    }
-
-                    div[data-testid="stMarkdownContainer"] {
-                        margin: 0 !important;
-                    }
-
-                    div[data-testid="stMarkdownContainer"] p {
-                        margin: 0 !important;
                     }
                     """
                 ):
-                    result_label_col, ai_button_col = st.columns(
-                        [1, 0.58],
-                        gap="small"
+                    render_result_box_with_ai(
+                        container_key=f"desktop_result_card_with_ai_{match_id}",
+                        button_key=f"ai_summary_button_desktop_{match_id}",
+                        show_winner_inside=False
                     )
 
-                    with result_label_col:
-                        st.markdown(
-                            """
-                            <div style="
-                                color:#64748B;
-                                font-size:12px;
-                                font-weight:800;
-                                line-height:1;
-                                margin-bottom:6px;
-                            ">
-                                Kết quả
-                            </div>
-                            """,
-                            unsafe_allow_html=True
-                        )
-
-                    with ai_button_col:
-                        ai_summary_clicked = st.button(
-                            "AI tóm tắt",
-                            key=f"ai_summary_button_{match_id}",
-                            type="secondary",
-                            help="AI tóm tắt trận đấu"
-                        )
-
-                        if ai_summary_clicked:
-                            st.session_state["ai_summary_match_id"] = match_id
-                            st.rerun()
-
-                    st.markdown(
-                        f"""
-                        <div style="
-                            color:#07111F;
-                            font-size:32px;
-                            font-weight:950;
-                            line-height:1.1;
-                            letter-spacing:-0.03em;
-                            white-space:nowrap;
-                            margin-top:0;
-                        ">
-                            {html.escape(result_text)}
-                        </div>
-                        """,
-                        unsafe_allow_html=True
-                    )
-
-                    if has_penalty:
+                    if final_winner_text:
                         st.markdown(
                             f"""
                             <div style="
-                                margin-top:10px;
-                                padding-top:9px;
-                                border-top:1px solid rgba(15,23,42,0.08);
+                                margin-top:14px;
                                 color:#64748B;
                                 font-size:13px;
-                                font-weight:750;
-                                line-height:1.25;
+                                line-height:1.35;
                             ">
-                                Penalty:
+                                Thắng chung cuộc:
                                 <span style="
-                                    color:#07111F;
-                                    font-weight:950;
-                                    margin-left:4px;
+                                    color:#475569;
+                                    font-weight:750;
                                 ">
-                                    {score_pen_home} - {score_pen_away}
+                                    {html.escape(final_winner_text)}
                                 </span>
                             </div>
                             """,
                             unsafe_allow_html=True
                         )
-
-                winner_name = row.get("winner_team_name")
-
-                winner_name_is_valid = (
-                    winner_name is not None
-                    and not pd.isna(winner_name)
-                    and str(winner_name).strip().lower() not in ["", "nan", "none"]
-                )
-
-                if winner_name_is_valid:
-                    final_winner_text = str(winner_name).strip()
-
-                elif not is_knockout and actual_home == actual_away:
-                    final_winner_text = "2 đội hòa nhau"
-
-                elif has_penalty and score_pen_home > score_pen_away:
-                    final_winner_text = str(home_name)
-
-                elif has_penalty and score_pen_away > score_pen_home:
-                    final_winner_text = str(away_name)
-
-                elif actual_home > actual_away:
-                    final_winner_text = str(home_name)
-
-                elif actual_away > actual_home:
-                    final_winner_text = str(away_name)
-
-                elif is_knockout:
-                    final_winner_text = "Chưa xác định"
-
-                else:
-                    final_winner_text = "2 đội hòa nhau"
-
-                winner_caption_html = (
-                    '<div style="'
-                    'margin-top:14px;'
-                    'color:#64748B;'
-                    'font-size:13px;'
-                    'line-height:1.35;'
-                    '">'
-                    'Thắng chung cuộc: '
-                    '<span style="'
-                    'color:#475569;'
-                    'font-weight:750;'
-                    '">'
-                    f'{html.escape(final_winner_text)}'
-                    '</span>'
-                    '</div>'
-                )
-
-                st.markdown(
-                    winner_caption_html,
-                    unsafe_allow_html=True
-                )
 
             else:
                 render_match_status_box(status_info)
