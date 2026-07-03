@@ -1052,26 +1052,28 @@ def inject_ai_summary_button_css():
         div[class*="st-key-ai_summary_button_"] {{
             margin: 0 !important;
             padding: 0 !important;
+            width: auto !important;
         }}
 
         div[class*="st-key-ai_summary_button_"] button {{
-            width: 100% !important;
-            height: 32px !important;
-            min-height: 32px !important;
-            max-height: 32px !important;
-            padding: 0 12px !important;
+            width: auto !important;
+            min-width: 44px !important;
+            height: 22px !important;
+            min-height: 22px !important;
+            max-height: 22px !important;
 
+            padding: 0 8px !important;
             border-radius: 999px !important;
-            border: 1.4px solid transparent !important;
+            border: 1px solid transparent !important;
 
             background:
                 linear-gradient(#FFFFFF, #FFFFFF) padding-box,
                 linear-gradient(90deg, #69D2FF 0%, #B66DFF 100%) border-box !important;
 
             color: #07111F !important;
-            box-shadow: 0 3px 8px rgba(15, 23, 42, 0.06) !important;
+            box-shadow: none !important;
 
-            font-size: 12px !important;
+            font-size: 10.5px !important;
             font-weight: 850 !important;
             line-height: 1 !important;
             white-space: nowrap !important;
@@ -1079,19 +1081,19 @@ def inject_ai_summary_button_css():
             display: inline-flex !important;
             align-items: center !important;
             justify-content: center !important;
-            gap: 6px !important;
+            gap: 4px !important;
 
             transition:
-                transform 0.16s ease,
-                box-shadow 0.16s ease,
-                filter 0.16s ease !important;
+                transform 0.14s ease,
+                box-shadow 0.14s ease,
+                filter 0.14s ease !important;
         }}
 
         div[class*="st-key-ai_summary_button_"] button::before {{
             content: "";
             display: inline-block;
-            width: 14px;
-            height: 14px;
+            width: 10px;
+            height: 10px;
             flex: 0 0 auto;
 
             background: linear-gradient(135deg, #69D2FF 0%, #A855F7 100%);
@@ -1101,12 +1103,13 @@ def inject_ai_summary_button_css():
 
         div[class*="st-key-ai_summary_button_"] button:hover {{
             transform: translateY(-1px) !important;
-            box-shadow: 0 5px 12px rgba(15, 23, 42, 0.10) !important;
+            box-shadow: 0 3px 8px rgba(15, 23, 42, 0.10) !important;
             filter: brightness(0.995) !important;
         }}
 
         div[class*="st-key-ai_summary_button_"] button:active {{
-            transform: translateY(0) scale(0.995) !important;
+            transform: translateY(0) scale(0.98) !important;
+            box-shadow: none !important;
         }}
 
         div[class*="st-key-ai_summary_button_"] button * {{
@@ -1117,21 +1120,6 @@ def inject_ai_summary_button_css():
             line-height: 1 !important;
             font-size: inherit !important;
             font-weight: inherit !important;
-        }}
-
-        @media (max-width: 768px) {{
-            div[class*="st-key-ai_summary_button_"] button {{
-                height: 31px !important;
-                min-height: 31px !important;
-                max-height: 31px !important;
-                padding: 0 10px !important;
-                font-size: 11.5px !important;
-            }}
-
-            div[class*="st-key-ai_summary_button_"] button::before {{
-                width: 13px;
-                height: 13px;
-            }}
         }}
         </style>
         """,
@@ -6051,11 +6039,7 @@ def render_match_card(
         key=f"match_card_{match_id}",
         css_styles=card_css
     ):
-        render_match_status_header(
-            status_info=status_info,
-            match_id=match_id,
-            is_finished=is_finished
-        )
+        render_status_badge(status_info)
     
         top_left, top_right = st.columns([3, 1])
 
@@ -6137,41 +6121,110 @@ def render_match_card(
                         '</div>'
                     )
 
-                result_card_html = (
-                    '<div style="'
-                    'background:rgba(255,255,255,0.86);'
-                    'border:1px solid rgba(15,23,42,0.08);'
-                    'border-radius:16px;'
-                    'padding:13px 15px;'
-                    'box-shadow:0 6px 18px rgba(15,23,42,0.04);'
-                    'min-width:180px;'
-                    '">'
-                    '<div style="'
-                    'color:#64748B;'
-                    'font-size:12px;'
-                    'font-weight:800;'
-                    'margin-bottom:6px;'
-                    '">'
-                    'Kết quả'
-                    '</div>'
-                    '<div style="'
-                    'color:#07111F;'
-                    'font-size:32px;'
-                    'font-weight:950;'
-                    'line-height:1.1;'
-                    'letter-spacing:-0.03em;'
-                    'white-space:nowrap;'
-                    '">'
-                    f'{html.escape(result_text)}'
-                    '</div>'
-                    f'{penalty_line_html}'
-                    '</div>'
-                )
+                with stylable_container(
+                    key=f"result_card_with_ai_{match_id}",
+                    css_styles="""
+                    {
+                        background: rgba(255,255,255,0.86);
+                        border: 1px solid rgba(15,23,42,0.08);
+                        border-radius: 16px;
+                        padding: 13px 15px;
+                        box-shadow: 0 6px 18px rgba(15,23,42,0.04);
+                        min-width: 180px;
+                    }
 
-                st.markdown(
-                    result_card_html,
-                    unsafe_allow_html=True
-                )
+                    div[data-testid="stHorizontalBlock"] {
+                        align-items: center !important;
+                        gap: 6px !important;
+                    }
+
+                    div[data-testid="column"] {
+                        padding: 0 !important;
+                    }
+
+                    div[data-testid="stMarkdownContainer"] {
+                        margin: 0 !important;
+                    }
+
+                    div[data-testid="stMarkdownContainer"] p {
+                        margin: 0 !important;
+                    }
+                    """
+                ):
+                    result_label_col, ai_button_col = st.columns(
+                        [1, 0.58],
+                        gap="small"
+                    )
+
+                    with result_label_col:
+                        st.markdown(
+                            """
+                            <div style="
+                                color:#64748B;
+                                font-size:12px;
+                                font-weight:800;
+                                line-height:1;
+                                margin-bottom:6px;
+                            ">
+                                Kết quả
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
+
+                    with ai_button_col:
+                        ai_summary_clicked = st.button(
+                            "AI",
+                            key=f"ai_summary_button_{match_id}",
+                            type="secondary",
+                            help="AI tổng kết trận đấu"
+                        )
+
+                        if ai_summary_clicked:
+                            st.session_state["ai_summary_match_id"] = match_id
+                            st.rerun()
+
+                    st.markdown(
+                        f"""
+                        <div style="
+                            color:#07111F;
+                            font-size:32px;
+                            font-weight:950;
+                            line-height:1.1;
+                            letter-spacing:-0.03em;
+                            white-space:nowrap;
+                            margin-top:0;
+                        ">
+                            {html.escape(result_text)}
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+                    if has_penalty:
+                        st.markdown(
+                            f"""
+                            <div style="
+                                margin-top:10px;
+                                padding-top:9px;
+                                border-top:1px solid rgba(15,23,42,0.08);
+                                color:#64748B;
+                                font-size:13px;
+                                font-weight:750;
+                                line-height:1.25;
+                            ">
+                                Penalty:
+                                <span style="
+                                    color:#07111F;
+                                    font-weight:950;
+                                    margin-left:4px;
+                                ">
+                                    {score_pen_home} - {score_pen_away}
+                                </span>
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
 
                 winner_name = row.get("winner_team_name")
 
