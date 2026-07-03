@@ -1051,45 +1051,55 @@ def inject_ai_summary_button_css():
         f"""
         <style>
         div[class*="st-key-ai_summary_button_"] {{
-            margin-bottom: 14px !important;
+            display: flex !important;
+            justify-content: flex-end !important;
+            width: 100% !important;
+
+            /* Đẩy nút lên trên. Muốn lên thêm thì giảm tiếp giá trị này. */
+            margin-top: -16px !important;
+            margin-bottom: 7px !important;
         }}
 
         div[class*="st-key-ai_summary_button_"] button {{
-            width: 100% !important;
-            min-height: 48px !important;
-            padding: 10px 18px !important;
+            width: auto !important;
+            min-width: 0 !important;
+            height: 30px !important;
+            min-height: 30px !important;
 
-            border-radius: 14px !important;
-            border: 1.6px solid transparent !important;
+            padding: 5px 10px !important;
+            margin-left: auto !important;
 
-            background:
-                linear-gradient(#FFFFFF, #FFFFFF) padding-box,
-                linear-gradient(90deg, #69D2FF 0%, #B66DFF 100%) border-box !important;
+            border-radius: 10px !important;
+            border: 1px solid rgba(166, 109, 255, 0.42) !important;
 
-            color: #1F2937 !important;
-            box-shadow: 0 3px 10px rgba(15, 23, 42, 0.06) !important;
+            background: rgba(255, 255, 255, 0.92) !important;
+            color: #334155 !important;
 
-            font-size: 14px !important;
-            font-weight: 700 !important;
+            box-shadow: 0 2px 7px rgba(15, 23, 42, 0.045) !important;
+
+            font-size: 12px !important;
+            font-weight: 400 !important;
+            letter-spacing: 0 !important;
             line-height: 1 !important;
             white-space: nowrap !important;
 
             display: inline-flex !important;
             align-items: center !important;
             justify-content: center !important;
-            gap: 10px !important;
+            gap: 5px !important;
 
             transition:
-                transform 0.18s ease,
-                box-shadow 0.18s ease,
-                filter 0.18s ease !important;
+                border-color 0.16s ease,
+                background 0.16s ease,
+                box-shadow 0.16s ease,
+                transform 0.16s ease !important;
         }}
 
         div[class*="st-key-ai_summary_button_"] button::before {{
             content: "";
             display: inline-block;
-            width: 18px;
-            height: 18px;
+            width: 13px;
+            height: 13px;
             flex: 0 0 auto;
 
             background: linear-gradient(135deg, #6CCBFF 0%, #A855F7 100%);
@@ -1098,43 +1108,53 @@ def inject_ai_summary_button_css():
         }}
 
         div[class*="st-key-ai_summary_button_"] button:hover {{
+            background: #FFFFFF !important;
+            border-color: rgba(168, 85, 247, 0.68) !important;
+            box-shadow: 0 4px 10px rgba(15, 23, 42, 0.07) !important;
             transform: translateY(-1px) !important;
-            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.10) !important;
-            filter: brightness(0.995) !important;
+            color: #1F2937 !important;
         }}
 
         div[class*="st-key-ai_summary_button_"] button:active {{
-            transform: translateY(0) scale(0.995) !important;
+            transform: translateY(0) scale(0.99) !important;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05) !important;
         }}
 
         div[class*="st-key-ai_summary_button_"] button * {{
-            color: #1F2937 !important;
+            color: #334155 !important;
             white-space: nowrap !important;
             word-break: keep-all !important;
             overflow-wrap: normal !important;
             line-height: 1 !important;
             font-size: inherit !important;
-            font-weight: inherit !important;
+            font-weight: 400 !important;
+            letter-spacing: 0 !important;
         }}
 
         @media (max-width: 768px) {{
+            div[class*="st-key-ai_summary_button_"] {{
+                margin-top: -10px !important;
+                margin-bottom: 8px !important;
+            }}
+
             div[class*="st-key-ai_summary_button_"] button {{
-                min-height: 45px !important;
-                padding: 9px 14px !important;
-                font-size: 13px !important;
-                border-radius: 13px !important;
+                height: 28px !important;
+                min-height: 28px !important;
+                padding: 4px 9px !important;
+                border-radius: 9px !important;
+                font-size: 11.5px !important;
+                gap: 4px !important;
             }}
 
             div[class*="st-key-ai_summary_button_"] button::before {{
-                width: 17px;
-                height: 17px;
+                width: 12px;
+                height: 12px;
             }}
         }}
         </style>
         """,
         unsafe_allow_html=True
     )
-
 
 inject_ai_summary_button_css()
 
@@ -6035,7 +6055,7 @@ def render_match_card(
             )
             if is_finished:
                 ai_summary_clicked = st.button(
-                    "AI tổng kết trận đấu",
+                    "AI tóm tắt",
                     key=f"ai_summary_button_{match_id}",
                     type="secondary",
                     use_container_width=True
