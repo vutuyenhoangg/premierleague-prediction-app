@@ -1519,29 +1519,40 @@ def render_status_legend():
 def render_kpi_tiles(matches: pd.DataFrame):
     total_matches = len(matches)
 
-    finished_matches = int(matches["is_finished"].apply(to_bool).sum())
-    unknown_matches = int(
-        matches.apply(
-            lambda row: is_unknown_team(row.get("home_team_name")) or is_unknown_team(row.get("away_team_name")),
+    if matches.empty:
+        finished_matches = 0
+        unknown_matches = 0
+        open_matches = 0
+    else:
+        matches_for_count = matches.copy()
+
+        matches_for_count["has_unknown_team"] = matches_for_count.apply(
+            lambda row: (
+                is_unknown_team(row.get("home_team_name"))
+                or is_unknown_team(row.get("away_team_name"))
+            ),
             axis=1
-        ).sum()
-    )
+        )
 
-    now_utc = pd.Timestamp.now(tz="UTC")
+        matches_for_count["is_finished_bool"] = matches_for_count["is_finished"].apply(to_bool)
 
-    open_matches = int(
-        (
-            (matches["kickoff_time_utc_dt"] > now_utc)
-            & (~matches["is_finished"].apply(to_bool))
-        ).sum()
-    )
+        now_utc = pd.Timestamp.now(tz="UTC")
 
-    locked_matches = int(
-        (
-            (matches["kickoff_time_utc_dt"] <= now_utc)
-            & (~matches["is_finished"].apply(to_bool))
-        ).sum()
-    )
+        finished_matches = int(
+            matches_for_count["is_finished_bool"].sum()
+        )
+
+        unknown_matches = int(
+            matches_for_count["has_unknown_team"].sum()
+        )
+
+        open_matches = int(
+            (
+                (matches_for_count["kickoff_time_utc_dt"] > now_utc)
+                & (~matches_for_count["is_finished_bool"])
+                & (~matches_for_count["has_unknown_team"])
+            ).sum()
+        )
 
     st.markdown(
         f"""
