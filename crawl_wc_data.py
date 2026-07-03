@@ -725,10 +725,10 @@ def normalize_matches(matches_raw: list) -> pd.DataFrame:
 
         venue = get_first_existing_value(
             match,
-            ["stadium", "venue", "venue_name"],
+            ["stadium", "venue", "venue_name", "ground"],
             default=None
         )
-
+        
         city = get_first_existing_value(
             match,
             ["city", "venue_city"],

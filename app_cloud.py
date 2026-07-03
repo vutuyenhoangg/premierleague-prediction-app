@@ -5885,13 +5885,83 @@ def render_ai_match_summary_dialog(match_id: int):
         unsafe_allow_html=True
     )
 
-    if st.button(
-        "Đóng",
-        use_container_width=True,
-        key=f"close_ai_summary_{match_id}"
-    ):
-        st.session_state.pop("ai_summary_match_id", None)
-        st.rerun()
+def normalize_venue_text(value) -> str:
+    """
+    Chuẩn hóa tên SVĐ/địa điểm để hiển thị ở cuối card.
+    """
+    if value is None:
+        return ""
+
+    try:
+        if pd.isna(value):
+            return ""
+    except TypeError:
+        pass
+
+    return str(value).strip()
+
+
+def render_match_venue_footer(row, match_id: int):
+    """
+    Hiển thị thông tin sân vận động/địa điểm ở cuối card trận đấu.
+
+    Chỉ hiển thị dạng:
+    Icon: Tên sân vận động
+
+    Không nằm trong form dự đoán.
+    Không ảnh hưởng logic lưu/cập nhật/xóa dự đoán.
+    """
+    venue = normalize_venue_text(row.get("venue"))
+
+    if not venue:
+        return
+
+    safe_venue = html.escape(venue)
+
+    soccer_field_icon_svg = """
+    <svg xmlns="http://www.w3.org/2000/svg"
+         width="24"
+         height="24"
+         viewBox="0 0 24 24"
+         fill="none"
+         stroke="currentColor"
+         stroke-width="1"
+         stroke-linecap="round"
+         stroke-linejoin="round"
+         style="display:inline-block; vertical-align:-6px;">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <path d="M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"/>
+      <path d="M3 9h3v6h-3l0 -6"/>
+      <path d="M18 9h3v6h-3l0 -6"/>
+      <path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10"/>
+      <path d="M12 5l0 14"/>
+    </svg>
+    """
+
+    st.markdown(
+        f"""
+        <div style="
+            margin-top: 20px;
+            margin-bottom: 0;
+            color: #64748B;
+            font-size: 14.5px;
+            font-weight: 700;
+            line-height: 1.35;
+        ">
+            <span style="
+                color: #64748B;
+                margin-right: 6px;
+            ">
+                {soccer_field_icon_svg}:
+            </span>
+            <span style="
+                color: #64748B;
+                font-style: italic;
+            ">{safe_venue}</span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 def render_match_card(
     row,
@@ -6245,7 +6315,6 @@ def render_match_card(
             pred_winner_team_id = None
             current_star_type = STAR_TYPE_NONE
             st.caption("Bạn chưa dự đoán trận này.")
-
         if not editable:
             render_match_venue_footer(row, match_id)
             return
