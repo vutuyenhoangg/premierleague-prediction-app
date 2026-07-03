@@ -1055,75 +1055,60 @@ def inject_ai_summary_button_css():
         }}
 
         div[class*="st-key-ai_summary_button_"] button {{
-            position: relative !important;
             width: 100% !important;
-            min-height: 50px !important;
-            padding: 10px 17px !important;
+            min-height: 48px !important;
+            padding: 10px 18px !important;
 
-            border-radius: 999px !important;
-            border: 2px solid rgba(255, 255, 255, 0.92) !important;
-            outline: 1px solid rgba(245, 197, 66, 0.28) !important;
-            outline-offset: 3px !important;
+            border-radius: 14px !important;
+            border: 1.6px solid transparent !important;
 
             background:
-                radial-gradient(circle at 18% 18%, rgba(245, 197, 66, 0.30), transparent 24%),
-                linear-gradient(90deg, #07111F 0%, #123C69 52%, #00B4D8 100%) !important;
+                linear-gradient(#FFFFFF, #FFFFFF) padding-box,
+                linear-gradient(90deg, #69D2FF 0%, #B66DFF 100%) border-box !important;
 
-            color: #F8FAFC !important;
-            box-shadow:
-                0 16px 34px rgba(7, 17, 31, 0.24),
-                0 8px 18px rgba(0, 180, 216, 0.12) !important;
+            color: #1F2937 !important;
+            box-shadow: 0 3px 10px rgba(15, 23, 42, 0.06) !important;
 
-            font-size: 13px !important;
-            font-weight: 950 !important;
-            letter-spacing: 0.005em !important;
+            font-size: 14px !important;
+            font-weight: 700 !important;
             line-height: 1 !important;
             white-space: nowrap !important;
 
             display: inline-flex !important;
             align-items: center !important;
             justify-content: center !important;
-            gap: 9px !important;
+            gap: 10px !important;
 
-            overflow: visible !important;
             transition:
                 transform 0.18s ease,
                 box-shadow 0.18s ease,
-                border-color 0.18s ease,
                 filter 0.18s ease !important;
         }}
 
         div[class*="st-key-ai_summary_button_"] button::before {{
             content: "";
             display: inline-block;
-            width: 20px;
-            height: 20px;
+            width: 18px;
+            height: 18px;
             flex: 0 0 auto;
 
-            background: #F5C542;
+            background: linear-gradient(135deg, #6CCBFF 0%, #A855F7 100%);
             -webkit-mask: url("data:image/svg+xml;base64,{ai_summary_icon_base64}") center / contain no-repeat;
             mask: url("data:image/svg+xml;base64,{ai_summary_icon_base64}") center / contain no-repeat;
-
-            filter: drop-shadow(0 2px 5px rgba(245, 197, 66, 0.32));
         }}
 
         div[class*="st-key-ai_summary_button_"] button:hover {{
-            border-color: rgba(245, 197, 66, 0.88) !important;
-            outline-color: rgba(245, 197, 66, 0.50) !important;
-            color: #FFFFFF !important;
             transform: translateY(-1px) !important;
-            box-shadow:
-                0 20px 42px rgba(7, 17, 31, 0.30),
-                0 10px 24px rgba(0, 180, 216, 0.18) !important;
-            filter: saturate(1.08) !important;
+            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.10) !important;
+            filter: brightness(0.995) !important;
         }}
 
         div[class*="st-key-ai_summary_button_"] button:active {{
-            transform: translateY(0) scale(0.99) !important;
+            transform: translateY(0) scale(0.995) !important;
         }}
 
         div[class*="st-key-ai_summary_button_"] button * {{
-            color: #F8FAFC !important;
+            color: #1F2937 !important;
             white-space: nowrap !important;
             word-break: keep-all !important;
             overflow-wrap: normal !important;
@@ -1133,20 +1118,16 @@ def inject_ai_summary_button_css():
         }}
 
         @media (max-width: 768px) {{
-            div[class*="st-key-ai_summary_button_"] {{
-                margin-top: 12px !important;
-                margin-bottom: 14px !important;
-            }}
-
             div[class*="st-key-ai_summary_button_"] button {{
-                min-height: 46px !important;
+                min-height: 45px !important;
                 padding: 9px 14px !important;
-                font-size: 12.5px !important;
+                font-size: 13px !important;
+                border-radius: 13px !important;
             }}
 
             div[class*="st-key-ai_summary_button_"] button::before {{
-                width: 18px;
-                height: 18px;
+                width: 17px;
+                height: 17px;
             }}
         }}
         </style>
@@ -4469,15 +4450,16 @@ def normalize_ai_summary_text(text: str) -> str:
     text = text.replace("AI tổng kết:", "")
     text = text.replace("Nguồn:", "")
     text = text.replace("Sources:", "")
+    text = text.replace("**", "")
+    text = text.replace("__", "")
+    text = text.replace("* ", "")
     text = re.sub(r"^\s*[-*•]\s*", "", text, flags=re.MULTILINE)
-    text = " ".join(text.split())
 
-    words = text.split()
+    # Giữ lại toàn bộ nội dung, chỉ chuẩn hóa khoảng trắng
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = text.strip()
 
-    if len(words) > 100:
-        text = " ".join(words[:100]).rstrip(" ,.;:") + "..."
-
-    return text.strip()
+    return text
 
 
 def build_ai_match_summary_prompt(match_row: dict) -> str:
@@ -4514,9 +4496,9 @@ def build_ai_match_summary_prompt(match_row: dict) -> str:
         "Bạn là một chuyên gia cập nhật tin tức bóng đá và World Cup 2026. "
         "Trước khi trả lời, hãy sử dụng Google Search để tìm thông tin cập nhật về trận đấu này. "
         f"Hãy viết summary về trận đấu giữa {match_name} trong khuôn khổ World Cup 2026. "
-        "Mục tiêu là giúp người xem hiểu thêm diễn biến trận đấu, thế trận hoặc bước ngoặt, "
+        "Mục tiêu là giúp người xem hiểu thêm diễn biến trận đấu và thế trận, "
         "bổ sung thêm thông tin so với việc chỉ nhìn tỉ số và cầu thủ ghi bàn. "
-        "Chỉ trả lời bằng tiếng Việt, không quá 100 chữ. "
+        "Chỉ trả lời bằng tiếng Việt, không quá 60 chữ. "
         "Chỉ trả lời bằng văn bản thuần, không dùng HTML, CSS, Markdown, bảng, bullet point, code block hoặc thẻ div. "
         "Không thêm tiêu đề, không thêm nhãn 'AI Summary', không thêm phần 'Nguồn'. "
         "Có thể viết đầy đủ nhiều câu nếu cần, miễn là rõ ràng và dễ hiểu.\n\n"
@@ -5797,50 +5779,58 @@ def render_ai_match_summary_dialog(match_id: int):
     actual_away = to_optional_int(match.get("away_score_for_prediction"))
 
     score_text = ""
-
     if actual_home is not None and actual_away is not None:
-        score_text = f"{actual_home} - {actual_away}"
+        score_text = f"{actual_home}-{actual_away}"
 
     st.markdown(
         f"""
         <div style="
             color:#07111F;
-            font-weight:950;
-            font-size:20px;
-            line-height:1.25;
-            margin-bottom:4px;
+            font-weight:900;
+            font-size:18px;
+            line-height:1.3;
+            margin-bottom:10px;
             letter-spacing:-0.02em;
         ">
             {html.escape(str(home_name))} vs {html.escape(str(away_name))}
-        </div>
-
-        <div style="
-            color:#64748B;
-            font-size:13px;
-            line-height:1.45;
-            margin-bottom:16px;
-        ">
-            Tổng kết được lưu theo từng trận. Nếu đã có dữ liệu, app sẽ hiển thị lại và không gọi Gemini mới.
         </div>
         """,
         unsafe_allow_html=True
     )
 
+    if score_text:
+        st.markdown(
+            f"""
+            <div style="
+                display:inline-flex;
+                align-items:center;
+                gap:6px;
+                margin-bottom:16px;
+                padding:7px 12px;
+                border-radius:999px;
+                background:#F8FAFC;
+                border:1px solid rgba(15,23,42,0.08);
+                color:#07111F;
+                font-size:13px;
+                font-weight:850;
+            ">
+                Kết quả: {html.escape(score_text)}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
     try:
         existing_summary = get_ai_match_summary_from_db(match_id)
-
     except Exception as e:
         st.error(
-            "Chưa đọc được bảng match_ai_summaries. "
-            "Hãy kiểm tra xem bạn đã tạo bảng trong Supabase chưa."
+            "Chưa đọc được bảng match_ai_summaries. Hãy kiểm tra xem bạn đã tạo bảng trong Supabase chưa."
         )
         st.caption(str(e))
         return
 
     if existing_summary is not None:
         summary_text = existing_summary.get("summary_text", "")
-        source_note = "Đã lưu trước đó"
-
     else:
         with st.spinner("AI đang tìm kiếm và tổng hợp diễn biến trận đấu..."):
             try:
@@ -5851,66 +5841,26 @@ def render_ai_match_summary_dialog(match_id: int):
                     summary_text=summary_text,
                     model_name=GEMINI_MODEL_NAME
                 )
-
-                source_note = "Vừa tạo mới bằng Gemini"
-
             except Exception as e:
                 st.error("Không tạo được AI summary cho trận này.")
                 st.caption(str(e))
                 return
 
-    safe_summary = html.escape(str(summary_text))
-    safe_score_text = html.escape(score_text)
-
-    score_chip_html = ""
-
-    if safe_score_text:
-        score_chip_html = f"""
-        <div style="
-            display:inline-flex;
-            align-items:center;
-            gap:6px;
-            margin-bottom:12px;
-            padding:7px 12px;
-            border-radius:999px;
-            background:#F8FAFC;
-            border:1px solid rgba(15,23,42,0.08);
-            color:#07111F;
-            font-size:13px;
-            font-weight:900;
-        ">
-            Kết quả: {safe_score_text}
-        </div>
-        """
+    safe_summary = html.escape(str(summary_text)).replace("\n", "<br>")
 
     st.markdown(
         f"""
-        {score_chip_html}
-
         <div style="
-            padding:17px 18px;
-            border-radius:20px;
-            background:
-                radial-gradient(circle at top left, rgba(0, 180, 216, 0.14), transparent 34%),
-                linear-gradient(135deg, rgba(248,250,252,0.98), rgba(255,255,255,0.96));
-            border:1px solid rgba(18, 60, 105, 0.16);
-            border-left:5px solid #F5C542;
-            box-shadow:0 14px 30px rgba(15, 23, 42, 0.08);
-            color:#0F172A;
-            font-size:15px;
-            line-height:1.68;
-            font-weight:650;
-            margin-bottom:10px;
+            color:#334155;
+            font-size:15.5px;
+            line-height:1.75;
+            font-weight:400;
+            margin-bottom:18px;
+            white-space:normal;
+            word-break:normal;
+            overflow-wrap:anywhere;
         ">
             {safe_summary}
-        </div>
-
-        <div style="
-            color:#94A3B8;
-            font-size:12px;
-            margin-bottom:14px;
-        ">
-            {html.escape(source_note)}
         </div>
         """,
         unsafe_allow_html=True
