@@ -881,7 +881,7 @@ def inject_mobile_match_title_css():
 
 inject_mobile_match_title_css()
 
-@st.dialog("Điểm danh hằng ngày")
+@st.dialog(" ")
 def render_daily_checkin_dialog(user_id: int):
     state = get_daily_checkin_state(user_id)
 
@@ -892,6 +892,8 @@ def render_daily_checkin_dialog(user_id: int):
 
     if checked_today and today_day_no is not None:
         claimed_days.add(int(today_day_no))
+
+    checked_count = len(claimed_days)
 
     day_items_html = ""
 
@@ -911,22 +913,25 @@ def render_daily_checkin_dialog(user_id: int):
         if is_today:
             day_classes.append("wc-checkin-day-today")
 
-        day_class_text = " ".join(day_classes)
-        day_icon = "✓" if is_claimed else "★"
+        if day in [CHECKIN_HOPE_REWARD_DAY, CHECKIN_SUPER_REWARD_DAY]:
+            day_classes.append("wc-checkin-day-reward")
 
-        today_badge_html = ""
-        if is_today:
-            today_badge_html = '<div class="wc-checkin-today-badge">HÔM NAY</div>'
+        day_class_text = " ".join(day_classes)
+
+        day_icon = "✓" if is_claimed else "★"
+        marker_text = "Hôm nay" if is_today else "&nbsp;"
 
         reward_html = ""
+
         if day == CHECKIN_HOPE_REWARD_DAY:
-            reward_html = '<div class="wc-checkin-reward-mini">⭐ 1 sao</div>'
+            reward_html = '<div class="wc-checkin-reward-mini">+1 Ngôi sao hy vọng</div>'
+
         elif day == CHECKIN_SUPER_REWARD_DAY:
-            reward_html = '<div class="wc-checkin-reward-mini">✨ 1 siêu sao</div>'
+            reward_html = '<div class="wc-checkin-reward-mini">+1 Siêu sao</div>'
 
         day_items_html += (
             f'<div class="{day_class_text}">'
-            f'{today_badge_html}'
+            f'<div class="wc-checkin-marker">{marker_text}</div>'
             f'<div class="wc-checkin-circle">{day_icon}</div>'
             f'<div class="wc-checkin-day-label">Ngày {day}</div>'
             f'{reward_html}'
@@ -936,42 +941,73 @@ def render_daily_checkin_dialog(user_id: int):
     daily_checkin_html = f"""
     <style>
     div[role="dialog"]:has(.wc-daily-checkin-shell) {{
+        width: min(860px, calc(100vw - 32px)) !important;
+        max-width: min(860px, calc(100vw - 32px)) !important;
         background: transparent !important;
         border: none !important;
         box-shadow: none !important;
         padding: 0 !important;
     }}
 
+    div[role="dialog"]:has(.wc-daily-checkin-shell) h2,
+    div[role="dialog"]:has(.wc-daily-checkin-shell) [data-testid="stDialogHeader"] {{
+        display: none !important;
+    }}
+
     div[role="dialog"]:has(.wc-daily-checkin-shell) button[aria-label="Close"] {{
         color: #FFFFFF !important;
         background: rgba(255, 255, 255, 0.12) !important;
         border-radius: 999px !important;
+        top: 18px !important;
+        right: 18px !important;
     }}
 
     .wc-daily-checkin-shell {{
         position: relative;
+        width: 100%;
         border-radius: 30px;
-        padding: 34px 38px 28px 38px;
+        padding: 34px 36px 30px 36px;
         background:
-            radial-gradient(circle at 50% 0%, rgba(245, 197, 66, 0.22), transparent 28%),
-            radial-gradient(circle at 20% 80%, rgba(0, 180, 216, 0.16), transparent 32%),
+            radial-gradient(circle at 50% 0%, rgba(245, 197, 66, 0.18), transparent 30%),
             linear-gradient(135deg, rgba(7, 17, 31, 0.98), rgba(11, 31, 58, 0.97));
         border: 1px solid rgba(255, 255, 255, 0.16);
         box-shadow: 0 28px 70px rgba(7, 17, 31, 0.46);
         color: #F8FAFC;
         overflow: hidden;
+        box-sizing: border-box;
+    }}
+
+    .wc-daily-checkin-shell::before {{
+        content: "";
+        position: absolute;
+        left: 34px;
+        right: 34px;
+        top: 0;
+        height: 3px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, transparent, #F5C542, transparent);
+        opacity: 0.85;
     }}
 
     .wc-daily-checkin-header {{
         text-align: center;
-        margin-bottom: 28px;
+        margin-bottom: 24px;
     }}
 
-    .wc-daily-checkin-icon {{
-        font-size: 46px;
-        line-height: 1;
+    .wc-daily-checkin-kicker {{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: rgba(245, 197, 66, 0.10);
+        border: 1px solid rgba(245, 197, 66, 0.28);
+        color: #F5C542;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: 0.10em;
+        text-transform: uppercase;
         margin-bottom: 12px;
-        filter: drop-shadow(0 0 18px rgba(245, 197, 66, 0.38));
     }}
 
     .wc-daily-checkin-title {{
@@ -989,49 +1025,94 @@ def render_daily_checkin_dialog(user_id: int):
         margin-top: 8px;
     }}
 
+    .wc-daily-checkin-progress {{
+        margin: 16px auto 0 auto;
+        width: min(420px, 100%);
+        height: 8px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.10);
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }}
+
+    .wc-daily-checkin-progress-fill {{
+        width: calc({checked_count} / 7 * 100%);
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #F5C542, #FFD761);
+        box-shadow: 0 0 18px rgba(245, 197, 66, 0.28);
+    }}
+
     .wc-daily-checkin-days {{
-        display: flex;
-        justify-content: center;
-        align-items: flex-start;
-        gap: 18px;
-        padding: 34px 4px 16px 4px;
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: 10px;
+        align-items: start;
+        padding: 22px 0 14px 0;
     }}
 
     .wc-checkin-day {{
         position: relative;
+        min-width: 0;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: flex-start;
-        min-width: 76px;
+    }}
+
+    .wc-checkin-marker {{
+        height: 20px;
+        margin-bottom: 6px;
+        color: #07111F;
+        background: transparent;
+        font-size: 10px;
+        font-weight: 950;
+        line-height: 20px;
+        white-space: nowrap;
+    }}
+
+    .wc-checkin-day-today .wc-checkin-marker {{
+        padding: 0 8px;
+        border-radius: 999px;
+        background: #F5C542;
+        color: #07111F;
+        box-shadow: 0 8px 18px rgba(245, 197, 66, 0.24);
     }}
 
     .wc-checkin-circle {{
-        width: 56px;
-        height: 56px;
+        width: 48px;
+        height: 48px;
         border-radius: 999px;
         display: flex;
         align-items: center;
         justify-content: center;
-        background: rgba(15, 23, 42, 0.38);
-        border: 1.5px solid rgba(255, 255, 255, 0.28);
-        color: rgba(255, 255, 255, 0.46);
-        font-size: 26px;
+        background: rgba(15, 23, 42, 0.40);
+        border: 1.5px solid rgba(255, 255, 255, 0.24);
+        color: rgba(255, 255, 255, 0.42);
+        font-size: 22px;
         font-weight: 950;
         line-height: 1;
+        box-sizing: border-box;
+    }}
+
+    .wc-checkin-day-today .wc-checkin-circle {{
+        background: rgba(245, 197, 66, 0.08);
+        border-color: rgba(245, 197, 66, 0.78);
+        color: #F5C542;
+        box-shadow: 0 0 0 4px rgba(245, 197, 66, 0.08);
     }}
 
     .wc-checkin-day-claimed .wc-checkin-circle {{
         background: linear-gradient(135deg, #F5C542, #FFD761);
         border-color: rgba(245, 197, 66, 0.95);
         color: #07111F;
-        box-shadow: 0 0 22px rgba(245, 197, 66, 0.42);
+        box-shadow: 0 0 20px rgba(245, 197, 66, 0.34);
     }}
 
     .wc-checkin-day-label {{
-        margin-top: 10px;
+        margin-top: 9px;
         color: #CBD5E1;
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 850;
         white-space: nowrap;
     }}
@@ -1041,44 +1122,32 @@ def render_daily_checkin_dialog(user_id: int):
         color: #F5C542;
     }}
 
-    .wc-checkin-today-badge {{
-        position: absolute;
-        top: -28px;
-        left: 50%;
-        transform: translateX(-50%);
-        padding: 4px 9px;
-        border-radius: 999px;
-        background: #F5C542;
-        color: #07111F;
-        font-size: 10px;
-        font-weight: 950;
-        white-space: nowrap;
-        box-shadow: 0 8px 18px rgba(245, 197, 66, 0.24);
-    }}
-
     .wc-checkin-reward-mini {{
-        margin-top: 8px;
+        margin-top: 7px;
+        min-height: 26px;
         color: #F5C542;
-        font-size: 11px;
+        font-size: 10.5px;
         font-weight: 850;
-        white-space: nowrap;
+        line-height: 1.25;
+        text-align: center;
+        max-width: 90px;
     }}
 
     .wc-checkin-reward-grid {{
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 12px;
-        margin: 18px auto 22px auto;
-        max-width: 420px;
+        margin: 18px auto 18px auto;
+        max-width: 520px;
     }}
 
     .wc-checkin-reward-card {{
-        border: 1px solid rgba(245, 197, 66, 0.42);
-        border-radius: 14px;
-        padding: 10px 12px;
+        border: 1px solid rgba(245, 197, 66, 0.36);
+        border-radius: 16px;
+        padding: 12px 14px;
         text-align: center;
         color: #F5C542;
-        font-size: 14px;
+        font-size: 13.5px;
         font-weight: 850;
         background: rgba(245, 197, 66, 0.06);
     }}
@@ -1088,6 +1157,13 @@ def render_daily_checkin_dialog(user_id: int):
         font-size: 13px;
         text-align: center;
         margin-top: 8px;
+        line-height: 1.45;
+    }}
+
+    div[class*="st-key-daily_checkin_claim_"],
+    div[class*="st-key-daily_checkin_done_"] {{
+        width: min(860px, calc(100vw - 32px)) !important;
+        margin: 14px auto 0 auto !important;
     }}
 
     div[class*="st-key-daily_checkin_claim_"] button {{
@@ -1099,7 +1175,7 @@ def render_daily_checkin_dialog(user_id: int):
         color: #07111F !important;
         font-size: 18px !important;
         font-weight: 950 !important;
-        box-shadow: 0 14px 34px rgba(245, 197, 66, 0.26) !important;
+        box-shadow: 0 14px 34px rgba(245, 197, 66, 0.24) !important;
     }}
 
     div[class*="st-key-daily_checkin_claim_"] button:hover {{
@@ -1120,40 +1196,55 @@ def render_daily_checkin_dialog(user_id: int):
     }}
 
     @media (max-width: 768px) {{
+        div[role="dialog"]:has(.wc-daily-checkin-shell) {{
+            width: min(390px, calc(100vw - 24px)) !important;
+            max-width: min(390px, calc(100vw - 24px)) !important;
+        }}
+
         .wc-daily-checkin-shell {{
-            padding: 26px 18px 22px 18px !important;
+            padding: 28px 18px 24px 18px !important;
             border-radius: 24px !important;
         }}
 
-        .wc-daily-checkin-days {{
-            overflow-x: auto !important;
-            justify-content: flex-start !important;
-            padding-top: 34px !important;
-            padding-bottom: 8px !important;
+        .wc-daily-checkin-title {{
+            font-size: 25px;
         }}
 
-        .wc-checkin-day {{
-            min-width: 68px;
+        .wc-daily-checkin-days {{
+            grid-template-columns: repeat(7, 62px);
+            overflow-x: auto;
+            justify-content: flex-start;
+            padding-bottom: 12px;
         }}
 
         .wc-checkin-circle {{
-            width: 50px;
-            height: 50px;
-            font-size: 23px;
+            width: 48px;
+            height: 48px;
         }}
 
         .wc-checkin-reward-grid {{
             grid-template-columns: 1fr;
             max-width: 100%;
         }}
+
+        div[class*="st-key-daily_checkin_claim_"],
+        div[class*="st-key-daily_checkin_done_"] {{
+            width: min(390px, calc(100vw - 24px)) !important;
+        }}
     }}
     </style>
 
     <div class="wc-daily-checkin-shell">
         <div class="wc-daily-checkin-header">
-            <div class="wc-daily-checkin-icon">📅</div>
+            <div class="wc-daily-checkin-kicker">Chu kỳ 7 ngày</div>
             <div class="wc-daily-checkin-title">Điểm danh hằng ngày</div>
-            <div class="wc-daily-checkin-subtitle">Đăng nhập và điểm danh mỗi ngày để nhận thưởng.</div>
+            <div class="wc-daily-checkin-subtitle">
+                Điểm danh mỗi ngày để tích lũy phần thưởng bổ trợ.
+            </div>
+
+            <div class="wc-daily-checkin-progress">
+                <div class="wc-daily-checkin-progress-fill"></div>
+            </div>
         </div>
 
         <div class="wc-daily-checkin-days">
@@ -1161,12 +1252,12 @@ def render_daily_checkin_dialog(user_id: int):
         </div>
 
         <div class="wc-checkin-reward-grid">
-            <div class="wc-checkin-reward-card">Ngày 5: ⭐ 1 Ngôi sao hy vọng</div>
-            <div class="wc-checkin-reward-card">Ngày 7: ✨ 1 Siêu sao</div>
+            <div class="wc-checkin-reward-card">Ngày 5: +1 Ngôi sao hy vọng</div>
+            <div class="wc-checkin-reward-card">Ngày 7: +1 Siêu sao</div>
         </div>
 
         <div class="wc-checkin-note">
-            ℹ️ Sau khi hoàn thành 7 ngày, chu kỳ sẽ tự động bắt đầu lại từ ngày 1.
+            Sau khi hoàn thành 7 ngày, chu kỳ sẽ tự động bắt đầu lại từ ngày 1.
         </div>
     </div>
     """
@@ -1202,53 +1293,74 @@ def render_daily_checkin_dialog(user_id: int):
         )
 
 
-@st.dialog("Chúc mừng!")
+@st.dialog(" ")
 def render_daily_checkin_reward_dialog(reward_info: dict):
     reward_label = str(reward_info.get("reward_label") or "")
-    reward_icon = str(reward_info.get("reward_icon") or "⭐")
+    reward_type = normalize_star_type(reward_info.get("reward_type"))
     day_no = int(reward_info.get("day_no") or 0)
 
     safe_reward_label = html.escape(reward_label)
 
+    reward_symbol = "✦" if reward_type == STAR_TYPE_SUPER else "★"
+
     daily_reward_html = f"""
     <style>
     div[role="dialog"]:has(.wc-daily-reward-shell) {{
+        width: min(560px, calc(100vw - 32px)) !important;
+        max-width: min(560px, calc(100vw - 32px)) !important;
         background: transparent !important;
         border: none !important;
         box-shadow: none !important;
         padding: 0 !important;
     }}
 
+    div[role="dialog"]:has(.wc-daily-reward-shell) h2,
+    div[role="dialog"]:has(.wc-daily-reward-shell) [data-testid="stDialogHeader"] {{
+        display: none !important;
+    }}
+
     div[role="dialog"]:has(.wc-daily-reward-shell) button[aria-label="Close"] {{
         color: #FFFFFF !important;
         background: rgba(255, 255, 255, 0.12) !important;
         border-radius: 999px !important;
+        top: 18px !important;
+        right: 18px !important;
     }}
 
     .wc-daily-reward-shell {{
         border-radius: 28px;
         padding: 38px 34px 30px 34px;
         background:
-            radial-gradient(circle at 50% 0%, rgba(245, 197, 66, 0.28), transparent 28%),
-            radial-gradient(circle at 18% 82%, rgba(0, 180, 216, 0.18), transparent 34%),
+            radial-gradient(circle at 50% 0%, rgba(245, 197, 66, 0.24), transparent 30%),
             linear-gradient(135deg, rgba(7, 17, 31, 0.98), rgba(11, 31, 58, 0.97));
         border: 1px solid rgba(255, 255, 255, 0.16);
         box-shadow: 0 28px 70px rgba(7, 17, 31, 0.46);
         color: #F8FAFC;
         text-align: center;
         overflow: hidden;
+        box-sizing: border-box;
     }}
 
-    .wc-daily-reward-icon {{
-        font-size: 64px;
-        line-height: 1;
-        margin-bottom: 18px;
-        filter: drop-shadow(0 0 24px rgba(245, 197, 66, 0.45));
+    .wc-daily-reward-orb {{
+        width: 84px;
+        height: 84px;
+        margin: 0 auto 18px auto;
+        border-radius: 999px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #F5C542, #FFD761);
+        color: #07111F;
+        font-size: 42px;
+        font-weight: 950;
+        box-shadow:
+            0 0 0 8px rgba(245, 197, 66, 0.10),
+            0 0 32px rgba(245, 197, 66, 0.32);
     }}
 
     .wc-daily-reward-title {{
         color: #F8FAFC;
-        font-size: 34px;
+        font-size: 32px;
         font-weight: 950;
         line-height: 1.12;
         letter-spacing: -0.04em;
@@ -1257,7 +1369,7 @@ def render_daily_checkin_reward_dialog(reward_info: dict):
 
     .wc-daily-reward-subtitle {{
         color: #CBD5E1;
-        font-size: 16px;
+        font-size: 15.5px;
         line-height: 1.55;
         margin-bottom: 18px;
     }}
@@ -1285,6 +1397,11 @@ def render_daily_checkin_reward_dialog(reward_info: dict):
         margin-top: 6px;
     }}
 
+    div[class*="st-key-daily_reward_confirm"] {{
+        width: min(560px, calc(100vw - 32px)) !important;
+        margin: 14px auto 0 auto !important;
+    }}
+
     div[class*="st-key-daily_reward_confirm"] button {{
         width: 100% !important;
         min-height: 54px !important;
@@ -1294,7 +1411,7 @@ def render_daily_checkin_reward_dialog(reward_info: dict):
         color: #07111F !important;
         font-size: 18px !important;
         font-weight: 950 !important;
-        box-shadow: 0 14px 34px rgba(245, 197, 66, 0.26) !important;
+        box-shadow: 0 14px 34px rgba(245, 197, 66, 0.24) !important;
     }}
 
     div[class*="st-key-daily_reward_confirm"] button:hover {{
@@ -1304,15 +1421,17 @@ def render_daily_checkin_reward_dialog(reward_info: dict):
     </style>
 
     <div class="wc-daily-reward-shell">
-        <div class="wc-daily-reward-icon">{reward_icon}</div>
-        <div class="wc-daily-reward-title">Chúc mừng!</div>
+        <div class="wc-daily-reward-orb">{reward_symbol}</div>
+        <div class="wc-daily-reward-title">Phần thưởng đã nhận</div>
+
         <div class="wc-daily-reward-subtitle">
-            Bạn đã điểm danh đủ <b style="color:#F5C542;">{day_no} ngày</b> và nhận được
+            Bạn đã điểm danh đủ <b style="color:#F5C542;">{day_no} ngày</b>
+            trong chu kỳ hiện tại.
         </div>
 
         <div class="wc-daily-reward-card">
             <div class="wc-daily-reward-name">{safe_reward_label}</div>
-            <div class="wc-daily-reward-note">Đã thêm vào kho thưởng của bạn</div>
+            <div class="wc-daily-reward-note">Đã được cộng vào kho bổ trợ của bạn</div>
         </div>
     </div>
     """
@@ -1323,12 +1442,11 @@ def render_daily_checkin_reward_dialog(reward_info: dict):
         components.html(daily_reward_html, height=430, scrolling=False)
 
     if st.button(
-        "Tuyệt vời",
+        "Hoàn tất",
         key="daily_reward_confirm",
         use_container_width=True
     ):
         st.rerun()
-
 
 def maybe_render_daily_checkin_popup(user_id: int):
     user_id = int(user_id)
