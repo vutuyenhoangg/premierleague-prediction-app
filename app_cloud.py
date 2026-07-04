@@ -4376,8 +4376,183 @@ def get_match_card_css(status_info):
     }}
     """
 
+def get_countdown_seconds_to_kickoff(kickoff_time_utc) -> int | None:
+    """
+    Tính số giây còn lại đến giờ kickoff.
 
-def render_status_badge(status_info):
+    Trả về:
+    - None nếu không parse được thời gian.
+    - 0 nếu đã đến/qua giờ kickoff.
+    - Số giây còn lại nếu trận chưa diễn ra.
+    """
+    kickoff = parse_utc_datetime(kickoff_time_utc)
+
+    if pd.isna(kickoff):
+        return None
+
+    now = pd.Timestamp.now(tz="UTC")
+    remaining_seconds = int((kickoff - now).total_seconds())
+
+    return max(0, remaining_seconds)
+
+
+def format_countdown_seconds(total_seconds: int) -> str:
+    """
+    Format countdown:
+    - Dưới 1 ngày: 12h 59m 12s
+    - Từ 1 ngày trở lên: 2d 1h 5m
+    """
+    total_seconds = max(0, int(total_seconds or 0))
+
+    days = total_seconds // 86400
+    hours = (total_seconds % 86400) // 3600
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+
+    if days >= 1:
+        return f"{days}d {hours}h {minutes}m"
+
+    return f"{hours}h {minutes}m {seconds}s"
+
+def render_status_badge(status_info, row=None):
+    """
+    Hiển thị badge trạng thái ở đầu card trận đấu.
+
+    Với trận chưa diễn ra thuộc trạng thái:
+    - Đang mở dự đoán
+    - Chưa xác định đội
+
+    Badge sẽ hiển thị countdown đến giờ kickoff:
+    - Dưới 1 ngày: 12h 59m 12s
+    - Từ 1 ngày trở lên: 2d 1h 5m
+
+    Các trạng thái khác giữ nguyên label cũ.
+    """
+    status_key = status_info.get("status_key")
+    badge_label = str(status_info.get("label", ""))
+
+    should_show_countdown = (
+        row is not None
+        and status_key in ["open", "unknown"]
+        and not to_bool(row.get("is_finished"))
+    )
+
+    if should_show_countdown:
+        remaining_seconds = get_countdown_seconds_to_kickoff(
+            row.get("kickoff_time_utc")
+        )
+
+        if remaining_seconds is not None and remaining_seconds > 0:
+            kickoff = parse_utc_datetime(row.get("kickoff_time_utc"))
+            kickoff_epoch_ms = int(kickoff.timestamp() * 1000)
+
+            initial_countdown_text = format_countdown_seconds(
+                remaining_seconds
+            )
+
+            safe_component_id = f"wc_countdown_badge_{int(row.get('match_id'))}"
+            safe_initial_text = html.escape(initial_countdown_text)
+            safe_expired_label = html.escape(badge_label)
+            safe_badge_bg = html.escape(str(status_info["badge_bg"]))
+            safe_badge_text = html.escape(str(status_info["badge_text"]))
+
+            countdown_html = f"""
+            <!doctype html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <style>
+                    html,
+                    body {{
+                        margin: 0;
+                        padding: 0;
+                        background: transparent;
+                        overflow: hidden;
+                    }}
+
+                    .wc-countdown-badge {{
+                        display: inline-block;
+                        padding: 7px 13px;
+                        border-radius: 999px;
+                        background: {safe_badge_bg};
+                        color: {safe_badge_text};
+                        font-weight: 850;
+                        font-size: 13px;
+                        line-height: 1.25;
+                        margin-bottom: 8px;
+                        border: 1px solid rgba(15,23,42,0.06);
+                        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+                        white-space: nowrap;
+                        box-sizing: border-box;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div
+                    id="{safe_component_id}"
+                    class="wc-countdown-badge"
+                    data-kickoff-ms="{kickoff_epoch_ms}"
+                    data-expired-label="{safe_expired_label}"
+                >{safe_initial_text}</div>
+
+                <script>
+                (function() {{
+                    const badge = document.getElementById("{safe_component_id}");
+
+                    if (!badge) {{
+                        return;
+                    }}
+
+                    const kickoffMs = Number(badge.dataset.kickoffMs);
+                    const expiredLabel = badge.dataset.expiredLabel || "";
+
+                    function formatCountdown(totalSeconds) {{
+                        totalSeconds = Math.max(0, Math.floor(totalSeconds));
+
+                        const days = Math.floor(totalSeconds / 86400);
+                        const hours = Math.floor((totalSeconds % 86400) / 3600);
+                        const minutes = Math.floor((totalSeconds % 3600) / 60);
+                        const seconds = totalSeconds % 60;
+
+                        if (days >= 1) {{
+                            return days + "d " + hours + "h " + minutes + "m";
+                        }}
+
+                        return hours + "h " + minutes + "m " + seconds + "s";
+                    }}
+
+                    function updateCountdown() {{
+                        const remainingMs = kickoffMs - Date.now();
+
+                        if (remainingMs <= 0) {{
+                            badge.textContent = expiredLabel;
+                            window.clearInterval(timer);
+                            return;
+                        }}
+
+                        badge.textContent = formatCountdown(remainingMs / 1000);
+                    }}
+
+                    updateCountdown();
+
+                    const timer = window.setInterval(
+                        updateCountdown,
+                        1000
+                    );
+                }})();
+                </script>
+            </body>
+            </html>
+            """
+
+            components.html(
+                countdown_html,
+                height=38,
+                scrolling=False
+            )
+
+            return
+
     st.markdown(
         f"""
         <div style="
@@ -4391,7 +4566,7 @@ def render_status_badge(status_info):
             margin-bottom:8px;
             border:1px solid rgba(15,23,42,0.06);
         ">
-            {status_info["label"]}
+            {html.escape(badge_label)}
         </div>
         """,
         unsafe_allow_html=True
@@ -7519,7 +7694,7 @@ def render_match_card(
         key=f"match_card_{match_id}",
         css_styles=card_css
     ):
-        render_status_badge(status_info)
+        render_status_badge(status_info, row=row)
 
         top_left, top_right = st.columns([3, 1])
 
