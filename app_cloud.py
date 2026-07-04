@@ -25,6 +25,7 @@ from streamlit_cookies_controller import CookieController
 import re
 from google import genai
 from google.genai import types
+import textwrap
 
 # ============================================================
 # 1. CONFIG
@@ -920,94 +921,102 @@ def render_daily_checkin_dialog(user_id: int):
         today_badge = ""
 
         if is_today:
-            today_badge = """
-            <div style="
-                position:absolute;
-                top:-28px;
-                left:50%;
-                transform:translateX(-50%);
-                padding:4px 9px;
-                border-radius:999px;
-                background:#F5C542;
-                color:#07111F;
-                font-size:10px;
-                font-weight:950;
-                white-space:nowrap;
-                box-shadow:0 8px 18px rgba(245,197,66,0.24);
-            ">
-                HÔM NAY
-            </div>
-            """
+            today_badge = textwrap.dedent(
+                """
+                <div style="
+                    position:absolute;
+                    top:-28px;
+                    left:50%;
+                    transform:translateX(-50%);
+                    padding:4px 9px;
+                    border-radius:999px;
+                    background:#F5C542;
+                    color:#07111F;
+                    font-size:10px;
+                    font-weight:950;
+                    white-space:nowrap;
+                    box-shadow:0 8px 18px rgba(245,197,66,0.24);
+                ">
+                    HÔM NAY
+                </div>
+                """
+            ).strip()
 
         reward_html = ""
 
         if day == CHECKIN_HOPE_REWARD_DAY:
-            reward_html = """
-            <div style="
-                margin-top:8px;
-                color:#F5C542;
-                font-size:11px;
-                font-weight:850;
-                white-space:nowrap;
-            ">
-                ⭐ 1 sao
-            </div>
-            """
+            reward_html = textwrap.dedent(
+                """
+                <div style="
+                    margin-top:8px;
+                    color:#F5C542;
+                    font-size:11px;
+                    font-weight:850;
+                    white-space:nowrap;
+                ">
+                    ⭐ 1 sao
+                </div>
+                """
+            ).strip()
 
         elif day == CHECKIN_SUPER_REWARD_DAY:
-            reward_html = """
+            reward_html = textwrap.dedent(
+                """
+                <div style="
+                    margin-top:8px;
+                    color:#F5C542;
+                    font-size:11px;
+                    font-weight:850;
+                    white-space:nowrap;
+                ">
+                    ✨ 1 siêu sao
+                </div>
+                """
+            ).strip()
+
+        day_items_html += textwrap.dedent(
+            f"""
             <div style="
-                margin-top:8px;
-                color:#F5C542;
-                font-size:11px;
-                font-weight:850;
-                white-space:nowrap;
+                position:relative;
+                display:flex;
+                flex-direction:column;
+                align-items:center;
+                justify-content:flex-start;
+                min-width:76px;
             ">
-                ✨ 1 siêu sao
+                {today_badge}
+                <div style="
+                    width:56px;
+                    height:56px;
+                    border-radius:999px;
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    background:{circle_bg};
+                    border:1.5px solid {circle_border};
+                    color:{circle_color};
+                    font-size:26px;
+                    font-weight:950;
+                    box-shadow:{circle_shadow};
+                    line-height:1;
+                ">
+                    {icon}
+                </div>
+                <div style="
+                    margin-top:10px;
+                    color:{label_color};
+                    font-size:14px;
+                    font-weight:850;
+                    white-space:nowrap;
+                ">
+                    Ngày {day}
+                </div>
+                {reward_html}
             </div>
             """
+        ).strip()
 
-        day_items_html += f"""
-        <div style="
-            position:relative;
-            display:flex;
-            flex-direction:column;
-            align-items:center;
-            justify-content:flex-start;
-            min-width:76px;
-        ">
-            {today_badge}
-            <div style="
-                width:56px;
-                height:56px;
-                border-radius:999px;
-                display:flex;
-                align-items:center;
-                justify-content:center;
-                background:{circle_bg};
-                border:1.5px solid {circle_border};
-                color:{circle_color};
-                font-size:26px;
-                font-weight:950;
-                box-shadow:{circle_shadow};
-                line-height:1;
-            ">
-                {icon}
-            </div>
-            <div style="
-                margin-top:10px;
-                color:{label_color};
-                font-size:14px;
-                font-weight:850;
-                white-space:nowrap;
-            ">
-                Ngày {day}
-            </div>
-            {reward_html}
-        </div>
-        """
-
-    st.markdown(
+    daily_checkin_html = textwrap.dedent(
         f"""
         <style>
         div[role="dialog"]:has(.wc-daily-checkin-shell) {{
@@ -1156,8 +1165,21 @@ def render_daily_checkin_dialog(user_id: int):
                     Ngày 7: ✨ 1 Siêu sao
                 </div>
             </div>
+
+            <div style="
+                color:#CBD5E1;
+                font-size:13px;
+                text-align:center;
+                margin-top:8px;
+            ">
+                ℹ️ Sau khi hoàn thành 7 ngày, chu kỳ sẽ tự động bắt đầu lại từ ngày 1.
+            </div>
         </div>
-        """,
+        """
+    ).strip()
+
+    st.markdown(
+        daily_checkin_html,
         unsafe_allow_html=True
     )
 
@@ -1186,19 +1208,6 @@ def render_daily_checkin_dialog(user_id: int):
             disabled=True
         )
 
-    st.markdown(
-        """
-        <div style="
-            color:#CBD5E1;
-            font-size:13px;
-            text-align:center;
-            margin-top:12px;
-        ">
-            Sau khi hoàn thành 7 ngày, chu kỳ sẽ tự động bắt đầu lại từ ngày 1.
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
 
 @st.dialog("Chúc mừng!")
 def render_daily_checkin_reward_dialog(reward_info: dict):
@@ -1206,7 +1215,7 @@ def render_daily_checkin_reward_dialog(reward_info: dict):
     reward_icon = str(reward_info.get("reward_icon") or "⭐")
     day_no = int(reward_info.get("day_no") or 0)
 
-    st.markdown(
+    daily_reward_html = textwrap.dedent(
         f"""
         <style>
         div[role="dialog"]:has(.wc-daily-reward-shell) {{
@@ -1232,6 +1241,11 @@ def render_daily_checkin_reward_dialog(reward_info: dict):
             font-size: 18px !important;
             font-weight: 950 !important;
             box-shadow: 0 14px 34px rgba(245,197,66,0.26) !important;
+        }}
+
+        div[class*="st-key-daily_reward_confirm"] button:hover {{
+            transform: translateY(-1px) !important;
+            filter: brightness(1.02) !important;
         }}
         </style>
 
@@ -1305,7 +1319,11 @@ def render_daily_checkin_reward_dialog(reward_info: dict):
                 </div>
             </div>
         </div>
-        """,
+        """
+    ).strip()
+
+    st.markdown(
+        daily_reward_html,
         unsafe_allow_html=True
     )
 
@@ -1315,6 +1333,7 @@ def render_daily_checkin_reward_dialog(reward_info: dict):
         use_container_width=True
     ):
         st.rerun()
+
 
 def maybe_render_daily_checkin_popup(user_id: int):
     """
