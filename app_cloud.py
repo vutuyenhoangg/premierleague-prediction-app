@@ -1649,7 +1649,7 @@ def render_daily_checkin_shortcut_button(user_id: int):
         @media (max-width: 768px) {{
             div[class*="st-key-daily_checkin_shortcut_button"] {{
                 top: 136px !important;
-                right: 18px !important;
+                right: 6px !important;
 
                 width: 40px !important;
                 height: 40px !important;
@@ -3188,9 +3188,9 @@ def render_avatar_popover(user: dict):
         }}
 
         @media (max-width: 768px) {{
-            .st-key-top_right_avatar_popover_shell {{
-                top: 64px !important;
-                right: -20px !important;
+            {{
+                top: 64px;
+                right: 12px;
                 width: 56px !important;
                 height: 56px !important;
             }}
