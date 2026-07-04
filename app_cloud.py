@@ -883,6 +883,11 @@ inject_mobile_match_title_css()
 
 @st.dialog(" ")
 def render_daily_checkin_dialog(user_id: int):
+    reward_info = st.session_state.get("daily_checkin_reward_popup")
+
+    if reward_info is not None:
+        render_daily_checkin_reward_content(reward_info)
+        return
     state = get_daily_checkin_state(user_id)
 
     claimed_days = set(int(day) for day in state.get("claimed_days", []))
@@ -1276,13 +1281,13 @@ def render_daily_checkin_dialog(user_id: int):
 
         if claim_clicked:
             result = claim_daily_checkin(user_id)
-
+        
             if result.get("reward_type") is not None:
                 st.session_state["daily_checkin_reward_popup"] = result
             else:
-                st.session_state["daily_checkin_show_confirm"] = True
-
-            st.rerun()
+                st.session_state["daily_checkin_after_claim"] = True
+        
+            rerun_current_fragment()
 
     else:
         st.button(
@@ -1448,45 +1453,152 @@ def render_daily_checkin_reward_dialog(reward_info: dict):
     ):
         st.rerun()
 
+def render_daily_checkin_reward_content(reward_info: dict):
+    reward_label = str(reward_info.get("reward_label") or "")
+    reward_type = normalize_star_type(reward_info.get("reward_type"))
+    day_no = int(reward_info.get("day_no") or 0)
+
+    safe_reward_label = html.escape(reward_label)
+    reward_symbol = "✦" if reward_type == STAR_TYPE_SUPER else "★"
+
+    daily_reward_html = f"""
+    <style>
+    .wc-daily-reward-shell {{
+        border-radius: 28px;
+        padding: 38px 34px 30px 34px;
+        background:
+            radial-gradient(circle at 50% 0%, rgba(245, 197, 66, 0.24), transparent 30%),
+            linear-gradient(135deg, rgba(7, 17, 31, 0.98), rgba(11, 31, 58, 0.97));
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        box-shadow: 0 28px 70px rgba(7, 17, 31, 0.46);
+        color: #F8FAFC;
+        text-align: center;
+        overflow: hidden;
+        box-sizing: border-box;
+    }}
+
+    .wc-daily-reward-orb {{
+        width: 84px;
+        height: 84px;
+        margin: 0 auto 18px auto;
+        border-radius: 999px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #F5C542, #FFD761);
+        color: #07111F;
+        font-size: 42px;
+        font-weight: 950;
+        box-shadow:
+            0 0 0 8px rgba(245, 197, 66, 0.10),
+            0 0 32px rgba(245, 197, 66, 0.32);
+    }}
+
+    .wc-daily-reward-title {{
+        color: #F8FAFC;
+        font-size: 32px;
+        font-weight: 950;
+        line-height: 1.12;
+        letter-spacing: -0.04em;
+        margin-bottom: 10px;
+    }}
+
+    .wc-daily-reward-subtitle {{
+        color: #CBD5E1;
+        font-size: 15.5px;
+        line-height: 1.55;
+        margin-bottom: 18px;
+    }}
+
+    .wc-daily-reward-card {{
+        max-width: 420px;
+        margin: 0 auto 24px auto;
+        border: 1px solid rgba(245, 197, 66, 0.62);
+        border-radius: 18px;
+        padding: 16px 18px;
+        background: rgba(245, 197, 66, 0.08);
+        box-shadow: 0 0 28px rgba(245, 197, 66, 0.14);
+    }}
+
+    .wc-daily-reward-name {{
+        color: #F5C542;
+        font-size: 20px;
+        font-weight: 950;
+        line-height: 1.2;
+    }}
+
+    .wc-daily-reward-note {{
+        color: #CBD5E1;
+        font-size: 14px;
+        margin-top: 6px;
+    }}
+
+    div[class*="st-key-daily_reward_confirm"] button {{
+        width: 100% !important;
+        min-height: 54px !important;
+        border-radius: 999px !important;
+        border: none !important;
+        background: linear-gradient(135deg, #F5C542, #FFD761) !important;
+        color: #07111F !important;
+        font-size: 18px !important;
+        font-weight: 950 !important;
+        box-shadow: 0 14px 34px rgba(245, 197, 66, 0.24) !important;
+    }}
+    </style>
+
+    <div class="wc-daily-reward-shell">
+        <div class="wc-daily-reward-orb">{reward_symbol}</div>
+        <div class="wc-daily-reward-title">Phần thưởng đã nhận</div>
+
+        <div class="wc-daily-reward-subtitle">
+            Bạn đã điểm danh đủ <b style="color:#F5C542;">{day_no} ngày</b>
+            trong chu kỳ hiện tại.
+        </div>
+
+        <div class="wc-daily-reward-card">
+            <div class="wc-daily-reward-name">{safe_reward_label}</div>
+            <div class="wc-daily-reward-note">Đã được cộng vào kho bổ trợ của bạn</div>
+        </div>
+    </div>
+    """
+
+    if hasattr(st, "html"):
+        st.html(daily_reward_html)
+    else:
+        components.html(daily_reward_html, height=430, scrolling=False)
+
+    if st.button(
+        "Hoàn tất",
+        key="daily_reward_confirm",
+        use_container_width=True
+    ):
+        st.session_state.pop("daily_checkin_reward_popup", None)
+        st.session_state.pop("daily_checkin_after_claim", None)
+        rerun_current_fragment()
+
 def maybe_render_daily_checkin_popup(user_id: int):
     """
     Tự mở popup điểm danh lần đầu trong ngày nếu user chưa điểm danh.
-    Nếu user bấm X, popup không tự bật lại liên tục khi filter/chuyển trang.
-    Nếu bấm nút shortcut thì vẫn mở lại được popup.
+    Hàm này chỉ chạy trong full app render bình thường.
+    Nút shortcut đã được tách sang fragment riêng.
     """
     user_id = int(user_id)
     today_key = today_vietnam_date().isoformat()
 
-    reward_info = st.session_state.pop(
-        "daily_checkin_reward_popup",
-        None
-    )
-
-    if reward_info is not None:
-        render_daily_checkin_reward_dialog(reward_info)
-        return
-
-    force_open = st.session_state.pop(
-        "daily_checkin_show_confirm",
-        False
-    )
-
-    state = get_daily_checkin_state(user_id)
+    state = get_daily_checkin_state(user_id, use_cache=True)
 
     prompt_seen_key = f"daily_checkin_prompt_seen_{user_id}_{today_key}"
 
     should_open = (
-        force_open
-        or (
-            not bool(state.get("checked_today", False))
-            and not bool(st.session_state.get(prompt_seen_key, False))
-        )
+        not bool(state.get("checked_today", False))
+        and not bool(st.session_state.get(prompt_seen_key, False))
     )
 
     if should_open:
         st.session_state[prompt_seen_key] = True
         render_daily_checkin_dialog(user_id)
 
+@st.fragment
 def render_daily_checkin_shortcut_button(user_id: int):
     """
     Nút tròn nhỏ dưới avatar để mở lại popup điểm danh.
@@ -1685,18 +1797,14 @@ def render_daily_checkin_shortcut_button(user_id: int):
         unsafe_allow_html=True
     )
 
-    if st.session_state.pop("open_daily_checkin_from_shortcut", False):
-        render_daily_checkin_dialog(user_id)
-
     shortcut_clicked = st.button(
         "Mở điểm danh",
         key="daily_checkin_shortcut_button",
         help="Xem điểm danh hằng ngày"
     )
-
+    
     if shortcut_clicked:
-        st.session_state["open_daily_checkin_from_shortcut"] = True
-        st.rerun()
+        render_daily_checkin_dialog(user_id)
 
 def inject_mobile_goal_scorer_button_css():
     """
@@ -3404,6 +3512,15 @@ def read_sql(query: str, params: dict | None = None) -> pd.DataFrame:
             params=params or {}
         )
 
+def rerun_current_fragment():
+    """
+    Rerun riêng fragment/dialog hiện tại.
+    Nếu Streamlit version cũ không hỗ trợ scope='fragment' thì fallback về full rerun.
+    """
+    try:
+        st.rerun(scope="fragment")
+    except Exception:
+        st.rerun()
 
 def fetch_one(query: str, params: dict | None = None):
     with get_engine().connect() as conn:
@@ -4716,11 +4833,28 @@ def restore_user_from_cookie() -> bool:
     st.session_state["user"] = user
     return True
 
-def get_daily_checkin_bonus_counts(user_id: int) -> dict:
+def clear_daily_checkin_cache():
     """
-    Tổng số sao thưởng người chơi đã nhận từ điểm danh.
-    Sao thưởng này cộng vào quota gốc.
+    Chỉ clear cache liên quan đến điểm danh và quota sao thưởng.
+    Không clear matches/predictions/users vì điểm danh không làm thay đổi các dữ liệu đó.
     """
+    try:
+        get_daily_checkin_bonus_counts_cached.clear()
+    except Exception:
+        pass
+
+    try:
+        get_daily_checkin_state_cached.clear()
+    except Exception:
+        pass
+
+    try:
+        build_leaderboard_df.clear()
+    except Exception:
+        pass
+
+@st.cache_data(ttl=60, show_spinner=False)
+def get_daily_checkin_bonus_counts_cached(user_id: int) -> dict:
     try:
         row = fetch_one(
             """
@@ -4752,6 +4886,10 @@ def get_daily_checkin_bonus_counts(user_id: int) -> dict:
     }
 
 
+def get_daily_checkin_bonus_counts(user_id: int) -> dict:
+    return get_daily_checkin_bonus_counts_cached(int(user_id))
+
+
 def get_user_star_quota(user_id: int) -> dict:
     """
     Quota sao thực tế = quota gốc + sao thưởng từ điểm danh.
@@ -4769,15 +4907,7 @@ def get_user_star_quota(user_id: int) -> dict:
     }
 
 
-def get_daily_checkin_state(user_id: int) -> dict:
-    """
-    Lấy trạng thái điểm danh hiện tại của user.
-
-    Logic:
-    - Một chu kỳ gồm 7 ngày điểm danh.
-    - Đủ ngày 7 thì chu kỳ kế tiếp bắt đầu lại từ ngày 1.
-    - Mỗi ngày chỉ điểm danh được 1 lần theo ngày Việt Nam.
-    """
+def get_daily_checkin_state_from_db(user_id: int) -> dict:
     today = today_vietnam_date()
 
     try:
@@ -4830,6 +4960,7 @@ def get_daily_checkin_state(user_id: int) -> dict:
     max_cycle_no = int(df["cycle_no"].max())
 
     current_cycle_df = df[df["cycle_no"].astype(int) == max_cycle_no].copy()
+
     current_cycle_days = sorted(
         int(day)
         for day in current_cycle_df["day_no"].dropna().tolist()
@@ -4838,7 +4969,6 @@ def get_daily_checkin_state(user_id: int) -> dict:
     cycle_completed = CHECKIN_CYCLE_DAYS in current_cycle_days
 
     if cycle_completed:
-        # Nếu chu kỳ gần nhất đã đủ 7 ngày, chu kỳ mới bắt đầu từ đầu.
         cycle_no = max_cycle_no + 1
         claimed_days = []
     else:
@@ -4859,13 +4989,30 @@ def get_daily_checkin_state(user_id: int) -> dict:
     }
 
 
+@st.cache_data(ttl=60, show_spinner=False)
+def get_daily_checkin_state_cached(user_id: int, today_key: str) -> dict:
+    return get_daily_checkin_state_from_db(int(user_id))
+
+
+def get_daily_checkin_state(user_id: int, use_cache: bool = True) -> dict:
+    today_key = today_vietnam_date().isoformat()
+
+    if use_cache:
+        return get_daily_checkin_state_cached(
+            int(user_id),
+            today_key
+        )
+
+    return get_daily_checkin_state_from_db(int(user_id))
+
+
 def claim_daily_checkin(user_id: int) -> dict:
     """
     Ghi nhận điểm danh hôm nay.
     Nếu đạt mốc ngày 5 hoặc ngày 7 thì ghi nhận thưởng sao.
     """
     user_id = int(user_id)
-    state = get_daily_checkin_state(user_id)
+    state = get_daily_checkin_state(user_id, use_cache=False)
 
     if state["checked_today"]:
         return {
@@ -4962,7 +5109,7 @@ def claim_daily_checkin(user_id: int) -> dict:
                 }
             )
 
-    clear_data_cache()
+    clear_daily_checkin_cache()
 
     return {
         "status": "checked",
