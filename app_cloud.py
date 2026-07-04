@@ -1494,10 +1494,16 @@ def render_daily_checkin_shortcut_button(user_id: int):
          width="24"
          height="24"
          viewBox="0 0 24 24"
-         fill="currentColor"
-         class="icon icon-tabler icons-tabler-filled icon-tabler-file-check">
+         fill="none"
+         stroke="currentColor"
+         stroke-width="1.5"
+         stroke-linecap="round"
+         stroke-linejoin="round"
+         class="icon icon-tabler icons-tabler-outline icon-tabler-file-check">
       <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-      <path d="M12 2l.117 .007a1 1 0 0 1 .876 .876l.007 .117v4l.005 .15a2 2 0 0 0 1.838 1.844l.157 .006h4l.117 .007a1 1 0 0 1 .876 .876l.007 .117v9a3 3 0 0 1 -2.824 2.995l-.176 .005h-10a3 3 0 0 1 -2.995 -2.824l-.005 -.176v-14a3 3 0 0 1 2.824 -2.995l.176 -.005zm3.707 10.293a1 1 0 0 0 -1.414 0l-3.293 3.292l-1.293 -1.292a1 1 0 1 0 -1.414 1.414l2 2a1 1 0 0 0 1.414 0l4 -4a1 1 0 0 0 0 -1.414m-.707 -9.294l4 4.001h-4z" />
+      <path d="M14 3v4a1 1 0 0 0 1 1h4" />
+      <path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2" />
+      <path d="M9 15l2 2l4 -4" />
     </svg>
     """
 
@@ -1528,28 +1534,26 @@ def render_daily_checkin_shortcut_button(user_id: int):
 
         div[class*="st-key-daily_checkin_shortcut_button"] button {{
             position: relative !important;
-
+        
             width: 46px !important;
             height: 46px !important;
             min-width: 46px !important;
             min-height: 46px !important;
             max-width: 46px !important;
             max-height: 46px !important;
-
+        
             padding: 0 !important;
             margin: 0 !important;
-
+        
             border-radius: 999px !important;
-            border: 2px solid rgba(245, 197, 66, 0.78) !important;
-            outline: 3px solid rgba(255, 255, 255, 0.92) !important;
-            outline-offset: 2px !important;
-
-            background:
-                radial-gradient(circle at 32% 26%, #FFF7CC 0%, #F5C542 42%, #D97706 100%) !important;
-
+            border: none !important;
+            outline: none !important;
+        
+            background: rgba(255, 255, 255, 0.96) !important;
+        
             box-shadow:
-                0 13px 28px rgba(7, 17, 31, 0.20),
-                0 0 0 6px rgba(245, 197, 66, 0.10) !important;
+                0 10px 24px rgba(7, 17, 31, 0.14),
+                0 0 0 1px rgba(15, 23, 42, 0.06) !important;
 
             color: transparent !important;
             font-size: 0 !important;
@@ -1569,14 +1573,14 @@ def render_daily_checkin_shortcut_button(user_id: int):
                 filter 0.18s ease !important;
         }}
 
-        div[class*="st-key-daily_checkin_shortcut_button"] button::before {{
+        div[class*="st-key-daily_checkin_shortcut_button"] button::before {(
             content: "";
             display: block;
-
+        
             width: 23px;
             height: 23px;
-
-            background: #07111F;
+        
+            background: #F5C542;
 
             -webkit-mask: url("data:image/svg+xml;base64,{daily_checkin_icon_base64}") center / contain no-repeat;
             mask: url("data:image/svg+xml;base64,{daily_checkin_icon_base64}") center / contain no-repeat;
@@ -1614,12 +1618,12 @@ def render_daily_checkin_shortcut_button(user_id: int):
 
         div[class*="st-key-daily_checkin_shortcut_button"] button:hover {{
             transform: translateY(-1px) scale(1.045) !important;
-            border-color: rgba(245, 197, 66, 1) !important;
-            filter: brightness(1.03) !important;
-
+            background: #FFFFFF !important;
+            filter: none !important;
+        
             box-shadow:
-                0 16px 34px rgba(7, 17, 31, 0.26),
-                0 0 0 7px rgba(245, 197, 66, 0.15) !important;
+                0 14px 30px rgba(7, 17, 31, 0.18),
+                0 0 0 4px rgba(245, 197, 66, 0.12) !important;
         }}
 
         div[class*="st-key-daily_checkin_shortcut_button"] button:hover::after {{
@@ -3202,9 +3206,8 @@ def render_avatar_popover(user: dict):
                 min-height: 48px !important;
                 max-width: 48px !important;
                 max-height: 48px !important;
-                border-width: 2px !important;
-                outline-width: 2px !important;
-                outline-offset: 2px !important;
+                border: none !important;
+                outline: none !important;
                 box-shadow:
                     0 10px 24px rgba(7, 17, 31, 0.22),
                     0 0 0 4px rgba(245, 197, 66, 0.10) !important;
