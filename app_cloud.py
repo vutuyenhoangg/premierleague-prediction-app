@@ -8343,7 +8343,6 @@ def page_matches():
     render_kpi_tiles(matches)
 
     user_id = st.session_state["user"]["user_id"]
-    render_daily_checkin_shortcut_button(user_id)
     success_message = st.session_state.pop(
         "star_transfer_success_message",
         None
@@ -8565,6 +8564,7 @@ def page_matches():
                 user_prediction_map=user_prediction_map
             )
 
+    render_daily_checkin_shortcut_button(user_id)
 
 def page_my_predictions():
     render_page_title(
