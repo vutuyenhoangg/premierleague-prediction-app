@@ -1648,7 +1648,7 @@ def render_daily_checkin_shortcut_button(user_id: int):
 
         @media (max-width: 768px) {{
             div[class*="st-key-daily_checkin_shortcut_button"] {{
-                top: 136px !important;
+                top: 36px !important;
                 right: 6px !important;
 
                 width: 40px !important;
