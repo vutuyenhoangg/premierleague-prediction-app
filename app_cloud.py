@@ -7655,14 +7655,10 @@ def build_leaderboard_df():
         axis=1
     )
 
-    summary["result_prediction_checkable"] = (
-        summary["num_scored"] + summary["knockout_winner_checkable"]
-    )
-
-    summary["result_prediction_correct"] = (
-        summary["correct_outcome_count"] + summary["knockout_winner_correct"]
-    )
-
+    summary["result_prediction_checkable"] = summary["num_scored"]
+    
+    summary["result_prediction_correct"] = summary["correct_outcome_count"]
+    
     summary["result_prediction_rate"] = summary.apply(
         lambda row: row["result_prediction_correct"] / row["result_prediction_checkable"]
         if row["result_prediction_checkable"] else 0,
