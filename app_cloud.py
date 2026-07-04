@@ -1,5 +1,6 @@
 # ============================================================
 # WORLD CUP 2026 PREDICTION APP
+# Safe refactor: duplicate overwritten helper definitions removed; runtime behavior intentionally preserved.
 # Stack: Streamlit + Supabase/PostgreSQL
 # Database input: Supabase via DATABASE_URL
 # ============================================================
@@ -3788,6 +3789,53 @@ def format_star_short(star_type) -> str:
     star_type = normalize_star_type(star_type)
     return STAR_CONFIG[star_type]["short_label"]
 
+def build_star_usage_result(
+    user_id: int,
+    hope_locked_used: int,
+    super_locked_used: int,
+    hope_reserved_used: int,
+    super_reserved_used: int
+) -> dict:
+    """
+    Gom phần tính quota sao sau khi đã có số sao locked/reserved.
+
+    Hàm này chỉ gom logic bị lặp giữa get_user_star_usage() và
+    get_user_star_usage_from_db(), không thay đổi công thức hiện tại.
+    """
+    quota = get_user_star_quota(user_id)
+
+    hope_total = int(quota["hope_total"])
+    super_total = int(quota["super_total"])
+
+    hope_left = max(0, hope_total - hope_locked_used)
+    super_left = max(0, super_total - super_locked_used)
+
+    hope_free_left = max(0, hope_left - hope_reserved_used)
+    super_free_left = max(0, super_left - super_reserved_used)
+
+    return {
+        "hope_used": hope_locked_used,
+        "super_used": super_locked_used,
+
+        "hope_locked_used": hope_locked_used,
+        "super_locked_used": super_locked_used,
+
+        "hope_reserved_used": hope_reserved_used,
+        "super_reserved_used": super_reserved_used,
+
+        "hope_total": hope_total,
+        "super_total": super_total,
+
+        "hope_bonus": int(quota.get("hope_bonus", 0)),
+        "super_bonus": int(quota.get("super_bonus", 0)),
+
+        "hope_left": hope_left,
+        "super_left": super_left,
+
+        "hope_free_left": hope_free_left,
+        "super_free_left": super_free_left
+    }
+
 
 def get_user_star_usage(user_id: int, exclude_match_id: int | None = None) -> dict:
     """
@@ -3870,39 +3918,13 @@ def get_user_star_usage(user_id: int, exclude_match_id: int | None = None) -> di
             super_reserved_used = int(
                 ((df["star_type"] == STAR_TYPE_SUPER) & df["is_star_reserved"]).sum()
             )
-    quota = get_user_star_quota(user_id)
-    
-    hope_total = int(quota["hope_total"])
-    super_total = int(quota["super_total"])
-    
-    hope_left = max(0, hope_total - hope_locked_used)
-    super_left = max(0, super_total - super_locked_used)
-    
-    hope_free_left = max(0, hope_left - hope_reserved_used)
-    super_free_left = max(0, super_left - super_reserved_used)
-
-    return {
-        "hope_used": hope_locked_used,
-        "super_used": super_locked_used,
-    
-        "hope_locked_used": hope_locked_used,
-        "super_locked_used": super_locked_used,
-    
-        "hope_reserved_used": hope_reserved_used,
-        "super_reserved_used": super_reserved_used,
-    
-        "hope_total": hope_total,
-        "super_total": super_total,
-    
-        "hope_bonus": int(quota.get("hope_bonus", 0)),
-        "super_bonus": int(quota.get("super_bonus", 0)),
-    
-        "hope_left": hope_left,
-        "super_left": super_left,
-    
-        "hope_free_left": hope_free_left,
-        "super_free_left": super_free_left
-    }
+    return build_star_usage_result(
+        user_id=user_id,
+        hope_locked_used=hope_locked_used,
+        super_locked_used=super_locked_used,
+        hope_reserved_used=hope_reserved_used,
+        super_reserved_used=super_reserved_used
+    )
 
 def validate_star_quota(user_id: int, match_id: int, star_type: str):
     star_type = normalize_star_type(star_type)
@@ -5600,39 +5622,13 @@ def get_user_star_usage_from_db(user_id: int, exclude_match_id: int | None = Non
             ((df["star_type"] == STAR_TYPE_SUPER) & df["is_star_reserved"]).sum()
         )
 
-    quota = get_user_star_quota(user_id)
-    
-    hope_total = int(quota["hope_total"])
-    super_total = int(quota["super_total"])
-    
-    hope_left = max(0, hope_total - hope_locked_used)
-    super_left = max(0, super_total - super_locked_used)
-    
-    hope_free_left = max(0, hope_left - hope_reserved_used)
-    super_free_left = max(0, super_left - super_reserved_used)
-
-    return {
-        "hope_used": hope_locked_used,
-        "super_used": super_locked_used,
-    
-        "hope_locked_used": hope_locked_used,
-        "super_locked_used": super_locked_used,
-    
-        "hope_reserved_used": hope_reserved_used,
-        "super_reserved_used": super_reserved_used,
-    
-        "hope_total": hope_total,
-        "super_total": super_total,
-    
-        "hope_bonus": int(quota.get("hope_bonus", 0)),
-        "super_bonus": int(quota.get("super_bonus", 0)),
-    
-        "hope_left": hope_left,
-        "super_left": super_left,
-    
-        "hope_free_left": hope_free_left,
-        "super_free_left": super_free_left
-    }
+    return build_star_usage_result(
+        user_id=user_id,
+        hope_locked_used=hope_locked_used,
+        super_locked_used=super_locked_used,
+        hope_reserved_used=hope_reserved_used,
+        super_reserved_used=super_reserved_used
+    )
 
 def update_user_avatar(user_id: int, avatar_key: str):
     """
@@ -6793,42 +6789,6 @@ def render_match_title(home_name, away_name, match_id: int):
     safe_home = html.escape(home_display)
     safe_away = html.escape(away_display)
 
-    # Desktop: giữ nguyên st.subheader như cũ, chỉ ẩn nó trên mobile
-    with stylable_container(
-        key=f"match_title_desktop_{match_id}",
-        css_styles="""
-        {
-            display: block;
-        }
-
-        @media (max-width: 768px) {
-            {
-                display: none !important;
-            }
-        }
-        """
-    ):
-        st.subheader(f"{home_display} vs {away_display}")
-
-    # Mobile: title riêng, mỗi đội đúng 1 dòng
-    st.markdown(
-        f"""
-        <div class="wc-match-title-mobile" aria-label="{safe_home} vs {safe_away}">
-            <div class="wc-match-team">{safe_home}</div>
-            <div class="wc-match-vs">vs</div>
-            <div class="wc-match-team">{safe_away}</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-def render_match_title(home_name, away_name, match_id: int):
-    home_display = "TBD" if home_name is None or pd.isna(home_name) else str(home_name)
-    away_display = "TBD" if away_name is None or pd.isna(away_name) else str(away_name)
-
-    safe_home = html.escape(home_display)
-    safe_away = html.escape(away_display)
-
     # Desktop: giữ nguyên kiểu st.subheader cũ
     with stylable_container(
         key=f"match_title_desktop_{match_id}",
@@ -6852,83 +6812,6 @@ def render_match_title(home_name, away_name, match_id: int):
         unsafe_allow_html=True
     )
 
-def normalize_venue_text(value) -> str:
-    """
-    Chuẩn hóa tên SVĐ/địa điểm để hiển thị ở cuối card.
-    """
-    if value is None:
-        return ""
-
-    try:
-        if pd.isna(value):
-            return ""
-    except TypeError:
-        pass
-
-    return str(value).strip()
-
-
-def render_match_venue_footer(row, match_id: int):
-    """
-    Hiển thị thông tin sân vận động/địa điểm ở cuối card trận đấu.
-
-    Chỉ hiển thị dạng:
-    Icon: Tên sân vận động
-
-    Không nằm trong form dự đoán.
-    Không ảnh hưởng logic lưu/cập nhật/xóa dự đoán.
-    """
-    venue = normalize_venue_text(row.get("venue"))
-
-    if not venue:
-        return
-
-    safe_venue = html.escape(venue)
-
-    soccer_field_icon_svg = """
-    <svg xmlns="http://www.w3.org/2000/svg"
-         width="24"
-         height="24"
-         viewBox="0 0 24 24"
-         fill="none"
-         stroke="currentColor"
-         stroke-width="1"
-         stroke-linecap="round"
-         stroke-linejoin="round"
-         style="display:inline-block; vertical-align:-6px;">
-      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
-      <path d="M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"/>
-      <path d="M3 9h3v6h-3l0 -6"/>
-      <path d="M18 9h3v6h-3l0 -6"/>
-      <path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10"/>
-      <path d="M12 5l0 14"/>
-    </svg>
-    """
-
-    st.markdown(
-        f"""
-        <div style="
-            margin-top: 20px;
-            margin-bottom: 0;
-            color: #64748B;
-            font-size: 14.5px;
-            font-weight: 700;
-            line-height: 1.35;
-        ">
-            <span style="
-                color: #64748B;
-                margin-right: 6px;
-            ">
-                {soccer_field_icon_svg}:
-            </span>
-            <span style="
-                color: #64748B;
-                font-style: italic;
-            ">{safe_venue}</span>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
 
 def render_pending_star_transfer_box(user_id: int, match_id: int):
     pending = st.session_state.get("pending_star_transfer")
