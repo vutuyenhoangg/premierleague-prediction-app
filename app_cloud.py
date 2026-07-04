@@ -46,6 +46,9 @@ COOKIE_NAME = "wc_session_token"
 SESSION_DAYS = 30
 HOPE_STARS_PER_USER = 5
 SUPER_STARS_PER_USER = 1
+CHECKIN_CYCLE_DAYS = 7
+CHECKIN_HOPE_REWARD_DAY = 5
+CHECKIN_SUPER_REWARD_DAY = 7
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 GEMINI_MODEL_NAME = st.secrets.get("GEMINI_MODEL_NAME", "gemini-2.5-flash")
 
@@ -876,6 +879,480 @@ def inject_mobile_match_title_css():
 
 
 inject_mobile_match_title_css()
+
+@st.dialog("Điểm danh hằng ngày")
+def render_daily_checkin_dialog(user_id: int):
+    state = get_daily_checkin_state(user_id)
+
+    claimed_days = set(int(day) for day in state.get("claimed_days", []))
+    checked_today = bool(state.get("checked_today"))
+    next_day_no = state.get("next_day_no")
+    today_day_no = state.get("today_day_no")
+
+    if checked_today and today_day_no is not None:
+        claimed_days.add(int(today_day_no))
+
+    day_items_html = ""
+
+    for day in range(1, CHECKIN_CYCLE_DAYS + 1):
+        is_claimed = day in claimed_days
+        is_today = (
+            not checked_today
+            and next_day_no is not None
+            and int(next_day_no) == day
+        )
+
+        if is_claimed:
+            circle_bg = "linear-gradient(135deg, #F5C542, #FFD761)"
+            circle_border = "rgba(245, 197, 66, 0.95)"
+            circle_shadow = "0 0 22px rgba(245, 197, 66, 0.42)"
+            circle_color = "#07111F"
+            icon = "✓"
+        else:
+            circle_bg = "rgba(15, 23, 42, 0.38)"
+            circle_border = "rgba(255,255,255,0.28)"
+            circle_shadow = "none"
+            circle_color = "rgba(255,255,255,0.46)"
+            icon = "★"
+
+        label_color = "#F5C542" if is_today or is_claimed else "#CBD5E1"
+
+        today_badge = ""
+
+        if is_today:
+            today_badge = """
+            <div style="
+                position:absolute;
+                top:-28px;
+                left:50%;
+                transform:translateX(-50%);
+                padding:4px 9px;
+                border-radius:999px;
+                background:#F5C542;
+                color:#07111F;
+                font-size:10px;
+                font-weight:950;
+                white-space:nowrap;
+                box-shadow:0 8px 18px rgba(245,197,66,0.24);
+            ">
+                HÔM NAY
+            </div>
+            """
+
+        reward_html = ""
+
+        if day == CHECKIN_HOPE_REWARD_DAY:
+            reward_html = """
+            <div style="
+                margin-top:8px;
+                color:#F5C542;
+                font-size:11px;
+                font-weight:850;
+                white-space:nowrap;
+            ">
+                ⭐ 1 sao
+            </div>
+            """
+
+        elif day == CHECKIN_SUPER_REWARD_DAY:
+            reward_html = """
+            <div style="
+                margin-top:8px;
+                color:#F5C542;
+                font-size:11px;
+                font-weight:850;
+                white-space:nowrap;
+            ">
+                ✨ 1 siêu sao
+            </div>
+            """
+
+        day_items_html += f"""
+        <div style="
+            position:relative;
+            display:flex;
+            flex-direction:column;
+            align-items:center;
+            justify-content:flex-start;
+            min-width:76px;
+        ">
+            {today_badge}
+            <div style="
+                width:56px;
+                height:56px;
+                border-radius:999px;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                background:{circle_bg};
+                border:1.5px solid {circle_border};
+                color:{circle_color};
+                font-size:26px;
+                font-weight:950;
+                box-shadow:{circle_shadow};
+                line-height:1;
+            ">
+                {icon}
+            </div>
+            <div style="
+                margin-top:10px;
+                color:{label_color};
+                font-size:14px;
+                font-weight:850;
+                white-space:nowrap;
+            ">
+                Ngày {day}
+            </div>
+            {reward_html}
+        </div>
+        """
+
+    st.markdown(
+        f"""
+        <style>
+        div[role="dialog"]:has(.wc-daily-checkin-shell) {{
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+        }}
+
+        div[role="dialog"]:has(.wc-daily-checkin-shell) button[aria-label="Close"] {{
+            color: #FFFFFF !important;
+            background: rgba(255,255,255,0.12) !important;
+            border-radius: 999px !important;
+        }}
+
+        div[class*="st-key-daily_checkin_claim_"] button {{
+            width: 100% !important;
+            min-height: 54px !important;
+            border-radius: 999px !important;
+            border: none !important;
+            background: linear-gradient(135deg, #F5C542, #FFD761) !important;
+            color: #07111F !important;
+            font-size: 18px !important;
+            font-weight: 950 !important;
+            box-shadow: 0 14px 34px rgba(245,197,66,0.26) !important;
+        }}
+
+        div[class*="st-key-daily_checkin_claim_"] button:hover {{
+            transform: translateY(-1px) !important;
+            filter: brightness(1.02) !important;
+        }}
+
+        div[class*="st-key-daily_checkin_done_"] button {{
+            width: 100% !important;
+            min-height: 54px !important;
+            border-radius: 999px !important;
+            border: 1px solid rgba(255,255,255,0.18) !important;
+            background: rgba(255,255,255,0.10) !important;
+            color: #CBD5E1 !important;
+            font-size: 16px !important;
+            font-weight: 850 !important;
+            box-shadow: none !important;
+        }}
+
+        @media (max-width: 768px) {{
+            .wc-daily-checkin-shell {{
+                padding: 26px 18px 22px 18px !important;
+                border-radius: 24px !important;
+            }}
+
+            .wc-daily-checkin-days {{
+                overflow-x: auto !important;
+                justify-content: flex-start !important;
+                padding-top: 32px !important;
+                padding-bottom: 8px !important;
+            }}
+        }}
+        </style>
+
+        <div class="wc-daily-checkin-shell" style="
+            position:relative;
+            border-radius:30px;
+            padding:34px 38px 28px 38px;
+            background:
+                radial-gradient(circle at 50% 0%, rgba(245,197,66,0.22), transparent 28%),
+                radial-gradient(circle at 20% 80%, rgba(0,180,216,0.16), transparent 32%),
+                linear-gradient(135deg, rgba(7,17,31,0.98), rgba(11,31,58,0.97));
+            border:1px solid rgba(255,255,255,0.16);
+            box-shadow:0 28px 70px rgba(7,17,31,0.46);
+            color:#F8FAFC;
+            overflow:hidden;
+        ">
+            <div style="
+                text-align:center;
+                margin-bottom:28px;
+            ">
+                <div style="
+                    font-size:46px;
+                    line-height:1;
+                    margin-bottom:12px;
+                    filter: drop-shadow(0 0 18px rgba(245,197,66,0.38));
+                ">
+                    📅
+                </div>
+
+                <div style="
+                    color:#F8FAFC;
+                    font-size:30px;
+                    font-weight:950;
+                    letter-spacing:-0.04em;
+                    line-height:1.15;
+                ">
+                    Điểm danh hằng ngày
+                </div>
+
+                <div style="
+                    color:#CBD5E1;
+                    font-size:15px;
+                    line-height:1.5;
+                    margin-top:8px;
+                ">
+                    Đăng nhập và điểm danh mỗi ngày để nhận thưởng.
+                </div>
+            </div>
+
+            <div class="wc-daily-checkin-days" style="
+                display:flex;
+                justify-content:center;
+                align-items:flex-start;
+                gap:18px;
+                padding:30px 4px 16px 4px;
+            ">
+                {day_items_html}
+            </div>
+
+            <div style="
+                display:grid;
+                grid-template-columns:1fr 1fr;
+                gap:12px;
+                margin:18px auto 22px auto;
+                max-width:420px;
+            ">
+                <div style="
+                    border:1px solid rgba(245,197,66,0.42);
+                    border-radius:14px;
+                    padding:10px 12px;
+                    text-align:center;
+                    color:#F5C542;
+                    font-size:14px;
+                    font-weight:850;
+                    background:rgba(245,197,66,0.06);
+                ">
+                    Ngày 5: ⭐ 1 Ngôi sao hy vọng
+                </div>
+
+                <div style="
+                    border:1px solid rgba(245,197,66,0.42);
+                    border-radius:14px;
+                    padding:10px 12px;
+                    text-align:center;
+                    color:#F5C542;
+                    font-size:14px;
+                    font-weight:850;
+                    background:rgba(245,197,66,0.06);
+                ">
+                    Ngày 7: ✨ 1 Siêu sao
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    if not checked_today and next_day_no is not None:
+        claim_clicked = st.button(
+            "Điểm danh ngay",
+            key=f"daily_checkin_claim_{user_id}_{state['cycle_no']}_{next_day_no}",
+            use_container_width=True
+        )
+
+        if claim_clicked:
+            result = claim_daily_checkin(user_id)
+
+            if result.get("reward_type") is not None:
+                st.session_state["daily_checkin_reward_popup"] = result
+            else:
+                st.session_state["daily_checkin_show_confirm"] = True
+
+            st.rerun()
+
+    else:
+        st.button(
+            "Đã điểm danh hôm nay",
+            key=f"daily_checkin_done_{user_id}_{today_vietnam_date()}",
+            use_container_width=True,
+            disabled=True
+        )
+
+    st.markdown(
+        """
+        <div style="
+            color:#CBD5E1;
+            font-size:13px;
+            text-align:center;
+            margin-top:12px;
+        ">
+            Sau khi hoàn thành 7 ngày, chu kỳ sẽ tự động bắt đầu lại từ ngày 1.
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+@st.dialog("Chúc mừng!")
+def render_daily_checkin_reward_dialog(reward_info: dict):
+    reward_label = str(reward_info.get("reward_label") or "")
+    reward_icon = str(reward_info.get("reward_icon") or "⭐")
+    day_no = int(reward_info.get("day_no") or 0)
+
+    st.markdown(
+        f"""
+        <style>
+        div[role="dialog"]:has(.wc-daily-reward-shell) {{
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+        }}
+
+        div[role="dialog"]:has(.wc-daily-reward-shell) button[aria-label="Close"] {{
+            color: #FFFFFF !important;
+            background: rgba(255,255,255,0.12) !important;
+            border-radius: 999px !important;
+        }}
+
+        div[class*="st-key-daily_reward_confirm"] button {{
+            width: 100% !important;
+            min-height: 54px !important;
+            border-radius: 999px !important;
+            border: none !important;
+            background: linear-gradient(135deg, #F5C542, #FFD761) !important;
+            color: #07111F !important;
+            font-size: 18px !important;
+            font-weight: 950 !important;
+            box-shadow: 0 14px 34px rgba(245,197,66,0.26) !important;
+        }}
+        </style>
+
+        <div class="wc-daily-reward-shell" style="
+            border-radius:28px;
+            padding:38px 34px 30px 34px;
+            background:
+                radial-gradient(circle at 50% 0%, rgba(245,197,66,0.28), transparent 28%),
+                radial-gradient(circle at 18% 82%, rgba(0,180,216,0.18), transparent 34%),
+                linear-gradient(135deg, rgba(7,17,31,0.98), rgba(11,31,58,0.97));
+            border:1px solid rgba(255,255,255,0.16);
+            box-shadow:0 28px 70px rgba(7,17,31,0.46);
+            color:#F8FAFC;
+            text-align:center;
+            overflow:hidden;
+        ">
+            <div style="
+                font-size:64px;
+                line-height:1;
+                margin-bottom:18px;
+                filter: drop-shadow(0 0 24px rgba(245,197,66,0.45));
+            ">
+                {reward_icon}
+            </div>
+
+            <div style="
+                color:#F8FAFC;
+                font-size:34px;
+                font-weight:950;
+                line-height:1.12;
+                letter-spacing:-0.04em;
+                margin-bottom:10px;
+            ">
+                Chúc mừng!
+            </div>
+
+            <div style="
+                color:#CBD5E1;
+                font-size:16px;
+                line-height:1.55;
+                margin-bottom:18px;
+            ">
+                Bạn đã điểm danh đủ <b style="color:#F5C542;">{day_no} ngày</b>
+                và nhận được
+            </div>
+
+            <div style="
+                max-width:420px;
+                margin:0 auto 24px auto;
+                border:1px solid rgba(245,197,66,0.62);
+                border-radius:18px;
+                padding:16px 18px;
+                background:rgba(245,197,66,0.08);
+                box-shadow:0 0 28px rgba(245,197,66,0.14);
+            ">
+                <div style="
+                    color:#F5C542;
+                    font-size:20px;
+                    font-weight:950;
+                    line-height:1.2;
+                ">
+                    {html.escape(reward_label)}
+                </div>
+
+                <div style="
+                    color:#CBD5E1;
+                    font-size:14px;
+                    margin-top:6px;
+                ">
+                    Đã thêm vào kho thưởng của bạn
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    if st.button(
+        "Tuyệt vời",
+        key="daily_reward_confirm",
+        use_container_width=True
+    ):
+        st.rerun()
+
+def maybe_render_daily_checkin_popup(user_id: int):
+    """
+    Mở popup điểm danh lần đầu trong ngày nếu user chưa điểm danh.
+    Dùng session flag để nếu user bấm X thì popup không bật lại liên tục khi filter/chuyển trang.
+    """
+    user_id = int(user_id)
+    today_key = today_vietnam_date().isoformat()
+
+    reward_info = st.session_state.pop(
+        "daily_checkin_reward_popup",
+        None
+    )
+
+    if reward_info is not None:
+        render_daily_checkin_reward_dialog(reward_info)
+        return
+
+    force_open = st.session_state.pop(
+        "daily_checkin_show_confirm",
+        False
+    )
+
+    state = get_daily_checkin_state(user_id)
+
+    prompt_seen_key = f"daily_checkin_prompt_seen_{user_id}_{today_key}"
+
+    should_open = (
+        force_open
+        or (
+            not state.get("checked_today", False)
+            and not st.session_state.get(prompt_seen_key, False)
+        )
+    )
+
+    if should_open:
+        st.session_state[prompt_seen_key] = True
+        render_daily_checkin_dialog(user_id)
 
 def inject_mobile_goal_scorer_button_css():
     """
@@ -1736,7 +2213,7 @@ def render_star_balance(user_id: int):
                     line-height:1;
                     margin-bottom:16px;
                 ">
-                    {usage["hope_left"]}/{HOPE_STARS_PER_USER}
+                    {usage["hope_left"]}/{usage.get("hope_total", HOPE_STARS_PER_USER)}
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -1880,7 +2357,7 @@ def render_star_balance(user_id: int):
                     line-height:1;
                     margin-bottom:16px;
                 ">
-                    {usage["super_left"]}/{SUPER_STARS_PER_USER}
+                    {usage["super_left"]}/{usage.get("super_total", SUPER_STARS_PER_USER)}
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -1987,10 +2464,10 @@ def render_sidebar_star_balance(user_id: int):
                 Kho sao của bạn
             </div>
             <div style="font-size:13px;color:#CBD5E1;">
-                ⭐ Ngôi sao hy vọng: <b style="color:#F5C542;">{usage["hope_left"]}/{HOPE_STARS_PER_USER}</b>
+                ⭐ Ngôi sao hy vọng: <b style="color:#F5C542;">{usage["hope_left"]}/{usage.get("hope_total", HOPE_STARS_PER_USER)}</b>
             </div>
             <div style="font-size:13px;color:#CBD5E1;margin-top:4px;">
-                ✨ Siêu sao: <b style="color:#F5C542;">{usage["super_left"]}/{SUPER_STARS_PER_USER}</b>
+                ✨ Siêu sao: <b style="color:#F5C542;">{usage["super_left"]}/{usage.get("super_total", SUPER_STARS_PER_USER)}</b>
             </div>
         </div>
         """,
@@ -2933,26 +3410,36 @@ def get_user_star_usage(user_id: int, exclude_match_id: int | None = None) -> di
             super_reserved_used = int(
                 ((df["star_type"] == STAR_TYPE_SUPER) & df["is_star_reserved"]).sum()
             )
-
-    hope_left = max(0, HOPE_STARS_PER_USER - hope_locked_used)
-    super_left = max(0, SUPER_STARS_PER_USER - super_locked_used)
-
+    quota = get_user_star_quota(user_id)
+    
+    hope_total = int(quota["hope_total"])
+    super_total = int(quota["super_total"])
+    
+    hope_left = max(0, hope_total - hope_locked_used)
+    super_left = max(0, super_total - super_locked_used)
+    
     hope_free_left = max(0, hope_left - hope_reserved_used)
     super_free_left = max(0, super_left - super_reserved_used)
 
     return {
         "hope_used": hope_locked_used,
         "super_used": super_locked_used,
-
+    
         "hope_locked_used": hope_locked_used,
         "super_locked_used": super_locked_used,
-
+    
         "hope_reserved_used": hope_reserved_used,
         "super_reserved_used": super_reserved_used,
-
+    
+        "hope_total": hope_total,
+        "super_total": super_total,
+    
+        "hope_bonus": int(quota.get("hope_bonus", 0)),
+        "super_bonus": int(quota.get("super_bonus", 0)),
+    
         "hope_left": hope_left,
         "super_left": super_left,
-
+    
         "hope_free_left": hope_free_left,
         "super_free_left": super_free_left
     }
@@ -3495,11 +3982,6 @@ def check_base_database():
         st.stop()
 
 def check_required_app_tables():
-    """
-    Kiểm tra các bảng app cần có khi không chạy migration ở startup.
-
-    Nếu thiếu bảng thì báo lỗi rõ ràng thay vì loading mãi.
-    """
     try:
         tables = read_sql(
             """
@@ -3520,7 +4002,9 @@ def check_required_app_tables():
         "users",
         "predictions",
         "prediction_history",
-        "login_sessions"
+        "login_sessions",
+        "daily_checkins",
+        "daily_checkin_rewards"
     }
 
     missing_tables = sorted(required_tables - table_names)
@@ -3889,7 +4373,262 @@ def restore_user_from_cookie() -> bool:
     st.session_state["user"] = user
     return True
 
+def get_daily_checkin_bonus_counts(user_id: int) -> dict:
+    """
+    Tổng số sao thưởng người chơi đã nhận từ điểm danh.
+    Sao thưởng này cộng vào quota gốc.
+    """
+    try:
+        row = fetch_one(
+            """
+            SELECT
+                COALESCE(SUM(CASE WHEN reward_type = 'hope' THEN amount ELSE 0 END), 0) AS hope_bonus,
+                COALESCE(SUM(CASE WHEN reward_type = 'super' THEN amount ELSE 0 END), 0) AS super_bonus
+            FROM daily_checkin_rewards
+            WHERE user_id = :user_id
+            """,
+            {
+                "user_id": int(user_id)
+            }
+        )
+    except Exception:
+        return {
+            "hope_bonus": 0,
+            "super_bonus": 0
+        }
 
+    if row is None:
+        return {
+            "hope_bonus": 0,
+            "super_bonus": 0
+        }
+
+    return {
+        "hope_bonus": int(row.get("hope_bonus") or 0),
+        "super_bonus": int(row.get("super_bonus") or 0)
+    }
+
+
+def get_user_star_quota(user_id: int) -> dict:
+    """
+    Quota sao thực tế = quota gốc + sao thưởng từ điểm danh.
+    """
+    bonus = get_daily_checkin_bonus_counts(user_id)
+
+    hope_total = HOPE_STARS_PER_USER + int(bonus["hope_bonus"])
+    super_total = SUPER_STARS_PER_USER + int(bonus["super_bonus"])
+
+    return {
+        "hope_total": hope_total,
+        "super_total": super_total,
+        "hope_bonus": int(bonus["hope_bonus"]),
+        "super_bonus": int(bonus["super_bonus"])
+    }
+
+
+def get_daily_checkin_state(user_id: int) -> dict:
+    """
+    Lấy trạng thái điểm danh hiện tại của user.
+
+    Logic:
+    - Một chu kỳ gồm 7 ngày điểm danh.
+    - Đủ ngày 7 thì chu kỳ kế tiếp bắt đầu lại từ ngày 1.
+    - Mỗi ngày chỉ điểm danh được 1 lần theo ngày Việt Nam.
+    """
+    today = today_vietnam_date()
+
+    try:
+        df = read_sql(
+            """
+            SELECT
+                checkin_date,
+                cycle_no,
+                day_no,
+                created_at
+            FROM daily_checkins
+            WHERE user_id = :user_id
+            ORDER BY cycle_no ASC, day_no ASC
+            """,
+            {
+                "user_id": int(user_id)
+            }
+        )
+    except Exception:
+        return {
+            "cycle_no": 1,
+            "claimed_days": [],
+            "next_day_no": 1,
+            "checked_today": False,
+            "today_day_no": None
+        }
+
+    if df.empty:
+        return {
+            "cycle_no": 1,
+            "claimed_days": [],
+            "next_day_no": 1,
+            "checked_today": False,
+            "today_day_no": None
+        }
+
+    df["checkin_date"] = pd.to_datetime(
+        df["checkin_date"],
+        errors="coerce"
+    ).dt.date
+
+    today_rows = df[df["checkin_date"] == today]
+
+    checked_today = not today_rows.empty
+    today_day_no = None
+
+    if checked_today:
+        today_day_no = int(today_rows.iloc[-1]["day_no"])
+
+    max_cycle_no = int(df["cycle_no"].max())
+
+    current_cycle_df = df[df["cycle_no"].astype(int) == max_cycle_no].copy()
+    current_cycle_days = sorted(
+        int(day)
+        for day in current_cycle_df["day_no"].dropna().tolist()
+    )
+
+    cycle_completed = CHECKIN_CYCLE_DAYS in current_cycle_days
+
+    if cycle_completed:
+        # Nếu chu kỳ gần nhất đã đủ 7 ngày, chu kỳ mới bắt đầu từ đầu.
+        cycle_no = max_cycle_no + 1
+        claimed_days = []
+    else:
+        cycle_no = max_cycle_no
+        claimed_days = current_cycle_days
+
+    if checked_today:
+        next_day_no = None
+    else:
+        next_day_no = min(len(claimed_days) + 1, CHECKIN_CYCLE_DAYS)
+
+    return {
+        "cycle_no": int(cycle_no),
+        "claimed_days": claimed_days,
+        "next_day_no": next_day_no,
+        "checked_today": checked_today,
+        "today_day_no": today_day_no
+    }
+
+
+def claim_daily_checkin(user_id: int) -> dict:
+    """
+    Ghi nhận điểm danh hôm nay.
+    Nếu đạt mốc ngày 5 hoặc ngày 7 thì ghi nhận thưởng sao.
+    """
+    user_id = int(user_id)
+    state = get_daily_checkin_state(user_id)
+
+    if state["checked_today"]:
+        return {
+            "status": "already_checked",
+            "reward_type": None,
+            "reward_label": None,
+            "day_no": state.get("today_day_no"),
+            "cycle_no": state.get("cycle_no")
+        }
+
+    cycle_no = int(state["cycle_no"])
+    day_no = int(state["next_day_no"] or 1)
+    today = today_vietnam_date()
+
+    reward_type = None
+    reward_label = None
+    reward_icon = None
+
+    if day_no == CHECKIN_HOPE_REWARD_DAY:
+        reward_type = STAR_TYPE_HOPE
+        reward_label = "1 Ngôi sao hy vọng"
+        reward_icon = "⭐"
+
+    elif day_no == CHECKIN_SUPER_REWARD_DAY:
+        reward_type = STAR_TYPE_SUPER
+        reward_label = "1 Siêu sao"
+        reward_icon = "✨"
+
+    with get_engine().begin() as conn:
+        inserted = conn.execute(
+            text(
+                """
+                INSERT INTO daily_checkins (
+                    user_id,
+                    checkin_date,
+                    cycle_no,
+                    day_no
+                )
+                VALUES (
+                    :user_id,
+                    :checkin_date,
+                    :cycle_no,
+                    :day_no
+                )
+                ON CONFLICT (user_id, checkin_date)
+                DO NOTHING
+                RETURNING checkin_id
+                """
+            ),
+            {
+                "user_id": user_id,
+                "checkin_date": today,
+                "cycle_no": cycle_no,
+                "day_no": day_no
+            }
+        ).mappings().fetchone()
+
+        if inserted is None:
+            return {
+                "status": "already_checked",
+                "reward_type": None,
+                "reward_label": None,
+                "day_no": day_no,
+                "cycle_no": cycle_no
+            }
+
+        if reward_type is not None:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO daily_checkin_rewards (
+                        user_id,
+                        cycle_no,
+                        day_no,
+                        reward_type,
+                        amount
+                    )
+                    VALUES (
+                        :user_id,
+                        :cycle_no,
+                        :day_no,
+                        :reward_type,
+                        1
+                    )
+                    ON CONFLICT (user_id, cycle_no, day_no, reward_type)
+                    DO NOTHING
+                    """
+                ),
+                {
+                    "user_id": user_id,
+                    "cycle_no": cycle_no,
+                    "day_no": day_no,
+                    "reward_type": reward_type
+                }
+            )
+
+    clear_data_cache()
+
+    return {
+        "status": "checked",
+        "reward_type": reward_type,
+        "reward_label": reward_label,
+        "reward_icon": reward_icon,
+        "day_no": day_no,
+        "cycle_no": cycle_no
+    }
 # ============================================================
 # 5. AUTH FUNCTIONS
 # ============================================================
@@ -4371,25 +5110,36 @@ def get_user_star_usage_from_db(user_id: int, exclude_match_id: int | None = Non
             ((df["star_type"] == STAR_TYPE_SUPER) & df["is_star_reserved"]).sum()
         )
 
-    hope_left = max(0, HOPE_STARS_PER_USER - hope_locked_used)
-    super_left = max(0, SUPER_STARS_PER_USER - super_locked_used)
-
+    quota = get_user_star_quota(user_id)
+    
+    hope_total = int(quota["hope_total"])
+    super_total = int(quota["super_total"])
+    
+    hope_left = max(0, hope_total - hope_locked_used)
+    super_left = max(0, super_total - super_locked_used)
+    
     hope_free_left = max(0, hope_left - hope_reserved_used)
     super_free_left = max(0, super_left - super_reserved_used)
 
     return {
         "hope_used": hope_locked_used,
         "super_used": super_locked_used,
-
+    
         "hope_locked_used": hope_locked_used,
         "super_locked_used": super_locked_used,
-
+    
         "hope_reserved_used": hope_reserved_used,
         "super_reserved_used": super_reserved_used,
-
+    
+        "hope_total": hope_total,
+        "super_total": super_total,
+    
+        "hope_bonus": int(quota.get("hope_bonus", 0)),
+        "super_bonus": int(quota.get("super_bonus", 0)),
+    
         "hope_left": hope_left,
         "super_left": super_left,
-
+    
         "hope_free_left": hope_free_left,
         "super_free_left": super_free_left
     }
@@ -6750,6 +7500,13 @@ def render_match_card(
             # Sao đang dùng ở trận chưa khóa vẫn nằm trong kho này.
             hope_display_left = int(star_usage_for_display.get("hope_left", 0))
             super_display_left = int(star_usage_for_display.get("super_left", 0))
+            hope_display_total = int(
+                star_usage_for_display.get("hope_total", HOPE_STARS_PER_USER)
+            )
+            
+            super_display_total = int(
+                star_usage_for_display.get("super_total", SUPER_STARS_PER_USER)
+            )
 
             # Đang dùng = sao đang giữ tạm ở các trận chưa khóa.
             hope_display_using = int(
@@ -6881,8 +7638,8 @@ def render_match_card(
 
                     return (
                         f"{hope_label} "
-                        f"(Kho còn lại: {hope_display_left}/{HOPE_STARS_PER_USER}; "
-                        f"Đang dùng: {hope_display_using}/{HOPE_STARS_PER_USER})"
+                        f"Kho còn lại: {hope_display_left}/{hope_display_total}; "
+                        f"Đang dùng: {hope_display_using}/{hope_display_total})"
                     )
 
                 if star_type == STAR_TYPE_SUPER:
@@ -6896,8 +7653,8 @@ def render_match_card(
 
                     return (
                         f"{super_label} "
-                        f"(Kho còn lại: {super_display_left}/{SUPER_STARS_PER_USER}; "
-                        f"Đang dùng: {super_display_using}/{SUPER_STARS_PER_USER})"
+                        f"Kho còn lại: {super_display_left}/{super_display_total}; "
+                        f"Đang dùng: {super_display_using}/{super_display_total})"
                     )
 
                 return STAR_CONFIG[star_type]["label"]
@@ -7693,14 +8450,31 @@ def page_leaderboard():
     if "avatar_key" not in leaderboard.columns:
         leaderboard["avatar_key"] = DEFAULT_AVATAR_KEY
 
-    leaderboard["hope_star_display"] = leaderboard["hope_stars_used"].apply(
-        lambda x: f"{max(0, HOPE_STARS_PER_USER - int(x))}/{HOPE_STARS_PER_USER}"
+    def format_hope_star_display_for_leaderboard(row):
+        quota = get_user_star_quota(int(row["user_id"]))
+        hope_total = int(quota["hope_total"])
+        hope_used = int(row["hope_stars_used"])
+    
+        return f"{max(0, hope_total - hope_used)}/{hope_total}"
+    
+    
+    def format_super_star_display_for_leaderboard(row):
+        quota = get_user_star_quota(int(row["user_id"]))
+        super_total = int(quota["super_total"])
+        super_used = int(row["super_stars_used"])
+    
+        return f"{max(0, super_total - super_used)}/{super_total}"
+    
+    
+    leaderboard["hope_star_display"] = leaderboard.apply(
+        format_hope_star_display_for_leaderboard,
+        axis=1
     )
-
-    leaderboard["super_star_display"] = leaderboard["super_stars_used"].apply(
-        lambda x: f"{max(0, SUPER_STARS_PER_USER - int(x))}/{SUPER_STARS_PER_USER}"
+    
+    leaderboard["super_star_display"] = leaderboard.apply(
+        format_super_star_display_for_leaderboard,
+        axis=1
     )
-
     display_df = leaderboard[
         [
             "rank",
@@ -8543,6 +9317,7 @@ def main():
     user = st.session_state["user"]
 
     render_avatar_popover(user)
+    maybe_render_daily_checkin_popup(user["user_id"])
 
     with st.sidebar:
         render_sidebar_brand()
