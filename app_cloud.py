@@ -1482,6 +1482,216 @@ def maybe_render_daily_checkin_popup(user_id: int):
         st.session_state[prompt_seen_key] = True
         render_daily_checkin_dialog(user_id)
 
+def render_daily_checkin_shortcut_button(user_id: int):
+    """
+    Nút tròn nhỏ dưới avatar để mở lại popup điểm danh.
+    Chỉ gọi hàm này ở trang Lịch thi đấu & dự đoán.
+    """
+    user_id = int(user_id)
+
+    daily_checkin_icon_svg = """
+    <svg xmlns="http://www.w3.org/2000/svg"
+         width="24"
+         height="24"
+         viewBox="0 0 24 24"
+         fill="currentColor"
+         class="icon icon-tabler icons-tabler-filled icon-tabler-file-check">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 2l.117 .007a1 1 0 0 1 .876 .876l.007 .117v4l.005 .15a2 2 0 0 0 1.838 1.844l.157 .006h4l.117 .007a1 1 0 0 1 .876 .876l.007 .117v9a3 3 0 0 1 -2.824 2.995l-.176 .005h-10a3 3 0 0 1 -2.995 -2.824l-.005 -.176v-14a3 3 0 0 1 2.824 -2.995l.176 -.005zm3.707 10.293a1 1 0 0 0 -1.414 0l-3.293 3.292l-1.293 -1.292a1 1 0 1 0 -1.414 1.414l2 2a1 1 0 0 0 1.414 0l4 -4a1 1 0 0 0 0 -1.414m-.707 -9.294l4 4.001h-4z" />
+    </svg>
+    """
+
+    daily_checkin_icon_base64 = base64.b64encode(
+        daily_checkin_icon_svg.encode("utf-8")
+    ).decode("utf-8")
+
+    st.markdown(
+        f"""
+        <style>
+        div[class*="st-key-daily_checkin_shortcut_button"] {{
+            position: fixed !important;
+            top: 148px !important;
+            right: 38px !important;
+            z-index: 999998 !important;
+
+            width: 46px !important;
+            height: 46px !important;
+            min-width: 46px !important;
+            min-height: 46px !important;
+            max-width: 46px !important;
+            max-height: 46px !important;
+
+            padding: 0 !important;
+            margin: 0 !important;
+            overflow: visible !important;
+        }}
+
+        div[class*="st-key-daily_checkin_shortcut_button"] button {{
+            position: relative !important;
+
+            width: 46px !important;
+            height: 46px !important;
+            min-width: 46px !important;
+            min-height: 46px !important;
+            max-width: 46px !important;
+            max-height: 46px !important;
+
+            padding: 0 !important;
+            margin: 0 !important;
+
+            border-radius: 999px !important;
+            border: 2px solid rgba(245, 197, 66, 0.78) !important;
+            outline: 3px solid rgba(255, 255, 255, 0.92) !important;
+            outline-offset: 2px !important;
+
+            background:
+                radial-gradient(circle at 32% 26%, #FFF7CC 0%, #F5C542 42%, #D97706 100%) !important;
+
+            box-shadow:
+                0 13px 28px rgba(7, 17, 31, 0.20),
+                0 0 0 6px rgba(245, 197, 66, 0.10) !important;
+
+            color: transparent !important;
+            font-size: 0 !important;
+            line-height: 0 !important;
+
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+
+            cursor: pointer !important;
+            overflow: visible !important;
+
+            transition:
+                transform 0.18s ease,
+                box-shadow 0.18s ease,
+                border-color 0.18s ease,
+                filter 0.18s ease !important;
+        }}
+
+        div[class*="st-key-daily_checkin_shortcut_button"] button::before {{
+            content: "";
+            display: block;
+
+            width: 23px;
+            height: 23px;
+
+            background: #07111F;
+
+            -webkit-mask: url("data:image/svg+xml;base64,{daily_checkin_icon_base64}") center / contain no-repeat;
+            mask: url("data:image/svg+xml;base64,{daily_checkin_icon_base64}") center / contain no-repeat;
+
+            pointer-events: none;
+        }}
+
+        div[class*="st-key-daily_checkin_shortcut_button"] button::after {{
+            content: "Điểm danh";
+            position: absolute;
+            right: 58px;
+            top: 50%;
+            transform: translateY(-50%) translateX(8px);
+
+            opacity: 0;
+            pointer-events: none;
+
+            padding: 8px 11px;
+            border-radius: 999px;
+
+            background: rgba(7, 17, 31, 0.94);
+            color: #F8FAFC;
+
+            font-size: 12px;
+            font-weight: 850;
+            line-height: 1;
+            white-space: nowrap;
+
+            box-shadow: 0 10px 24px rgba(7, 17, 31, 0.22);
+
+            transition:
+                opacity 0.18s ease,
+                transform 0.18s ease;
+        }}
+
+        div[class*="st-key-daily_checkin_shortcut_button"] button:hover {{
+            transform: translateY(-1px) scale(1.045) !important;
+            border-color: rgba(245, 197, 66, 1) !important;
+            filter: brightness(1.03) !important;
+
+            box-shadow:
+                0 16px 34px rgba(7, 17, 31, 0.26),
+                0 0 0 7px rgba(245, 197, 66, 0.15) !important;
+        }}
+
+        div[class*="st-key-daily_checkin_shortcut_button"] button:hover::after {{
+            opacity: 1;
+            transform: translateY(-50%) translateX(0);
+        }}
+
+        div[class*="st-key-daily_checkin_shortcut_button"] button:active {{
+            transform: translateY(0) scale(0.98) !important;
+        }}
+
+        div[class*="st-key-daily_checkin_shortcut_button"] button * {{
+            display: none !important;
+            visibility: hidden !important;
+            color: transparent !important;
+            font-size: 0 !important;
+            line-height: 0 !important;
+        }}
+
+        @media (max-width: 768px) {{
+            div[class*="st-key-daily_checkin_shortcut_button"] {{
+                top: 124px !important;
+                right: 18px !important;
+
+                width: 40px !important;
+                height: 40px !important;
+                min-width: 40px !important;
+                min-height: 40px !important;
+                max-width: 40px !important;
+                max-height: 40px !important;
+            }}
+
+            div[class*="st-key-daily_checkin_shortcut_button"] button {{
+                width: 40px !important;
+                height: 40px !important;
+                min-width: 40px !important;
+                min-height: 40px !important;
+                max-width: 40px !important;
+                max-height: 40px !important;
+
+                border-width: 2px !important;
+                outline-width: 2px !important;
+                outline-offset: 2px !important;
+            }}
+
+            div[class*="st-key-daily_checkin_shortcut_button"] button::before {{
+                width: 20px;
+                height: 20px;
+            }}
+
+            div[class*="st-key-daily_checkin_shortcut_button"] button::after {{
+                display: none !important;
+            }}
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    if st.session_state.pop("open_daily_checkin_from_shortcut", False):
+        render_daily_checkin_dialog(user_id)
+
+    shortcut_clicked = st.button(
+        "Mở điểm danh",
+        key="daily_checkin_shortcut_button",
+        help="Xem điểm danh hằng ngày"
+    )
+
+    if shortcut_clicked:
+        st.session_state["open_daily_checkin_from_shortcut"] = True
+        st.rerun()
+
 def inject_mobile_goal_scorer_button_css():
     """
     CSS riêng cho nút Xem cầu thủ ghi bàn trên mobile.
@@ -7981,6 +8191,7 @@ def page_matches():
     render_kpi_tiles(matches)
 
     user_id = st.session_state["user"]["user_id"]
+    render_daily_checkin_shortcut_button(user_id)
     success_message = st.session_state.pop(
         "star_transfer_success_message",
         None
