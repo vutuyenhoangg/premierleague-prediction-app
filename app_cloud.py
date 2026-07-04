@@ -1522,7 +1522,7 @@ def render_daily_checkin_shortcut_button(user_id: int):
         div[class*="st-key-daily_checkin_shortcut_button"] {{
             position: fixed !important;
             top: 148px !important;
-            right: 48px !important;
+            right: 44px !important;
             z-index: 999998 !important;
 
             width: 46px !important;
