@@ -1243,9 +1243,9 @@ def render_daily_checkin_dialog(user_id: int):
     <div class="wc-daily-checkin-shell">
         <div class="wc-daily-checkin-header">
             <div class="wc-daily-checkin-kicker">7 ngày rực cháy</div>
-            <div class="wc-daily-checkin-title">Điểm danh hằng ngày</div>
+            <div class="wc-daily-checkin-title">Điểm danh hàng ngày</div>
             <div class="wc-daily-checkin-subtitle">
-                Điểm danh mỗi ngày để tích lũy phần thưởng bổ trợ.
+                Điểm danh mỗi ngày để tích lũy phần thưởng.
             </div>
 
             <div class="wc-daily-checkin-progress">
@@ -1263,7 +1263,7 @@ def render_daily_checkin_dialog(user_id: int):
         </div>
 
         <div class="wc-checkin-note">
-            Sau khi hoàn thành 7 ngày, chu kỳ sẽ tự động bắt đầu lại từ ngày 1.
+            Sau khi hoàn thành 7 ngày, chu kỳ sẽ tự động bắt đầu lại.
         </div>
     </div>
     """
@@ -1801,7 +1801,7 @@ def render_daily_checkin_shortcut_button(user_id: int):
     shortcut_clicked = st.button(
         "Mở điểm danh",
         key="daily_checkin_shortcut_button",
-        help="Xem điểm danh hằng ngày"
+        help="Xem điểm danh hàng ngày"
     )
     
     if shortcut_clicked:
