@@ -1,5 +1,6 @@
 # ============================================================
 # WORLD CUP 2026 PREDICTION APP
+# Safe refactor: duplicate overwritten helper definitions removed; runtime behavior intentionally preserved.
 # Stack: Streamlit + Supabase/PostgreSQL
 # Database input: Supabase via DATABASE_URL
 # ============================================================
@@ -25,6 +26,7 @@ from streamlit_cookies_controller import CookieController
 import re
 from google import genai
 from google.genai import types
+import textwrap
 
 # ============================================================
 # 1. CONFIG
@@ -46,6 +48,9 @@ COOKIE_NAME = "wc_session_token"
 SESSION_DAYS = 30
 HOPE_STARS_PER_USER = 5
 SUPER_STARS_PER_USER = 1
+CHECKIN_CYCLE_DAYS = 7
+CHECKIN_HOPE_REWARD_DAY = 5
+CHECKIN_SUPER_REWARD_DAY = 7
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 GEMINI_MODEL_NAME = st.secrets.get("GEMINI_MODEL_NAME", "gemini-2.5-flash")
 
@@ -876,6 +881,931 @@ def inject_mobile_match_title_css():
 
 
 inject_mobile_match_title_css()
+
+@st.dialog(" ")
+def render_daily_checkin_dialog(user_id: int):
+    reward_info = st.session_state.get("daily_checkin_reward_popup")
+
+    if reward_info is not None:
+        render_daily_checkin_reward_content(reward_info)
+        return
+    state = get_daily_checkin_state(user_id)
+
+    claimed_days = set(int(day) for day in state.get("claimed_days", []))
+    checked_today = bool(state.get("checked_today"))
+    next_day_no = state.get("next_day_no")
+    today_day_no = state.get("today_day_no")
+
+    if checked_today and today_day_no is not None:
+        claimed_days.add(int(today_day_no))
+
+    checked_count = len(claimed_days)
+
+    day_items_html = ""
+
+    for day in range(1, CHECKIN_CYCLE_DAYS + 1):
+        is_claimed = day in claimed_days
+        is_today = (
+            not checked_today
+            and next_day_no is not None
+            and int(next_day_no) == day
+        )
+
+        day_classes = ["wc-checkin-day"]
+
+        if is_claimed:
+            day_classes.append("wc-checkin-day-claimed")
+
+        if is_today:
+            day_classes.append("wc-checkin-day-today")
+
+        if day in [CHECKIN_HOPE_REWARD_DAY, CHECKIN_SUPER_REWARD_DAY]:
+            day_classes.append("wc-checkin-day-reward")
+
+        day_class_text = " ".join(day_classes)
+
+        day_icon = "✓" if is_claimed else "★"
+        marker_text = "Hôm nay" if is_today else "&nbsp;"
+
+        reward_html = ""
+
+        if day == CHECKIN_HOPE_REWARD_DAY:
+            reward_html = '<div class="wc-checkin-reward-mini">+1 Ngôi sao hy vọng</div>'
+
+        elif day == CHECKIN_SUPER_REWARD_DAY:
+            reward_html = '<div class="wc-checkin-reward-mini">+1 Siêu sao</div>'
+
+        day_items_html += (
+            f'<div class="{day_class_text}">'
+            f'<div class="wc-checkin-marker">{marker_text}</div>'
+            f'<div class="wc-checkin-circle">{day_icon}</div>'
+            f'<div class="wc-checkin-day-label">Ngày {day}</div>'
+            f'{reward_html}'
+            f'</div>'
+        )
+
+    daily_checkin_html = f"""
+    <style>
+    div[role="dialog"]:has(.wc-daily-checkin-shell) {{
+        width: min(860px, calc(100vw - 32px)) !important;
+        max-width: min(860px, calc(100vw - 32px)) !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+    }}
+
+    div[role="dialog"]:has(.wc-daily-checkin-shell) h2,
+    div[role="dialog"]:has(.wc-daily-checkin-shell) [data-testid="stDialogHeader"] {{
+        display: none !important;
+    }}
+
+    div[role="dialog"]:has(.wc-daily-checkin-shell) button[aria-label="Close"] {{
+        color: #FFFFFF !important;
+        background: rgba(255, 255, 255, 0.12) !important;
+        border-radius: 999px !important;
+        top: 18px !important;
+        right: 18px !important;
+    }}
+
+    .wc-daily-checkin-shell {{
+        position: relative;
+        width: 100%;
+        border-radius: 30px;
+        padding: 34px 36px 30px 36px;
+        background:
+            radial-gradient(circle at 50% 0%, rgba(245, 197, 66, 0.18), transparent 30%),
+            linear-gradient(135deg, rgba(7, 17, 31, 0.98), rgba(11, 31, 58, 0.97));
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        box-shadow: 0 28px 70px rgba(7, 17, 31, 0.46);
+        color: #F8FAFC;
+        overflow: hidden;
+        box-sizing: border-box;
+    }}
+
+    .wc-daily-checkin-shell::before {{
+        content: "";
+        position: absolute;
+        left: 34px;
+        right: 34px;
+        top: 0;
+        height: 3px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, transparent, #F5C542, transparent);
+        opacity: 0.85;
+    }}
+
+    .wc-daily-checkin-header {{
+        text-align: center;
+        margin-bottom: 24px;
+    }}
+
+    .wc-daily-checkin-kicker {{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: rgba(245, 197, 66, 0.10);
+        border: 1px solid rgba(245, 197, 66, 0.28);
+        color: #F5C542;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: 0.10em;
+        text-transform: uppercase;
+        margin-bottom: 12px;
+    }}
+
+    .wc-daily-checkin-title {{
+        color: #F8FAFC;
+        font-size: 30px;
+        font-weight: 950;
+        letter-spacing: -0.04em;
+        line-height: 1.15;
+    }}
+
+    .wc-daily-checkin-subtitle {{
+        color: #CBD5E1;
+        font-size: 15px;
+        line-height: 1.5;
+        margin-top: 8px;
+    }}
+
+    .wc-daily-checkin-progress {{
+        margin: 16px auto 0 auto;
+        width: min(420px, 100%);
+        height: 8px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.10);
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }}
+
+    .wc-daily-checkin-progress-fill {{
+        width: calc({checked_count} / 7 * 100%);
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #F5C542, #FFD761);
+        box-shadow: 0 0 18px rgba(245, 197, 66, 0.28);
+    }}
+
+    .wc-daily-checkin-days {{
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: 10px;
+        align-items: start;
+        padding: 22px 0 14px 0;
+    }}
+
+    .wc-checkin-day {{
+        position: relative;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+    }}
+
+    .wc-checkin-marker {{
+        height: 20px;
+        margin-bottom: 6px;
+        color: #07111F;
+        background: transparent;
+        font-size: 10px;
+        font-weight: 950;
+        line-height: 20px;
+        white-space: nowrap;
+    }}
+
+    .wc-checkin-day-today .wc-checkin-marker {{
+        padding: 0 8px;
+        border-radius: 999px;
+        background: #F5C542;
+        color: #07111F;
+        box-shadow: 0 8px 18px rgba(245, 197, 66, 0.24);
+    }}
+
+    .wc-checkin-circle {{
+        width: 48px;
+        height: 48px;
+        border-radius: 999px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(15, 23, 42, 0.40);
+        border: 1.5px solid rgba(255, 255, 255, 0.24);
+        color: rgba(255, 255, 255, 0.42);
+        font-size: 22px;
+        font-weight: 950;
+        line-height: 1;
+        box-sizing: border-box;
+    }}
+
+    .wc-checkin-day-today .wc-checkin-circle {{
+        background: rgba(245, 197, 66, 0.08);
+        border-color: rgba(245, 197, 66, 0.78);
+        color: #F5C542;
+        box-shadow: 0 0 0 4px rgba(245, 197, 66, 0.08);
+    }}
+
+    .wc-checkin-day-claimed .wc-checkin-circle {{
+        background: linear-gradient(135deg, #F5C542, #FFD761);
+        border-color: rgba(245, 197, 66, 0.95);
+        color: #07111F;
+        box-shadow: 0 0 20px rgba(245, 197, 66, 0.34);
+    }}
+
+    .wc-checkin-day-label {{
+        margin-top: 9px;
+        color: #CBD5E1;
+        font-size: 13px;
+        font-weight: 850;
+        white-space: nowrap;
+    }}
+
+    .wc-checkin-day-claimed .wc-checkin-day-label,
+    .wc-checkin-day-today .wc-checkin-day-label {{
+        color: #F5C542;
+    }}
+
+    .wc-checkin-reward-mini {{
+        margin-top: 7px;
+        min-height: 26px;
+        color: #F5C542;
+        font-size: 10.5px;
+        font-weight: 850;
+        line-height: 1.25;
+        text-align: center;
+        max-width: 90px;
+    }}
+
+    .wc-checkin-reward-grid {{
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin: 18px auto 18px auto;
+        max-width: 520px;
+    }}
+
+    .wc-checkin-reward-card {{
+        border: 1px solid rgba(245, 197, 66, 0.36);
+        border-radius: 16px;
+        padding: 12px 14px;
+        text-align: center;
+        color: #F5C542;
+        font-size: 13.5px;
+        font-weight: 850;
+        background: rgba(245, 197, 66, 0.06);
+    }}
+
+    .wc-checkin-note {{
+        color: #CBD5E1;
+        font-size: 13px;
+        text-align: center;
+        margin-top: 8px;
+        line-height: 1.45;
+    }}
+
+    div[class*="st-key-daily_checkin_claim_"],
+    div[class*="st-key-daily_checkin_done_"] {{
+        width: min(860px, calc(100vw - 32px)) !important;
+        margin: 14px auto 0 auto !important;
+    }}
+
+    div[class*="st-key-daily_checkin_claim_"] button {{
+        width: 100% !important;
+        min-height: 54px !important;
+        border-radius: 999px !important;
+        border: none !important;
+        background: linear-gradient(135deg, #F5C542, #FFD761) !important;
+        color: #07111F !important;
+        font-size: 18px !important;
+        font-weight: 950 !important;
+        box-shadow: 0 14px 34px rgba(245, 197, 66, 0.24) !important;
+    }}
+
+    div[class*="st-key-daily_checkin_claim_"] button:hover {{
+        transform: translateY(-1px) !important;
+        filter: brightness(1.02) !important;
+    }}
+
+    div[class*="st-key-daily_checkin_done_"] button {{
+        width: 100% !important;
+        min-height: 54px !important;
+        border-radius: 999px !important;
+        border: 1px solid rgba(255, 255, 255, 0.18) !important;
+        background: rgba(255, 255, 255, 0.10) !important;
+        color: #CBD5E1 !important;
+        font-size: 16px !important;
+        font-weight: 850 !important;
+        box-shadow: none !important;
+    }}
+
+    @media (max-width: 768px) {{
+        div[role="dialog"]:has(.wc-daily-checkin-shell) {{
+            width: min(390px, calc(100vw - 24px)) !important;
+            max-width: min(390px, calc(100vw - 24px)) !important;
+        }}
+
+        .wc-daily-checkin-shell {{
+            padding: 28px 18px 24px 18px !important;
+            border-radius: 24px !important;
+        }}
+
+        .wc-daily-checkin-title {{
+            font-size: 25px;
+        }}
+
+        .wc-daily-checkin-days {{
+            grid-template-columns: repeat(7, 62px);
+            overflow-x: auto;
+            justify-content: flex-start;
+            padding-bottom: 12px;
+        }}
+
+        .wc-checkin-circle {{
+            width: 48px;
+            height: 48px;
+        }}
+
+        .wc-checkin-reward-grid {{
+            grid-template-columns: 1fr;
+            max-width: 100%;
+        }}
+
+        div[class*="st-key-daily_checkin_claim_"],
+        div[class*="st-key-daily_checkin_done_"] {{
+            width: min(390px, calc(100vw - 24px)) !important;
+        }}
+    }}
+    </style>
+
+    <div class="wc-daily-checkin-shell">
+        <div class="wc-daily-checkin-header">
+            <div class="wc-daily-checkin-kicker">7 ngày rực cháy</div>
+            <div class="wc-daily-checkin-title">Điểm danh hàng ngày</div>
+            <div class="wc-daily-checkin-subtitle">
+                Điểm danh mỗi ngày để tích lũy phần thưởng.
+            </div>
+
+            <div class="wc-daily-checkin-progress">
+                <div class="wc-daily-checkin-progress-fill"></div>
+            </div>
+        </div>
+
+        <div class="wc-daily-checkin-days">
+            {day_items_html}
+        </div>
+
+        <div class="wc-checkin-reward-grid">
+            <div class="wc-checkin-reward-card">Ngày 5: +1 Ngôi sao hy vọng</div>
+            <div class="wc-checkin-reward-card">Ngày 7: +1 Siêu sao</div>
+        </div>
+
+        <div class="wc-checkin-note">
+            Sau khi hoàn thành 7 ngày, chu kỳ sẽ tự động bắt đầu lại.
+        </div>
+    </div>
+    """
+
+    if hasattr(st, "html"):
+        st.html(daily_checkin_html)
+    else:
+        components.html(daily_checkin_html, height=620, scrolling=True)
+
+    if not checked_today and next_day_no is not None:
+        claim_clicked = st.button(
+            "Điểm danh ngay",
+            key=f"daily_checkin_claim_{user_id}_{state['cycle_no']}_{next_day_no}",
+            use_container_width=True
+        )
+
+        if claim_clicked:
+            result = claim_daily_checkin(user_id)
+        
+            if result.get("reward_type") is not None:
+                st.session_state["daily_checkin_reward_popup"] = result
+            else:
+                st.session_state["daily_checkin_after_claim"] = True
+        
+            rerun_current_fragment()
+
+    else:
+        st.button(
+            "Đã điểm danh hôm nay",
+            key=f"daily_checkin_done_{user_id}_{today_vietnam_date()}",
+            use_container_width=True,
+            disabled=True
+        )
+
+
+@st.dialog(" ")
+def render_daily_checkin_reward_dialog(reward_info: dict):
+    reward_label = str(reward_info.get("reward_label") or "")
+    reward_type = normalize_star_type(reward_info.get("reward_type"))
+    day_no = int(reward_info.get("day_no") or 0)
+
+    safe_reward_label = html.escape(reward_label)
+
+    reward_symbol = "✦" if reward_type == STAR_TYPE_SUPER else "★"
+
+    daily_reward_html = f"""
+    <style>
+    div[role="dialog"]:has(.wc-daily-reward-shell) {{
+        width: min(560px, calc(100vw - 32px)) !important;
+        max-width: min(560px, calc(100vw - 32px)) !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+    }}
+
+    div[role="dialog"]:has(.wc-daily-reward-shell) h2,
+    div[role="dialog"]:has(.wc-daily-reward-shell) [data-testid="stDialogHeader"] {{
+        display: none !important;
+    }}
+
+    div[role="dialog"]:has(.wc-daily-reward-shell) button[aria-label="Close"] {{
+        color: #FFFFFF !important;
+        background: rgba(255, 255, 255, 0.12) !important;
+        border-radius: 999px !important;
+        top: 18px !important;
+        right: 18px !important;
+    }}
+
+    .wc-daily-reward-shell {{
+        border-radius: 28px;
+        padding: 38px 34px 30px 34px;
+        background:
+            radial-gradient(circle at 50% 0%, rgba(245, 197, 66, 0.24), transparent 30%),
+            linear-gradient(135deg, rgba(7, 17, 31, 0.98), rgba(11, 31, 58, 0.97));
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        box-shadow: 0 28px 70px rgba(7, 17, 31, 0.46);
+        color: #F8FAFC;
+        text-align: center;
+        overflow: hidden;
+        box-sizing: border-box;
+    }}
+
+    .wc-daily-reward-orb {{
+        width: 84px;
+        height: 84px;
+        margin: 0 auto 18px auto;
+        border-radius: 999px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #F5C542, #FFD761);
+        color: #07111F;
+        font-size: 42px;
+        font-weight: 950;
+        box-shadow:
+            0 0 0 8px rgba(245, 197, 66, 0.10),
+            0 0 32px rgba(245, 197, 66, 0.32);
+    }}
+
+    .wc-daily-reward-title {{
+        color: #F8FAFC;
+        font-size: 32px;
+        font-weight: 950;
+        line-height: 1.12;
+        letter-spacing: -0.04em;
+        margin-bottom: 10px;
+    }}
+
+    .wc-daily-reward-subtitle {{
+        color: #CBD5E1;
+        font-size: 15.5px;
+        line-height: 1.55;
+        margin-bottom: 18px;
+    }}
+
+    .wc-daily-reward-card {{
+        max-width: 420px;
+        margin: 0 auto 24px auto;
+        border: 1px solid rgba(245, 197, 66, 0.62);
+        border-radius: 18px;
+        padding: 16px 18px;
+        background: rgba(245, 197, 66, 0.08);
+        box-shadow: 0 0 28px rgba(245, 197, 66, 0.14);
+    }}
+
+    .wc-daily-reward-name {{
+        color: #F5C542;
+        font-size: 20px;
+        font-weight: 950;
+        line-height: 1.2;
+    }}
+
+    .wc-daily-reward-note {{
+        color: #CBD5E1;
+        font-size: 14px;
+        margin-top: 6px;
+    }}
+
+    div[class*="st-key-daily_reward_confirm"] {{
+        width: min(560px, calc(100vw - 32px)) !important;
+        margin: 14px auto 0 auto !important;
+    }}
+
+    div[class*="st-key-daily_reward_confirm"] button {{
+        width: 100% !important;
+        min-height: 54px !important;
+        border-radius: 999px !important;
+        border: none !important;
+        background: linear-gradient(135deg, #F5C542, #FFD761) !important;
+        color: #07111F !important;
+        font-size: 18px !important;
+        font-weight: 950 !important;
+        box-shadow: 0 14px 34px rgba(245, 197, 66, 0.24) !important;
+    }}
+
+    div[class*="st-key-daily_reward_confirm"] button:hover {{
+        transform: translateY(-1px) !important;
+        filter: brightness(1.02) !important;
+    }}
+    </style>
+
+    <div class="wc-daily-reward-shell">
+        <div class="wc-daily-reward-orb">{reward_symbol}</div>
+        <div class="wc-daily-reward-title">Phần thưởng đã nhận</div>
+
+        <div class="wc-daily-reward-subtitle">
+            Bạn đã điểm danh đủ <b style="color:#F5C542;">{day_no} ngày</b>
+            trong chu kỳ hiện tại.
+        </div>
+
+        <div class="wc-daily-reward-card">
+            <div class="wc-daily-reward-name">{safe_reward_label}</div>
+            <div class="wc-daily-reward-note">Đã được cộng vào kho bổ trợ của bạn</div>
+        </div>
+    </div>
+    """
+
+    if hasattr(st, "html"):
+        st.html(daily_reward_html)
+    else:
+        components.html(daily_reward_html, height=430, scrolling=False)
+
+    if st.button(
+        "Hoàn tất",
+        key="daily_reward_confirm",
+        use_container_width=True
+    ):
+        st.rerun()
+
+def render_daily_checkin_reward_content(reward_info: dict):
+    reward_label = str(reward_info.get("reward_label") or "")
+    reward_type = normalize_star_type(reward_info.get("reward_type"))
+    day_no = int(reward_info.get("day_no") or 0)
+
+    safe_reward_label = html.escape(reward_label)
+    reward_symbol = "✦" if reward_type == STAR_TYPE_SUPER else "★"
+
+    daily_reward_html = f"""
+    <style>
+    .wc-daily-reward-shell {{
+        border-radius: 28px;
+        padding: 38px 34px 30px 34px;
+        background:
+            radial-gradient(circle at 50% 0%, rgba(245, 197, 66, 0.24), transparent 30%),
+            linear-gradient(135deg, rgba(7, 17, 31, 0.98), rgba(11, 31, 58, 0.97));
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        box-shadow: 0 28px 70px rgba(7, 17, 31, 0.46);
+        color: #F8FAFC;
+        text-align: center;
+        overflow: hidden;
+        box-sizing: border-box;
+    }}
+
+    .wc-daily-reward-orb {{
+        width: 84px;
+        height: 84px;
+        margin: 0 auto 18px auto;
+        border-radius: 999px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #F5C542, #FFD761);
+        color: #07111F;
+        font-size: 42px;
+        font-weight: 950;
+        box-shadow:
+            0 0 0 8px rgba(245, 197, 66, 0.10),
+            0 0 32px rgba(245, 197, 66, 0.32);
+    }}
+
+    .wc-daily-reward-title {{
+        color: #F8FAFC;
+        font-size: 32px;
+        font-weight: 950;
+        line-height: 1.12;
+        letter-spacing: -0.04em;
+        margin-bottom: 10px;
+    }}
+
+    .wc-daily-reward-subtitle {{
+        color: #CBD5E1;
+        font-size: 15.5px;
+        line-height: 1.55;
+        margin-bottom: 18px;
+    }}
+
+    .wc-daily-reward-card {{
+        max-width: 420px;
+        margin: 0 auto 24px auto;
+        border: 1px solid rgba(245, 197, 66, 0.62);
+        border-radius: 18px;
+        padding: 16px 18px;
+        background: rgba(245, 197, 66, 0.08);
+        box-shadow: 0 0 28px rgba(245, 197, 66, 0.14);
+    }}
+
+    .wc-daily-reward-name {{
+        color: #F5C542;
+        font-size: 20px;
+        font-weight: 950;
+        line-height: 1.2;
+    }}
+
+    .wc-daily-reward-note {{
+        color: #CBD5E1;
+        font-size: 14px;
+        margin-top: 6px;
+    }}
+
+    div[class*="st-key-daily_reward_confirm"] button {{
+        width: 100% !important;
+        min-height: 54px !important;
+        border-radius: 999px !important;
+        border: none !important;
+        background: linear-gradient(135deg, #F5C542, #FFD761) !important;
+        color: #07111F !important;
+        font-size: 18px !important;
+        font-weight: 950 !important;
+        box-shadow: 0 14px 34px rgba(245, 197, 66, 0.24) !important;
+    }}
+    </style>
+
+    <div class="wc-daily-reward-shell">
+        <div class="wc-daily-reward-orb">{reward_symbol}</div>
+        <div class="wc-daily-reward-title">Phần thưởng đã nhận</div>
+
+        <div class="wc-daily-reward-subtitle">
+            Bạn đã điểm danh đủ <b style="color:#F5C542;">{day_no} ngày</b>
+            trong chu kỳ hiện tại.
+        </div>
+
+        <div class="wc-daily-reward-card">
+            <div class="wc-daily-reward-name">{safe_reward_label}</div>
+            <div class="wc-daily-reward-note">Đã được cộng vào kho bổ trợ của bạn</div>
+        </div>
+    </div>
+    """
+
+    if hasattr(st, "html"):
+        st.html(daily_reward_html)
+    else:
+        components.html(daily_reward_html, height=430, scrolling=False)
+
+    if st.button(
+        "Hoàn tất",
+        key="daily_reward_confirm",
+        use_container_width=True
+    ):
+        st.session_state.pop("daily_checkin_reward_popup", None)
+        st.session_state.pop("daily_checkin_after_claim", None)
+        rerun_current_fragment()
+
+def maybe_render_daily_checkin_popup(user_id: int):
+    """
+    Tự mở popup điểm danh lần đầu trong ngày nếu user chưa điểm danh.
+    Hàm này chỉ chạy trong full app render bình thường.
+    Nút shortcut đã được tách sang fragment riêng.
+    """
+    user_id = int(user_id)
+    today_key = today_vietnam_date().isoformat()
+
+    state = get_daily_checkin_state(user_id, use_cache=True)
+
+    prompt_seen_key = f"daily_checkin_prompt_seen_{user_id}_{today_key}"
+
+    should_open = (
+        not bool(state.get("checked_today", False))
+        and not bool(st.session_state.get(prompt_seen_key, False))
+    )
+
+    if should_open:
+        st.session_state[prompt_seen_key] = True
+        render_daily_checkin_dialog(user_id)
+
+@st.fragment
+def render_daily_checkin_shortcut_button(user_id: int):
+    """
+    Nút tròn nhỏ dưới avatar để mở lại popup điểm danh.
+    Chỉ gọi hàm này ở trang Lịch thi đấu & dự đoán.
+    """
+    user_id = int(user_id)
+
+    daily_checkin_icon_svg = """
+    <svg xmlns="http://www.w3.org/2000/svg"
+         width="24"
+         height="24"
+         viewBox="0 0 24 24"
+         fill="none"
+         stroke="currentColor"
+         stroke-width="1.5"
+         stroke-linecap="round"
+         stroke-linejoin="round"
+         class="icon icon-tabler icons-tabler-outline icon-tabler-file-check">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M14 3v4a1 1 0 0 0 1 1h4" />
+      <path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2" />
+      <path d="M9 15l2 2l4 -4" />
+    </svg>
+    """
+
+    daily_checkin_icon_base64 = base64.b64encode(
+        daily_checkin_icon_svg.encode("utf-8")
+    ).decode("utf-8")
+
+    st.markdown(
+        f"""
+        <style>
+        div[class*="st-key-daily_checkin_shortcut_button"] {{
+            position: fixed !important;
+            top: 148px !important;
+            right: 45px !important;
+            z-index: 999998 !important;
+
+            width: 46px !important;
+            height: 46px !important;
+            min-width: 46px !important;
+            min-height: 46px !important;
+            max-width: 46px !important;
+            max-height: 46px !important;
+
+            padding: 0 !important;
+            margin: 0 !important;
+            overflow: visible !important;
+        }}
+
+        div[class*="st-key-daily_checkin_shortcut_button"] button {{
+            position: relative !important;
+
+            width: 46px !important;
+            height: 46px !important;
+            min-width: 46px !important;
+            min-height: 46px !important;
+            max-width: 46px !important;
+            max-height: 46px !important;
+
+            padding: 0 !important;
+            margin: 0 !important;
+
+            border-radius: 999px !important;
+            border: none !important;
+            outline: none !important;
+
+            background: rgba(255, 255, 255, 0.96) !important;
+
+            box-shadow:
+                0 10px 24px rgba(7, 17, 31, 0.14),
+                0 0 0 1px rgba(15, 23, 42, 0.06) !important;
+
+            color: transparent !important;
+            font-size: 0 !important;
+            line-height: 0 !important;
+
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+
+            cursor: pointer !important;
+            overflow: visible !important;
+
+            transition:
+                transform 0.18s ease,
+                box-shadow 0.18s ease,
+                background 0.18s ease !important;
+        }}
+
+        div[class*="st-key-daily_checkin_shortcut_button"] button::before {{
+            content: "";
+            display: block;
+
+            width: 23px;
+            height: 23px;
+
+            background: #F5C542;
+
+            -webkit-mask: url("data:image/svg+xml;base64,{daily_checkin_icon_base64}") center / contain no-repeat;
+            mask: url("data:image/svg+xml;base64,{daily_checkin_icon_base64}") center / contain no-repeat;
+
+            pointer-events: none;
+        }}
+
+        div[class*="st-key-daily_checkin_shortcut_button"] button::after {{
+            content: "Điểm danh";
+            position: absolute;
+            right: 58px;
+            top: 50%;
+            transform: translateY(-50%) translateX(8px);
+
+            opacity: 0;
+            pointer-events: none;
+
+            padding: 8px 11px;
+            border-radius: 999px;
+
+            background: rgba(7, 17, 31, 0.94);
+            color: #F8FAFC;
+
+            font-size: 12px;
+            font-weight: 850;
+            line-height: 1;
+            white-space: nowrap;
+
+            box-shadow: 0 10px 24px rgba(7, 17, 31, 0.22);
+
+            transition:
+                opacity 0.18s ease,
+                transform 0.18s ease;
+        }}
+
+        div[class*="st-key-daily_checkin_shortcut_button"] button:hover {{
+            transform: translateY(-1px) scale(1.045) !important;
+            background: #FFFFFF !important;
+
+            box-shadow:
+                0 14px 30px rgba(7, 17, 31, 0.18),
+                0 0 0 4px rgba(245, 197, 66, 0.12) !important;
+        }}
+
+        div[class*="st-key-daily_checkin_shortcut_button"] button:hover::after {{
+            opacity: 1;
+            transform: translateY(-50%) translateX(0);
+        }}
+
+        div[class*="st-key-daily_checkin_shortcut_button"] button:active {{
+            transform: translateY(0) scale(0.98) !important;
+        }}
+
+        div[class*="st-key-daily_checkin_shortcut_button"] button * {{
+            display: none !important;
+            visibility: hidden !important;
+            color: transparent !important;
+            font-size: 0 !important;
+            line-height: 0 !important;
+        }}
+
+        @media (max-width: 768px) {{
+            div[class*="st-key-daily_checkin_shortcut_button"] {{
+                top: 77px !important;
+                right: 5px !important;
+
+                width: 40px !important;
+                height: 40px !important;
+                min-width: 40px !important;
+                min-height: 40px !important;
+                max-width: 40px !important;
+                max-height: 40px !important;
+            }}
+
+            div[class*="st-key-daily_checkin_shortcut_button"] button {{
+                width: 40px !important;
+                height: 40px !important;
+                min-width: 40px !important;
+                min-height: 40px !important;
+                max-width: 40px !important;
+                max-height: 40px !important;
+
+                border: none !important;
+                outline: none !important;
+            }}
+
+            div[class*="st-key-daily_checkin_shortcut_button"] button::before {{
+                width: 20px;
+                height: 20px;
+            }}
+
+            div[class*="st-key-daily_checkin_shortcut_button"] button::after {{
+                display: none !important;
+            }}
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    shortcut_clicked = st.button(
+        "Mở điểm danh",
+        key="daily_checkin_shortcut_button",
+        help="Xem điểm danh hàng ngày"
+    )
+    
+    if shortcut_clicked:
+        render_daily_checkin_dialog(user_id)
 
 def inject_mobile_goal_scorer_button_css():
     """
@@ -1736,7 +2666,7 @@ def render_star_balance(user_id: int):
                     line-height:1;
                     margin-bottom:16px;
                 ">
-                    {usage["hope_left"]}/{HOPE_STARS_PER_USER}
+                    {usage["hope_left"]}/{usage.get("hope_total", HOPE_STARS_PER_USER)}
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -1880,7 +2810,7 @@ def render_star_balance(user_id: int):
                     line-height:1;
                     margin-bottom:16px;
                 ">
-                    {usage["super_left"]}/{SUPER_STARS_PER_USER}
+                    {usage["super_left"]}/{usage.get("super_total", SUPER_STARS_PER_USER)}
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -1987,10 +2917,10 @@ def render_sidebar_star_balance(user_id: int):
                 Kho sao của bạn
             </div>
             <div style="font-size:13px;color:#CBD5E1;">
-                ⭐ Ngôi sao hy vọng: <b style="color:#F5C542;">{usage["hope_left"]}/{HOPE_STARS_PER_USER}</b>
+                ⭐ Ngôi sao hy vọng: <b style="color:#F5C542;">{usage["hope_left"]}/{usage.get("hope_total", HOPE_STARS_PER_USER)}</b>
             </div>
             <div style="font-size:13px;color:#CBD5E1;margin-top:4px;">
-                ✨ Siêu sao: <b style="color:#F5C542;">{usage["super_left"]}/{SUPER_STARS_PER_USER}</b>
+                ✨ Siêu sao: <b style="color:#F5C542;">{usage["super_left"]}/{usage.get("super_total", SUPER_STARS_PER_USER)}</b>
             </div>
         </div>
         """,
@@ -2387,9 +3317,8 @@ def render_avatar_popover(user: dict):
                 min-height: 48px !important;
                 max-width: 48px !important;
                 max-height: 48px !important;
-                border-width: 2px !important;
-                outline-width: 2px !important;
-                outline-offset: 2px !important;
+                border: none !important;
+                outline: none !important;
                 box-shadow:
                     0 10px 24px rgba(7, 17, 31, 0.22),
                     0 0 0 4px rgba(245, 197, 66, 0.10) !important;
@@ -2584,6 +3513,15 @@ def read_sql(query: str, params: dict | None = None) -> pd.DataFrame:
             params=params or {}
         )
 
+def rerun_current_fragment():
+    """
+    Rerun riêng fragment/dialog hiện tại.
+    Nếu Streamlit version cũ không hỗ trợ scope='fragment' thì fallback về full rerun.
+    """
+    try:
+        st.rerun(scope="fragment")
+    except Exception:
+        st.rerun()
 
 def fetch_one(query: str, params: dict | None = None):
     with get_engine().connect() as conn:
@@ -2851,6 +3789,53 @@ def format_star_short(star_type) -> str:
     star_type = normalize_star_type(star_type)
     return STAR_CONFIG[star_type]["short_label"]
 
+def build_star_usage_result(
+    user_id: int,
+    hope_locked_used: int,
+    super_locked_used: int,
+    hope_reserved_used: int,
+    super_reserved_used: int
+) -> dict:
+    """
+    Gom phần tính quota sao sau khi đã có số sao locked/reserved.
+
+    Hàm này chỉ gom logic bị lặp giữa get_user_star_usage() và
+    get_user_star_usage_from_db(), không thay đổi công thức hiện tại.
+    """
+    quota = get_user_star_quota(user_id)
+
+    hope_total = int(quota["hope_total"])
+    super_total = int(quota["super_total"])
+
+    hope_left = max(0, hope_total - hope_locked_used)
+    super_left = max(0, super_total - super_locked_used)
+
+    hope_free_left = max(0, hope_left - hope_reserved_used)
+    super_free_left = max(0, super_left - super_reserved_used)
+
+    return {
+        "hope_used": hope_locked_used,
+        "super_used": super_locked_used,
+
+        "hope_locked_used": hope_locked_used,
+        "super_locked_used": super_locked_used,
+
+        "hope_reserved_used": hope_reserved_used,
+        "super_reserved_used": super_reserved_used,
+
+        "hope_total": hope_total,
+        "super_total": super_total,
+
+        "hope_bonus": int(quota.get("hope_bonus", 0)),
+        "super_bonus": int(quota.get("super_bonus", 0)),
+
+        "hope_left": hope_left,
+        "super_left": super_left,
+
+        "hope_free_left": hope_free_left,
+        "super_free_left": super_free_left
+    }
+
 
 def get_user_star_usage(user_id: int, exclude_match_id: int | None = None) -> dict:
     """
@@ -2933,29 +3918,13 @@ def get_user_star_usage(user_id: int, exclude_match_id: int | None = None) -> di
             super_reserved_used = int(
                 ((df["star_type"] == STAR_TYPE_SUPER) & df["is_star_reserved"]).sum()
             )
-
-    hope_left = max(0, HOPE_STARS_PER_USER - hope_locked_used)
-    super_left = max(0, SUPER_STARS_PER_USER - super_locked_used)
-
-    hope_free_left = max(0, hope_left - hope_reserved_used)
-    super_free_left = max(0, super_left - super_reserved_used)
-
-    return {
-        "hope_used": hope_locked_used,
-        "super_used": super_locked_used,
-
-        "hope_locked_used": hope_locked_used,
-        "super_locked_used": super_locked_used,
-
-        "hope_reserved_used": hope_reserved_used,
-        "super_reserved_used": super_reserved_used,
-
-        "hope_left": hope_left,
-        "super_left": super_left,
-
-        "hope_free_left": hope_free_left,
-        "super_free_left": super_free_left
-    }
+    return build_star_usage_result(
+        user_id=user_id,
+        hope_locked_used=hope_locked_used,
+        super_locked_used=super_locked_used,
+        hope_reserved_used=hope_reserved_used,
+        super_reserved_used=super_reserved_used
+    )
 
 def validate_star_quota(user_id: int, match_id: int, star_type: str):
     star_type = normalize_star_type(star_type)
@@ -3495,11 +4464,6 @@ def check_base_database():
         st.stop()
 
 def check_required_app_tables():
-    """
-    Kiểm tra các bảng app cần có khi không chạy migration ở startup.
-
-    Nếu thiếu bảng thì báo lỗi rõ ràng thay vì loading mãi.
-    """
     try:
         tables = read_sql(
             """
@@ -3520,7 +4484,9 @@ def check_required_app_tables():
         "users",
         "predictions",
         "prediction_history",
-        "login_sessions"
+        "login_sessions",
+        "daily_checkins",
+        "daily_checkin_rewards"
     }
 
     missing_tables = sorted(required_tables - table_names)
@@ -3889,7 +4855,292 @@ def restore_user_from_cookie() -> bool:
     st.session_state["user"] = user
     return True
 
+def clear_daily_checkin_cache():
+    """
+    Chỉ clear cache liên quan đến điểm danh và quota sao thưởng.
+    Không clear matches/predictions/users vì điểm danh không làm thay đổi các dữ liệu đó.
+    """
+    try:
+        get_daily_checkin_bonus_counts_cached.clear()
+    except Exception:
+        pass
 
+    try:
+        get_daily_checkin_state_cached.clear()
+    except Exception:
+        pass
+
+    try:
+        build_leaderboard_df.clear()
+    except Exception:
+        pass
+
+@st.cache_data(ttl=60, show_spinner=False)
+def get_daily_checkin_bonus_counts_cached(user_id: int) -> dict:
+    try:
+        row = fetch_one(
+            """
+            SELECT
+                COALESCE(SUM(CASE WHEN reward_type = 'hope' THEN amount ELSE 0 END), 0) AS hope_bonus,
+                COALESCE(SUM(CASE WHEN reward_type = 'super' THEN amount ELSE 0 END), 0) AS super_bonus
+            FROM daily_checkin_rewards
+            WHERE user_id = :user_id
+            """,
+            {
+                "user_id": int(user_id)
+            }
+        )
+    except Exception:
+        return {
+            "hope_bonus": 0,
+            "super_bonus": 0
+        }
+
+    if row is None:
+        return {
+            "hope_bonus": 0,
+            "super_bonus": 0
+        }
+
+    return {
+        "hope_bonus": int(row.get("hope_bonus") or 0),
+        "super_bonus": int(row.get("super_bonus") or 0)
+    }
+
+
+def get_daily_checkin_bonus_counts(user_id: int) -> dict:
+    return get_daily_checkin_bonus_counts_cached(int(user_id))
+
+
+def get_user_star_quota(user_id: int) -> dict:
+    """
+    Quota sao thực tế = quota gốc + sao thưởng từ điểm danh.
+    """
+    bonus = get_daily_checkin_bonus_counts(user_id)
+
+    hope_total = HOPE_STARS_PER_USER + int(bonus["hope_bonus"])
+    super_total = SUPER_STARS_PER_USER + int(bonus["super_bonus"])
+
+    return {
+        "hope_total": hope_total,
+        "super_total": super_total,
+        "hope_bonus": int(bonus["hope_bonus"]),
+        "super_bonus": int(bonus["super_bonus"])
+    }
+
+
+def get_daily_checkin_state_from_db(user_id: int) -> dict:
+    today = today_vietnam_date()
+
+    try:
+        df = read_sql(
+            """
+            SELECT
+                checkin_date,
+                cycle_no,
+                day_no,
+                created_at
+            FROM daily_checkins
+            WHERE user_id = :user_id
+            ORDER BY cycle_no ASC, day_no ASC
+            """,
+            {
+                "user_id": int(user_id)
+            }
+        )
+    except Exception:
+        return {
+            "cycle_no": 1,
+            "claimed_days": [],
+            "next_day_no": 1,
+            "checked_today": False,
+            "today_day_no": None
+        }
+
+    if df.empty:
+        return {
+            "cycle_no": 1,
+            "claimed_days": [],
+            "next_day_no": 1,
+            "checked_today": False,
+            "today_day_no": None
+        }
+
+    df["checkin_date"] = pd.to_datetime(
+        df["checkin_date"],
+        errors="coerce"
+    ).dt.date
+
+    today_rows = df[df["checkin_date"] == today]
+
+    checked_today = not today_rows.empty
+    today_day_no = None
+
+    if checked_today:
+        today_day_no = int(today_rows.iloc[-1]["day_no"])
+
+    max_cycle_no = int(df["cycle_no"].max())
+
+    current_cycle_df = df[df["cycle_no"].astype(int) == max_cycle_no].copy()
+
+    current_cycle_days = sorted(
+        int(day)
+        for day in current_cycle_df["day_no"].dropna().tolist()
+    )
+
+    cycle_completed = CHECKIN_CYCLE_DAYS in current_cycle_days
+
+    if cycle_completed:
+        cycle_no = max_cycle_no + 1
+        claimed_days = []
+    else:
+        cycle_no = max_cycle_no
+        claimed_days = current_cycle_days
+
+    if checked_today:
+        next_day_no = None
+    else:
+        next_day_no = min(len(claimed_days) + 1, CHECKIN_CYCLE_DAYS)
+
+    return {
+        "cycle_no": int(cycle_no),
+        "claimed_days": claimed_days,
+        "next_day_no": next_day_no,
+        "checked_today": checked_today,
+        "today_day_no": today_day_no
+    }
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def get_daily_checkin_state_cached(user_id: int, today_key: str) -> dict:
+    return get_daily_checkin_state_from_db(int(user_id))
+
+
+def get_daily_checkin_state(user_id: int, use_cache: bool = True) -> dict:
+    today_key = today_vietnam_date().isoformat()
+
+    if use_cache:
+        return get_daily_checkin_state_cached(
+            int(user_id),
+            today_key
+        )
+
+    return get_daily_checkin_state_from_db(int(user_id))
+
+
+def claim_daily_checkin(user_id: int) -> dict:
+    """
+    Ghi nhận điểm danh hôm nay.
+    Nếu đạt mốc ngày 5 hoặc ngày 7 thì ghi nhận thưởng sao.
+    """
+    user_id = int(user_id)
+    state = get_daily_checkin_state(user_id, use_cache=False)
+
+    if state["checked_today"]:
+        return {
+            "status": "already_checked",
+            "reward_type": None,
+            "reward_label": None,
+            "day_no": state.get("today_day_no"),
+            "cycle_no": state.get("cycle_no")
+        }
+
+    cycle_no = int(state["cycle_no"])
+    day_no = int(state["next_day_no"] or 1)
+    today = today_vietnam_date()
+
+    reward_type = None
+    reward_label = None
+    reward_icon = None
+
+    if day_no == CHECKIN_HOPE_REWARD_DAY:
+        reward_type = STAR_TYPE_HOPE
+        reward_label = "1 Ngôi sao hy vọng"
+        reward_icon = "⭐"
+
+    elif day_no == CHECKIN_SUPER_REWARD_DAY:
+        reward_type = STAR_TYPE_SUPER
+        reward_label = "1 Siêu sao"
+        reward_icon = "✨"
+
+    with get_engine().begin() as conn:
+        inserted = conn.execute(
+            text(
+                """
+                INSERT INTO daily_checkins (
+                    user_id,
+                    checkin_date,
+                    cycle_no,
+                    day_no
+                )
+                VALUES (
+                    :user_id,
+                    :checkin_date,
+                    :cycle_no,
+                    :day_no
+                )
+                ON CONFLICT (user_id, checkin_date)
+                DO NOTHING
+                RETURNING checkin_id
+                """
+            ),
+            {
+                "user_id": user_id,
+                "checkin_date": today,
+                "cycle_no": cycle_no,
+                "day_no": day_no
+            }
+        ).mappings().fetchone()
+
+        if inserted is None:
+            return {
+                "status": "already_checked",
+                "reward_type": None,
+                "reward_label": None,
+                "day_no": day_no,
+                "cycle_no": cycle_no
+            }
+
+        if reward_type is not None:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO daily_checkin_rewards (
+                        user_id,
+                        cycle_no,
+                        day_no,
+                        reward_type,
+                        amount
+                    )
+                    VALUES (
+                        :user_id,
+                        :cycle_no,
+                        :day_no,
+                        :reward_type,
+                        1
+                    )
+                    ON CONFLICT (user_id, cycle_no, day_no, reward_type)
+                    DO NOTHING
+                    """
+                ),
+                {
+                    "user_id": user_id,
+                    "cycle_no": cycle_no,
+                    "day_no": day_no,
+                    "reward_type": reward_type
+                }
+            )
+
+    clear_daily_checkin_cache()
+
+    return {
+        "status": "checked",
+        "reward_type": reward_type,
+        "reward_label": reward_label,
+        "reward_icon": reward_icon,
+        "day_no": day_no,
+        "cycle_no": cycle_no
+    }
 # ============================================================
 # 5. AUTH FUNCTIONS
 # ============================================================
@@ -4371,28 +5622,13 @@ def get_user_star_usage_from_db(user_id: int, exclude_match_id: int | None = Non
             ((df["star_type"] == STAR_TYPE_SUPER) & df["is_star_reserved"]).sum()
         )
 
-    hope_left = max(0, HOPE_STARS_PER_USER - hope_locked_used)
-    super_left = max(0, SUPER_STARS_PER_USER - super_locked_used)
-
-    hope_free_left = max(0, hope_left - hope_reserved_used)
-    super_free_left = max(0, super_left - super_reserved_used)
-
-    return {
-        "hope_used": hope_locked_used,
-        "super_used": super_locked_used,
-
-        "hope_locked_used": hope_locked_used,
-        "super_locked_used": super_locked_used,
-
-        "hope_reserved_used": hope_reserved_used,
-        "super_reserved_used": super_reserved_used,
-
-        "hope_left": hope_left,
-        "super_left": super_left,
-
-        "hope_free_left": hope_free_left,
-        "super_free_left": super_free_left
-    }
+    return build_star_usage_result(
+        user_id=user_id,
+        hope_locked_used=hope_locked_used,
+        super_locked_used=super_locked_used,
+        hope_reserved_used=hope_reserved_used,
+        super_reserved_used=super_reserved_used
+    )
 
 def update_user_avatar(user_id: int, avatar_key: str):
     """
@@ -5553,42 +6789,6 @@ def render_match_title(home_name, away_name, match_id: int):
     safe_home = html.escape(home_display)
     safe_away = html.escape(away_display)
 
-    # Desktop: giữ nguyên st.subheader như cũ, chỉ ẩn nó trên mobile
-    with stylable_container(
-        key=f"match_title_desktop_{match_id}",
-        css_styles="""
-        {
-            display: block;
-        }
-
-        @media (max-width: 768px) {
-            {
-                display: none !important;
-            }
-        }
-        """
-    ):
-        st.subheader(f"{home_display} vs {away_display}")
-
-    # Mobile: title riêng, mỗi đội đúng 1 dòng
-    st.markdown(
-        f"""
-        <div class="wc-match-title-mobile" aria-label="{safe_home} vs {safe_away}">
-            <div class="wc-match-team">{safe_home}</div>
-            <div class="wc-match-vs">vs</div>
-            <div class="wc-match-team">{safe_away}</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-def render_match_title(home_name, away_name, match_id: int):
-    home_display = "TBD" if home_name is None or pd.isna(home_name) else str(home_name)
-    away_display = "TBD" if away_name is None or pd.isna(away_name) else str(away_name)
-
-    safe_home = html.escape(home_display)
-    safe_away = html.escape(away_display)
-
     # Desktop: giữ nguyên kiểu st.subheader cũ
     with stylable_container(
         key=f"match_title_desktop_{match_id}",
@@ -5612,83 +6812,6 @@ def render_match_title(home_name, away_name, match_id: int):
         unsafe_allow_html=True
     )
 
-def normalize_venue_text(value) -> str:
-    """
-    Chuẩn hóa tên SVĐ/địa điểm để hiển thị ở cuối card.
-    """
-    if value is None:
-        return ""
-
-    try:
-        if pd.isna(value):
-            return ""
-    except TypeError:
-        pass
-
-    return str(value).strip()
-
-
-def render_match_venue_footer(row, match_id: int):
-    """
-    Hiển thị thông tin sân vận động/địa điểm ở cuối card trận đấu.
-
-    Chỉ hiển thị dạng:
-    Icon: Tên sân vận động
-
-    Không nằm trong form dự đoán.
-    Không ảnh hưởng logic lưu/cập nhật/xóa dự đoán.
-    """
-    venue = normalize_venue_text(row.get("venue"))
-
-    if not venue:
-        return
-
-    safe_venue = html.escape(venue)
-
-    soccer_field_icon_svg = """
-    <svg xmlns="http://www.w3.org/2000/svg"
-         width="24"
-         height="24"
-         viewBox="0 0 24 24"
-         fill="none"
-         stroke="currentColor"
-         stroke-width="1"
-         stroke-linecap="round"
-         stroke-linejoin="round"
-         style="display:inline-block; vertical-align:-6px;">
-      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
-      <path d="M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"/>
-      <path d="M3 9h3v6h-3l0 -6"/>
-      <path d="M18 9h3v6h-3l0 -6"/>
-      <path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10"/>
-      <path d="M12 5l0 14"/>
-    </svg>
-    """
-
-    st.markdown(
-        f"""
-        <div style="
-            margin-top: 20px;
-            margin-bottom: 0;
-            color: #64748B;
-            font-size: 14.5px;
-            font-weight: 700;
-            line-height: 1.35;
-        ">
-            <span style="
-                color: #64748B;
-                margin-right: 6px;
-            ">
-                {soccer_field_icon_svg}:
-            </span>
-            <span style="
-                color: #64748B;
-                font-style: italic;
-            ">{safe_venue}</span>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
 
 def render_pending_star_transfer_box(user_id: int, match_id: int):
     pending = st.session_state.get("pending_star_transfer")
@@ -6750,6 +7873,13 @@ def render_match_card(
             # Sao đang dùng ở trận chưa khóa vẫn nằm trong kho này.
             hope_display_left = int(star_usage_for_display.get("hope_left", 0))
             super_display_left = int(star_usage_for_display.get("super_left", 0))
+            hope_display_total = int(
+                star_usage_for_display.get("hope_total", HOPE_STARS_PER_USER)
+            )
+            
+            super_display_total = int(
+                star_usage_for_display.get("super_total", SUPER_STARS_PER_USER)
+            )
 
             # Đang dùng = sao đang giữ tạm ở các trận chưa khóa.
             hope_display_using = int(
@@ -6881,8 +8011,8 @@ def render_match_card(
 
                     return (
                         f"{hope_label} "
-                        f"(Kho còn lại: {hope_display_left}/{HOPE_STARS_PER_USER}; "
-                        f"Đang dùng: {hope_display_using}/{HOPE_STARS_PER_USER})"
+                        f"Kho còn lại: {hope_display_left}/{hope_display_total}; "
+                        f"Đang dùng: {hope_display_using}/{hope_display_total})"
                     )
 
                 if star_type == STAR_TYPE_SUPER:
@@ -6896,8 +8026,8 @@ def render_match_card(
 
                     return (
                         f"{super_label} "
-                        f"(Kho còn lại: {super_display_left}/{SUPER_STARS_PER_USER}; "
-                        f"Đang dùng: {super_display_using}/{SUPER_STARS_PER_USER})"
+                        f"Kho còn lại: {super_display_left}/{super_display_total}; "
+                        f"Đang dùng: {super_display_using}/{super_display_total})"
                     )
 
                 return STAR_CONFIG[star_type]["label"]
@@ -7317,6 +8447,7 @@ def page_matches():
                 user_prediction_map=user_prediction_map
             )
 
+    render_daily_checkin_shortcut_button(user_id)
 
 def page_my_predictions():
     render_page_title(
@@ -7693,14 +8824,31 @@ def page_leaderboard():
     if "avatar_key" not in leaderboard.columns:
         leaderboard["avatar_key"] = DEFAULT_AVATAR_KEY
 
-    leaderboard["hope_star_display"] = leaderboard["hope_stars_used"].apply(
-        lambda x: f"{max(0, HOPE_STARS_PER_USER - int(x))}/{HOPE_STARS_PER_USER}"
+    def format_hope_star_display_for_leaderboard(row):
+        quota = get_user_star_quota(int(row["user_id"]))
+        hope_total = int(quota["hope_total"])
+        hope_used = int(row["hope_stars_used"])
+    
+        return f"{max(0, hope_total - hope_used)}/{hope_total}"
+    
+    
+    def format_super_star_display_for_leaderboard(row):
+        quota = get_user_star_quota(int(row["user_id"]))
+        super_total = int(quota["super_total"])
+        super_used = int(row["super_stars_used"])
+    
+        return f"{max(0, super_total - super_used)}/{super_total}"
+    
+    
+    leaderboard["hope_star_display"] = leaderboard.apply(
+        format_hope_star_display_for_leaderboard,
+        axis=1
     )
-
-    leaderboard["super_star_display"] = leaderboard["super_stars_used"].apply(
-        lambda x: f"{max(0, SUPER_STARS_PER_USER - int(x))}/{SUPER_STARS_PER_USER}"
+    
+    leaderboard["super_star_display"] = leaderboard.apply(
+        format_super_star_display_for_leaderboard,
+        axis=1
     )
-
     display_df = leaderboard[
         [
             "rank",
@@ -8543,6 +9691,7 @@ def main():
     user = st.session_state["user"]
 
     render_avatar_popover(user)
+    maybe_render_daily_checkin_popup(user["user_id"])
 
     with st.sidebar:
         render_sidebar_brand()
