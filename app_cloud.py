@@ -1449,6 +1449,11 @@ def render_daily_checkin_reward_dialog(reward_info: dict):
         st.rerun()
 
 def maybe_render_daily_checkin_popup(user_id: int):
+    """
+    Tự mở popup điểm danh lần đầu trong ngày nếu user chưa điểm danh.
+    Nếu user bấm X, popup không tự bật lại liên tục khi filter/chuyển trang.
+    Nếu bấm nút shortcut thì vẫn mở lại được popup.
+    """
     user_id = int(user_id)
     today_key = today_vietnam_date().isoformat()
 
@@ -1473,8 +1478,8 @@ def maybe_render_daily_checkin_popup(user_id: int):
     should_open = (
         force_open
         or (
-            not state.get("checked_today", False)
-            and not st.session_state.get(prompt_seen_key, False)
+            not bool(state.get("checked_today", False))
+            and not bool(st.session_state.get(prompt_seen_key, False))
         )
     )
 
@@ -1534,23 +1539,23 @@ def render_daily_checkin_shortcut_button(user_id: int):
 
         div[class*="st-key-daily_checkin_shortcut_button"] button {{
             position: relative !important;
-        
+
             width: 46px !important;
             height: 46px !important;
             min-width: 46px !important;
             min-height: 46px !important;
             max-width: 46px !important;
             max-height: 46px !important;
-        
+
             padding: 0 !important;
             margin: 0 !important;
-        
+
             border-radius: 999px !important;
             border: none !important;
             outline: none !important;
-        
+
             background: rgba(255, 255, 255, 0.96) !important;
-        
+
             box-shadow:
                 0 10px 24px rgba(7, 17, 31, 0.14),
                 0 0 0 1px rgba(15, 23, 42, 0.06) !important;
@@ -1569,17 +1574,16 @@ def render_daily_checkin_shortcut_button(user_id: int):
             transition:
                 transform 0.18s ease,
                 box-shadow 0.18s ease,
-                border-color 0.18s ease,
-                filter 0.18s ease !important;
+                background 0.18s ease !important;
         }}
 
-        div[class*="st-key-daily_checkin_shortcut_button"] button::before {(
+        div[class*="st-key-daily_checkin_shortcut_button"] button::before {{
             content: "";
             display: block;
-        
+
             width: 23px;
             height: 23px;
-        
+
             background: #F5C542;
 
             -webkit-mask: url("data:image/svg+xml;base64,{daily_checkin_icon_base64}") center / contain no-repeat;
@@ -1619,8 +1623,7 @@ def render_daily_checkin_shortcut_button(user_id: int):
         div[class*="st-key-daily_checkin_shortcut_button"] button:hover {{
             transform: translateY(-1px) scale(1.045) !important;
             background: #FFFFFF !important;
-            filter: none !important;
-        
+
             box-shadow:
                 0 14px 30px rgba(7, 17, 31, 0.18),
                 0 0 0 4px rgba(245, 197, 66, 0.12) !important;
@@ -1664,9 +1667,8 @@ def render_daily_checkin_shortcut_button(user_id: int):
                 max-width: 40px !important;
                 max-height: 40px !important;
 
-                border-width: 2px !important;
-                outline-width: 2px !important;
-                outline-offset: 2px !important;
+                border: none !important;
+                outline: none !important;
             }}
 
             div[class*="st-key-daily_checkin_shortcut_button"] button::before {{
