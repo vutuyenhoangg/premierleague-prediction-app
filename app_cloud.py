@@ -1050,7 +1050,8 @@ def inject_ai_summary_button_css():
     st.markdown(
         f"""
         <style>
-        div[class*="st-key-ai_summary_button_"] {{
+        div[class*="st-key-ai_summary_button_"],
+        div[class*="st-key-ai_suggestion_button_"] {{
             display: flex !important;
             justify-content: flex-end !important;
             width: 100% !important;
@@ -1059,7 +1060,8 @@ def inject_ai_summary_button_css():
             margin-bottom: 7px !important;
         }}
 
-        div[class*="st-key-ai_summary_button_"] button {{
+        div[class*="st-key-ai_summary_button_"] button,
+        div[class*="st-key-ai_suggestion_button_"] button {{
             width: auto !important;
             min-width: 0 !important;
             height: 30px !important;
@@ -1094,7 +1096,8 @@ def inject_ai_summary_button_css():
                 transform 0.16s ease !important;
         }}
 
-        div[class*="st-key-ai_summary_button_"] button::before {{
+        div[class*="st-key-ai_summary_button_"] button::before,
+        div[class*="st-key-ai_suggestion_button_"] button::before {{
             content: "";
             display: inline-block;
             width: 13px;
@@ -1106,7 +1109,8 @@ def inject_ai_summary_button_css():
             mask: url("data:image/svg+xml;base64,{ai_summary_icon_base64}") center / contain no-repeat;
         }}
 
-        div[class*="st-key-ai_summary_button_"] button:hover {{
+        div[class*="st-key-ai_summary_button_"] button:hover,
+        div[class*="st-key-ai_suggestion_button_"] button:hover {{
             background: #FFFFFF !important;
             border-color: rgba(168, 85, 247, 0.68) !important;
             box-shadow: 0 4px 10px rgba(15, 23, 42, 0.07) !important;
@@ -1114,12 +1118,14 @@ def inject_ai_summary_button_css():
             color: #1F2937 !important;
         }}
 
-        div[class*="st-key-ai_summary_button_"] button:active {{
+        div[class*="st-key-ai_summary_button_"] button:active,
+        div[class*="st-key-ai_suggestion_button_"] button:active {{
             transform: translateY(0) scale(0.99) !important;
             box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05) !important;
         }}
 
-        div[class*="st-key-ai_summary_button_"] button * {{
+        div[class*="st-key-ai_summary_button_"] button *,
+        div[class*="st-key-ai_suggestion_button_"] button * {{
             color: #334155 !important;
             white-space: nowrap !important;
             word-break: keep-all !important;
@@ -1131,12 +1137,14 @@ def inject_ai_summary_button_css():
         }}
 
         @media (max-width: 768px) {{
-            div[class*="st-key-ai_summary_button_"] {{
+            div[class*="st-key-ai_summary_button_"],
+            div[class*="st-key-ai_suggestion_button_"] {{
                 margin-top: -25px !important;
                 margin-bottom: -5px !important;
             }}
 
-            div[class*="st-key-ai_summary_button_"] button {{
+            div[class*="st-key-ai_summary_button_"] button,
+            div[class*="st-key-ai_suggestion_button_"] button {{
                 height: 28px !important;
                 min-height: 28px !important;
                 padding: 4px 9px !important;
@@ -1145,7 +1153,8 @@ def inject_ai_summary_button_css():
                 gap: 4px !important;
             }}
 
-            div[class*="st-key-ai_summary_button_"] button::before {{
+            div[class*="st-key-ai_summary_button_"] button::before,
+            div[class*="st-key-ai_suggestion_button_"] button::before {{
                 width: 12px;
                 height: 12px;
             }}
@@ -1510,29 +1519,40 @@ def render_status_legend():
 def render_kpi_tiles(matches: pd.DataFrame):
     total_matches = len(matches)
 
-    finished_matches = int(matches["is_finished"].apply(to_bool).sum())
-    unknown_matches = int(
-        matches.apply(
-            lambda row: is_unknown_team(row.get("home_team_name")) or is_unknown_team(row.get("away_team_name")),
+    if matches.empty:
+        finished_matches = 0
+        unknown_matches = 0
+        open_matches = 0
+    else:
+        matches_for_count = matches.copy()
+
+        matches_for_count["has_unknown_team"] = matches_for_count.apply(
+            lambda row: (
+                is_unknown_team(row.get("home_team_name"))
+                or is_unknown_team(row.get("away_team_name"))
+            ),
             axis=1
-        ).sum()
-    )
+        )
 
-    now_utc = pd.Timestamp.now(tz="UTC")
+        matches_for_count["is_finished_bool"] = matches_for_count["is_finished"].apply(to_bool)
 
-    open_matches = int(
-        (
-            (matches["kickoff_time_utc_dt"] > now_utc)
-            & (~matches["is_finished"].apply(to_bool))
-        ).sum()
-    )
+        now_utc = pd.Timestamp.now(tz="UTC")
 
-    locked_matches = int(
-        (
-            (matches["kickoff_time_utc_dt"] <= now_utc)
-            & (~matches["is_finished"].apply(to_bool))
-        ).sum()
-    )
+        finished_matches = int(
+            matches_for_count["is_finished_bool"].sum()
+        )
+
+        unknown_matches = int(
+            matches_for_count["has_unknown_team"].sum()
+        )
+
+        open_matches = int(
+            (
+                (matches_for_count["kickoff_time_utc_dt"] > now_utc)
+                & (~matches_for_count["is_finished_bool"])
+                & (~matches_for_count["has_unknown_team"])
+            ).sum()
+        )
 
     st.markdown(
         f"""
@@ -2704,7 +2724,8 @@ def is_unknown_team(team_name) -> bool:
     if team_name is None or pd.isna(team_name):
         return True
 
-    text = str(team_name).lower()
+    raw_text = str(team_name).strip()
+    text = raw_text.lower()
 
     unknown_keywords = [
         "tbd",
@@ -2717,7 +2738,19 @@ def is_unknown_team(team_name) -> bool:
         "1st group"
     ]
 
-    return any(keyword in text for keyword in unknown_keywords)
+    if any(keyword in text for keyword in unknown_keywords):
+        return True
+
+    # Bắt các placeholder kiểu W87, L87, W 87, L 87
+    # Thường nghĩa là Winner/Loser của match số 87, tức đội chưa xác định.
+    if re.fullmatch(r"[wl]\s*\d+", text):
+        return True
+
+    # Bắt thêm các dạng có ký hiệu kèm theo như "W87 / L88" nếu sau này data có biến thể.
+    if re.search(r"\b[wl]\s*\d+\b", text):
+        return True
+
+    return False
 
 
 def get_outcome(home_score, away_score):
@@ -4512,7 +4545,7 @@ def build_ai_match_summary_prompt(match_row: dict) -> str:
     app_context = "\n".join(app_context_parts)
 
     prompt = (
-        "Bạn là một chuyên gia cập nhật tin tức bóng đá và World Cup 2026. "
+        "Bạn là một chuyên gia cập nhật tin tức bóng đá và World Cup 2026. Bạn rất am hiểu bóng đá. "
         "Trước khi trả lời, hãy sử dụng Google Search để tìm thông tin cập nhật về trận đấu này. "
         f"Hãy viết summary về trận đấu giữa {match_name} trong khuôn khổ World Cup 2026. "
         "Mục tiêu là giúp người xem hiểu thêm diễn biến, tình huống trận đấu và thế trận, "
@@ -4643,6 +4676,166 @@ def generate_ai_match_summary(match_row: dict) -> str:
         )
 
     return summary_text
+
+def build_ai_match_suggestion_prompt(match_row: dict) -> str:
+    home_name = match_row.get("home_team_name")
+    away_name = match_row.get("away_team_name")
+    match_name = f"{home_name} vs {away_name}"
+
+    round_name = match_row.get("round_name", "")
+    date_text = match_row.get(
+        "kickoff_date_display_vietnam",
+        match_row.get("kickoff_date_vietnam", "")
+    )
+    time_text = match_row.get("kickoff_time_vietnam", "")
+    venue = match_row.get("venue", "")
+
+    app_context_parts = [
+        f"Trận đấu trong app: {match_name}",
+        f"Vòng đấu: {round_name}",
+        f"Thời gian theo Việt Nam: {date_text} {time_text}",
+    ]
+
+    if venue is not None and not pd.isna(venue) and str(venue).strip():
+        app_context_parts.append(f"Sân vận động: {venue}")
+
+    app_context = "\n".join(app_context_parts)
+
+    prompt = (
+        "Bạn là một chuyên gia bóng đá và có khả năng cập nhật những tin tức, "
+        "nhận định chuyên môn mới nhất về các trận đấu tại World Cup 2026. "
+        "Trước khi trả lời, hãy sử dụng Google Search để tìm thông tin cập nhật, "
+        "đối chiếu phong độ, lực lượng, đối đầu và bối cảnh trận đấu. "
+        "Tôi muốn bạn hãy tạo một bản phân tích ngắn gọn về phong độ gần đây, "
+        "tương quan lực lượng 2 đội, thành tích đối đầu trực tiếp giữa họ "
+        "(bên nào thắng nhiều hơn hay cân bằng, ...), ... để gợi ý về khả năng "
+        "giành chiến thắng của 2 đội. "
+        "Viết đảm bảo ngôn từ, thuật ngữ chuyên nghiệp, chính xác, súc tích, "
+        "không quá 90 chữ. "
+        f"Hãy làm cho trận đấu giữa {match_name} tại World Cup 2026. "
+        "Viết hoàn toàn bằng tiếng Việt, chỉ trả lời bằng văn bản thuần, "
+        "không dùng HTML, CSS, Markdown, bảng, bullet point, code block hoặc thẻ div. "
+        "Không thêm tiêu đề, không thêm nhãn 'AI gợi ý', không thêm phần 'Nguồn'.\n\n"
+        "Thông tin gợi ý từ app để đối chiếu khi tìm kiếm:\n"
+        f"{app_context}\n\n"
+        "Nếu kết quả tìm kiếm có nhiều trận trùng tên, hãy ưu tiên trận đúng World Cup 2026, đúng vòng đấu và đúng thời gian ở trên."
+    )
+
+    return prompt
+
+
+def get_ai_match_suggestion_from_db(match_id: int):
+    return fetch_one(
+        """
+        SELECT
+            match_id,
+            suggestion_text,
+            model_name,
+            created_at,
+            updated_at
+        FROM match_ai_suggestions
+        WHERE match_id = :match_id
+        """,
+        {
+            "match_id": int(match_id)
+        }
+    )
+
+
+def save_ai_match_suggestion_to_db(
+    match_id: int,
+    suggestion_text: str,
+    model_name: str
+):
+    now_text = now_utc_iso()
+
+    execute_sql(
+        """
+        INSERT INTO match_ai_suggestions (
+            match_id,
+            suggestion_text,
+            model_name,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            :match_id,
+            :suggestion_text,
+            :model_name,
+            :created_at,
+            :updated_at
+        )
+        ON CONFLICT (match_id)
+        DO UPDATE SET
+            suggestion_text = EXCLUDED.suggestion_text,
+            model_name = EXCLUDED.model_name,
+            updated_at = EXCLUDED.updated_at
+        """,
+        {
+            "match_id": int(match_id),
+            "suggestion_text": suggestion_text,
+            "model_name": model_name,
+            "created_at": now_text,
+            "updated_at": now_text
+        }
+    )
+
+
+def generate_ai_match_suggestion(match_row: dict) -> str:
+    client = get_gemini_client()
+    prompt = build_ai_match_suggestion_prompt(match_row)
+
+    grounding_tool = types.Tool(
+        google_search=types.GoogleSearch()
+    )
+
+    config = types.GenerateContentConfig(
+        tools=[grounding_tool]
+    )
+
+    try:
+        response = client.models.generate_content(
+            model=GEMINI_MODEL_NAME,
+            contents=prompt,
+            config=config
+        )
+
+    except Exception as e:
+        error_text = str(e)
+
+        if (
+            "prepayment credits are depleted" in error_text.lower()
+            or "resource_exhausted" in error_text.lower()
+            or "too_many_requests" in error_text.lower()
+            or "429" in error_text
+        ):
+            raise ValueError(
+                "Gemini API đã hết credit hoặc vượt giới hạn quota. "
+                "Hãy kiểm tra billing/quota trong Google AI Studio."
+            )
+
+        raise
+
+    suggestion_text = normalize_ai_summary_text(getattr(response, "text", ""))
+
+    if not suggestion_text:
+        raise ValueError("Gemini không trả về nội dung gợi ý hợp lệ.")
+
+    bad_markers = [
+        "không tìm thấy thông tin",
+        "không có dữ liệu",
+        "không thể xác nhận"
+    ]
+
+    lowered_suggestion = suggestion_text.lower()
+
+    if any(marker in lowered_suggestion for marker in bad_markers):
+        raise ValueError(
+            "Gemini chưa tìm được thông tin đủ chắc chắn về trận này. "
+            "Gợi ý chưa được lưu để tránh lưu nội dung sai."
+        )
+
+    return suggestion_text
 
 # ============================================================
 # 7. PREDICTION SAVE + SCORING
@@ -5885,6 +6078,139 @@ def render_ai_match_summary_dialog(match_id: int):
         unsafe_allow_html=True
     )
 
+@st.dialog("AI gợi ý")
+def render_ai_match_suggestion_dialog(match_id: int):
+    match_id = int(match_id)
+
+    match = get_match_by_id(match_id)
+
+    if match is None:
+        st.error("Không tìm thấy trận đấu.")
+        if st.button(
+            "Đóng",
+            use_container_width=True,
+            key=f"close_ai_suggestion_missing_{match_id}"
+        ):
+            st.session_state.pop("ai_suggestion_match_id", None)
+            st.rerun()
+        return
+
+    is_finished = to_bool(match.get("is_finished"))
+    is_editable = can_edit_prediction(match.get("kickoff_time_utc"))
+
+    if is_finished or not is_editable:
+        st.warning("Chỉ có thể tạo AI gợi ý cho trận đang mở dự đoán.")
+        if st.button(
+            "Đóng",
+            use_container_width=True,
+            key=f"close_ai_suggestion_unavailable_{match_id}"
+        ):
+            st.session_state.pop("ai_suggestion_match_id", None)
+            st.rerun()
+        return
+
+    home_name = match.get("home_team_name")
+    away_name = match.get("away_team_name")
+
+    round_name = match.get("round_name", "")
+    date_text = match.get(
+        "kickoff_date_display_vietnam",
+        match.get("kickoff_date_vietnam", "")
+    )
+    time_text = match.get("kickoff_time_vietnam", "")
+
+    st.markdown(
+        f"""
+        <div style="
+            color:#07111F;
+            font-weight:900;
+            font-size:18px;
+            line-height:1.3;
+            margin-bottom:10px;
+            letter-spacing:-0.02em;
+        ">
+            {html.escape(str(home_name))} vs {html.escape(str(away_name))}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.markdown(
+        f"""
+        <div style="
+            display:inline-flex;
+            align-items:center;
+            gap:6px;
+            margin-bottom:16px;
+            padding:7px 12px;
+            border-radius:999px;
+            background:#F8FAFC;
+            border:1px solid rgba(15,23,42,0.08);
+            color:#07111F;
+            font-size:13px;
+            font-weight:850;
+        ">
+            {html.escape(str(round_name))} | {html.escape(str(date_text))} lúc {html.escape(str(time_text))}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    try:
+        existing_suggestion = get_ai_match_suggestion_from_db(match_id)
+    except Exception as e:
+        st.error(
+            "Chưa đọc được bảng match_ai_suggestions. Hãy kiểm tra xem bạn đã tạo bảng trong Supabase chưa."
+        )
+        st.caption(str(e))
+        return
+
+    if existing_suggestion is not None:
+        suggestion_text = existing_suggestion.get("suggestion_text", "")
+    else:
+        with st.spinner("AI đang tìm kiếm và tổng hợp nhận định trước trận..."):
+            try:
+                suggestion_text = generate_ai_match_suggestion(match)
+
+                save_ai_match_suggestion_to_db(
+                    match_id=match_id,
+                    suggestion_text=suggestion_text,
+                    model_name=GEMINI_MODEL_NAME
+                )
+
+            except Exception as e:
+                st.error("Không tạo được AI gợi ý cho trận này.")
+                st.caption(str(e))
+                return
+
+    safe_suggestion = html.escape(str(suggestion_text)).replace("\n", "<br>")
+
+    st.markdown(
+        f"""
+        <div style="
+            color:#334155;
+            font-size:15.5px;
+            line-height:1.75;
+            font-weight:400;
+            margin-bottom:18px;
+            white-space:normal;
+            word-break:normal;
+            overflow-wrap:anywhere;
+        ">
+            {safe_suggestion}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    if st.button(
+        "Đóng",
+        use_container_width=True,
+        key=f"close_ai_suggestion_{match_id}"
+    ):
+        st.session_state.pop("ai_suggestion_match_id", None)
+        st.rerun()
+
 def normalize_venue_text(value) -> str:
     """
     Chuẩn hóa tên SVĐ/địa điểm để hiển thị ở cuối card.
@@ -6129,9 +6455,21 @@ def render_match_card(
                     type="secondary",
                     use_container_width=True
                 )
-
+            
                 if ai_summary_clicked:
                     st.session_state["ai_summary_match_id"] = match_id
+                    st.rerun()
+            
+            elif status_info.get("status_key") == "open":
+                ai_suggestion_clicked = st.button(
+                    "AI gợi ý",
+                    key=f"ai_suggestion_button_{match_id}",
+                    type="secondary",
+                    use_container_width=True
+                )
+            
+                if ai_suggestion_clicked:
+                    st.session_state["ai_suggestion_match_id"] = match_id
                     st.rerun()
             if is_finished and actual_home is not None and actual_away is not None:
                 result_text = f"{actual_home} - {actual_away}"
@@ -6769,9 +7107,18 @@ def page_matches():
     if st.session_state.get("pending_star_transfer"):
         render_star_transfer_dialog(user_id)
     
-    if st.session_state.get("ai_summary_match_id"):
+    ai_summary_match_id = st.session_state.pop("ai_summary_match_id", None)
+    
+    if ai_summary_match_id is not None:
         render_ai_match_summary_dialog(
-            int(st.session_state["ai_summary_match_id"])
+            int(ai_summary_match_id)
+        )
+    
+    ai_suggestion_match_id = st.session_state.pop("ai_suggestion_match_id", None)
+    
+    if ai_suggestion_match_id is not None:
+        render_ai_match_suggestion_dialog(
+            int(ai_suggestion_match_id)
         )
     
     render_star_balance(user_id)
@@ -7308,14 +7655,10 @@ def build_leaderboard_df():
         axis=1
     )
 
-    summary["result_prediction_checkable"] = (
-        summary["num_scored"] + summary["knockout_winner_checkable"]
-    )
-
-    summary["result_prediction_correct"] = (
-        summary["correct_outcome_count"] + summary["knockout_winner_correct"]
-    )
-
+    summary["result_prediction_checkable"] = summary["num_scored"]
+    
+    summary["result_prediction_correct"] = summary["correct_outcome_count"]
+    
     summary["result_prediction_rate"] = summary.apply(
         lambda row: row["result_prediction_correct"] / row["result_prediction_checkable"]
         if row["result_prediction_checkable"] else 0,
