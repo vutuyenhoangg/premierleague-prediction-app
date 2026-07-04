@@ -1242,7 +1242,7 @@ def render_daily_checkin_dialog(user_id: int):
 
     <div class="wc-daily-checkin-shell">
         <div class="wc-daily-checkin-header">
-            <div class="wc-daily-checkin-kicker">Chu kỳ 7 ngày</div>
+            <div class="wc-daily-checkin-kicker">7 ngày rực cháy</div>
             <div class="wc-daily-checkin-title">Điểm danh hằng ngày</div>
             <div class="wc-daily-checkin-subtitle">
                 Điểm danh mỗi ngày để tích lũy phần thưởng bổ trợ.
