@@ -3190,7 +3190,7 @@ def render_avatar_popover(user: dict):
         @media (max-width: 768px) {{
             {{
                 top: 64px;
-                right: 4px;
+                right: 0px;
                 width: 56px !important;
                 height: 56px !important;
             }}
