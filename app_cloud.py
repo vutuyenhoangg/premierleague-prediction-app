@@ -127,10 +127,6 @@ HERO_TROPHY_IMAGE_URL = "data/static/trophy-render.png"
 SIDEBAR_DECORATION_URL = "data/static/sidebar.png"
 
 FOOTER_PROJECT_URL = ""
-# TODO LINK 5:
-# Gắn link GitHub repo / portfolio / project page của bạn.
-# Có thể để trống.
-# FOOTER_PROJECT_URL = "https://github.com/yourname/worldcup-prediction-app"
 
 @st.cache_data(show_spinner=False)
 def resolve_asset_src(asset_path: str) -> str:
@@ -163,7 +159,6 @@ def resolve_asset_src(asset_path: str) -> str:
     else:
         candidate_paths.append(BASE_DIR / raw_path)
 
-        # Nếu trước đó bạn lỡ ghi data/static/..., app vẫn thử hiểu lại thành static/...
         if normalized_path.startswith("data/static/"):
             candidate_paths.append(BASE_DIR / normalized_path.replace("data/static/", "static/", 1))
 
@@ -7581,6 +7576,107 @@ def render_match_venue_footer(row, match_id: int):
         unsafe_allow_html=True
     )
 
+def get_prediction_feedback_key(match_id: int) -> str:
+    return f"prediction_feedback_message_{int(match_id)}"
+
+
+def set_prediction_feedback_message(
+    match_id: int,
+    message: str,
+    tone: str = "success"
+):
+    st.session_state[get_prediction_feedback_key(match_id)] = {
+        "message": str(message),
+        "tone": str(tone)
+    }
+
+
+def render_prediction_feedback_message(match_id: int):
+    feedback = st.session_state.pop(
+        get_prediction_feedback_key(match_id),
+        None
+    )
+
+    if not feedback:
+        return
+
+    if isinstance(feedback, dict):
+        message = str(feedback.get("message", ""))
+        tone = str(feedback.get("tone", "success"))
+    else:
+        message = str(feedback)
+        tone = "success"
+
+    if not message.strip():
+        return
+
+    safe_message = html.escape(message)
+
+    text_color = "#16A34A"
+
+    if tone == "danger":
+        text_color = "#DC2626"
+
+    animation_id = (
+        f"{int(match_id)}_"
+        f"{int(datetime.now(timezone.utc).timestamp() * 1000)}"
+    )
+
+    st.markdown(
+        f"""
+        <style>
+        @keyframes wc_prediction_feedback_fade_{animation_id} {{
+            0% {{
+                opacity: 0;
+                max-height: 0;
+                margin-top: 0;
+                margin-bottom: 0;
+                transform: translateY(-2px);
+            }}
+
+            6% {{
+                opacity: 1;
+                max-height: 32px;
+                margin-top: 8px;
+                margin-bottom: 10px;
+                transform: translateY(0);
+            }}
+
+            90% {{
+                opacity: 1;
+                max-height: 32px;
+                margin-top: 8px;
+                margin-bottom: 10px;
+                transform: translateY(0);
+            }}
+
+            100% {{
+                opacity: 0;
+                max-height: 0;
+                margin-top: 0;
+                margin-bottom: 0;
+                transform: translateY(-2px);
+            }}
+        }}
+
+        .wc-prediction-feedback-{animation_id} {{
+            color: {text_color};
+            font-size: 14px;
+            font-weight: 750;
+            line-height: 1.35;
+            overflow: hidden;
+            pointer-events: none;
+            animation: wc_prediction_feedback_fade_{animation_id} 5.6s ease forwards;
+        }}
+        </style>
+
+        <div class="wc-prediction-feedback-{animation_id}">
+            {safe_message}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
 def render_match_card(
     row,
     user_id: int,
@@ -7689,7 +7785,9 @@ def render_match_card(
         css_styles=card_css
     ):
         render_status_badge(status_info, row=row)
-
+    
+        render_prediction_feedback_message(match_id)
+    
         top_left, top_right = st.columns([3, 1])
 
         with top_left:
@@ -8349,8 +8447,10 @@ def render_match_card(
 
                         st.session_state.pop("pending_star_transfer", None)
 
-                        st.success(
-                            "Đã lưu dự đoán. Bạn vẫn có thể cập nhật dự đoán cho đến trước giờ bóng lăn."
+                        set_prediction_feedback_message(
+                            match_id=match_id,
+                            message="Đã lưu dự đoán. Bạn vẫn có thể cập nhật dự đoán cho đến trước giờ bóng lăn.",
+                            tone="success"
                         )
                         st.rerun()
 
