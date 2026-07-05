@@ -3512,106 +3512,6 @@ def rerun_current_fragment():
     except Exception:
         st.rerun()
 
-def render_client_side_dialog_close_button(
-    label: str = "Đóng",
-    key: str = "client_side_dialog_close"
-):
-    """
-    Nút Đóng chỉ đóng popup ở phía trình duyệt, giống nút X native của st.dialog.
-    Không gọi st.rerun(), không chạy lại page, không query DB, không gọi AI.
-    """
-    safe_label = html.escape(str(label))
-    safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", str(key))
-
-    components.html(
-        f"""
-        <!doctype html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <style>
-                html, body {{
-                    margin: 0;
-                    padding: 0;
-                    background: transparent;
-                    overflow: hidden;
-                    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-                }}
-
-                .wc-client-dialog-close {{
-                    width: 100%;
-                    min-height: 46px;
-                    border-radius: 999px;
-                    border: 1px solid rgba(15, 23, 42, 0.12);
-                    background: #FFFFFF;
-                    color: #07111F;
-                    font-size: 15px;
-                    font-weight: 850;
-                    cursor: pointer;
-                    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
-                    transition:
-                        transform 0.16s ease,
-                        border-color 0.16s ease,
-                        background 0.16s ease;
-                }}
-
-                .wc-client-dialog-close:hover {{
-                    background: #F8FAFC;
-                    border-color: rgba(245, 197, 66, 0.72);
-                    transform: translateY(-1px);
-                }}
-
-                .wc-client-dialog-close:active {{
-                    transform: translateY(0) scale(0.99);
-                }}
-            </style>
-        </head>
-        <body>
-            <button id="{safe_id}" class="wc-client-dialog-close">
-                {safe_label}
-            </button>
-
-            <script>
-            (function() {{
-                const button = document.getElementById("{safe_id}");
-
-                if (!button) {{
-                    return;
-                }}
-
-                button.addEventListener("click", function(event) {{
-                    event.preventDefault();
-
-                    try {{
-                        const parentDoc = window.parent.document;
-                        const dialogs = Array.from(
-                            parentDoc.querySelectorAll('div[role="dialog"]')
-                        );
-
-                        const latestDialog = dialogs.length
-                            ? dialogs[dialogs.length - 1]
-                            : parentDoc;
-
-                        const closeButton =
-                            latestDialog.querySelector('button[aria-label="Close"]') ||
-                            parentDoc.querySelector('button[aria-label="Close"]');
-
-                        if (closeButton) {{
-                            closeButton.click();
-                        }}
-                    }} catch (error) {{
-                        console.warn("Cannot close Streamlit dialog from component:", error);
-                    }}
-                }});
-            }})();
-            </script>
-        </body>
-        </html>
-        """,
-        height=58,
-        scrolling=False
-    )
-
 def fetch_one(query: str, params: dict | None = None):
     with get_engine().connect() as conn:
         row = conn.execute(
@@ -7351,16 +7251,10 @@ def render_ai_match_summary_dialog(match_id: int):
 
     if match is None:
         st.error("Không tìm thấy trận đấu.")
-        render_client_side_dialog_close_button(
-            key=f"close_ai_summary_missing_{match_id}"
-        )
         return
 
     if not to_bool(match.get("is_finished")):
         st.warning("Chỉ có thể tạo AI tổng kết cho trận đã có kết quả.")
-        render_client_side_dialog_close_button(
-            key=f"close_ai_summary_unfinished_{match_id}"
-        )
         return
 
     home_name = match.get("home_team_name")
@@ -7419,9 +7313,6 @@ def render_ai_match_summary_dialog(match_id: int):
             "Chưa đọc được bảng match_ai_summaries. Hãy kiểm tra xem bạn đã tạo bảng trong Supabase chưa."
         )
         st.caption(str(e))
-        render_client_side_dialog_close_button(
-            key=f"close_ai_summary_db_error_{match_id}"
-        )
         return
 
     if existing_summary is not None and str(existing_summary.get("summary_text", "")).strip():
@@ -7441,9 +7332,6 @@ def render_ai_match_summary_dialog(match_id: int):
             except Exception as e:
                 st.error("Không tạo được AI summary cho trận này.")
                 st.caption(str(e))
-                render_client_side_dialog_close_button(
-                    key=f"close_ai_summary_generate_error_{match_id}"
-                )
                 return
 
     safe_summary = html.escape(str(summary_text)).replace("\n", "<br>")
@@ -7466,10 +7354,6 @@ def render_ai_match_summary_dialog(match_id: int):
         unsafe_allow_html=True
     )
 
-    render_client_side_dialog_close_button(
-        key=f"close_ai_summary_{match_id}"
-    )
-
 
 @st.dialog("AI gợi ý")
 def render_ai_match_suggestion_dialog(match_id: int):
@@ -7479,9 +7363,6 @@ def render_ai_match_suggestion_dialog(match_id: int):
 
     if match is None:
         st.error("Không tìm thấy trận đấu.")
-        render_client_side_dialog_close_button(
-            key=f"close_ai_suggestion_missing_{match_id}"
-        )
         return
 
     is_finished = to_bool(match.get("is_finished"))
@@ -7489,9 +7370,6 @@ def render_ai_match_suggestion_dialog(match_id: int):
 
     if is_finished or not is_editable:
         st.warning("Chỉ có thể tạo AI gợi ý cho trận đang mở dự đoán.")
-        render_client_side_dialog_close_button(
-            key=f"close_ai_suggestion_unavailable_{match_id}"
-        )
         return
 
     home_name = match.get("home_team_name")
@@ -7549,9 +7427,6 @@ def render_ai_match_suggestion_dialog(match_id: int):
             "Chưa đọc được bảng match_ai_suggestions. Hãy kiểm tra xem bạn đã tạo bảng trong Supabase chưa."
         )
         st.caption(str(e))
-        render_client_side_dialog_close_button(
-            key=f"close_ai_suggestion_db_error_{match_id}"
-        )
         return
 
     if existing_suggestion is not None and str(existing_suggestion.get("suggestion_text", "")).strip():
@@ -7571,9 +7446,6 @@ def render_ai_match_suggestion_dialog(match_id: int):
             except Exception as e:
                 st.error("Không tạo được AI gợi ý cho trận này.")
                 st.caption(str(e))
-                render_client_side_dialog_close_button(
-                    key=f"close_ai_suggestion_generate_error_{match_id}"
-                )
                 return
 
     safe_suggestion = html.escape(str(suggestion_text)).replace("\n", "<br>")
@@ -7596,9 +7468,6 @@ def render_ai_match_suggestion_dialog(match_id: int):
         unsafe_allow_html=True
     )
 
-    render_client_side_dialog_close_button(
-        key=f"close_ai_suggestion_{match_id}"
-    )
 
 @st.fragment
 def render_ai_summary_button_fragment(match_id: int):
