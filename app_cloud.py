@@ -7251,10 +7251,24 @@ def render_ai_match_summary_dialog(match_id: int):
 
     if match is None:
         st.error("Không tìm thấy trận đấu.")
+        if st.button(
+            "Đóng",
+            use_container_width=True,
+            key=f"close_ai_summary_missing_{match_id}"
+        ):
+            st.session_state.pop("ai_summary_match_id", None)
+            st.rerun()
         return
 
     if not to_bool(match.get("is_finished")):
         st.warning("Chỉ có thể tạo AI tổng kết cho trận đã có kết quả.")
+        if st.button(
+            "Đóng",
+            use_container_width=True,
+            key=f"close_ai_summary_unfinished_{match_id}"
+        ):
+            st.session_state.pop("ai_summary_match_id", None)
+            st.rerun()
         return
 
     home_name = match.get("home_team_name")
@@ -7307,7 +7321,6 @@ def render_ai_match_summary_dialog(match_id: int):
 
     try:
         existing_summary = get_ai_match_summary_from_db(match_id)
-
     except Exception as e:
         st.error(
             "Chưa đọc được bảng match_ai_summaries. Hãy kiểm tra xem bạn đã tạo bảng trong Supabase chưa."
@@ -7315,9 +7328,8 @@ def render_ai_match_summary_dialog(match_id: int):
         st.caption(str(e))
         return
 
-    if existing_summary is not None and str(existing_summary.get("summary_text", "")).strip():
+    if existing_summary is not None:
         summary_text = existing_summary.get("summary_text", "")
-
     else:
         with st.spinner("AI đang tìm kiếm và tổng hợp diễn biến trận đấu..."):
             try:
@@ -7328,7 +7340,6 @@ def render_ai_match_summary_dialog(match_id: int):
                     summary_text=summary_text,
                     model_name=GEMINI_MODEL_NAME
                 )
-
             except Exception as e:
                 st.error("Không tạo được AI summary cho trận này.")
                 st.caption(str(e))
@@ -7354,7 +7365,6 @@ def render_ai_match_summary_dialog(match_id: int):
         unsafe_allow_html=True
     )
 
-
 @st.dialog("AI gợi ý")
 def render_ai_match_suggestion_dialog(match_id: int):
     match_id = int(match_id)
@@ -7363,6 +7373,13 @@ def render_ai_match_suggestion_dialog(match_id: int):
 
     if match is None:
         st.error("Không tìm thấy trận đấu.")
+        if st.button(
+            "Đóng",
+            use_container_width=True,
+            key=f"close_ai_suggestion_missing_{match_id}"
+        ):
+            st.session_state.pop("ai_suggestion_match_id", None)
+            st.rerun()
         return
 
     is_finished = to_bool(match.get("is_finished"))
@@ -7370,6 +7387,13 @@ def render_ai_match_suggestion_dialog(match_id: int):
 
     if is_finished or not is_editable:
         st.warning("Chỉ có thể tạo AI gợi ý cho trận đang mở dự đoán.")
+        if st.button(
+            "Đóng",
+            use_container_width=True,
+            key=f"close_ai_suggestion_unavailable_{match_id}"
+        ):
+            st.session_state.pop("ai_suggestion_match_id", None)
+            st.rerun()
         return
 
     home_name = match.get("home_team_name")
@@ -7421,7 +7445,6 @@ def render_ai_match_suggestion_dialog(match_id: int):
 
     try:
         existing_suggestion = get_ai_match_suggestion_from_db(match_id)
-
     except Exception as e:
         st.error(
             "Chưa đọc được bảng match_ai_suggestions. Hãy kiểm tra xem bạn đã tạo bảng trong Supabase chưa."
@@ -7429,9 +7452,8 @@ def render_ai_match_suggestion_dialog(match_id: int):
         st.caption(str(e))
         return
 
-    if existing_suggestion is not None and str(existing_suggestion.get("suggestion_text", "")).strip():
+    if existing_suggestion is not None:
         suggestion_text = existing_suggestion.get("suggestion_text", "")
-
     else:
         with st.spinner("AI đang tìm kiếm và tổng hợp nhận định trước trận..."):
             try:
@@ -7468,45 +7490,13 @@ def render_ai_match_suggestion_dialog(match_id: int):
         unsafe_allow_html=True
     )
 
-
-@st.fragment
-def render_ai_summary_button_fragment(match_id: int):
-    """
-    Nút AI tóm tắt chạy trong fragment riêng.
-    Khi bấm nút, chỉ fragment này rerun để mở dialog và xử lý AI.
-    Không rerun toàn bộ page_matches().
-    """
-    match_id = int(match_id)
-
-    ai_summary_clicked = st.button(
-        "AI tóm tắt",
-        key=f"ai_summary_button_{match_id}",
-        type="secondary",
-        use_container_width=True
-    )
-
-    if ai_summary_clicked:
-        render_ai_match_summary_dialog(match_id)
-
-
-@st.fragment
-def render_ai_suggestion_button_fragment(match_id: int):
-    """
-    Nút AI gợi ý chạy trong fragment riêng.
-    Khi bấm nút, chỉ fragment này rerun để mở dialog và xử lý AI.
-    Không rerun toàn bộ page_matches().
-    """
-    match_id = int(match_id)
-
-    ai_suggestion_clicked = st.button(
-        "AI gợi ý",
-        key=f"ai_suggestion_button_{match_id}",
-        type="secondary",
-        use_container_width=True
-    )
-
-    if ai_suggestion_clicked:
-        render_ai_match_suggestion_dialog(match_id)
+    if st.button(
+        "Đóng",
+        use_container_width=True,
+        key=f"close_ai_suggestion_{match_id}"
+    ):
+        st.session_state.pop("ai_suggestion_match_id", None)
+        st.rerun()
 
 def normalize_venue_text(value) -> str:
     """
@@ -7879,10 +7869,28 @@ def render_match_card(
                 and score_pen_away is not None
             )
             if is_finished:
-                render_ai_summary_button_fragment(match_id)
+                ai_summary_clicked = st.button(
+                    "AI tóm tắt",
+                    key=f"ai_summary_button_{match_id}",
+                    type="secondary",
+                    use_container_width=True
+                )
+            
+                if ai_summary_clicked:
+                    st.session_state["ai_summary_match_id"] = match_id
+                    st.rerun()
             
             elif status_info.get("status_key") == "open":
-                render_ai_suggestion_button_fragment(match_id)
+                ai_suggestion_clicked = st.button(
+                    "AI gợi ý",
+                    key=f"ai_suggestion_button_{match_id}",
+                    type="secondary",
+                    use_container_width=True
+                )
+            
+                if ai_suggestion_clicked:
+                    st.session_state["ai_suggestion_match_id"] = match_id
+                    st.rerun()
             if is_finished and actual_home is not None and actual_away is not None:
                 result_text = f"{actual_home} - {actual_away}"
 
@@ -8529,6 +8537,20 @@ def page_matches():
     
     if st.session_state.get("pending_star_transfer"):
         render_star_transfer_dialog(user_id)
+    
+    ai_summary_match_id = st.session_state.pop("ai_summary_match_id", None)
+    
+    if ai_summary_match_id is not None:
+        render_ai_match_summary_dialog(
+            int(ai_summary_match_id)
+        )
+    
+    ai_suggestion_match_id = st.session_state.pop("ai_suggestion_match_id", None)
+    
+    if ai_suggestion_match_id is not None:
+        render_ai_match_suggestion_dialog(
+            int(ai_suggestion_match_id)
+        )
     
     render_star_balance(user_id)
     render_scoring_rules()
