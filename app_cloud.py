@@ -7576,8 +7576,7 @@ def render_match_venue_footer(row, match_id: int):
         unsafe_allow_html=True
     )
 
-def get_prediction_feedback_key(match_id: int) -> str:
-    return f"prediction_feedback_message_{int(match_id)}"
+PREDICTION_FEEDBACK_POPUP_KEY = "prediction_feedback_popup_message"
 
 
 def set_prediction_feedback_message(
@@ -7585,15 +7584,30 @@ def set_prediction_feedback_message(
     message: str,
     tone: str = "success"
 ):
-    st.session_state[get_prediction_feedback_key(match_id)] = {
+    """
+    Lưu message feedback sau khi lưu/cập nhật dự đoán.
+
+    match_id vẫn giữ trong signature để không phải sửa các chỗ đang gọi hàm.
+    Message sẽ được render dạng popup global ngoài card trận đấu.
+    """
+    st.session_state[PREDICTION_FEEDBACK_POPUP_KEY] = {
+        "match_id": int(match_id),
         "message": str(message),
-        "tone": str(tone)
+        "tone": str(tone),
+        "created_at_ms": int(datetime.now(timezone.utc).timestamp() * 1000)
     }
 
 
-def render_prediction_feedback_message(match_id: int):
+def render_prediction_feedback_popup():
+    """
+    Hiển thị feedback sau khi lưu/cập nhật dự đoán dưới dạng popup text global.
+
+    Không render trong card trận đấu.
+    Không dùng st.success.
+    Hiện khoảng 5 giây rồi fade out.
+    """
     feedback = st.session_state.pop(
-        get_prediction_feedback_key(match_id),
+        PREDICTION_FEEDBACK_POPUP_KEY,
         None
     )
 
@@ -7603,9 +7617,16 @@ def render_prediction_feedback_message(match_id: int):
     if isinstance(feedback, dict):
         message = str(feedback.get("message", ""))
         tone = str(feedback.get("tone", "success"))
+        created_at_ms = int(
+            feedback.get(
+                "created_at_ms",
+                int(datetime.now(timezone.utc).timestamp() * 1000)
+            )
+        )
     else:
         message = str(feedback)
         tone = "success"
+        created_at_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
 
     if not message.strip():
         return
@@ -7617,60 +7638,68 @@ def render_prediction_feedback_message(match_id: int):
     if tone == "danger":
         text_color = "#DC2626"
 
-    animation_id = (
-        f"{int(match_id)}_"
-        f"{int(datetime.now(timezone.utc).timestamp() * 1000)}"
-    )
+    animation_id = f"prediction_popup_{created_at_ms}"
 
     st.markdown(
         f"""
         <style>
-        @keyframes wc_prediction_feedback_fade_{animation_id} {{
+        @keyframes wc_prediction_popup_fade_{animation_id} {{
             0% {{
                 opacity: 0;
-                max-height: 0;
-                margin-top: 0;
-                margin-bottom: 0;
-                transform: translateY(-2px);
+                transform: translate(-50%, -8px);
             }}
 
-            6% {{
+            8% {{
                 opacity: 1;
-                max-height: 32px;
-                margin-top: 8px;
-                margin-bottom: 10px;
-                transform: translateY(0);
+                transform: translate(-50%, 0);
             }}
 
-            90% {{
+            88% {{
                 opacity: 1;
-                max-height: 32px;
-                margin-top: 8px;
-                margin-bottom: 10px;
-                transform: translateY(0);
+                transform: translate(-50%, 0);
             }}
 
             100% {{
                 opacity: 0;
-                max-height: 0;
-                margin-top: 0;
-                margin-bottom: 0;
-                transform: translateY(-2px);
+                transform: translate(-50%, -8px);
             }}
         }}
 
-        .wc-prediction-feedback-{animation_id} {{
+        .wc-prediction-feedback-popup-{animation_id} {{
+            position: fixed;
+            left: 50%;
+            top: 92px;
+            z-index: 2147483647;
+
             color: {text_color};
-            font-size: 14px;
-            font-weight: 750;
+            font-size: 15px;
+            font-weight: 850;
             line-height: 1.35;
-            overflow: hidden;
+            text-align: center;
+            white-space: nowrap;
+
             pointer-events: none;
-            animation: wc_prediction_feedback_fade_{animation_id} 5.6s ease forwards;
+
+            text-shadow:
+                0 1px 8px rgba(255, 255, 255, 0.96),
+                0 4px 18px rgba(15, 23, 42, 0.18);
+
+            animation: wc_prediction_popup_fade_{animation_id} 5.6s ease forwards;
+        }}
+
+        @media (max-width: 768px) {{
+            .wc-prediction-feedback-popup-{animation_id} {{
+                top: 78px;
+                width: calc(100vw - 28px);
+                max-width: calc(100vw - 28px);
+                white-space: normal;
+                font-size: 13.5px;
+                line-height: 1.35;
+            }}
         }}
         </style>
 
-        <div class="wc-prediction-feedback-{animation_id}">
+        <div class="wc-prediction-feedback-popup-{animation_id}">
             {safe_message}
         </div>
         """,
@@ -7785,8 +7814,6 @@ def render_match_card(
         css_styles=card_css
     ):
         render_status_badge(status_info, row=row)
-    
-        render_prediction_feedback_message(match_id)
     
         top_left, top_right = st.columns([3, 1])
 
@@ -8485,6 +8512,8 @@ def page_matches():
         "Lịch thi đấu & dự đoán",
         "Cuộn xuống dưới để xem lịch thi đấu và nhập dự đoán cho từng trận."
     )
+
+    render_prediction_feedback_popup()
 
     matches = load_matches()
 
