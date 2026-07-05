@@ -7604,7 +7604,7 @@ def render_prediction_feedback_popup():
 
     Không render trong card trận đấu.
     Không dùng st.success.
-    Hiện khoảng 5 giây rồi fade out.
+    Hiện ở chính giữa màn hình khoảng 5 giây rồi fade out.
     """
     feedback = st.session_state.pop(
         PREDICTION_FEEDBACK_POPUP_KEY,
@@ -7646,37 +7646,40 @@ def render_prediction_feedback_popup():
         @keyframes wc_prediction_popup_fade_{animation_id} {{
             0% {{
                 opacity: 0;
-                transform: translate(-50%, -8px);
+                transform: translate(-50%, calc(-50% - 10px));
             }}
 
             8% {{
                 opacity: 1;
-                transform: translate(-50%, 0);
+                transform: translate(-50%, -50%);
             }}
 
             88% {{
                 opacity: 1;
-                transform: translate(-50%, 0);
+                transform: translate(-50%, -50%);
             }}
 
             100% {{
                 opacity: 0;
-                transform: translate(-50%, -8px);
+                transform: translate(-50%, calc(-50% - 10px));
             }}
         }}
 
         .wc-prediction-feedback-popup-{animation_id} {{
             position: fixed;
             left: 50%;
-            top: 92px;
+            top: 50%;
             z-index: 2147483647;
+
+            width: fit-content;
+            max-width: min(760px, calc(100vw - 36px));
 
             color: {text_color};
             font-size: 15px;
             font-weight: 850;
             line-height: 1.35;
             text-align: center;
-            white-space: nowrap;
+            white-space: normal;
 
             pointer-events: none;
 
@@ -7689,10 +7692,10 @@ def render_prediction_feedback_popup():
 
         @media (max-width: 768px) {{
             .wc-prediction-feedback-popup-{animation_id} {{
-                top: 78px;
-                width: calc(100vw - 28px);
-                max-width: calc(100vw - 28px);
-                white-space: normal;
+                left: 50%;
+                top: 50%;
+                width: calc(100vw - 32px);
+                max-width: calc(100vw - 32px);
                 font-size: 13.5px;
                 line-height: 1.35;
             }}
