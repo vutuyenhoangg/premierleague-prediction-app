@@ -2927,6 +2927,7 @@ def render_sidebar_star_balance(user_id: int):
         unsafe_allow_html=True
     )
 
+@st.fragment
 def render_avatar_popover(user: dict):
     """
     Hiển thị avatar tròn ở góc trên bên phải.
@@ -2939,6 +2940,7 @@ def render_avatar_popover(user: dict):
     - Người dùng chọn avatar bằng cách bấm trực tiếp vào khung avatar.
     - CSS target theo key riêng để hạn chế ảnh hưởng các nút khác.
     """
+    user = st.session_state.get("user", user)
     avatar_keys = load_avatar_keys()
 
     if not avatar_keys:
@@ -3111,27 +3113,19 @@ def render_avatar_popover(user: dict):
 
                     if avatar_clicked and not is_selected:
                         try:
-                            selected_page_before_avatar_change = st.session_state.get(
-                                "selected_page",
-                                None
-                            )
-                    
                             update_user_avatar(
                                 user_id=int(user["user_id"]),
                                 avatar_key=avatar_key
                             )
                     
-                            st.session_state["user"]["avatar_key"] = avatar_key
+                            updated_user = dict(st.session_state.get("user", user))
+                            updated_user["avatar_key"] = avatar_key
+                            st.session_state["user"] = updated_user
                     
-                            if selected_page_before_avatar_change:
-                                st.session_state["selected_page"] = selected_page_before_avatar_change
-                                st.session_state["_selected_page_after_avatar_change"] = selected_page_before_avatar_change
-                    
-                            st.rerun()
+                            rerun_current_fragment()
                     
                         except ValueError as e:
                             st.error(str(e))
-
     with stylable_container(
         key="top_right_avatar_popover_shell",
         css_styles=f"""
@@ -9889,14 +9883,6 @@ def main():
 
         if user["role"] == "admin":
             pages.append("Admin")
-
-        avatar_restore_page = st.session_state.pop(
-            "_selected_page_after_avatar_change",
-            None
-        )
-        
-        if avatar_restore_page in pages:
-            st.session_state["selected_page"] = avatar_restore_page
         
         if "selected_page" not in st.session_state:
             st.session_state["selected_page"] = "Lịch thi đấu & dự đoán"
