@@ -3512,6 +3512,15 @@ def rerun_current_fragment():
     except Exception:
         st.rerun()
 
+def close_ai_dialog():
+    """
+    Đóng popup AI.
+
+    Với st.dialog, không dùng rerun_current_fragment()
+    vì fragment rerun sẽ render lại chính dialog và làm popup không đóng.
+    """
+    st.rerun()
+
 def fetch_one(query: str, params: dict | None = None):
     with get_engine().connect() as conn:
         row = conn.execute(
@@ -7256,7 +7265,7 @@ def render_ai_match_summary_dialog(match_id: int):
             use_container_width=True,
             key=f"close_ai_summary_missing_{match_id}"
         ):
-            rerun_current_fragment()
+            close_ai_dialog()
         return
 
     if not to_bool(match.get("is_finished")):
@@ -7266,7 +7275,7 @@ def render_ai_match_summary_dialog(match_id: int):
             use_container_width=True,
             key=f"close_ai_summary_unfinished_{match_id}"
         ):
-            rerun_current_fragment()
+            close_ai_dialog()
         return
 
     home_name = match.get("home_team_name")
@@ -7362,6 +7371,12 @@ def render_ai_match_summary_dialog(match_id: int):
         """,
         unsafe_allow_html=True
     )
+    if st.button(
+        "Đóng",
+        use_container_width=True,
+        key=f"close_ai_summary_{match_id}"
+    ):
+        close_ai_dialog()
 
 @st.dialog("AI gợi ý")
 def render_ai_match_suggestion_dialog(match_id: int):
@@ -7376,7 +7391,7 @@ def render_ai_match_suggestion_dialog(match_id: int):
             use_container_width=True,
             key=f"close_ai_suggestion_missing_{match_id}"
         ):
-            rerun_current_fragment()
+            close_ai_dialog()
         return
 
     is_finished = to_bool(match.get("is_finished"))
@@ -7389,7 +7404,7 @@ def render_ai_match_suggestion_dialog(match_id: int):
             use_container_width=True,
             key=f"close_ai_suggestion_unavailable_{match_id}"
         ):
-            rerun_current_fragment()
+            close_ai_dialog()
         return
 
     home_name = match.get("home_team_name")
@@ -7491,7 +7506,7 @@ def render_ai_match_suggestion_dialog(match_id: int):
         use_container_width=True,
         key=f"close_ai_suggestion_{match_id}"
     ):
-        rerun_current_fragment()
+        close_ai_dialog()
 
 @st.fragment
 def render_ai_match_action_button(
