@@ -4780,17 +4780,9 @@ def render_winner_flag_overlay(row):
     }}
     </style>
 
-    <div
-        class="wc-winner-flag-overlay-{match_id}"
-        title="Đội thắng chung cuộc: {safe_winner_name}"
-    >
+    <div class="wc-winner-flag-overlay-{match_id}" title="Đội thắng chung cuộc: {safe_winner_name}">
         <div class="wc-winner-flag-pole-{match_id}"></div>
-
-        <img
-            class="wc-winner-flag-img-{match_id}"
-            src="{flag_src}"
-            alt="Cờ {safe_winner_name}"
-        >
+        <img class="wc-winner-flag-img-{match_id}" src="{flag_src}" alt="Cờ {safe_winner_name}" />
     </div>
     """
 
