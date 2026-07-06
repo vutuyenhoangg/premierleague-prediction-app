@@ -4675,6 +4675,34 @@ def render_winner_flag_overlay(row):
         }}
     }}
 
+    @keyframes wcWinnerFlagShine_{match_id} {{
+        0% {{
+            transform: translateX(-150%) skewX(-22deg);
+            opacity: 0;
+        }}
+    
+        18% {{
+            opacity: 0;
+        }}
+    
+        38% {{
+            opacity: 0.75;
+        }}
+    
+        62% {{
+            opacity: 0.75;
+        }}
+    
+        82% {{
+            opacity: 0;
+        }}
+    
+        100% {{
+            transform: translateX(170%) skewX(-22deg);
+            opacity: 0;
+        }}
+    }}
+
     .wc-winner-flag-overlay-{match_id} {{
         position: absolute;
 
@@ -4694,32 +4722,69 @@ def render_winner_flag_overlay(row):
         justify-content: flex-start;
     }}
 
-    .wc-winner-flag-img-{match_id} {{
+    .wc-winner-flag-frame-{match_id} {{
         position: absolute;
         left: 11px;
         top: 8px;
-
+    
+        width: fit-content;
+        height: fit-content;
+    
+        max-width: 98px;
+        max-height: 56px;
+    
+        border-radius: 7px;
+        border: 1px solid rgba(255, 255, 255, 0.78);
+        background: rgba(255, 255, 255, 0.94);
+    
+        box-shadow:
+            0 12px 26px rgba(15, 23, 42, 0.18),
+            0 0 0 1px rgba(15, 23, 42, 0.06);
+    
+        overflow: hidden;
+        transform-origin: left center;
+        animation: wcWinnerFlagWave_{match_id} 2.4s ease-in-out infinite;
+    }}
+    
+    .wc-winner-flag-img-{match_id} {{
+        display: block;
+    
         width: auto;
         height: auto;
         max-width: 98px;
         max-height: 56px;
-
+    
         object-fit: contain;
         object-position: left center;
-
-        border-radius: 7px;
-        border: 1px solid rgba(255, 255, 255, 0.78);
-
-        background: rgba(255, 255, 255, 0.94);
-
-        box-shadow:
-            0 12px 26px rgba(15, 23, 42, 0.18),
-            0 0 0 1px rgba(15, 23, 42, 0.06);
-
-        transform-origin: left center;
-        animation: wcWinnerFlagWave_{match_id} 2.4s ease-in-out infinite;
     }}
-
+    
+    .wc-winner-flag-shine-{match_id} {{
+        position: absolute;
+        top: -25%;
+        left: 0;
+    
+        width: 44%;
+        height: 150%;
+    
+        pointer-events: none;
+    
+        background:
+            linear-gradient(
+                90deg,
+                transparent 0%,
+                rgba(255, 255, 255, 0.12) 18%,
+                rgba(255, 255, 255, 0.88) 48%,
+                rgba(255, 245, 180, 0.58) 62%,
+                rgba(255, 255, 255, 0.14) 78%,
+                transparent 100%
+            );
+    
+        filter: blur(0.3px);
+        mix-blend-mode: screen;
+    
+        transform: translateX(-150%) skewX(-22deg);
+        animation: wcWinnerFlagShine_{match_id} 3.2s ease-in-out infinite;
+    }}
     @media (max-width: 768px) {{
         .wc-winner-flag-overlay-{match_id} {{
             /* Mobile: vị trí vùng góc phải */
@@ -4730,16 +4795,23 @@ def render_winner_flag_overlay(row):
             height: 52px;
         }}
 
-        .wc-winner-flag-img-{match_id} {{
+        .wc-winner-flag-frame-{match_id} {{
             left: 8px;
             top: 7px;
-
-            width: auto;
-            height: auto;
+        
             max-width: 66px;
             max-height: 39px;
-
+        
             border-radius: 6px;
+        }}
+        
+        .wc-winner-flag-img-{match_id} {{
+            max-width: 66px;
+            max-height: 39px;
+        }}
+        
+        .wc-winner-flag-shine-{match_id} {{
+            width: 48%;
         }}
     }}
 
@@ -4752,6 +4824,11 @@ def render_winner_flag_overlay(row):
             height: 50px;
         }}
 
+        .wc-winner-flag-frame-{match_id} {{
+            max-width: 61px;
+            max-height: 36px;
+        }}
+        
         .wc-winner-flag-img-{match_id} {{
             max-width: 61px;
             max-height: 36px;
@@ -4760,7 +4837,10 @@ def render_winner_flag_overlay(row):
     </style>
 
     <div class="wc-winner-flag-overlay-{match_id}" title="Đội thắng chung cuộc: {safe_winner_name}">
-        <img class="wc-winner-flag-img-{match_id}" src="{flag_src}" alt="Cờ {safe_winner_name}" />
+        <div class="wc-winner-flag-frame-{match_id}">
+            <img class="wc-winner-flag-img-{match_id}" src="{flag_src}" alt="Cờ {safe_winner_name}" />
+            <div class="wc-winner-flag-shine-{match_id}"></div>
+        </div>
     </div>
     """
 
