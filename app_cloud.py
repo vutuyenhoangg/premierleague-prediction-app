@@ -4723,8 +4723,8 @@ def render_winner_flag_overlay(row):
     @media (max-width: 768px) {{
         .wc-winner-flag-overlay-{match_id} {{
             /* Mobile: vị trí vùng góc phải */
-            top: -15px;
-            right: -15px;
+            top: -25px;
+            right: -20px;
 
             width: 84px;
             height: 52px;
