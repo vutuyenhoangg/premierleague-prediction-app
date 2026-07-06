@@ -8308,7 +8308,7 @@ def render_match_card(
 
                     return (
                         f"{hope_label} "
-                        f"Kho còn lại: {hope_display_left}/{hope_display_total}; "
+                        f"(Kho còn lại: {hope_display_left}/{hope_display_total}; "
                         f"Đang dùng: {hope_display_using}/{hope_display_total})"
                     )
 
@@ -8323,7 +8323,7 @@ def render_match_card(
 
                     return (
                         f"{super_label} "
-                        f"Kho còn lại: {super_display_left}/{super_display_total}; "
+                        f"(Kho còn lại: {super_display_left}/{super_display_total}; "
                         f"Đang dùng: {super_display_using}/{super_display_total})"
                     )
 
