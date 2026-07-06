@@ -4694,20 +4694,6 @@ def render_winner_flag_overlay(row):
         justify-content: flex-start;
     }}
 
-    .wc-winner-flag-pole-{match_id} {{
-        position: absolute;
-        left: 7px;
-        top: 7px;
-        bottom: 7px;
-
-        width: 3px;
-        border-radius: 999px;
-
-        background: linear-gradient(180deg, #FDE68A, #B45309);
-        box-shadow: 0 4px 10px rgba(15, 23, 42, 0.20);
-        opacity: 0.96;
-    }}
-
     .wc-winner-flag-img-{match_id} {{
         position: absolute;
         left: 11px;
@@ -4744,13 +4730,6 @@ def render_winner_flag_overlay(row):
             height: 52px;
         }}
 
-        .wc-winner-flag-pole-{match_id} {{
-            left: 5px;
-            top: 6px;
-            bottom: 6px;
-            width: 2.5px;
-        }}
-
         .wc-winner-flag-img-{match_id} {{
             left: 8px;
             top: 7px;
@@ -4781,7 +4760,6 @@ def render_winner_flag_overlay(row):
     </style>
 
     <div class="wc-winner-flag-overlay-{match_id}" title="Đội thắng chung cuộc: {safe_winner_name}">
-        <div class="wc-winner-flag-pole-{match_id}"></div>
         <img class="wc-winner-flag-img-{match_id}" src="{flag_src}" alt="Cờ {safe_winner_name}" />
     </div>
     """
