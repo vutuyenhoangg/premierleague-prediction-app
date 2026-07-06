@@ -4678,9 +4678,9 @@ def render_winner_flag_overlay(row):
     .wc-winner-flag-overlay-{match_id} {{
         position: absolute;
 
-        /* Desktop: vị trí vùng góc phải bạn đánh dấu */
-        top: 18px;
-        right: 38px;
+        /* Desktop: vị trí vùng góc phải */
+        top: 5px;
+        right: 20px;
 
         z-index: 3;
 
