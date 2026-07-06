@@ -4679,8 +4679,8 @@ def render_winner_flag_overlay(row):
         position: absolute;
 
         /* Desktop: vị trí vùng góc phải */
-        top: -20px;
-        right: 0px;
+        top: -30px;
+        right: -15px;
 
         z-index: 3;
 
