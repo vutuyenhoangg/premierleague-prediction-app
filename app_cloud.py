@@ -4795,7 +4795,7 @@ def render_winner_flag_overlay(row):
     """
 
     st.markdown(
-        flag_html,
+        textwrap.dedent(flag_html).strip(),
         unsafe_allow_html=True
     )
 
