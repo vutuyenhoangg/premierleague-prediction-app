@@ -24,6 +24,7 @@ from streamlit_extras.stylable_container import stylable_container
 import secrets
 from streamlit_cookies_controller import CookieController
 import re
+import unicodedata
 from google import genai
 from google.genai import types
 import textwrap
@@ -4362,8 +4363,441 @@ def get_match_card_css(status_info):
         margin-bottom: 22px;
         background: {status_info["background"]};
         box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+        position: relative;
+        overflow: hidden;
     }}
     """
+
+TEAM_FLAG_FOLDER = "data/static/flags"
+TEAM_FLAG_FILE_EXTENSION = ".jpg"
+
+TEAM_FLAG_ASSET_OVERRIDES = {
+    # Tên đội trong DB -> file ảnh cờ thực tế của bạn
+
+    # Mỹ
+    "usa": "data/static/flags/usa.jpg",
+    "us": "data/static/flags/usa.jpg",
+    "united states": "data/static/flags/usa.jpg",
+    "united states of america": "data/static/flags/usa.jpg",
+
+    # Một số tên có thể phát sinh sau này
+    "korea republic": "data/static/flags/south-korea.jpg",
+    "south korea": "data/static/flags/south-korea.jpg",
+
+    "cote d ivoire": "data/static/flags/ivory-coast.jpg",
+    "cote divoire": "data/static/flags/ivory-coast.jpg",
+    "ivory coast": "data/static/flags/ivory-coast.jpg",
+
+    "ir iran": "data/static/flags/iran.jpg",
+    "iran": "data/static/flags/iran.jpg",
+}
+
+
+def normalize_flag_text(value) -> str:
+    """
+    Chuẩn hóa text để so sánh tên đội / vòng đấu ổn định hơn.
+    Ví dụ:
+    - Côte d'Ivoire -> cote d ivoire
+    - Round of 16 -> round of 16
+    """
+    if value is None:
+        return ""
+
+    try:
+        if pd.isna(value):
+            return ""
+    except TypeError:
+        pass
+
+    text = str(value).strip()
+
+    text = unicodedata.normalize("NFD", text)
+    text = "".join(
+        char for char in text
+        if unicodedata.category(char) != "Mn"
+    )
+
+    text = text.lower()
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+
+    return text
+
+
+def make_flag_slug(value) -> str:
+    """
+    Chuyển tên đội thành tên file.
+    Ví dụ:
+    - France -> france
+    - Switzerland -> switzerland
+    - United States -> united-states
+    """
+    text = normalize_flag_text(value)
+
+    if not text:
+        return ""
+
+    return text.replace(" ", "-")
+
+
+def local_asset_exists(asset_path: str) -> bool:
+    """
+    Kiểm tra file ảnh local có tồn tại không.
+    Nếu thiếu ảnh thì không render cờ, tránh ảnh vỡ trong card.
+    """
+    if not asset_path:
+        return False
+
+    asset_path = str(asset_path).strip()
+
+    if asset_path.startswith(("http://", "https://", "data:")):
+        return True
+
+    normalized_path = asset_path.replace("\\", "/")
+    raw_path = Path(normalized_path)
+
+    candidate_paths = []
+
+    if raw_path.is_absolute():
+        candidate_paths.append(raw_path)
+    else:
+        candidate_paths.append(BASE_DIR / raw_path)
+
+        if normalized_path.startswith("data/static/"):
+            candidate_paths.append(
+                BASE_DIR / normalized_path.replace(
+                    "data/static/",
+                    "static/",
+                    1
+                )
+            )
+
+        candidate_paths.append(BASE_DIR / "static" / raw_path.name)
+
+    return any(
+        candidate_path.exists() and candidate_path.is_file()
+        for candidate_path in candidate_paths
+    )
+
+
+def is_round_of_16_or_later(row) -> bool:
+    """
+    Chỉ cho hiện cờ từ Round of 16 trở đi.
+    Không hiện ở vòng bảng hoặc Round of 32.
+    """
+    if row is None:
+        return False
+
+    round_text = normalize_flag_text(row.get("round_name"))
+
+    if not round_text:
+        return False
+
+    excluded_keywords = [
+        "group",
+        "vong bang",
+        "round of 32",
+        "round 32",
+        "last 32"
+    ]
+
+    if any(keyword in round_text for keyword in excluded_keywords):
+        return False
+
+    included_keywords = [
+        "round of 16",
+        "round 16",
+        "last 16",
+        "vong 16",
+        "vong 1 8",
+
+        "quarter final",
+        "quarterfinal",
+        "quarter finals",
+        "quarterfinals",
+        "tu ket",
+
+        "semi final",
+        "semifinal",
+        "semi finals",
+        "semifinals",
+        "ban ket",
+
+        "third place",
+        "3rd place",
+        "3rd place playoff",
+        "third place playoff",
+        "third place play off",
+        "bronze",
+        "tranh hang 3",
+        "tranh hang ba",
+
+        "final",
+        "finals",
+        "chung ket"
+    ]
+
+    return any(keyword in round_text for keyword in included_keywords)
+
+
+def get_winner_team_name_for_flag(row) -> str:
+    """
+    Lấy tên đội thắng chung cuộc.
+    Ưu tiên winner_team_name đã lưu trong DB.
+    Nếu thiếu thì fallback theo winner_team_id.
+    """
+    if row is None:
+        return ""
+
+    winner_team_id = to_optional_int(row.get("winner_team_id"))
+
+    if winner_team_id is None:
+        return ""
+
+    winner_name = row.get("winner_team_name")
+
+    if winner_name is not None and not pd.isna(winner_name):
+        winner_name = str(winner_name).strip()
+
+        if winner_name:
+            return winner_name
+
+    home_team_id = to_optional_int(row.get("home_team_id"))
+    away_team_id = to_optional_int(row.get("away_team_id"))
+
+    if winner_team_id == home_team_id:
+        return str(row.get("home_team_name") or "").strip()
+
+    if winner_team_id == away_team_id:
+        return str(row.get("away_team_name") or "").strip()
+
+    return ""
+
+
+def get_winner_flag_asset_path(row) -> str:
+    """
+    Trả về đường dẫn file cờ đội thắng.
+    Bộ ảnh hiện tại của bạn đang dùng .jpg.
+    """
+    winner_name = get_winner_team_name_for_flag(row)
+
+    if not winner_name:
+        return ""
+
+    normalized_winner_name = normalize_flag_text(winner_name)
+
+    if normalized_winner_name in TEAM_FLAG_ASSET_OVERRIDES:
+        return TEAM_FLAG_ASSET_OVERRIDES[normalized_winner_name]
+
+    flag_slug = make_flag_slug(winner_name)
+
+    if not flag_slug:
+        return ""
+
+    return f"{TEAM_FLAG_FOLDER}/{flag_slug}{TEAM_FLAG_FILE_EXTENSION}"
+
+
+def should_render_winner_flag(row) -> bool:
+    """
+    Điều kiện hiển thị cờ:
+    - Trận đã có kết quả
+    - Từ Round of 16 trở đi
+    - Có đội thắng chung cuộc
+    - Có file ảnh cờ
+    """
+    if row is None:
+        return False
+
+    if not to_bool(row.get("is_finished")):
+        return False
+
+    if not is_round_of_16_or_later(row):
+        return False
+
+    if to_optional_int(row.get("winner_team_id")) is None:
+        return False
+
+    flag_asset_path = get_winner_flag_asset_path(row)
+
+    if not flag_asset_path:
+        return False
+
+    return local_asset_exists(flag_asset_path)
+
+
+def render_winner_flag_overlay(row):
+    """
+    Render 1 lá cờ đội thắng trong card.
+
+    Không ảnh hưởng layout:
+    - dùng position:absolute
+    - dùng pointer-events:none để không chặn click nút AI / nút ghi bàn / form
+    - giữ đúng tỉ lệ thật của từng lá cờ bằng max-width/max-height
+    """
+    if not should_render_winner_flag(row):
+        return
+
+    match_id = int(row.get("match_id"))
+    flag_asset_path = get_winner_flag_asset_path(row)
+    flag_src = resolve_asset_src(flag_asset_path)
+
+    winner_name = get_winner_team_name_for_flag(row)
+    safe_winner_name = html.escape(winner_name)
+
+    flag_html = f"""
+    <style>
+    @keyframes wcWinnerFlagWave_{match_id} {{
+        0% {{
+            transform:
+                perspective(520px)
+                rotateY(-9deg)
+                skewY(-1deg)
+                translateY(0);
+            filter: brightness(1.02) saturate(1.08);
+        }}
+
+        50% {{
+            transform:
+                perspective(520px)
+                rotateY(9deg)
+                skewY(1.15deg)
+                translateY(-1px);
+            filter: brightness(1.08) saturate(1.14);
+        }}
+
+        100% {{
+            transform:
+                perspective(520px)
+                rotateY(-9deg)
+                skewY(-1deg)
+                translateY(0);
+            filter: brightness(1.02) saturate(1.08);
+        }}
+    }}
+
+    .wc-winner-flag-overlay-{match_id} {{
+        position: absolute;
+
+        /* Desktop: vị trí vùng góc phải bạn đánh dấu */
+        top: 18px;
+        right: 38px;
+
+        z-index: 3;
+
+        width: 122px;
+        height: 72px;
+
+        pointer-events: none;
+
+        display: flex;
+        align-items: flex-start;
+        justify-content: flex-start;
+    }}
+
+    .wc-winner-flag-pole-{match_id} {{
+        position: absolute;
+        left: 7px;
+        top: 7px;
+        bottom: 7px;
+
+        width: 3px;
+        border-radius: 999px;
+
+        background: linear-gradient(180deg, #FDE68A, #B45309);
+        box-shadow: 0 4px 10px rgba(15, 23, 42, 0.20);
+        opacity: 0.96;
+    }}
+
+    .wc-winner-flag-img-{match_id} {{
+        position: absolute;
+        left: 11px;
+        top: 8px;
+
+        width: auto;
+        height: auto;
+        max-width: 98px;
+        max-height: 56px;
+
+        object-fit: contain;
+        object-position: left center;
+
+        border-radius: 7px;
+        border: 1px solid rgba(255, 255, 255, 0.78);
+
+        background: rgba(255, 255, 255, 0.94);
+
+        box-shadow:
+            0 12px 26px rgba(15, 23, 42, 0.18),
+            0 0 0 1px rgba(15, 23, 42, 0.06);
+
+        transform-origin: left center;
+        animation: wcWinnerFlagWave_{match_id} 2.4s ease-in-out infinite;
+    }}
+
+    @media (max-width: 768px) {{
+        .wc-winner-flag-overlay-{match_id} {{
+            /* Mobile: vị trí vùng góc phải bạn đánh dấu */
+            top: 15px;
+            right: 12px;
+
+            width: 84px;
+            height: 52px;
+        }}
+
+        .wc-winner-flag-pole-{match_id} {{
+            left: 5px;
+            top: 6px;
+            bottom: 6px;
+            width: 2.5px;
+        }}
+
+        .wc-winner-flag-img-{match_id} {{
+            left: 8px;
+            top: 7px;
+
+            width: auto;
+            height: auto;
+            max-width: 66px;
+            max-height: 39px;
+
+            border-radius: 6px;
+        }}
+    }}
+
+    @media (max-width: 390px) {{
+        .wc-winner-flag-overlay-{match_id} {{
+            top: 15px;
+            right: 10px;
+
+            width: 78px;
+            height: 50px;
+        }}
+
+        .wc-winner-flag-img-{match_id} {{
+            max-width: 61px;
+            max-height: 36px;
+        }}
+    }}
+    </style>
+
+    <div
+        class="wc-winner-flag-overlay-{match_id}"
+        title="Đội thắng chung cuộc: {safe_winner_name}"
+    >
+        <div class="wc-winner-flag-pole-{match_id}"></div>
+
+        <img
+            class="wc-winner-flag-img-{match_id}"
+            src="{flag_src}"
+            alt="Cờ {safe_winner_name}"
+        >
+    </div>
+    """
+
+    st.markdown(
+        flag_html,
+        unsafe_allow_html=True
+    )
 
 def get_countdown_seconds_to_kickoff(kickoff_time_utc) -> int | None:
     """
@@ -7817,6 +8251,7 @@ def render_match_card(
         css_styles=card_css
     ):
         render_status_badge(status_info, row=row)
+        render_winner_flag_overlay(row)
     
         top_left, top_right = st.columns([3, 1])
 
