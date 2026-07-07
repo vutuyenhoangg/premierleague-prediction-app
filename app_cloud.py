@@ -179,9 +179,10 @@ def resolve_asset_src(asset_path: str) -> str:
 
 
 st.set_page_config(
-    page_title=APP_NAME,
-    page_icon="⚽",
-    layout="wide"
+    page_title="World Cup Prediction",
+    page_icon="static/app-icon.png",
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
 cookie_controller = CookieController()
