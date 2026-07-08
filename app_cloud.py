@@ -28,13 +28,11 @@ import unicodedata
 from google import genai
 from google.genai import types
 import textwrap
-import logging
 
 # ============================================================
 # 1. CONFIG
 # ============================================================
 
-logger = logging.getLogger(__name__)
 BASE_DIR = Path(__file__).resolve().parent
 DATABASE_URL = st.secrets["DATABASE_URL"]
 RUN_DB_MIGRATIONS = str(
@@ -2350,6 +2348,13 @@ def render_sidebar_brand():
 
 def render_sidebar_footer():
     project_link_html = ""
+
+    if FOOTER_PROJECT_URL:
+        project_link_html = f"""
+        <div style="margin-top:10px;">
+            <a href="{FOOTER_PROJECT_URL}" target="_blank">Xem project ↗</a>
+        </div>
+        """
 
     image_html = ""
 
@@ -7820,9 +7825,9 @@ def render_ai_match_summary_dialog(match_id: int):
                     summary_text=summary_text,
                     model_name=GEMINI_MODEL_NAME
                 )
-            except Exception:
-                logger.exception("Failed to generate AI match summary")
-                st.error("Không tạo được AI summary cho trận này. Vui lòng thử lại sau.")
+            except Exception as e:
+                st.error("Không tạo được AI summary cho trận này.")
+                st.caption(str(e))
                 return
 
     safe_summary = html.escape(str(summary_text)).replace("\n", "<br>")
@@ -7945,9 +7950,9 @@ def render_ai_match_suggestion_dialog(match_id: int):
                     model_name=GEMINI_MODEL_NAME
                 )
 
-            except Exception:
-                logger.exception("Failed to generate AI match suggestion")
-                st.error("Không tạo được AI gợi ý cho trận này. Vui lòng thử lại sau.")
+            except Exception as e:
+                st.error("Không tạo được AI gợi ý cho trận này.")
+                st.caption(str(e))
                 return
 
     safe_suggestion = html.escape(str(suggestion_text)).replace("\n", "<br>")
@@ -10424,10 +10429,15 @@ def page_admin():
 
 
 def render_footer():
+    if FOOTER_PROJECT_URL:
+        footer_link = f'<a href="{FOOTER_PROJECT_URL}" target="_blank">Project repo / portfolio</a>'
+    else:
+        footer_link = "World Cup Prediction Arena"
+
     st.markdown(
-        """
+        f"""
         <div class="wc-footer">
-            © 2026 Prediction Arena. World Cup Prediction Arena
+            © 2026 Prediction Arena. {footer_link}
         </div>
         """,
         unsafe_allow_html=True
@@ -10441,9 +10451,12 @@ def render_footer():
 def main():
     try:
         initialize_app_once()
-    except Exception:
-        logger.exception("App failed during database initialization")
-        st.error("App đang gặp lỗi khởi động. Vui lòng thử lại sau.")
+    except Exception as e:
+        st.error("App không khởi động được ở bước kết nối/khởi tạo database.")
+        st.caption(
+            "Hãy kiểm tra DATABASE_URL, trạng thái Supabase và log trong Streamlit Cloud."
+        )
+        st.exception(e)
         st.stop()
 
     try:
@@ -10471,8 +10484,7 @@ def main():
         render_sidebar_brand()
 
         st.markdown(f"Xin chào, **{user['display_name']}**")
-        if user["role"] == "admin":
-            st.caption("Admin mode")
+        st.caption(f"Role: {user['role']}")
         render_sidebar_star_balance(user["user_id"])
 
         if st.button("Đăng xuất", use_container_width=True):
