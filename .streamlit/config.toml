@@ -3,9 +3,3 @@ base = "light"
 
 [client]
 toolbarMode = "minimal"
-
-[server]
-enableStaticServing = true
-
-[browser]
-gatherUsageStats = false
