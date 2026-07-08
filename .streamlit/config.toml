@@ -9,8 +9,3 @@ enableStaticServing = true
 
 [browser]
 gatherUsageStats = false
-
-[client]
-showErrorDetails = "none"
-showErrorLinks = false
-showSidebarNavigation = false
