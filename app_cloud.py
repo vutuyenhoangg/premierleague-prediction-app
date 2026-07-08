@@ -184,6 +184,26 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+def enforce_embed_url():
+    components.html(
+        """
+        <script>
+        (function() {
+            const url = new URL(window.parent.location.href);
+            const hasEmbed = url.searchParams.get("embed") === "true";
+
+            if (!hasEmbed) {
+                url.searchParams.set("embed", "true");
+                window.parent.location.replace(url.toString());
+            }
+        })();
+        </script>
+        """,
+        height=0,
+    )
+
+
+enforce_embed_url()
 
 cookie_controller = CookieController()
 
@@ -814,8 +834,49 @@ def inject_worldcup_theme():
         unsafe_allow_html=True
     )
 
+def inject_hide_streamlit_embed_footer_css():
+    st.markdown(
+        """
+        <style>
+        footer {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+        }
+
+        [data-testid="stFooter"] {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+        }
+
+        a[href*="streamlit.app"][target="_blank"],
+        a[title*="Fullscreen"],
+        a[aria-label*="Fullscreen"],
+        button[title*="Fullscreen"],
+        button[aria-label*="Fullscreen"] {
+            display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+        }
+
+        a[href*="streamlit.io"],
+        div:has(> a[href*="streamlit.io"]) {
+            display: none !important;
+            visibility: hidden !important;
+        }
+
+        .stApp {
+            padding-bottom: 0 !important;
+            margin-bottom: 0 !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
 inject_worldcup_theme()
+inject_hide_streamlit_embed_footer_css()
 
 def inject_mobile_match_title_css():
     st.markdown(
