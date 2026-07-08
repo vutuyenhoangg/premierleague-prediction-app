@@ -3,3 +3,6 @@ base = "light"
 
 [client]
 toolbarMode = "minimal"
+showErrorDetails = "none"
+showErrorLinks = false
+showSidebarNavigation = false
