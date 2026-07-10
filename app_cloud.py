@@ -131,16 +131,6 @@ FOOTER_PROJECT_URL = ""
 
 @st.cache_data(show_spinner=False)
 def resolve_asset_src(asset_path: str) -> str:
-    """
-    Nhận link ảnh online hoặc đường dẫn ảnh local, rồi trả về src dùng được trong HTML/CSS.
-
-    Cách dùng local khuyên dùng:
-    - Đặt ảnh trong folder static/ cùng cấp với app.py
-    - Ví dụ: static/app-logo.png
-
-    Function này sẽ tự chuyển ảnh local thành base64 data URI, vì vậy bạn KHÔNG cần
-    bắt buộc phải tạo .streamlit/config.toml để test giao diện local.
-    """
     if not asset_path:
         return ""
 
