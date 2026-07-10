@@ -201,9 +201,7 @@ cookie_controller = CookieController()
 def load_avatar_keys() -> list[str]:
     """
     Load danh sách avatar có sẵn trong folder data/static/avatars.
-
-    Nếu AVATAR_ORDER có khai báo thứ tự, app sẽ ưu tiên hiển thị theo thứ tự đó.
-    Các file avatar chưa có trong AVATAR_ORDER sẽ được xếp phía sau theo tên file.
+    Khai báo thứ tự avatar.
     """
     avatar_dir = BASE_DIR / AVATAR_FOLDER
 
@@ -239,7 +237,6 @@ def load_avatar_keys() -> list[str]:
 def normalize_avatar_key(avatar_key) -> str:
     """
     Chuẩn hóa avatar_key.
-
     Mục tiêu:
     - Nếu user chưa có avatar thì dùng avatar mặc định.
     - Nếu avatar đang lưu trong DB không còn tồn tại thì fallback về avatar mặc định.
@@ -266,10 +263,6 @@ def normalize_avatar_key(avatar_key) -> str:
 
 @st.cache_data(show_spinner=False)
 def get_avatar_src(avatar_key: str) -> str:
-    """
-    Trả về src ảnh avatar để nhúng vào HTML/CSS.
-    Tận dụng resolve_asset_src() hiện có của app.
-    """
     avatar_key = normalize_avatar_key(avatar_key)
 
     if not avatar_key:
