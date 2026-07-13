@@ -3999,123 +3999,6 @@ def format_filter_date(date_value):
 
     return date_value.strftime("%d/%m/%Y")
 
-def format_date_slicer_display(date_value) -> str:
-    """
-    Chỉ format phần chữ hiển thị trong ô Ngày thi đấu.
-
-    Không thay đổi giá trị date thật dùng để lọc dữ liệu.
-    """
-    if date_value is None:
-        return ""
-
-    date_text = date_value.strftime("%d/%m/%Y")
-
-    if date_value == today_vietnam_date():
-        return f"Hôm nay ({date_text})"
-
-    if date_value == tomorrow_vietnam_date():
-        return f"Ngày mai ({date_text})"
-
-    return date_text
-
-
-def inject_date_slicer_display_text(date_value):
-    """
-    Phủ nhãn thân thiện lên st.date_input:
-
-    - Hôm nay (14/07/2026)
-    - Ngày mai (15/07/2026)
-    - 16/07/2026 với những ngày còn lại
-
-    Widget bên dưới vẫn giữ nguyên kiểu datetime.date.
-    """
-    display_text = format_date_slicer_display(date_value)
-
-    # Escape ký tự có thể làm vỡ CSS content.
-    safe_display_text = (
-        display_text
-        .replace("\\", "\\\\")
-        .replace('"', '\\"')
-    )
-
-    st.markdown(
-        f"""
-        <style>
-        div[class*="st-key-filter_date"]
-        div[data-baseweb="input"] {{
-            position: relative !important;
-            overflow: hidden !important;
-        }}
-
-        /* Ẩn phần ngày mặc định, nhưng giữ nguyên input thật bên dưới */
-        div[class*="st-key-filter_date"]
-        div[data-baseweb="input"] input {{
-            color: transparent !important;
-            -webkit-text-fill-color: transparent !important;
-            caret-color: transparent !important;
-
-            padding-left: 14px !important;
-            padding-right: 48px !important;
-        }}
-
-        /* Phần chữ hiển thị tùy chỉnh */
-        div[class*="st-key-filter_date"]
-        div[data-baseweb="input"]::before {{
-            content: "{safe_display_text}";
-
-            position: absolute !important;
-            left: 14px !important;
-            right: 46px !important;
-            top: 50% !important;
-
-            transform: translateY(-50%) !important;
-
-            color: #0F172A !important;
-            font-size: 14px !important;
-            font-weight: 500 !important;
-            line-height: 1.2 !important;
-
-            white-space: nowrap !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-
-            z-index: 2 !important;
-            pointer-events: none !important;
-        }}
-
-        /* Giữ icon lịch nằm trên lớp chữ tùy chỉnh */
-        div[class*="st-key-filter_date"]
-        div[data-baseweb="input"]::after {{
-            z-index: 3 !important;
-        }}
-
-        div[class*="st-key-filter_date"]
-        div[data-baseweb="input"] button,
-        div[class*="st-key-filter_date"]
-        div[data-baseweb="input"] svg {{
-            position: relative !important;
-            z-index: 3 !important;
-        }}
-
-        @media (max-width: 768px) {{
-            div[class*="st-key-filter_date"]
-            div[data-baseweb="input"]::before {{
-                left: 13px !important;
-                right: 43px !important;
-                font-size: 14px !important;
-            }}
-        }}
-
-        @media (max-width: 390px) {{
-            div[class*="st-key-filter_date"]
-            div[data-baseweb="input"]::before {{
-                font-size: 13.5px !important;
-            }}
-        }}
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
 
 def to_bool(value) -> bool:
     if isinstance(value, bool):
@@ -10097,15 +9980,6 @@ def page_matches():
                 </div>
                 """,
                 unsafe_allow_html=True
-            )
-        
-            current_filter_date = st.session_state.get(
-                "filter_date",
-                today_vn
-            )
-        
-            inject_date_slicer_display_text(
-                current_filter_date
             )
         
             selected_date = st.date_input(
