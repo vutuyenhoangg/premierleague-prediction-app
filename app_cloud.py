@@ -2341,7 +2341,6 @@ def maybe_render_daily_checkin_popup(user_id: int):
         st.session_state[prompt_seen_key] = True
         render_daily_checkin_dialog(user_id)
 
-@st.fragment
 def render_daily_checkin_shortcut_button(user_id: int):
     """
     Nút tròn nhỏ dưới avatar để mở lại popup điểm danh.
