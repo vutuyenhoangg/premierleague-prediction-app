@@ -9272,8 +9272,6 @@ def page_matches():
                 user_prediction_map=user_prediction_map
             )
 
-    render_daily_checkin_shortcut_button(user_id)
-
 def page_my_predictions():
     render_page_title(
         "Dự đoán của tôi",
@@ -10553,8 +10551,10 @@ def main():
         )
 
         render_sidebar_footer()
-
     if selected_page == "Lịch thi đấu & dự đoán":
+        render_daily_checkin_shortcut_button(
+            int(user["user_id"])
+        )
         page_matches()
 
     elif selected_page == "Dự đoán của tôi":
