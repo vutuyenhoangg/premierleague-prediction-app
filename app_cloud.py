@@ -9182,24 +9182,30 @@ def page_matches():
         )
 
         col_filter_1, col_filter_2, col_filter_3 = st.columns([1, 1, 1])
-
+        
         with col_filter_1:
             selected_date = st.selectbox(
                 "Ngày thi đấu",
                 options=date_options,
-                index=date_options.index(st.session_state["filter_date"]),
+                index=date_options.index(
+                    st.session_state["filter_date"]
+                ),
                 format_func=format_filter_date,
-                key="filter_date"
+                key="filter_date",
+                filter_mode=None
             )
-
+        
         with col_filter_2:
             status_filter = st.selectbox(
                 "Trạng thái",
                 options=status_options,
-                index=status_options.index(st.session_state["filter_status"]),
-                key="filter_status"
+                index=status_options.index(
+                    st.session_state["filter_status"]
+                ),
+                key="filter_status",
+                filter_mode=None
             )
-
+        
         with col_filter_3:
             prediction_status_filter = st.selectbox(
                 "Tình trạng dự đoán",
@@ -9207,7 +9213,8 @@ def page_matches():
                 index=prediction_status_options.index(
                     st.session_state["filter_prediction_status"]
                 ),
-                key="filter_prediction_status"
+                key="filter_prediction_status",
+                filter_mode=None
             )
 
     filtered = matches.copy()
