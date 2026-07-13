@@ -9223,14 +9223,6 @@ def page_matches():
             margin: 0 !important;
         }
         
-        div[data-testid="stDateInput"] label {
-            color: #334155 !important;
-            font-weight: 850 !important;
-            font-size: 13px !important;
-            line-height: 1.25 !important;
-            margin-bottom: 7px !important;
-        }
-        
         div[data-testid="stDateInput"] div[data-baseweb="input"] {
             width: 100% !important;
             min-height: 44px !important;
@@ -9287,20 +9279,121 @@ def page_matches():
             box-shadow: none !important;
             outline: none !important;
         }
+        /* =========================
+           Slicer Ngày thi đấu
+           ========================= */
         
-        div[data-testid="stDateInput"] button {
+        div[class*="st-key-filter_date"] {
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        
+        div[class*="st-key-filter_date"] div[data-testid="stDateInput"] {
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        
+        div[class*="st-key-filter_date"] div[data-baseweb="input"] {
+            position: relative !important;
+        
+            width: 100% !important;
+            min-height: 44px !important;
+        
+            background: rgba(248, 250, 252, 0.95) !important;
+        
+            border: 1px solid rgba(15, 23, 42, 0.10) !important;
+            border-radius: 14px !important;
+        
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.70) !important;
+        
+            overflow: hidden !important;
+        
+            transition:
+                border-color 0.16s ease,
+                background 0.16s ease,
+                box-shadow 0.16s ease !important;
+        }
+        
+        div[class*="st-key-filter_date"] div[data-baseweb="input"]:hover {
+            background: #FFFFFF !important;
+            border-color: rgba(7, 17, 31, 0.55) !important;
+        }
+        
+        div[class*="st-key-filter_date"] div[data-baseweb="input"]:focus-within {
+            background: #FFFFFF !important;
+            border-color: #2563EB !important;
+        
+            box-shadow:
+                0 0 0 3px rgba(37, 99, 235, 0.10),
+                0 6px 16px rgba(15, 23, 42, 0.08) !important;
+        }
+        
+        div[class*="st-key-filter_date"] input {
+            width: 100% !important;
+            min-height: 42px !important;
+        
+            padding: 0 44px 0 14px !important;
+        
             background: transparent !important;
+            color: #0F172A !important;
+        
             border: none !important;
+            outline: none !important;
             box-shadow: none !important;
-            transform: none !important;
+        
+            font-size: 14px !important;
+            font-weight: 500 !important;
+            line-height: 1 !important;
         }
         
-        div[data-testid="stDateInput"] svg {
-            color: #334155 !important;
-            fill: #334155 !important;
-            stroke: #334155 !important;
+        /* Ẩn icon lịch native đang bị biến thành chấm tròn */
+        div[class*="st-key-filter_date"]
+        div[data-baseweb="input"] svg {
+            display: none !important;
+            visibility: hidden !important;
         }
         
+        /* Vẽ lại icon lịch sạch và đúng vị trí */
+        div[class*="st-key-filter_date"]
+        div[data-baseweb="input"]::after {
+            content: "";
+        
+            position: absolute;
+            top: 50%;
+            right: 14px;
+        
+            width: 18px;
+            height: 18px;
+        
+            transform: translateY(-50%);
+        
+            background: #334155;
+        
+            -webkit-mask:
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='16' rx='2'/%3E%3Cpath d='M16 3v4M8 3v4M3 11h18'/%3E%3C/svg%3E")
+                center / contain no-repeat;
+        
+            mask:
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='16' rx='2'/%3E%3Cpath d='M16 3v4M8 3v4M3 11h18'/%3E%3C/svg%3E")
+                center / contain no-repeat;
+        
+            pointer-events: none;
+        }
+        
+        @media (max-width: 768px) {
+            div[class*="st-key-filter_date"]
+            div[data-baseweb="input"] {
+                min-height: 46px !important;
+            }
+        
+            div[class*="st-key-filter_date"] input {
+                min-height: 44px !important;
+                font-size: 14px !important;
+            }
+        }
         @media (max-width: 768px) {
             div[data-testid="stDateInput"] div[data-baseweb="input"] {
                 min-height: 46px !important;
@@ -9487,13 +9580,23 @@ def page_matches():
         )
         
         with col_filter_1:
+            st.markdown(
+                """
+                <div class="wc-filter-dropdown-label">
+                    Ngày thi đấu
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        
             selected_date = st.date_input(
-                "Ngày thi đấu",
+                label="Ngày thi đấu",
                 key="filter_date",
                 min_value=min_filter_date,
                 max_value=max_filter_date,
                 format="DD/MM/YYYY",
-                help="Bấm để chọn ngày thi đấu trên lịch"
+                help="Bấm để chọn ngày thi đấu trên lịch",
+                label_visibility="collapsed"
             )
         
         with col_filter_2:
