@@ -28,7 +28,6 @@ import unicodedata
 from google import genai
 from google.genai import types
 import textwrap
-import json
 
 # ============================================================
 # 1. CONFIG
@@ -864,24 +863,7 @@ inject_hide_streamlit_embed_footer_css()
 
 def inject_match_datepicker_calendar_theme():
     today = today_vietnam_date()
-    matches = load_matches()
 
-    match_date_keys = []
-
-    if not matches.empty and "kickoff_date_filter" in matches.columns:
-        valid_match_dates = pd.to_datetime(
-            matches["kickoff_date_filter"],
-            errors="coerce"
-        ).dropna()
-
-        match_date_keys = sorted(
-            {
-                date_value.date().isoformat()
-                for date_value in valid_match_dates
-            }
-        )
-
-    match_date_keys_json = json.dumps(match_date_keys, ensure_ascii=False)
     english_month_names = [
         "January",
         "February",
@@ -1353,61 +1335,6 @@ def inject_match_datepicker_calendar_theme():
         }}
 
         /* =====================================================
-           ĐÁNH DẤU NHỎ CHO NGÀY CÓ TRẬN ĐẤU
-           ===================================================== */
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][data-wc-has-match="true"]::after {{
-            content: "" !important;
-            display: block !important;
-
-            position: absolute !important;
-            left: 50% !important;
-            bottom: 4px !important;
-
-            width: 4px !important;
-            height: 4px !important;
-
-            transform: translateX(-50%) !important;
-
-            border-radius: 999px !important;
-            background: rgba(18, 60, 105, 0.72) !important;
-
-            box-shadow: none !important;
-            pointer-events: none !important;
-            z-index: 3 !important;
-        }}
-
-        /* Nếu ngày đang được chọn thì chấm chuyển sang trắng để hài hòa với nền xanh */
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][data-wc-has-match="true"][aria-selected="true"]::after,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][data-wc-has-match="true"][data-selected="true"]::after,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][data-wc-has-match="true"]:has([aria-selected="true"])::after,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][data-wc-has-match="true"]:has([data-selected="true"])::after {{
-            background: rgba(255, 255, 255, 0.96) !important;
-        }}
-
-        @media (max-width: 768px) {{
-            body:has(div[class*="st-key-filter_date"])
-            div[data-baseweb="calendar"]
-            div[role="gridcell"][data-wc-has-match="true"]::after {{
-                width: 3.5px !important;
-                height: 3.5px !important;
-                bottom: 4px !important;
-            }}
-        }}
-        /* =====================================================
            NGÀY KHÔNG KHẢ DỤNG
            ===================================================== */
 
@@ -1519,144 +1446,6 @@ def inject_match_datepicker_calendar_theme():
         </style>
         """,
         unsafe_allow_html=True
-    )
-
-    marker_script = f"""
-    <script>
-    (() => {{
-        const parentWindow = window.parent;
-        const parentDocument = parentWindow.document;
-
-        const matchDateKeys = new Set({match_date_keys_json});
-
-        const monthMap = {{
-            january: "01",
-            february: "02",
-            march: "03",
-            april: "04",
-            may: "05",
-            june: "06",
-            july: "07",
-            august: "08",
-            september: "09",
-            october: "10",
-            november: "11",
-            december: "12"
-        }};
-
-        const calendarCellSelector =
-            'div[class*="st-key-filter_date"] div[data-baseweb="calendar"] div[role="gridcell"]';
-
-        const extractDateKey = (rawText) => {{
-            if (!rawText) {{
-                return null;
-            }}
-
-            const normalizedText = String(rawText)
-                .replace(/,/g, " ")
-                .replace(/\\s+/g, " ")
-                .trim();
-
-            const match = normalizedText.match(
-                /(January|February|March|April|May|June|July|August|September|October|November|December)\\s+(\\d{{1,2}})(?:st|nd|rd|th)?\\s+(\\d{{4}})/i
-            );
-
-            if (!match) {{
-                return null;
-            }}
-
-            const monthName = match[1].toLowerCase();
-            const day = String(match[2]).padStart(2, "0");
-            const year = match[3];
-            const month = monthMap[monthName];
-
-            if (!month) {{
-                return null;
-            }}
-
-            return `${{year}}-${{month}}-${{day}}`;
-        }};
-
-        const getCellDateKey = (cell) => {{
-            if (!cell) {{
-                return null;
-            }}
-
-            const candidateTexts = [];
-
-            const cellAriaLabel = cell.getAttribute("aria-label");
-            if (cellAriaLabel) {{
-                candidateTexts.push(cellAriaLabel);
-            }}
-
-            const labelledChild = cell.querySelector("[aria-label]");
-            if (labelledChild) {{
-                const childAriaLabel = labelledChild.getAttribute("aria-label");
-                if (childAriaLabel) {{
-                    candidateTexts.push(childAriaLabel);
-                }}
-            }}
-
-            const textContent = cell.textContent;
-            if (textContent) {{
-                candidateTexts.push(textContent);
-            }}
-
-            for (const candidateText of candidateTexts) {{
-                const dateKey = extractDateKey(candidateText);
-                if (dateKey) {{
-                    return dateKey;
-                }}
-            }}
-
-            return null;
-        }};
-
-        const markCalendarCells = () => {{
-            const cells = parentDocument.querySelectorAll(calendarCellSelector);
-
-            cells.forEach((cell) => {{
-                cell.removeAttribute("data-wc-has-match");
-
-                if (cell.getAttribute("aria-disabled") === "true") {{
-                    return;
-                }}
-
-                const dateKey = getCellDateKey(cell);
-
-                if (dateKey && matchDateKeys.has(dateKey)) {{
-                    cell.setAttribute("data-wc-has-match", "true");
-                }}
-            }});
-        }};
-
-        const observerKey = "__wcFilterDateMatchMarkerObserver";
-        const oldObserver = parentWindow[observerKey];
-
-        if (oldObserver) {{
-            oldObserver.disconnect();
-        }}
-
-        markCalendarCells();
-
-        const observer = new parentWindow.MutationObserver(() => {{
-            markCalendarCells();
-        }});
-
-        observer.observe(parentDocument.body, {{
-            childList: true,
-            subtree: true
-        }});
-
-        parentWindow[observerKey] = observer;
-    }})();
-    </script>
-    """
-
-    components.html(
-        marker_script,
-        height=0,
-        scrolling=False
     )
     components.html(
         """
