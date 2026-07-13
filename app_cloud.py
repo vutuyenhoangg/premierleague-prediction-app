@@ -2065,8 +2065,8 @@ def inject_ai_summary_button_css():
         div[class*="st-key-ai_suggestion_button_"] button::before {{
             content: "";
             display: inline-block;
-            width: 13px;
-            height: 13px;
+            width: 18px;
+            height: 18px;
             flex: 0 0 auto;
 
             background: linear-gradient(135deg, #6CCBFF 0%, #A855F7 100%);
@@ -2120,8 +2120,8 @@ def inject_ai_summary_button_css():
 
             div[class*="st-key-ai_summary_button_"] button::before,
             div[class*="st-key-ai_suggestion_button_"] button::before {{
-                width: 12px;
-                height: 12px;
+                width: 14px;
+                height: 14px;
             }}
         }}
         </style>
