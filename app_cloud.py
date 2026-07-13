@@ -1233,6 +1233,161 @@ def inject_match_datepicker_calendar_theme():
         }}
 
         /* =====================================================
+           HÔM NAY ĐỒNG THỜI ĐANG ĐƯỢC CHỌN
+        
+           Mặc định:
+           - Hôm nay nhưng không được chọn: giữ màu xám nhạt.
+        
+           Khi được chọn:
+           - Chuyển sang màu xanh theme.
+           - Chữ trắng.
+           - Không in đậm.
+           ===================================================== */
+        
+        /* Trường hợp aria-label của ngày hôm nay nằm ngay trên gridcell */
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"]::before,
+        
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][data-selected="true"]::before,
+        
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-label*="Selected"]::before,
+        
+        /* Ngày hôm nay nằm trên gridcell, trạng thái selected nằm ở phần tử con */
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]:has([aria-selected="true"])::before,
+        
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]:has([data-selected="true"])::before,
+        
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]:has([aria-label*="Selected"])::before,
+        
+        /* aria-label của hôm nay nằm ở phần tử con, selected nằm trên gridcell */
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-selected="true"]:has(
+            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]
+        )::before,
+        
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][data-selected="true"]:has(
+            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]
+        )::before,
+        
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="Selected"]:has(
+            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]
+        )::before,
+        
+        /* Cả thông tin hôm nay và selected đều nằm ở phần tử con */
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has(
+            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]
+        ):has([aria-selected="true"])::before,
+        
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has(
+            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]
+        ):has([data-selected="true"])::before,
+        
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has(
+            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]
+        ):has([aria-label*="Selected"])::before {
+            content: "" !important;
+            display: block !important;
+        
+            width: 28px !important;
+            height: 28px !important;
+        
+            background: #123C69 !important;
+        
+            border: none !important;
+            border-radius: 999px !important;
+            outline: none !important;
+        
+            box-shadow: none !important;
+            filter: none !important;
+        }
+        
+        /* Chữ trắng cho hôm nay khi đang được chọn */
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"],
+        
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"] *,
+        
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][data-selected="true"],
+        
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][data-selected="true"] *,
+        
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]:has([aria-selected="true"]),
+        
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]:has([aria-selected="true"]) *,
+        
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-selected="true"]:has(
+            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]
+        ),
+        
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-selected="true"]:has(
+            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]
+        ) *,
+        
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has(
+            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]
+        ):has([aria-selected="true"]),
+        
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has(
+            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]
+        ):has([aria-selected="true"]) *,
+        
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has(
+            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]
+        ):has([data-selected="true"]),
+        
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has(
+            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]
+        ):has([data-selected="true"]) * {
+            color: #FFFFFF !important;
+            font-weight: 400 !important;
+        }
+
+        /* =====================================================
            NGÀY KHÔNG KHẢ DỤNG
            ===================================================== */
 
