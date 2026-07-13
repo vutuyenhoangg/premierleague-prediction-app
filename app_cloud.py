@@ -1431,9 +1431,135 @@ def inject_match_datepicker_calendar_theme():
             fill: #FFFFFF !important;
             font-weight: 400 !important;
         }}
+        /* =====================================================
+           Ô ngày chỉ đọc
+           ===================================================== */
+
+        div[class*="st-key-filter_date"] input[readonly] {{
+            cursor: pointer !important;
+            caret-color: transparent !important;
+
+            user-select: none !important;
+            -webkit-user-select: none !important;
+            -webkit-touch-callout: none !important;
+        }}
         </style>
         """,
         unsafe_allow_html=True
+    )
+    components.html(
+        """
+        <script>
+        (() => {
+            const parentWindow = window.parent;
+            const parentDocument = parentWindow.document;
+
+            /*
+             * Chỉ target input thuộc widget có key="filter_date".
+             * Không tác động tới bất kỳ input nào khác trong app.
+             */
+            const inputSelector =
+                'div[class*="st-key-filter_date"] input';
+
+            const makeInputReadonly = (input) => {
+                if (
+                    !input
+                    || !(input instanceof parentWindow.HTMLInputElement)
+                ) {
+                    return;
+                }
+
+                /*
+                 * Khóa nhập liệu nhưng không disable widget.
+                 * Click, focus và thao tác mở calendar vẫn được giữ lại.
+                 */
+                input.readOnly = true;
+
+                input.setAttribute("readonly", "");
+                input.setAttribute("aria-readonly", "true");
+                input.setAttribute("inputmode", "none");
+                input.setAttribute("autocomplete", "off");
+                input.setAttribute("spellcheck", "false");
+
+                /*
+                 * Tránh gắn listener trùng lặp khi Streamlit render lại.
+                 */
+                if (input.dataset.wcDateReadonlyBound === "1") {
+                    return;
+                }
+
+                const preventManualEditing = (event) => {
+                    event.preventDefault();
+                };
+
+                /*
+                 * Chặn nhập, paste và kéo-thả nội dung vào ô ngày.
+                 * Việc chọn ngày từ calendar không bị ảnh hưởng.
+                 */
+                input.addEventListener(
+                    "beforeinput",
+                    preventManualEditing
+                );
+
+                input.addEventListener(
+                    "paste",
+                    preventManualEditing
+                );
+
+                input.addEventListener(
+                    "drop",
+                    preventManualEditing
+                );
+
+                input.dataset.wcDateReadonlyBound = "1";
+            };
+
+            const applyReadonlyMode = () => {
+                parentDocument
+                    .querySelectorAll(inputSelector)
+                    .forEach(makeInputReadonly);
+            };
+
+            /*
+             * Ngắt observer cũ nếu app vừa rerun,
+             * tránh tạo nhiều observer chạy song song.
+             */
+            const observerKey =
+                "__wcFilterDateReadonlyObserver";
+
+            const oldObserver = parentWindow[observerKey];
+
+            if (oldObserver) {
+                oldObserver.disconnect();
+            }
+
+            /*
+             * Áp dụng ngay nếu widget đã xuất hiện.
+             */
+            applyReadonlyMode();
+
+            /*
+             * Streamlit có thể dựng widget sau khi script đã chạy.
+             * Observer sẽ tự bắt widget mới và đặt readonly.
+             */
+            const observer = new parentWindow.MutationObserver(
+                applyReadonlyMode
+            );
+
+            observer.observe(
+                parentDocument.body,
+                {
+                    childList: true,
+                    subtree: true
+                }
+            );
+
+            parentWindow[observerKey] = observer;
+        })();
+        </script>
+        """,
+        height=0,
+        scrolling=False
     )
 
 def inject_mobile_match_title_css():
