@@ -861,6 +861,130 @@ def inject_hide_streamlit_embed_footer_css():
 inject_worldcup_theme()
 inject_hide_streamlit_embed_footer_css()
 
+def inject_match_datepicker_calendar_theme():
+    today = today_vietnam_date()
+
+    english_month_names = [
+        "January", "February", "March", "April",
+        "May", "June", "July", "August",
+        "September", "October", "November", "December"
+    ]
+
+    today_month_en = english_month_names[today.month - 1]
+    today_day = today.day
+    today_year = today.year
+
+    st.markdown(
+        f"""
+        <style>
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"] {{
+            position: relative !important;
+            border-radius: 999px !important;
+
+            transition:
+                color 0.16s ease,
+                background 0.16s ease,
+                box-shadow 0.16s ease !important;
+        }}
+
+        /* Hôm nay */
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"] {{
+            color: #123C69 !important;
+            font-weight: 900 !important;
+        }}
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]::before {{
+            background: rgba(18, 60, 105, 0.07) !important;
+            border-radius: 999px !important;
+
+            box-shadow:
+                inset 0 0 0 1.5px rgba(18, 60, 105, 0.48),
+                0 0 0 3px rgba(18, 60, 105, 0.045) !important;
+        }}
+
+        /* Hover */
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:not([aria-disabled="true"]):not([aria-label*="Selected"]):hover {{
+            color: #07111F !important;
+            font-weight: 850 !important;
+        }}
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:not([aria-disabled="true"]):not([aria-label*="Selected"]):hover::before {{
+            background: rgba(245, 197, 66, 0.16) !important;
+            border-radius: 999px !important;
+
+            box-shadow:
+                inset 0 0 0 1px rgba(245, 197, 66, 0.35) !important;
+        }}
+
+        /* Ngày đang chọn */
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="Selected"],
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-selected="true"],
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][tabindex="0"] {{
+            color: #07111F !important;
+            font-weight: 950 !important;
+        }}
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="Selected"]::before,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-selected="true"]::before,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][tabindex="0"]::before {{
+            background:
+                linear-gradient(
+                    135deg,
+                    #F5C542 0%,
+                    #FFD761 100%
+                ) !important;
+
+            border-radius: 999px !important;
+
+            box-shadow:
+                0 6px 15px rgba(245, 197, 66, 0.30),
+                inset 0 1px 0 rgba(255, 255, 255, 0.42) !important;
+        }}
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="Selected"]::after,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-selected="true"]::after,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][tabindex="0"]::after {{
+            border-color: rgba(245, 197, 66, 0.92) !important;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
 def inject_mobile_match_title_css():
     st.markdown(
         """
@@ -9186,6 +9310,8 @@ def page_matches():
     ):
         st.session_state["filter_prediction_status"] = "Tất cả"
 
+    inject_match_datepicker_calendar_theme()
+    
     with stylable_container(
         key="match_filter_panel",
         css_styles="""
