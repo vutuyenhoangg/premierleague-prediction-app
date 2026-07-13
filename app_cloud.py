@@ -862,14 +862,6 @@ inject_worldcup_theme()
 inject_hide_streamlit_embed_footer_css()
 
 def inject_match_datepicker_calendar_theme():
-    """
-    Theme riêng cho lịch của slicer Ngày thi đấu.
-
-    - Ngày được chọn: ô tròn nhỏ màu xanh theme, chữ trắng.
-    - Ngày hôm nay: ô tròn nhỏ màu xám nhạt.
-    - Loại bỏ vòng tròn đỏ mặc định của BaseWeb.
-    - Không thay đổi logic của st.date_input.
-    """
     today = today_vietnam_date()
 
     english_month_names = [
@@ -1151,7 +1143,6 @@ def inject_match_datepicker_calendar_theme():
 
         /* =====================================================
            NGÀY ĐƯỢC CHỌN
-           Chỉ vẽ một ô tròn nhỏ màu xanh
            ===================================================== */
 
         body:has(div[class*="st-key-filter_date"])
@@ -1234,7 +1225,6 @@ def inject_match_datepicker_calendar_theme():
 
         /* =====================================================
            HÔM NAY + ĐANG ĐƯỢC CHỌN
-           Override cuối cùng để màu xanh thắng màu xám
            ===================================================== */
 
         body:has(div[class*="st-key-filter_date"])
@@ -1358,6 +1348,88 @@ def inject_match_datepicker_calendar_theme():
             color: #A8B1C2 !important;
             font-weight: 400 !important;
             opacity: 0.72 !important;
+        }}
+
+        /* =====================================================
+           FIX CUỐI: HÔM NAY KHI ĐƯỢC CHỌN
+           Ép số ngày thành màu trắng
+           ===================================================== */
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"],
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"] *,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][data-selected="true"],
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][data-selected="true"] *,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-label*="Selected"],
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-label*="Selected"] *,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has(
+            [aria-label*="{today_month_en} {today_day}"]
+            [aria-label*="{today_year}"]
+            [aria-selected="true"]
+        ),
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has(
+            [aria-label*="{today_month_en} {today_day}"]
+            [aria-label*="{today_year}"]
+            [aria-selected="true"]
+        ) *,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has(
+            [aria-label*="{today_month_en} {today_day}"]
+            [aria-label*="{today_year}"]
+            [data-selected="true"]
+        ),
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has(
+            [aria-label*="{today_month_en} {today_day}"]
+            [aria-label*="{today_year}"]
+            [data-selected="true"]
+        ) *,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has(
+            [aria-label*="{today_month_en} {today_day}"]
+            [aria-label*="{today_year}"]
+            [aria-label*="Selected"]
+        ),
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has(
+            [aria-label*="{today_month_en} {today_day}"]
+            [aria-label*="{today_year}"]
+            [aria-label*="Selected"]
+        ) * {{
+            color: #FFFFFF !important;
+            -webkit-text-fill-color: #FFFFFF !important;
+            fill: #FFFFFF !important;
+            font-weight: 400 !important;
         }}
         </style>
         """,
