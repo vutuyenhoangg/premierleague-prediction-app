@@ -9086,6 +9086,132 @@ def render_filter_dropdown(
 
     return st.session_state[state_key]
 
+def sync_match_filter_date_from_picker():
+    """
+    Đồng bộ ngày người dùng chọn từ calendar sang filter_date.
+    Callback chạy trước khi Streamlit render lại trang.
+    """
+    selected_date = st.session_state.get("filter_date_picker")
+
+    if selected_date is not None:
+        st.session_state["filter_date"] = selected_date
+
+
+def move_match_filter_date(date_options: list, step: int):
+    """
+    Chuyển sang ngày hợp lệ trước hoặc sau trong date_options.
+
+    step = -1: ngày trước
+    step = 1: ngày sau
+    """
+    if not date_options:
+        return
+
+    date_options = sorted(list(date_options))
+
+    current_date = st.session_state.get("filter_date")
+
+    if current_date not in date_options:
+        current_date = date_options[0]
+
+    current_index = date_options.index(current_date)
+
+    new_index = max(
+        0,
+        min(
+            len(date_options) - 1,
+            current_index + int(step)
+        )
+    )
+
+    new_date = date_options[new_index]
+
+    st.session_state["filter_date"] = new_date
+    st.session_state["filter_date_picker"] = new_date
+
+
+def render_match_date_picker(date_options: list):
+    """
+    Bộ chọn ngày thi đấu mới:
+
+    - Không hiển thị danh sách ngày dài.
+    - Có calendar để nhảy nhanh tới ngày mong muốn.
+    - Có nút lùi/tiến theo danh sách ngày hợp lệ.
+    - Giữ dữ liệu tại filter_date để không ảnh hưởng logic lọc hiện tại.
+    """
+    if not date_options:
+        return None
+
+    date_options = sorted(list(date_options))
+
+    current_date = st.session_state.get("filter_date")
+
+    if current_date not in date_options:
+        current_date = date_options[0]
+        st.session_state["filter_date"] = current_date
+
+    # Đồng bộ widget calendar với filter_date trước khi widget được tạo.
+    if (
+        "filter_date_picker" not in st.session_state
+        or st.session_state["filter_date_picker"] != current_date
+    ):
+        st.session_state["filter_date_picker"] = current_date
+
+    current_index = date_options.index(current_date)
+
+    is_first_date = current_index == 0
+    is_last_date = current_index == len(date_options) - 1
+
+    st.markdown(
+        """
+        <div class="wc-filter-dropdown-label">
+            Ngày thi đấu
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    col_previous, col_calendar, col_next = st.columns(
+        [0.15, 1, 0.15],
+        gap="small"
+    )
+
+    with col_previous:
+        st.button(
+            "‹",
+            key="filter_date_previous_button",
+            help="Ngày thi đấu trước",
+            use_container_width=True,
+            disabled=is_first_date,
+            on_click=move_match_filter_date,
+            args=(date_options, -1)
+        )
+
+    with col_calendar:
+        st.date_input(
+            "Ngày thi đấu",
+            min_value=date_options[0],
+            max_value=date_options[-1],
+            format="DD/MM/YYYY",
+            key="filter_date_picker",
+            label_visibility="collapsed",
+            width="stretch",
+            on_change=sync_match_filter_date_from_picker
+        )
+
+    with col_next:
+        st.button(
+            "›",
+            key="filter_date_next_button",
+            help="Ngày thi đấu tiếp theo",
+            use_container_width=True,
+            disabled=is_last_date,
+            on_click=move_match_filter_date,
+            args=(date_options, 1)
+        )
+
+    return st.session_state["filter_date"]
+
 def page_matches():
     render_app_hero()
 
@@ -9343,7 +9469,133 @@ def page_matches():
                 translateY(-25%)
                 rotate(225deg);
         }
+        /* =========================================================
+           DATE PICKER: Ngày thi đấu
+           ========================================================= */
         
+        /* Bỏ khoảng trống thừa của ba widget ngày */
+        div[class*="st-key-filter_date_previous_button"],
+        div[class*="st-key-filter_date_picker"],
+        div[class*="st-key-filter_date_next_button"] {
+            width: 100% !important;
+            margin: 0 !important;
+        }
+        
+        /* Hai nút chuyển ngày */
+        div[class*="st-key-filter_date_previous_button"] button,
+        div[class*="st-key-filter_date_next_button"] button {
+            width: 100% !important;
+            min-width: 0 !important;
+            min-height: 44px !important;
+            height: 44px !important;
+        
+            padding: 0 !important;
+            margin: 0 !important;
+        
+            border-radius: 14px !important;
+            border: 1px solid rgba(15, 23, 42, 0.10) !important;
+        
+            background: rgba(248, 250, 252, 0.95) !important;
+            color: #334155 !important;
+        
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.72),
+                0 1px 2px rgba(15, 23, 42, 0.02) !important;
+        
+            font-size: 23px !important;
+            font-weight: 600 !important;
+            line-height: 1 !important;
+        
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        
+            transform: none !important;
+        }
+        
+        /* Hover nút chuyển ngày */
+        div[class*="st-key-filter_date_previous_button"] button:hover,
+        div[class*="st-key-filter_date_next_button"] button:hover {
+            background: #FFFFFF !important;
+            border-color: rgba(37, 99, 235, 0.50) !important;
+            color: #2563EB !important;
+        
+            box-shadow:
+                0 0 0 3px rgba(37, 99, 235, 0.08),
+                0 5px 14px rgba(15, 23, 42, 0.06) !important;
+        
+            transform: none !important;
+        }
+        
+        /* Trạng thái vô hiệu hóa ở ngày đầu/cuối */
+        div[class*="st-key-filter_date_previous_button"] button:disabled,
+        div[class*="st-key-filter_date_next_button"] button:disabled {
+            opacity: 0.38 !important;
+            cursor: default !important;
+            box-shadow: none !important;
+        }
+        
+        /* Khung date input */
+        div[class*="st-key-filter_date_picker"] div[data-baseweb="input"] {
+            min-height: 44px !important;
+            height: 44px !important;
+        
+            border-radius: 14px !important;
+            border: 1px solid rgba(15, 23, 42, 0.10) !important;
+        
+            background: rgba(248, 250, 252, 0.95) !important;
+        
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.72),
+                0 1px 2px rgba(15, 23, 42, 0.02) !important;
+        
+            overflow: hidden !important;
+        }
+        
+        /* Không tạo thêm viền ở phần tử con */
+        div[class*="st-key-filter_date_picker"] div[data-baseweb="input"] > div {
+            background: transparent !important;
+            border: none !important;
+        }
+        
+        /* Chữ ngày */
+        div[class*="st-key-filter_date_picker"] input {
+            height: 42px !important;
+            padding-left: 14px !important;
+        
+            color: #0F172A !important;
+            font-size: 14px !important;
+            font-weight: 550 !important;
+            line-height: 1.2 !important;
+        
+            background: transparent !important;
+        }
+        
+        /* Icon lịch */
+        div[class*="st-key-filter_date_picker"] svg {
+            color: #475569 !important;
+            fill: none !important;
+        }
+        
+        /* Hover date picker */
+        div[class*="st-key-filter_date_picker"] div[data-baseweb="input"]:hover {
+            background: #FFFFFF !important;
+            border-color: rgba(7, 17, 31, 0.55) !important;
+        
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.85),
+                0 5px 14px rgba(15, 23, 42, 0.07) !important;
+        }
+        
+        /* Khi input đang focus */
+        div[class*="st-key-filter_date_picker"] div[data-baseweb="input"]:focus-within {
+            background: #FFFFFF !important;
+            border-color: #2563EB !important;
+        
+            box-shadow:
+                0 0 0 3px rgba(37, 99, 235, 0.10),
+                0 6px 16px rgba(15, 23, 42, 0.08) !important;
+        }
         @media (max-width: 768px) {
             .wc-filter-dropdown-label {
                 margin-top: 4px !important;
@@ -9351,6 +9603,17 @@ def page_matches():
         
             div[class*="st-key-filter_date_menu"] button,
             div[class*="st-key-filter_status_menu"] button,
+            div[class*="st-key-filter_date_previous_button"] button,
+            div[class*="st-key-filter_date_next_button"] button,
+            div[class*="st-key-filter_date_picker"] div[data-baseweb="input"] {
+                min-height: 46px !important;
+                height: 46px !important;
+            }
+            
+            div[class*="st-key-filter_date_picker"] input {
+                height: 44px !important;
+                font-size: 14px !important;
+            }
             div[class*="st-key-filter_prediction_status_menu"] button {
                 min-height: 46px !important;
                 font-size: 14px !important;
@@ -9379,12 +9642,8 @@ def page_matches():
         )
         
         with col_filter_1:
-            selected_date = render_filter_dropdown(
-                label="Ngày thi đấu",
-                options=date_options,
-                state_key="filter_date",
-                menu_key="filter_date_menu",
-                format_func=format_filter_date
+            selected_date = render_match_date_picker(
+                date_options=date_options
             )
         
         with col_filter_2:
