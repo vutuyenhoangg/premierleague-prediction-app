@@ -992,31 +992,25 @@ def inject_match_datepicker_calendar_theme():
 
         /* =====================================================
            NGÀY HÔM NAY
-           Chỉ hiện nền xám khi hôm nay CHƯA được chọn.
-           Khi được chọn, CSS "NGÀY ĐƯỢC CHỌN" phía dưới
-           sẽ hiển thị nền xanh và chữ trắng.
+           Luôn có ô tròn xám nhạt khi chưa được chọn
            ===================================================== */
 
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]
-        :not([aria-selected="true"])
-        :not([data-selected="true"])
-        :not([aria-label*="Selected"])
-        :not(:has([aria-selected="true"]))
-        :not(:has([data-selected="true"]))
-        :not(:has([aria-label*="Selected"]))::before,
+        div[role="gridcell"]
+        [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"] {{
+            font-weight: 400 !important;
+        }}
 
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"]
-        :has([aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"])
-        :not([aria-selected="true"])
-        :not([data-selected="true"])
-        :not([aria-label*="Selected"])
-        :not(:has([aria-selected="true"]))
-        :not(:has([data-selected="true"]))
-        :not(:has([aria-label*="Selected"]))::before {{
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]::before,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has(
+            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]
+        )::before {{
             width: 28px !important;
             height: 28px !important;
 
@@ -1030,45 +1024,23 @@ def inject_match_datepicker_calendar_theme():
 
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]
-        :not([aria-selected="true"])
-        :not([data-selected="true"])
-        :not([aria-label*="Selected"])
-        :not(:has([aria-selected="true"]))
-        :not(:has([data-selected="true"]))
-        :not(:has([aria-label*="Selected"])),
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"],
 
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]
-        :not([aria-selected="true"])
-        :not([data-selected="true"])
-        :not([aria-label*="Selected"])
-        :not(:has([aria-selected="true"]))
-        :not(:has([data-selected="true"]))
-        :not(:has([aria-label*="Selected"])) *,
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"] *,
 
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"]
-        :has([aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"])
-        :not([aria-selected="true"])
-        :not([data-selected="true"])
-        :not([aria-label*="Selected"])
-        :not(:has([aria-selected="true"]))
-        :not(:has([data-selected="true"]))
-        :not(:has([aria-label*="Selected"])),
+        div[role="gridcell"]:has(
+            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]
+        ),
 
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"]
-        :has([aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"])
-        :not([aria-selected="true"])
-        :not([data-selected="true"])
-        :not([aria-label*="Selected"])
-        :not(:has([aria-selected="true"]))
-        :not(:has([data-selected="true"]))
-        :not(:has([aria-label*="Selected"])) * {{
+        div[role="gridcell"]:has(
+            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]
+        ) * {{
             color: #0F172A !important;
             font-weight: 400 !important;
         }}
@@ -1256,6 +1228,118 @@ def inject_match_datepicker_calendar_theme():
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
         div[role="gridcell"]:has([data-selected="true"]) * {{
+            color: #FFFFFF !important;
+            font-weight: 400 !important;
+        }}
+
+        /* =====================================================
+           HÔM NAY + ĐANG ĐƯỢC CHỌN
+           Override cuối cùng để màu xanh thắng màu xám
+           ===================================================== */
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"]::before,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][data-selected="true"]::before,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-label*="Selected"]::before,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]:has(
+            [aria-selected="true"]
+        )::before,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]:has(
+            [data-selected="true"]
+        )::before,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has(
+            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"]
+        )::before,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has(
+            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][data-selected="true"]
+        )::before,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has(
+            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-label*="Selected"]
+        )::before {{
+            width: 28px !important;
+            height: 28px !important;
+
+            background: #123C69 !important;
+
+            border: none !important;
+            border-radius: 999px !important;
+
+            box-shadow: none !important;
+        }}
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"],
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"] *,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][data-selected="true"],
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][data-selected="true"] *,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]:has(
+            [aria-selected="true"]
+        ),
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]:has(
+            [aria-selected="true"]
+        ) *,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has(
+            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"]
+        ),
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has(
+            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"]
+        ) *,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has(
+            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][data-selected="true"]
+        ),
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has(
+            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][data-selected="true"]
+        ) * {{
             color: #FFFFFF !important;
             font-weight: 400 !important;
         }}
