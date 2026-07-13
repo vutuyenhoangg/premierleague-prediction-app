@@ -9146,33 +9146,44 @@ def page_matches():
 
     if "filter_date" not in st.session_state:
         st.session_state["filter_date"] = today_vn
-
+    
     if "filter_status" not in st.session_state:
         st.session_state["filter_status"] = "Tất cả"
-
+    
     if "filter_prediction_status" not in st.session_state:
         st.session_state["filter_prediction_status"] = "Tất cả"
-
+    
     status_options = [
         "Tất cả",
         "Sắp diễn ra",
         "Đã khóa",
         "Đã có kết quả"
     ]
-
+    
     prediction_status_options = [
         "Tất cả",
         "Đã dự đoán",
         "Chưa dự đoán"
     ]
-
-    if st.session_state["filter_date"] not in date_options:
+    
+    min_filter_date = date_options[0]
+    max_filter_date = date_options[-1]
+    
+    current_filter_date = st.session_state["filter_date"]
+    
+    if (
+        current_filter_date < min_filter_date
+        or current_filter_date > max_filter_date
+    ):
         st.session_state["filter_date"] = today_vn
-
+    
     if st.session_state["filter_status"] not in status_options:
         st.session_state["filter_status"] = "Tất cả"
-
-    if st.session_state["filter_prediction_status"] not in prediction_status_options:
+    
+    if (
+        st.session_state["filter_prediction_status"]
+        not in prediction_status_options
+    ):
         st.session_state["filter_prediction_status"] = "Tất cả"
 
     with stylable_container(
@@ -9202,6 +9213,103 @@ def page_matches():
             font-size: 13px !important;
             line-height: 1.25 !important;
             margin-bottom: 7px !important;
+        }
+        /* =========================
+           Bộ chọn ngày dạng lịch
+           ========================= */
+        
+        div[data-testid="stDateInput"] {
+            width: 100% !important;
+            margin: 0 !important;
+        }
+        
+        div[data-testid="stDateInput"] label {
+            color: #334155 !important;
+            font-weight: 850 !important;
+            font-size: 13px !important;
+            line-height: 1.25 !important;
+            margin-bottom: 7px !important;
+        }
+        
+        div[data-testid="stDateInput"] div[data-baseweb="input"] {
+            width: 100% !important;
+            min-height: 44px !important;
+        
+            background: rgba(248, 250, 252, 0.95) !important;
+        
+            border: 1px solid rgba(15, 23, 42, 0.10) !important;
+            border-radius: 14px !important;
+        
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.70),
+                0 1px 2px rgba(15, 23, 42, 0.02) !important;
+        
+            transition:
+                border-color 0.16s ease,
+                background 0.16s ease,
+                box-shadow 0.16s ease !important;
+        }
+        
+        div[data-testid="stDateInput"] div[data-baseweb="input"]:hover {
+            background: #FFFFFF !important;
+            border-color: rgba(7, 17, 31, 0.55) !important;
+        
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.85),
+                0 5px 14px rgba(15, 23, 42, 0.07) !important;
+        }
+        
+        div[data-testid="stDateInput"] div[data-baseweb="input"]:focus-within {
+            background: #FFFFFF !important;
+            border-color: #2563EB !important;
+        
+            box-shadow:
+                0 0 0 3px rgba(37, 99, 235, 0.10),
+                0 6px 16px rgba(15, 23, 42, 0.08) !important;
+        }
+        
+        div[data-testid="stDateInput"] input {
+            min-height: 42px !important;
+            padding-left: 14px !important;
+        
+            background: transparent !important;
+            color: #0F172A !important;
+        
+            border: none !important;
+            box-shadow: none !important;
+        
+            font-size: 14px !important;
+            font-weight: 500 !important;
+        }
+        
+        div[data-testid="stDateInput"] input:focus {
+            border: none !important;
+            box-shadow: none !important;
+            outline: none !important;
+        }
+        
+        div[data-testid="stDateInput"] button {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            transform: none !important;
+        }
+        
+        div[data-testid="stDateInput"] svg {
+            color: #334155 !important;
+            fill: #334155 !important;
+            stroke: #334155 !important;
+        }
+        
+        @media (max-width: 768px) {
+            div[data-testid="stDateInput"] div[data-baseweb="input"] {
+                min-height: 46px !important;
+            }
+        
+            div[data-testid="stDateInput"] input {
+                min-height: 44px !important;
+                font-size: 14px !important;
+            }
         }
         
         /* Wrapper của ba dropdown */
@@ -9379,12 +9487,13 @@ def page_matches():
         )
         
         with col_filter_1:
-            selected_date = render_filter_dropdown(
-                label="Ngày thi đấu",
-                options=date_options,
-                state_key="filter_date",
-                menu_key="filter_date_menu",
-                format_func=format_filter_date
+            selected_date = st.date_input(
+                "Ngày thi đấu",
+                key="filter_date",
+                min_value=min_filter_date,
+                max_value=max_filter_date,
+                format="DD/MM/YYYY",
+                help="Bấm để chọn ngày thi đấu trên lịch"
             )
         
         with col_filter_2:
