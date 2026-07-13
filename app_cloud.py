@@ -9031,6 +9031,60 @@ def render_match_card(
 # ============================================================
 # 10. PAGES
 # ============================================================
+def sync_filter_menu_value(menu_key: str, state_key: str):
+    """
+    Đồng bộ lựa chọn từ st.menu_button sang session_state của bộ lọc.
+    Callback chạy trước khi app render lại nên nhãn dropdown cập nhật ngay.
+    """
+    selected_value = st.session_state.get(menu_key)
+
+    if selected_value is not None:
+        st.session_state[state_key] = selected_value
+
+
+def render_filter_dropdown(
+    label: str,
+    options,
+    state_key: str,
+    menu_key: str,
+    format_func=None
+):
+    """
+    Render dropdown thuần túy:
+    - Không có ô input.
+    - Không thể gõ hoặc xóa chữ.
+    - Hiển thị giá trị hiện đang chọn trên nút.
+    - Có dấu ✓ trước option đang được chọn.
+    """
+    if format_func is None:
+        format_func = lambda value: str(value)
+
+    current_value = st.session_state[state_key]
+
+    st.markdown(
+        f"""
+        <div class="wc-filter-dropdown-label">
+            {html.escape(str(label))}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.menu_button(
+        label=format_func(current_value),
+        options=options,
+        key=menu_key,
+        width="stretch",
+        format_func=lambda value: (
+            f"✓ {format_func(value)}"
+            if value == current_value
+            else format_func(value)
+        ),
+        on_click=sync_filter_menu_value,
+        args=(menu_key, state_key)
+    )
+
+    return st.session_state[state_key]
 
 def page_matches():
     render_app_hero()
@@ -9142,27 +9196,149 @@ def page_matches():
             box-sizing: border-box;
         }
 
-        div[data-testid="stSelectbox"] {
-            margin-bottom: 0 !important;
-        }
-
-        div[data-testid="stSelectbox"] label {
+        .wc-filter-dropdown-label {
             color: #334155 !important;
             font-weight: 850 !important;
             font-size: 13px !important;
-            margin-bottom: 6px !important;
+            line-height: 1.25 !important;
+            margin-bottom: 7px !important;
         }
-
-        div[data-baseweb="select"] > div {
-            background: rgba(248,250,252,0.95) !important;
-            border: 1px solid rgba(15,23,42,0.10) !important;
-            border-radius: 14px !important;
+        
+        /* Wrapper của ba dropdown */
+        div[class*="st-key-filter_date_menu"],
+        div[class*="st-key-filter_status_menu"],
+        div[class*="st-key-filter_prediction_status_menu"] {
+            width: 100% !important;
+            margin: 0 !important;
+        }
+        
+        /* Nút dropdown */
+        div[class*="st-key-filter_date_menu"] button,
+        div[class*="st-key-filter_status_menu"] button,
+        div[class*="st-key-filter_prediction_status_menu"] button {
+            position: relative !important;
+        
+            width: 100% !important;
+            min-width: 100% !important;
             min-height: 44px !important;
-            box-shadow: inset 0 1px 0 rgba(255,255,255,0.70);
+        
+            padding: 0 42px 0 14px !important;
+            margin: 0 !important;
+        
+            border-radius: 14px !important;
+            border: 1px solid rgba(15, 23, 42, 0.10) !important;
+        
+            background: rgba(248, 250, 252, 0.95) !important;
+            color: #0F172A !important;
+        
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.70),
+                0 1px 2px rgba(15, 23, 42, 0.02) !important;
+        
+            display: flex !important;
+            align-items: center !important;
+            justify-content: flex-start !important;
+        
+            text-align: left !important;
+            font-size: 14px !important;
+            font-weight: 500 !important;
+            line-height: 1.2 !important;
+            white-space: nowrap !important;
+        
+            cursor: pointer !important;
+        
+            transition:
+                border-color 0.16s ease,
+                background 0.16s ease,
+                box-shadow 0.16s ease !important;
         }
-
-        div[data-baseweb="select"] > div:hover {
-            border-color: rgba(7,17,31,0.55) !important;
+        
+        /* Mũi tên dropdown cố định ở bên phải */
+        div[class*="st-key-filter_date_menu"] button::after,
+        div[class*="st-key-filter_status_menu"] button::after,
+        div[class*="st-key-filter_prediction_status_menu"] button::after {
+            content: "";
+            position: absolute;
+        
+            right: 16px;
+            top: 50%;
+        
+            width: 7px;
+            height: 7px;
+        
+            border-right: 2px solid #334155;
+            border-bottom: 2px solid #334155;
+        
+            transform:
+                translateY(-70%)
+                rotate(45deg);
+        
+            pointer-events: none;
+        }
+        
+        /* Ẩn icon dropdown mặc định nếu Streamlit đã tự render icon */
+        div[class*="st-key-filter_date_menu"] button svg,
+        div[class*="st-key-filter_status_menu"] button svg,
+        div[class*="st-key-filter_prediction_status_menu"] button svg {
+            display: none !important;
+        }
+        
+        /* Giữ màu chữ cho các phần tử con */
+        div[class*="st-key-filter_date_menu"] button *,
+        div[class*="st-key-filter_status_menu"] button *,
+        div[class*="st-key-filter_prediction_status_menu"] button * {
+            color: #0F172A !important;
+            font-size: inherit !important;
+            font-weight: inherit !important;
+            white-space: nowrap !important;
+        }
+        
+        /* Hover */
+        div[class*="st-key-filter_date_menu"] button:hover,
+        div[class*="st-key-filter_status_menu"] button:hover,
+        div[class*="st-key-filter_prediction_status_menu"] button:hover {
+            background: #FFFFFF !important;
+            border-color: rgba(7, 17, 31, 0.55) !important;
+        
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.85),
+                0 5px 14px rgba(15, 23, 42, 0.07) !important;
+        
+            transform: none !important;
+        }
+        
+        /* Khi đang mở dropdown */
+        div[class*="st-key-filter_date_menu"] button[aria-expanded="true"],
+        div[class*="st-key-filter_status_menu"] button[aria-expanded="true"],
+        div[class*="st-key-filter_prediction_status_menu"] button[aria-expanded="true"] {
+            background: #FFFFFF !important;
+            border-color: #2563EB !important;
+        
+            box-shadow:
+                0 0 0 3px rgba(37, 99, 235, 0.10),
+                0 6px 16px rgba(15, 23, 42, 0.08) !important;
+        }
+        
+        /* Quay mũi tên khi menu mở */
+        div[class*="st-key-filter_date_menu"] button[aria-expanded="true"]::after,
+        div[class*="st-key-filter_status_menu"] button[aria-expanded="true"]::after,
+        div[class*="st-key-filter_prediction_status_menu"] button[aria-expanded="true"]::after {
+            transform:
+                translateY(-25%)
+                rotate(225deg);
+        }
+        
+        @media (max-width: 768px) {
+            .wc-filter-dropdown-label {
+                margin-top: 4px !important;
+            }
+        
+            div[class*="st-key-filter_date_menu"] button,
+            div[class*="st-key-filter_status_menu"] button,
+            div[class*="st-key-filter_prediction_status_menu"] button {
+                min-height: 46px !important;
+                font-size: 14px !important;
+            }
         }
         """
     ):
@@ -9181,40 +9357,34 @@ def page_matches():
             unsafe_allow_html=True
         )
 
-        col_filter_1, col_filter_2, col_filter_3 = st.columns([1, 1, 1])
+        col_filter_1, col_filter_2, col_filter_3 = st.columns(
+            [1, 1, 1],
+            gap="medium"
+        )
         
         with col_filter_1:
-            selected_date = st.selectbox(
-                "Ngày thi đấu",
+            selected_date = render_filter_dropdown(
+                label="Ngày thi đấu",
                 options=date_options,
-                index=date_options.index(
-                    st.session_state["filter_date"]
-                ),
-                format_func=format_filter_date,
-                key="filter_date",
-                filter_mode=None
+                state_key="filter_date",
+                menu_key="filter_date_menu",
+                format_func=format_filter_date
             )
         
         with col_filter_2:
-            status_filter = st.selectbox(
-                "Trạng thái",
+            status_filter = render_filter_dropdown(
+                label="Trạng thái",
                 options=status_options,
-                index=status_options.index(
-                    st.session_state["filter_status"]
-                ),
-                key="filter_status",
-                filter_mode=None
+                state_key="filter_status",
+                menu_key="filter_status_menu"
             )
         
         with col_filter_3:
-            prediction_status_filter = st.selectbox(
-                "Tình trạng dự đoán",
+            prediction_status_filter = render_filter_dropdown(
+                label="Tình trạng dự đoán",
                 options=prediction_status_options,
-                index=prediction_status_options.index(
-                    st.session_state["filter_prediction_status"]
-                ),
-                key="filter_prediction_status",
-                filter_mode=None
+                state_key="filter_prediction_status",
+                menu_key="filter_prediction_status_menu"
             )
 
     filtered = matches.copy()
