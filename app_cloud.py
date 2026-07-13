@@ -882,51 +882,53 @@ def inject_match_datepicker_calendar_theme():
         div[role="gridcell"] {{
             position: relative !important;
             border-radius: 999px !important;
-
+            color: #0F172A !important;
+            font-weight: 400 !important;
             transition:
                 color 0.16s ease,
                 background 0.16s ease,
                 box-shadow 0.16s ease !important;
         }}
 
-        /* Hôm nay */
+        /* =========================
+           Ngày hôm nay: xám nhạt
+           ========================= */
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
         div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"] {{
-            color: #123C69 !important;
-            font-weight: 900 !important;
+            color: #0F172A !important;
+            font-weight: 400 !important;
         }}
 
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
         div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]::before {{
-            background: rgba(18, 60, 105, 0.07) !important;
+            background: #E5E7EB !important;
             border-radius: 999px !important;
-
-            box-shadow:
-                inset 0 0 0 1.5px rgba(18, 60, 105, 0.48),
-                0 0 0 3px rgba(18, 60, 105, 0.045) !important;
+            box-shadow: none !important;
         }}
 
-        /* Hover */
+        /* =========================
+           Hover nhẹ, không đổi đậm
+           ========================= */
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
         div[role="gridcell"]:not([aria-disabled="true"]):not([aria-label*="Selected"]):hover {{
-            color: #07111F !important;
-            font-weight: 850 !important;
+            color: #0F172A !important;
+            font-weight: 400 !important;
         }}
 
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
         div[role="gridcell"]:not([aria-disabled="true"]):not([aria-label*="Selected"]):hover::before {{
-            background: rgba(245, 197, 66, 0.16) !important;
+            background: rgba(18, 60, 105, 0.08) !important;
             border-radius: 999px !important;
-
-            box-shadow:
-                inset 0 0 0 1px rgba(245, 197, 66, 0.35) !important;
+            box-shadow: none !important;
         }}
 
-        /* Ngày đang chọn */
+        /* =========================
+           Ngày đang chọn: xanh theme app
+           ========================= */
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
         div[role="gridcell"][aria-label*="Selected"],
@@ -938,8 +940,8 @@ def inject_match_datepicker_calendar_theme():
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
         div[role="gridcell"][tabindex="0"] {{
-            color: #07111F !important;
-            font-weight: 950 !important;
+            color: #FFFFFF !important;
+            font-weight: 400 !important;
         }}
 
         body:has(div[class*="st-key-filter_date"])
@@ -953,18 +955,9 @@ def inject_match_datepicker_calendar_theme():
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
         div[role="gridcell"][tabindex="0"]::before {{
-            background:
-                linear-gradient(
-                    135deg,
-                    #F5C542 0%,
-                    #FFD761 100%
-                ) !important;
-
+            background: #123C69 !important;
             border-radius: 999px !important;
-
-            box-shadow:
-                0 6px 15px rgba(245, 197, 66, 0.30),
-                inset 0 1px 0 rgba(255, 255, 255, 0.42) !important;
+            box-shadow: 0 4px 12px rgba(18, 60, 105, 0.22) !important;
         }}
 
         body:has(div[class*="st-key-filter_date"])
@@ -978,7 +971,44 @@ def inject_match_datepicker_calendar_theme():
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
         div[role="gridcell"][tabindex="0"]::after {{
-            border-color: rgba(245, 197, 66, 0.92) !important;
+            border-color: #123C69 !important;
+        }}
+
+        /* Nếu hôm nay cũng chính là ngày đang chọn,
+           ưu tiên style của ngày đang chọn */
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-label*="Selected"],
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"],
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][tabindex="0"] {{
+            color: #FFFFFF !important;
+            font-weight: 400 !important;
+        }}
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-label*="Selected"]::before,
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"]::before,
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][tabindex="0"]::before {{
+            background: #123C69 !important;
+            box-shadow: 0 4px 12px rgba(18, 60, 105, 0.22) !important;
+        }}
+
+        /* Ngày bị disable */
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-disabled="true"] {{
+            color: #A8B1C2 !important;
+            opacity: 0.70 !important;
+            font-weight: 400 !important;
         }}
         </style>
         """,
