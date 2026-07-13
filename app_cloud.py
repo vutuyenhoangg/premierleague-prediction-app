@@ -9096,429 +9096,71 @@ def sync_match_filter_date_from_picker():
     if selected_date is not None:
         st.session_state["filter_date"] = selected_date
 
-def inject_match_date_picker_dom_behavior(today):
+
+def move_match_filter_date(date_options: list, step: int):
     """
-    Tùy chỉnh date picker:
+    Chuyển sang ngày hợp lệ trước hoặc sau trong date_options.
 
-    - Không cho người dùng nhập hoặc xóa chữ.
-    - Vẫn cho phép bấm để mở lịch.
-    - Đánh dấu ngày hôm nay trong popup calendar.
-    """
-    month_names_en = [
-        "january",
-        "february",
-        "march",
-        "april",
-        "may",
-        "june",
-        "july",
-        "august",
-        "september",
-        "october",
-        "november",
-        "december"
-    ]
-
-    today_month_en = month_names_en[today.month - 1]
-    today_iso = today.isoformat()
-
-    components.html(
-        f"""
-        <script>
-        (function() {{
-            const parentWindow = window.parent;
-            const doc = parentWindow.document;
-
-            const targetDay = "{today.day}";
-            const targetMonth = "{today.month}";
-            const targetMonthEnglish = "{today_month_en}";
-            const targetYear = "{today.year}";
-            const targetIso = "{today_iso}";
-
-            function preventEditing(event) {{
-                event.preventDefault();
-            }}
-
-            function lockDateInput() {{
-                const widgetRoot = doc.querySelector(
-                    '[class*="st-key-filter_date_picker"]'
-                );
-
-                if (!widgetRoot) {{
-                    return;
-                }}
-
-                const input = widgetRoot.querySelector("input");
-
-                if (!input) {{
-                    return;
-                }}
-
-                input.readOnly = true;
-
-                input.setAttribute(
-                    "readonly",
-                    "readonly"
-                );
-
-                input.setAttribute(
-                    "aria-readonly",
-                    "true"
-                );
-
-                input.setAttribute(
-                    "inputmode",
-                    "none"
-                );
-
-                input.setAttribute(
-                    "autocomplete",
-                    "off"
-                );
-
-                if (
-                    input.dataset.wcReadonlyInstalled
-                    !== "true"
-                ) {{
-                    input.addEventListener(
-                        "beforeinput",
-                        preventEditing,
-                        true
-                    );
-
-                    input.addEventListener(
-                        "paste",
-                        preventEditing,
-                        true
-                    );
-
-                    input.addEventListener(
-                        "drop",
-                        preventEditing,
-                        true
-                    );
-
-                    input.dataset.wcReadonlyInstalled = "true";
-                }}
-            }}
-
-            function installTodayStyle() {{
-                let style = doc.getElementById(
-                    "wc-match-date-today-style"
-                );
-
-                if (style) {{
-                    return;
-                }}
-
-                style = doc.createElement("style");
-                style.id = "wc-match-date-today-style";
-
-                style.textContent = `
-                    [data-wc-calendar-today="true"] {{
-                        position: relative !important;
-                        font-weight: 900 !important;
-                    }}
-
-                    [data-wc-calendar-today="true"]
-                    :not(*) {{
-                        pointer-events: none;
-                    }}
-
-                    [data-wc-calendar-today="true"]:not(
-                        [aria-selected="true"]
-                    ) {{
-                        color: #92400E !important;
-                        background:
-                            rgba(245, 197, 66, 0.16)
-                            !important;
-
-                        box-shadow:
-                            inset 0 0 0 2px #F5C542
-                            !important;
-
-                        border-radius: 999px !important;
-                    }}
-
-                    [data-wc-calendar-today="true"][
-                        aria-selected="true"
-                    ] {{
-                        box-shadow:
-                            0 0 0 3px
-                            rgba(245, 197, 66, 0.48)
-                            !important;
-
-                        border-radius: 999px !important;
-                    }}
-
-                    [data-wc-calendar-today="true"]::after {{
-                        content: "";
-                        position: absolute;
-
-                        left: 50%;
-                        bottom: 3px;
-
-                        width: 4px;
-                        height: 4px;
-
-                        border-radius: 999px;
-                        background: #D97706;
-
-                        transform: translateX(-50%);
-                        pointer-events: none;
-                    }}
-                `;
-
-                doc.head.appendChild(style);
-            }}
-
-            function normalizeCalendarLabel(value) {{
-                return String(value || "")
-                    .toLowerCase()
-                    .replace(
-                        /(\\d+)(st|nd|rd|th)/g,
-                        "$1"
-                    )
-                    .replace(
-                        /[,\\.\\-_\\/]/g,
-                        " "
-                    )
-                    .replace(
-                        /\\s+/g,
-                        " "
-                    )
-                    .trim();
-            }}
-
-            function markTodayInCalendar() {{
-                installTodayStyle();
-
-                doc.querySelectorAll(
-                    '[data-wc-calendar-today="true"]'
-                ).forEach(function(element) {{
-                    element.removeAttribute(
-                        "data-wc-calendar-today"
-                    );
-                }});
-
-                /*
-                Ưu tiên thuộc tính semantic nếu
-                date picker cung cấp aria-current.
-                */
-                const nativeTodayElements =
-                    doc.querySelectorAll(
-                        '[aria-current="date"]'
-                    );
-
-                if (nativeTodayElements.length > 0) {{
-                    nativeTodayElements.forEach(
-                        function(element) {{
-                            element.setAttribute(
-                                "data-wc-calendar-today",
-                                "true"
-                            );
-                        }}
-                    );
-
-                    return;
-                }}
-
-                /*
-                Fallback: tìm ngày hôm nay qua aria-label
-                của các ô ngày trong calendar.
-                */
-                const candidates =
-                    doc.querySelectorAll(
-                        'button[aria-label],'
-                        + '[role="gridcell"][aria-label]'
-                    );
-
-                candidates.forEach(function(element) {{
-                    const ariaLabel =
-                        normalizeCalendarLabel(
-                            element.getAttribute(
-                                "aria-label"
-                            )
-                        );
-
-                    if (!ariaLabel) {{
-                        return;
-                    }}
-
-                    const englishPattern =
-                        targetMonthEnglish
-                        + " "
-                        + targetDay
-                        + " "
-                        + targetYear;
-
-                    const reverseEnglishPattern =
-                        targetDay
-                        + " "
-                        + targetMonthEnglish
-                        + " "
-                        + targetYear;
-
-                    const normalizedIso =
-                        targetIso.replace(
-                            /-/g,
-                            " "
-                        );
-
-                    const numberParts =
-                        ariaLabel.match(/\\d+/g) || [];
-
-                    const matchesEnglish =
-                        ariaLabel.includes(
-                            englishPattern
-                        )
-                        || ariaLabel.includes(
-                            reverseEnglishPattern
-                        );
-
-                    const matchesIso =
-                        ariaLabel.includes(
-                            normalizedIso
-                        );
-
-                    const matchesNumeric =
-                        numberParts.includes(
-                            targetDay
-                        )
-                        && numberParts.includes(
-                            targetMonth
-                        )
-                        && numberParts.includes(
-                            targetYear
-                        );
-
-                    if (
-                        matchesEnglish
-                        || matchesIso
-                        || matchesNumeric
-                    ) {{
-                        element.setAttribute(
-                            "data-wc-calendar-today",
-                            "true"
-                        );
-                    }}
-                }});
-            }}
-
-            if (
-                parentWindow.__wcMatchDatePickerObserver
-            ) {{
-                parentWindow
-                    .__wcMatchDatePickerObserver
-                    .disconnect();
-            }}
-
-            const observer = new MutationObserver(
-                function() {{
-                    lockDateInput();
-                    markTodayInCalendar();
-                }}
-            );
-
-            observer.observe(
-                doc.body,
-                {{
-                    childList: true,
-                    subtree: true
-                }}
-            );
-
-            parentWindow.__wcMatchDatePickerObserver =
-                observer;
-
-            lockDateInput();
-            markTodayInCalendar();
-
-            window.setTimeout(
-                lockDateInput,
-                100
-            );
-
-            window.setTimeout(
-                markTodayInCalendar,
-                200
-            );
-        }})();
-        </script>
-        """,
-        height=0
-    )
-
-def render_match_date_picker(date_options: list):
-    """
-    Bộ chọn ngày thi đấu:
-
-    - Chỉ còn một ô chọn ngày.
-    - Không có nút lùi và tiến.
-    - Không cho người dùng nhập chữ.
-    - Bấm vào ô để mở lịch.
-    - Ngày hôm nay hiển thị thành:
-      Hôm nay (13/7/2026)
-    - Ngày hôm nay được đánh dấu trong calendar.
+    step = -1: ngày trước
+    step = 1: ngày sau
     """
     if not date_options:
-        return None
+        return
 
-    date_options = sorted(
-        set(date_options)
-    )
+    date_options = sorted(list(date_options))
 
-    current_date = st.session_state.get(
-        "filter_date"
-    )
+    current_date = st.session_state.get("filter_date")
 
     if current_date not in date_options:
         current_date = date_options[0]
 
-        st.session_state["filter_date"] = (
-            current_date
+    current_index = date_options.index(current_date)
+
+    new_index = max(
+        0,
+        min(
+            len(date_options) - 1,
+            current_index + int(step)
         )
-
-    if (
-        "filter_date_picker"
-        not in st.session_state
-    ):
-        st.session_state[
-            "filter_date_picker"
-        ] = current_date
-
-    elif (
-        st.session_state[
-            "filter_date_picker"
-        ]
-        != current_date
-    ):
-        st.session_state[
-            "filter_date_picker"
-        ] = current_date
-
-    today = today_vietnam_date()
-
-    if current_date == today:
-        display_text = (
-            f"Hôm nay "
-            f"({today.day}/"
-            f"{today.month}/"
-            f"{today.year})"
-        )
-
-    else:
-        display_text = (
-            f"{current_date.day}/"
-            f"{current_date.month}/"
-            f"{current_date.year}"
-        )
-
-    safe_display_text = (
-        display_text
-        .replace("\\", "\\\\")
-        .replace('"', '\\"')
     )
+
+    new_date = date_options[new_index]
+
+    st.session_state["filter_date"] = new_date
+    st.session_state["filter_date_picker"] = new_date
+
+
+def render_match_date_picker(date_options: list):
+    """
+    Bộ chọn ngày thi đấu mới:
+
+    - Không hiển thị danh sách ngày dài.
+    - Có calendar để nhảy nhanh tới ngày mong muốn.
+    - Có nút lùi/tiến theo danh sách ngày hợp lệ.
+    - Giữ dữ liệu tại filter_date để không ảnh hưởng logic lọc hiện tại.
+    """
+    if not date_options:
+        return None
+
+    date_options = sorted(list(date_options))
+
+    current_date = st.session_state.get("filter_date")
+
+    if current_date not in date_options:
+        current_date = date_options[0]
+        st.session_state["filter_date"] = current_date
+
+    # Đồng bộ widget calendar với filter_date trước khi widget được tạo.
+    if (
+        "filter_date_picker" not in st.session_state
+        or st.session_state["filter_date_picker"] != current_date
+    ):
+        st.session_state["filter_date_picker"] = current_date
+
+    current_index = date_options.index(current_date)
+
+    is_first_date = current_index == 0
+    is_last_date = current_index == len(date_options) - 1
 
     st.markdown(
         """
@@ -9529,157 +9171,23 @@ def render_match_date_picker(date_options: list):
         unsafe_allow_html=True
     )
 
-    with stylable_container(
-        key="match_date_picker_shell",
-        css_styles=f"""
-        {{
-            width: 100% !important;
-            margin: 0 !important;
-        }}
+    col_previous, col_calendar, col_next = st.columns(
+        [0.15, 1, 0.15],
+        gap="small"
+    )
 
-        div[data-testid="stDateInput"] {{
-            width: 100% !important;
-            margin: 0 !important;
-        }}
+    with col_previous:
+        st.button(
+            "‹",
+            key="filter_date_previous_button",
+            help="Ngày thi đấu trước",
+            use_container_width=True,
+            disabled=is_first_date,
+            on_click=move_match_filter_date,
+            args=(date_options, -1)
+        )
 
-        div[data-baseweb="input"] {{
-            position: relative !important;
-
-            width: 100% !important;
-            min-height: 44px !important;
-            height: 44px !important;
-
-            border-radius: 14px !important;
-            border:
-                1px solid
-                rgba(15, 23, 42, 0.10)
-                !important;
-
-            background:
-                rgba(248, 250, 252, 0.95)
-                !important;
-
-            box-shadow:
-                inset 0 1px 0
-                rgba(255, 255, 255, 0.72),
-                0 1px 2px
-                rgba(15, 23, 42, 0.02)
-                !important;
-
-            overflow: hidden !important;
-            cursor: pointer !important;
-
-            transition:
-                border-color 0.16s ease,
-                background 0.16s ease,
-                box-shadow 0.16s ease
-                !important;
-        }}
-
-        /*
-        Hiển thị nội dung tùy chỉnh thay cho
-        text thật bên trong input.
-        */
-        div[data-baseweb="input"]::before {{
-            content: "{safe_display_text}";
-
-            position: absolute;
-            left: 14px;
-            top: 50%;
-            z-index: 2;
-
-            transform: translateY(-50%);
-
-            color: #0F172A;
-            font-size: 14px;
-            font-weight: 550;
-            line-height: 1.2;
-
-            white-space: nowrap;
-            pointer-events: none;
-        }}
-
-        /*
-        Ẩn chữ thật của input nhưng vẫn giữ
-        widget hoạt động và mở được calendar.
-        */
-        input {{
-            width: 100% !important;
-            height: 42px !important;
-
-            color: transparent !important;
-            caret-color: transparent !important;
-
-            background: transparent !important;
-
-            cursor: pointer !important;
-            user-select: none !important;
-
-            padding-left: 14px !important;
-            padding-right: 44px !important;
-        }}
-
-        input::selection {{
-            color: transparent !important;
-            background: transparent !important;
-        }}
-
-        /*
-        Giữ icon lịch ở bên phải.
-        */
-        svg {{
-            position: relative !important;
-            z-index: 3 !important;
-
-            color: #475569 !important;
-            stroke: #475569 !important;
-
-            pointer-events: none !important;
-        }}
-
-        div[data-baseweb="input"]:hover {{
-            background: #FFFFFF !important;
-
-            border-color:
-                rgba(7, 17, 31, 0.55)
-                !important;
-
-            box-shadow:
-                inset 0 1px 0
-                rgba(255, 255, 255, 0.85),
-                0 5px 14px
-                rgba(15, 23, 42, 0.07)
-                !important;
-        }}
-
-        div[data-baseweb="input"]:focus-within {{
-            background: #FFFFFF !important;
-            border-color: #2563EB !important;
-
-            box-shadow:
-                0 0 0 3px
-                rgba(37, 99, 235, 0.10),
-                0 6px 16px
-                rgba(15, 23, 42, 0.08)
-                !important;
-        }}
-
-        @media (max-width: 768px) {{
-            div[data-baseweb="input"] {{
-                min-height: 46px !important;
-                height: 46px !important;
-            }}
-
-            input {{
-                height: 44px !important;
-            }}
-
-            div[data-baseweb="input"]::before {{
-                font-size: 14px !important;
-            }}
-        }}
-        """
-    ):
+    with col_calendar:
         st.date_input(
             "Ngày thi đấu",
             min_value=date_options[0],
@@ -9688,14 +9196,19 @@ def render_match_date_picker(date_options: list):
             key="filter_date_picker",
             label_visibility="collapsed",
             width="stretch",
-            on_change=(
-                sync_match_filter_date_from_picker
-            )
+            on_change=sync_match_filter_date_from_picker
         )
 
-    inject_match_date_picker_dom_behavior(
-        today
-    )
+    with col_next:
+        st.button(
+            "›",
+            key="filter_date_next_button",
+            help="Ngày thi đấu tiếp theo",
+            use_container_width=True,
+            disabled=is_last_date,
+            on_click=move_match_filter_date,
+            args=(date_options, 1)
+        )
 
     return st.session_state["filter_date"]
 
@@ -9961,9 +9474,65 @@ def page_matches():
            ========================================================= */
         
         /* Bỏ khoảng trống thừa của ba widget ngày */
-        div[class*="st-key-filter_date_picker"] {
+        div[class*="st-key-filter_date_previous_button"],
+        div[class*="st-key-filter_date_picker"],
+        div[class*="st-key-filter_date_next_button"] {
             width: 100% !important;
             margin: 0 !important;
+        }
+        
+        /* Hai nút chuyển ngày */
+        div[class*="st-key-filter_date_previous_button"] button,
+        div[class*="st-key-filter_date_next_button"] button {
+            width: 100% !important;
+            min-width: 0 !important;
+            min-height: 44px !important;
+            height: 44px !important;
+        
+            padding: 0 !important;
+            margin: 0 !important;
+        
+            border-radius: 14px !important;
+            border: 1px solid rgba(15, 23, 42, 0.10) !important;
+        
+            background: rgba(248, 250, 252, 0.95) !important;
+            color: #334155 !important;
+        
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.72),
+                0 1px 2px rgba(15, 23, 42, 0.02) !important;
+        
+            font-size: 23px !important;
+            font-weight: 600 !important;
+            line-height: 1 !important;
+        
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        
+            transform: none !important;
+        }
+        
+        /* Hover nút chuyển ngày */
+        div[class*="st-key-filter_date_previous_button"] button:hover,
+        div[class*="st-key-filter_date_next_button"] button:hover {
+            background: #FFFFFF !important;
+            border-color: rgba(37, 99, 235, 0.50) !important;
+            color: #2563EB !important;
+        
+            box-shadow:
+                0 0 0 3px rgba(37, 99, 235, 0.08),
+                0 5px 14px rgba(15, 23, 42, 0.06) !important;
+        
+            transform: none !important;
+        }
+        
+        /* Trạng thái vô hiệu hóa ở ngày đầu/cuối */
+        div[class*="st-key-filter_date_previous_button"] button:disabled,
+        div[class*="st-key-filter_date_next_button"] button:disabled {
+            opacity: 0.38 !important;
+            cursor: default !important;
+            box-shadow: none !important;
         }
         
         /* Khung date input */
@@ -10034,6 +9603,8 @@ def page_matches():
         
             div[class*="st-key-filter_date_menu"] button,
             div[class*="st-key-filter_status_menu"] button,
+            div[class*="st-key-filter_date_previous_button"] button,
+            div[class*="st-key-filter_date_next_button"] button,
             div[class*="st-key-filter_date_picker"] div[data-baseweb="input"] {
                 min-height: 46px !important;
                 height: 46px !important;
