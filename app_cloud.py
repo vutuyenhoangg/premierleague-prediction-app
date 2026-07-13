@@ -9276,11 +9276,27 @@ def page_matches():
             pointer-events: none;
         }
         
-        /* Ẩn icon dropdown mặc định nếu Streamlit đã tự render icon */
+        /* Ẩn mũi tên mặc định của st.menu_button.
+           Chỉ giữ mũi tên custom button::after ở góc phải. */
         div[class*="st-key-filter_date_menu"] button svg,
         div[class*="st-key-filter_status_menu"] button svg,
-        div[class*="st-key-filter_prediction_status_menu"] button svg {
+        div[class*="st-key-filter_prediction_status_menu"] button svg,
+        
+        div[class*="st-key-filter_date_menu"] button [data-testid="stIconMaterial"],
+        div[class*="st-key-filter_status_menu"] button [data-testid="stIconMaterial"],
+        div[class*="st-key-filter_prediction_status_menu"] button [data-testid="stIconMaterial"],
+        
+        div[class*="st-key-filter_date_menu"] button span[class*="material-symbols"],
+        div[class*="st-key-filter_status_menu"] button span[class*="material-symbols"],
+        div[class*="st-key-filter_prediction_status_menu"] button span[class*="material-symbols"] {
             display: none !important;
+            visibility: hidden !important;
+            width: 0 !important;
+            min-width: 0 !important;
+            height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
         }
         
         /* Giữ màu chữ cho các phần tử con */
