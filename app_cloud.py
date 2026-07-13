@@ -4340,11 +4340,11 @@ def clear_filter_state():
         "filter_date",
         "filter_status",
         "filter_prediction_status",
+        "filter_date_popover",
         "pending_prediction"
     ]:
         if key in st.session_state:
             del st.session_state[key]
-
 
 def get_match_status_info(row):
     is_finished = to_bool(row.get("is_finished"))
@@ -9033,14 +9033,12 @@ def render_match_card(
 # ============================================================
 def sync_filter_menu_value(menu_key: str, state_key: str):
     """
-    Đồng bộ lựa chọn từ st.menu_button sang session_state của bộ lọc.
-    Callback chạy trước khi app render lại nên nhãn dropdown cập nhật ngay.
+    Đồng bộ option vừa chọn từ st.menu_button vào session_state của bộ lọc.
     """
     selected_value = st.session_state.get(menu_key)
 
     if selected_value is not None:
         st.session_state[state_key] = selected_value
-
 
 def render_filter_dropdown(
     label: str,
@@ -9049,13 +9047,6 @@ def render_filter_dropdown(
     menu_key: str,
     format_func=None
 ):
-    """
-    Render dropdown thuần túy:
-    - Không có ô input.
-    - Không thể gõ hoặc xóa chữ.
-    - Hiển thị giá trị hiện đang chọn trên nút.
-    - Có dấu ✓ trước option đang được chọn.
-    """
     if format_func is None:
         format_func = lambda value: str(value)
 
@@ -9071,14 +9062,14 @@ def render_filter_dropdown(
     )
 
     st.menu_button(
-        label=format_func(current_value),
+        label=str(format_func(current_value)),
         options=options,
         key=menu_key,
         width="stretch",
         format_func=lambda value: (
             f"✓ {format_func(value)}"
             if value == current_value
-            else format_func(value)
+            else str(format_func(value))
         ),
         on_click=sync_filter_menu_value,
         args=(menu_key, state_key)
@@ -9086,95 +9077,237 @@ def render_filter_dropdown(
 
     return st.session_state[state_key]
 
-def page_matches():
-    render_app_hero()
+def get_weekday_label_vn(date_value) -> str:
+    """Trả về tên thứ ngắn gọn bằng tiếng Việt."""
+    weekday_labels = [
+        "Th 2",
+        "Th 3",
+        "Th 4",
+        "Th 5",
+        "Th 6",
+        "Th 7",
+        "CN"
+    ]
 
-    render_page_title(
-        "Lịch thi đấu & dự đoán",
-        "Cuộn xuống dưới để xem lịch thi đấu và nhập dự đoán cho từng trận."
+    return weekday_labels[date_value.weekday()]
+
+
+def format_matchday_trigger_label(date_value) -> str:
+    """Nhãn hiển thị trên nút chọn ngày chính."""
+    if date_value == today_vietnam_date():
+        return f"Hôm nay · {date_value.strftime('%d/%m/%Y')}"
+
+    if date_value == tomorrow_vietnam_date():
+        return f"Ngày mai · {date_value.strftime('%d/%m/%Y')}"
+
+    return (
+        f"{get_weekday_label_vn(date_value)} · "
+        f"{date_value.strftime('%d/%m/%Y')}"
     )
 
-    render_prediction_feedback_popup()
 
-    matches = load_matches()
+def format_matchday_option_label(date_value) -> str:
+    """Nhãn ngắn gọn cho từng ngày trong bảng chọn ngày."""
+    if date_value == today_vietnam_date():
+        return f"Hôm nay · {date_value.strftime('%d/%m')}"
 
-    if matches.empty:
-        st.warning("Chưa có dữ liệu trận đấu.")
+    if date_value == tomorrow_vietnam_date():
+        return f"Ngày mai · {date_value.strftime('%d/%m')}"
+
+    return (
+        f"{get_weekday_label_vn(date_value)} · "
+        f"{date_value.strftime('%d/%m')}"
+    )
+
+
+def select_match_filter_date(date_value):
+    """
+    Chọn một ngày và đóng popover ngay sau khi người dùng bấm.
+    """
+    st.session_state["filter_date"] = date_value
+
+    if "filter_date_popover" in st.session_state:
+        st.session_state["filter_date_popover"] = False
+
+
+def move_match_filter_date(date_options: list, step: int):
+    """
+    Di chuyển sang ngày trước hoặc ngày sau trong danh sách ngày hợp lệ.
+    """
+    if not date_options:
         return
 
-    render_kpi_tiles(matches)
+    current_date = st.session_state.get("filter_date")
 
-    user_id = st.session_state["user"]["user_id"]
-    success_message = st.session_state.pop(
-        "star_transfer_success_message",
-        None
+    if current_date not in date_options:
+        st.session_state["filter_date"] = date_options[0]
+        return
+
+    current_index = date_options.index(current_date)
+    next_index = max(
+        0,
+        min(len(date_options) - 1, current_index + int(step))
     )
-    
-    if success_message:
-        st.success(success_message)
-    
-    if st.session_state.get("pending_star_transfer"):
-        render_star_transfer_dialog(user_id)
-    
-    ai_summary_match_id = st.session_state.pop("ai_summary_match_id", None)
-    
-    if ai_summary_match_id is not None:
-        render_ai_match_summary_dialog(
-            int(ai_summary_match_id)
+
+    st.session_state["filter_date"] = date_options[next_index]
+
+    if "filter_date_popover" in st.session_state:
+        st.session_state["filter_date_popover"] = False
+
+
+def render_matchday_slicer(
+    date_options: list,
+    date_match_counts: dict | None = None
+):
+    """
+    Bộ chọn ngày thi đấu chuyên dụng.
+
+    Gồm:
+    - Nút lùi một ngày hợp lệ.
+    - Nút giữa mở popover dạng lưới, chia theo tháng.
+    - Nút tiến một ngày hợp lệ.
+    """
+    if not date_options:
+        return None
+
+    date_options = sorted(list(date_options))
+    date_match_counts = date_match_counts or {}
+
+    current_date = st.session_state.get("filter_date")
+
+    if current_date not in date_options:
+        current_date = date_options[0]
+        st.session_state["filter_date"] = current_date
+
+    current_index = date_options.index(current_date)
+    is_first_date = current_index == 0
+    is_last_date = current_index == len(date_options) - 1
+
+    st.markdown(
+        """
+        <div class="wc-filter-dropdown-label">
+            Ngày thi đấu
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    col_previous, col_current, col_next = st.columns(
+        [0.14, 1, 0.14],
+        gap="small"
+    )
+
+    with col_previous:
+        st.button(
+            "‹",
+            key="filter_date_previous_button",
+            help="Chuyển sang ngày thi đấu trước",
+            use_container_width=True,
+            disabled=is_first_date,
+            on_click=move_match_filter_date,
+            args=(date_options, -1)
         )
-    
-    ai_suggestion_match_id = st.session_state.pop("ai_suggestion_match_id", None)
-    
-    if ai_suggestion_match_id is not None:
-        render_ai_match_suggestion_dialog(
-            int(ai_suggestion_match_id)
+
+    with col_current:
+        with st.popover(
+            format_matchday_trigger_label(current_date),
+            key="filter_date_popover",
+            width="stretch",
+            on_change="rerun"
+        ):
+            st.markdown(
+                """
+                <div class="wc-matchday-popover-heading">
+                    Chọn ngày thi đấu
+                </div>
+                <div class="wc-matchday-popover-note">
+                    Các ngày được nhóm theo tháng để bạn tìm và chọn nhanh hơn.
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+            month_groups = {}
+
+            for date_value in date_options:
+                month_key = (date_value.year, date_value.month)
+                month_groups.setdefault(month_key, []).append(date_value)
+
+            for (year_value, month_value), month_dates in month_groups.items():
+                st.markdown(
+                    f"""
+                    <div class="wc-matchday-month-label">
+                        Tháng {month_value}/{year_value}
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+                for start_index in range(0, len(month_dates), 4):
+                    row_dates = month_dates[start_index:start_index + 4]
+                    date_columns = st.columns(4, gap="small")
+
+                    for date_column, date_value in zip(
+                        date_columns,
+                        row_dates
+                    ):
+                        is_selected = date_value == current_date
+                        match_count = int(
+                            date_match_counts.get(date_value, 0) or 0
+                        )
+
+                        if match_count > 0:
+                            date_help = (
+                                f"{match_count} trận đấu trong ngày "
+                                f"{date_value.strftime('%d/%m/%Y')}"
+                            )
+                        else:
+                            date_help = (
+                                "Không có trận đấu trong ngày này. "
+                                "Bạn vẫn có thể chọn để kiểm tra lịch."
+                            )
+
+                        with date_column:
+                            st.button(
+                                format_matchday_option_label(date_value),
+                                key=(
+                                    "filter_date_pick_"
+                                    f"{date_value.isoformat()}"
+                                ),
+                                type=(
+                                    "primary"
+                                    if is_selected
+                                    else "secondary"
+                                ),
+                                help=date_help,
+                                use_container_width=True,
+                                on_click=select_match_filter_date,
+                                args=(date_value,)
+                            )
+
+    with col_next:
+        st.button(
+            "›",
+            key="filter_date_next_button",
+            help="Chuyển sang ngày thi đấu tiếp theo",
+            use_container_width=True,
+            disabled=is_last_date,
+            on_click=move_match_filter_date,
+            args=(date_options, 1)
         )
-    
-    render_star_balance(user_id)
-    render_scoring_rules()
 
-    available_dates = sorted(matches["kickoff_date_filter"].dropna().unique())
+    return st.session_state["filter_date"]
 
-    today_vn = today_vietnam_date()
-    tomorrow_vn = tomorrow_vietnam_date()
 
-    date_options_set = set(available_dates)
-    date_options_set.add(today_vn)
-    date_options_set.add(tomorrow_vn)
-
-    date_options = sorted(date_options_set)
-
-    if "filter_date" not in st.session_state:
-        st.session_state["filter_date"] = today_vn
-
-    if "filter_status" not in st.session_state:
-        st.session_state["filter_status"] = "Tất cả"
-
-    if "filter_prediction_status" not in st.session_state:
-        st.session_state["filter_prediction_status"] = "Tất cả"
-
-    status_options = [
-        "Tất cả",
-        "Sắp diễn ra",
-        "Đã khóa",
-        "Đã có kết quả"
-    ]
-
-    prediction_status_options = [
-        "Tất cả",
-        "Đã dự đoán",
-        "Chưa dự đoán"
-    ]
-
-    if st.session_state["filter_date"] not in date_options:
-        st.session_state["filter_date"] = today_vn
-
-    if st.session_state["filter_status"] not in status_options:
-        st.session_state["filter_status"] = "Tất cả"
-
-    if st.session_state["filter_prediction_status"] not in prediction_status_options:
-        st.session_state["filter_prediction_status"] = "Tất cả"
-
+def render_match_filter_panel(
+    date_options: list,
+    status_options: list,
+    prediction_status_options: list,
+    date_match_counts: dict | None = None
+):
+    """
+    Render toàn bộ panel Bộ lọc và trả về ba giá trị đang chọn.
+    """
     with stylable_container(
         key="match_filter_panel",
         css_styles="""
@@ -9203,141 +9336,337 @@ def page_matches():
             line-height: 1.25 !important;
             margin-bottom: 7px !important;
         }
-        
-        /* Wrapper của ba dropdown */
-        div[class*="st-key-filter_date_menu"],
+
+        /* =========================
+           Dropdown trạng thái
+           Chỉ dùng mũi tên native của Streamlit và đẩy nó sang góc phải.
+           Không vẽ thêm mũi tên bằng ::after.
+           ========================= */
         div[class*="st-key-filter_status_menu"],
         div[class*="st-key-filter_prediction_status_menu"] {
             width: 100% !important;
             margin: 0 !important;
         }
-        
-        /* Nút dropdown */
-        div[class*="st-key-filter_date_menu"] button,
+
         div[class*="st-key-filter_status_menu"] button,
         div[class*="st-key-filter_prediction_status_menu"] button {
             position: relative !important;
-        
             width: 100% !important;
             min-width: 100% !important;
             min-height: 44px !important;
-        
-            padding: 0 42px 0 14px !important;
+            padding: 0 14px !important;
             margin: 0 !important;
-        
             border-radius: 14px !important;
-            border: 1px solid rgba(15, 23, 42, 0.10) !important;
-        
-            background: rgba(248, 250, 252, 0.95) !important;
+            border: 1px solid rgba(15,23,42,0.10) !important;
+            background: rgba(248,250,252,0.95) !important;
             color: #0F172A !important;
-        
             box-shadow:
-                inset 0 1px 0 rgba(255, 255, 255, 0.70),
-                0 1px 2px rgba(15, 23, 42, 0.02) !important;
-        
+                inset 0 1px 0 rgba(255,255,255,0.70),
+                0 1px 2px rgba(15,23,42,0.02) !important;
             display: flex !important;
             align-items: center !important;
-            justify-content: flex-start !important;
-        
+            justify-content: space-between !important;
+            gap: 12px !important;
             text-align: left !important;
             font-size: 14px !important;
             font-weight: 500 !important;
             line-height: 1.2 !important;
             white-space: nowrap !important;
-        
             cursor: pointer !important;
-        
             transition:
                 border-color 0.16s ease,
                 background 0.16s ease,
                 box-shadow 0.16s ease !important;
         }
-        
-        /* Mũi tên dropdown cố định ở bên phải */
-        div[class*="st-key-filter_date_menu"] button::after,
+
+        div[class*="st-key-filter_status_menu"] button::before,
         div[class*="st-key-filter_status_menu"] button::after,
+        div[class*="st-key-filter_prediction_status_menu"] button::before,
         div[class*="st-key-filter_prediction_status_menu"] button::after {
-            content: "";
-            position: absolute;
-        
-            right: 16px;
-            top: 50%;
-        
-            width: 7px;
-            height: 7px;
-        
-            border-right: 2px solid #334155;
-            border-bottom: 2px solid #334155;
-        
-            transform:
-                translateY(-70%)
-                rotate(45deg);
-        
-            pointer-events: none;
-        }
-        
-        /* Ẩn icon dropdown mặc định nếu Streamlit đã tự render icon */
-        div[class*="st-key-filter_date_menu"] button svg,
-        div[class*="st-key-filter_status_menu"] button svg,
-        div[class*="st-key-filter_prediction_status_menu"] button svg {
+            content: none !important;
             display: none !important;
         }
-        
-        /* Giữ màu chữ cho các phần tử con */
-        div[class*="st-key-filter_date_menu"] button *,
-        div[class*="st-key-filter_status_menu"] button *,
-        div[class*="st-key-filter_prediction_status_menu"] button * {
-            color: #0F172A !important;
-            font-size: inherit !important;
-            font-weight: inherit !important;
-            white-space: nowrap !important;
+
+        div[class*="st-key-filter_status_menu"] button > *:last-child,
+        div[class*="st-key-filter_prediction_status_menu"] button > *:last-child {
+            margin-left: auto !important;
+            flex: 0 0 auto !important;
         }
-        
-        /* Hover */
-        div[class*="st-key-filter_date_menu"] button:hover,
+
+        div[class*="st-key-filter_status_menu"] button svg,
+        div[class*="st-key-filter_prediction_status_menu"] button svg,
+        div[class*="st-key-filter_status_menu"] button [data-testid="stIconMaterial"],
+        div[class*="st-key-filter_prediction_status_menu"] button [data-testid="stIconMaterial"] {
+            display: inline-flex !important;
+            width: 18px !important;
+            height: 18px !important;
+            margin-left: auto !important;
+            color: #334155 !important;
+            fill: #334155 !important;
+            stroke: #334155 !important;
+            flex: 0 0 auto !important;
+        }
+
         div[class*="st-key-filter_status_menu"] button:hover,
         div[class*="st-key-filter_prediction_status_menu"] button:hover {
             background: #FFFFFF !important;
-            border-color: rgba(7, 17, 31, 0.55) !important;
-        
+            border-color: rgba(7,17,31,0.55) !important;
             box-shadow:
-                inset 0 1px 0 rgba(255, 255, 255, 0.85),
-                0 5px 14px rgba(15, 23, 42, 0.07) !important;
-        
+                inset 0 1px 0 rgba(255,255,255,0.85),
+                0 5px 14px rgba(15,23,42,0.07) !important;
             transform: none !important;
         }
-        
-        /* Khi đang mở dropdown */
-        div[class*="st-key-filter_date_menu"] button[aria-expanded="true"],
+
         div[class*="st-key-filter_status_menu"] button[aria-expanded="true"],
         div[class*="st-key-filter_prediction_status_menu"] button[aria-expanded="true"] {
             background: #FFFFFF !important;
             border-color: #2563EB !important;
-        
             box-shadow:
-                0 0 0 3px rgba(37, 99, 235, 0.10),
-                0 6px 16px rgba(15, 23, 42, 0.08) !important;
+                0 0 0 3px rgba(37,99,235,0.10),
+                0 6px 16px rgba(15,23,42,0.08) !important;
         }
-        
-        /* Quay mũi tên khi menu mở */
-        div[class*="st-key-filter_date_menu"] button[aria-expanded="true"]::after,
-        div[class*="st-key-filter_status_menu"] button[aria-expanded="true"]::after,
-        div[class*="st-key-filter_prediction_status_menu"] button[aria-expanded="true"]::after {
-            transform:
-                translateY(-25%)
-                rotate(225deg);
+
+        /* =========================
+           Slicer Ngày thi đấu
+           ========================= */
+        div[class*="st-key-filter_date_previous_button"],
+        div[class*="st-key-filter_date_next_button"] {
+            width: 100% !important;
+            margin: 0 !important;
         }
-        
+
+        div[class*="st-key-filter_date_previous_button"] button,
+        div[class*="st-key-filter_date_next_button"] button {
+            width: 100% !important;
+            min-width: 0 !important;
+            min-height: 44px !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            border-radius: 14px !important;
+            border: 1px solid rgba(15,23,42,0.10) !important;
+            background: rgba(248,250,252,0.95) !important;
+            color: #0F172A !important;
+            box-shadow:
+                inset 0 1px 0 rgba(255,255,255,0.70),
+                0 1px 2px rgba(15,23,42,0.02) !important;
+            font-size: 22px !important;
+            font-weight: 750 !important;
+            line-height: 1 !important;
+        }
+
+        div[class*="st-key-filter_date_previous_button"] button:hover,
+        div[class*="st-key-filter_date_next_button"] button:hover {
+            background: #FFFFFF !important;
+            border-color: rgba(7,17,31,0.55) !important;
+            box-shadow: 0 5px 14px rgba(15,23,42,0.07) !important;
+            transform: none !important;
+        }
+
+        div[class*="st-key-filter_date_previous_button"] button:disabled,
+        div[class*="st-key-filter_date_next_button"] button:disabled {
+            opacity: 0.38 !important;
+            cursor: not-allowed !important;
+            box-shadow: none !important;
+        }
+
+        div[class*="st-key-filter_date_popover"] {
+            width: 100% !important;
+            margin: 0 !important;
+        }
+
+        div[class*="st-key-filter_date_popover"] button[aria-haspopup="dialog"] {
+            position: relative !important;
+            width: 100% !important;
+            min-width: 100% !important;
+            min-height: 44px !important;
+            padding: 0 14px !important;
+            margin: 0 !important;
+            border-radius: 14px !important;
+            border: 1px solid rgba(15,23,42,0.10) !important;
+            background: rgba(248,250,252,0.95) !important;
+            color: #0F172A !important;
+            box-shadow:
+                inset 0 1px 0 rgba(255,255,255,0.70),
+                0 1px 2px rgba(15,23,42,0.02) !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            gap: 12px !important;
+            text-align: left !important;
+            font-size: 14px !important;
+            font-weight: 550 !important;
+            line-height: 1.2 !important;
+            white-space: nowrap !important;
+            cursor: pointer !important;
+        }
+
+        div[class*="st-key-filter_date_popover"] button[aria-haspopup="dialog"]::before,
+        div[class*="st-key-filter_date_popover"] button[aria-haspopup="dialog"]::after {
+            content: none !important;
+            display: none !important;
+        }
+
+        div[class*="st-key-filter_date_popover"] button[aria-haspopup="dialog"] > *:last-child {
+            margin-left: auto !important;
+            flex: 0 0 auto !important;
+        }
+
+        div[class*="st-key-filter_date_popover"] button[aria-haspopup="dialog"] svg,
+        div[class*="st-key-filter_date_popover"] button[aria-haspopup="dialog"] [data-testid="stIconMaterial"] {
+            display: inline-flex !important;
+            width: 18px !important;
+            height: 18px !important;
+            margin-left: auto !important;
+            color: #334155 !important;
+            fill: #334155 !important;
+            stroke: #334155 !important;
+            flex: 0 0 auto !important;
+        }
+
+        div[class*="st-key-filter_date_popover"] button[aria-haspopup="dialog"]:hover {
+            background: #FFFFFF !important;
+            border-color: rgba(7,17,31,0.55) !important;
+            box-shadow: 0 5px 14px rgba(15,23,42,0.07) !important;
+            transform: none !important;
+        }
+
+        div[class*="st-key-filter_date_popover"] button[aria-haspopup="dialog"][aria-expanded="true"] {
+            background: #FFFFFF !important;
+            border-color: #2563EB !important;
+            box-shadow:
+                0 0 0 3px rgba(37,99,235,0.10),
+                0 6px 16px rgba(15,23,42,0.08) !important;
+        }
+
+        .wc-matchday-popover-heading {
+            color: #07111F;
+            font-size: 16px;
+            font-weight: 950;
+            line-height: 1.2;
+            margin-bottom: 4px;
+        }
+
+        .wc-matchday-popover-note {
+            color: #64748B;
+            font-size: 12.5px;
+            line-height: 1.4;
+            margin-bottom: 14px;
+        }
+
+        .wc-matchday-month-label {
+            color: #334155;
+            font-size: 12px;
+            font-weight: 900;
+            line-height: 1.2;
+            letter-spacing: 0.045em;
+            text-transform: uppercase;
+            margin: 14px 0 8px 0;
+            padding-bottom: 7px;
+            border-bottom: 1px solid rgba(15,23,42,0.08);
+        }
+
+        div[class*="st-key-filter_date_pick_"] button {
+            width: 100% !important;
+            min-height: 44px !important;
+            padding: 8px 9px !important;
+            margin: 0 0 8px 0 !important;
+            border-radius: 12px !important;
+            border: 1px solid rgba(15,23,42,0.10) !important;
+            background: #FFFFFF !important;
+            color: #0F172A !important;
+            box-shadow: 0 3px 10px rgba(15,23,42,0.04) !important;
+            font-size: 12.5px !important;
+            font-weight: 750 !important;
+            line-height: 1.15 !important;
+            white-space: nowrap !important;
+            transform: none !important;
+        }
+
+        div[class*="st-key-filter_date_pick_"] button:hover {
+            background: #F8FAFC !important;
+            border-color: #2563EB !important;
+            box-shadow: 0 6px 14px rgba(37,99,235,0.10) !important;
+            transform: none !important;
+        }
+
+        div[class*="st-key-filter_date_pick_"] button[kind="primary"],
+        div[class*="st-key-filter_date_pick_"] button[data-testid="stBaseButton-primary"] {
+            background: #07111F !important;
+            color: #FFFFFF !important;
+            border-color: #07111F !important;
+            box-shadow: 0 7px 16px rgba(7,17,31,0.18) !important;
+        }
+
+        div[class*="st-key-filter_date_pick_"] button[kind="primary"] *,
+        div[class*="st-key-filter_date_pick_"] button[data-testid="stBaseButton-primary"] * {
+            color: #FFFFFF !important;
+        }
+
+        div[data-testid="stPopoverBody"]:has(div[class*="st-key-filter_date_pick_"]),
+        div[data-testid="stPopoverContent"]:has(div[class*="st-key-filter_date_pick_"]) {
+            width: min(560px, calc(100vw - 32px)) !important;
+            min-width: min(560px, calc(100vw - 32px)) !important;
+            max-width: min(560px, calc(100vw - 32px)) !important;
+            max-height: min(520px, 72vh) !important;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+            padding: 18px !important;
+            border-radius: 18px !important;
+            border: 1px solid rgba(15,23,42,0.10) !important;
+            box-shadow: 0 22px 54px rgba(7,17,31,0.20) !important;
+        }
+
         @media (max-width: 768px) {
+            {
+                padding: 16px 16px 18px 16px;
+                border-radius: 18px;
+            }
+
             .wc-filter-dropdown-label {
                 margin-top: 4px !important;
             }
-        
-            div[class*="st-key-filter_date_menu"] button,
+
             div[class*="st-key-filter_status_menu"] button,
-            div[class*="st-key-filter_prediction_status_menu"] button {
+            div[class*="st-key-filter_prediction_status_menu"] button,
+            div[class*="st-key-filter_date_popover"] button[aria-haspopup="dialog"],
+            div[class*="st-key-filter_date_previous_button"] button,
+            div[class*="st-key-filter_date_next_button"] button {
                 min-height: 46px !important;
-                font-size: 14px !important;
+            }
+
+            div[data-testid="stPopoverBody"]:has(div[class*="st-key-filter_date_pick_"]),
+            div[data-testid="stPopoverContent"]:has(div[class*="st-key-filter_date_pick_"]) {
+                width: min(360px, calc(100vw - 24px)) !important;
+                min-width: min(360px, calc(100vw - 24px)) !important;
+                max-width: min(360px, calc(100vw - 24px)) !important;
+                max-height: 68vh !important;
+                padding: 14px !important;
+            }
+
+            div[data-testid="stPopoverBody"]:has(div[class*="st-key-filter_date_pick_"])
+            div[data-testid="stHorizontalBlock"],
+            div[data-testid="stPopoverContent"]:has(div[class*="st-key-filter_date_pick_"])
+            div[data-testid="stHorizontalBlock"] {
+                display: grid !important;
+                grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+                gap: 8px !important;
+                width: 100% !important;
+            }
+
+            div[data-testid="stPopoverBody"]:has(div[class*="st-key-filter_date_pick_"])
+            div[data-testid="column"],
+            div[data-testid="stPopoverContent"]:has(div[class*="st-key-filter_date_pick_"])
+            div[data-testid="column"] {
+                width: 100% !important;
+                min-width: 0 !important;
+                flex: unset !important;
+                padding-left: 0 !important;
+                padding-right: 0 !important;
+            }
+
+            div[class*="st-key-filter_date_pick_"] button {
+                min-height: 43px !important;
+                font-size: 12px !important;
             }
         }
         """
@@ -9361,16 +9690,13 @@ def page_matches():
             [1, 1, 1],
             gap="medium"
         )
-        
+
         with col_filter_1:
-            selected_date = render_filter_dropdown(
-                label="Ngày thi đấu",
-                options=date_options,
-                state_key="filter_date",
-                menu_key="filter_date_menu",
-                format_func=format_filter_date
+            selected_date = render_matchday_slicer(
+                date_options=date_options,
+                date_match_counts=date_match_counts
             )
-        
+
         with col_filter_2:
             status_filter = render_filter_dropdown(
                 label="Trạng thái",
@@ -9378,7 +9704,7 @@ def page_matches():
                 state_key="filter_status",
                 menu_key="filter_status_menu"
             )
-        
+
         with col_filter_3:
             prediction_status_filter = render_filter_dropdown(
                 label="Tình trạng dự đoán",
@@ -9386,6 +9712,131 @@ def page_matches():
                 state_key="filter_prediction_status",
                 menu_key="filter_prediction_status_menu"
             )
+
+    return (
+        selected_date,
+        status_filter,
+        prediction_status_filter
+    )
+
+def page_matches():
+    render_app_hero()
+
+    render_page_title(
+        "Lịch thi đấu & dự đoán",
+        "Cuộn xuống dưới để xem lịch thi đấu và nhập dự đoán cho từng trận."
+    )
+
+    render_prediction_feedback_popup()
+
+    matches = load_matches()
+
+    if matches.empty:
+        st.warning("Chưa có dữ liệu trận đấu.")
+        return
+
+    render_kpi_tiles(matches)
+
+    user_id = st.session_state["user"]["user_id"]
+
+    success_message = st.session_state.pop(
+        "star_transfer_success_message",
+        None
+    )
+
+    if success_message:
+        st.success(success_message)
+
+    if st.session_state.get("pending_star_transfer"):
+        render_star_transfer_dialog(user_id)
+
+    ai_summary_match_id = st.session_state.pop(
+        "ai_summary_match_id",
+        None
+    )
+
+    if ai_summary_match_id is not None:
+        render_ai_match_summary_dialog(
+            int(ai_summary_match_id)
+        )
+
+    ai_suggestion_match_id = st.session_state.pop(
+        "ai_suggestion_match_id",
+        None
+    )
+
+    if ai_suggestion_match_id is not None:
+        render_ai_match_suggestion_dialog(
+            int(ai_suggestion_match_id)
+        )
+
+    render_star_balance(user_id)
+    render_scoring_rules()
+
+    available_dates = sorted(
+        matches["kickoff_date_filter"].dropna().unique()
+    )
+
+    today_vn = today_vietnam_date()
+    tomorrow_vn = tomorrow_vietnam_date()
+
+    date_options_set = set(available_dates)
+    date_options_set.add(today_vn)
+    date_options_set.add(tomorrow_vn)
+
+    date_options = sorted(date_options_set)
+
+    status_options = [
+        "Tất cả",
+        "Sắp diễn ra",
+        "Đã khóa",
+        "Đã có kết quả"
+    ]
+
+    prediction_status_options = [
+        "Tất cả",
+        "Đã dự đoán",
+        "Chưa dự đoán"
+    ]
+
+    if "filter_date" not in st.session_state:
+        st.session_state["filter_date"] = today_vn
+
+    if "filter_status" not in st.session_state:
+        st.session_state["filter_status"] = "Tất cả"
+
+    if "filter_prediction_status" not in st.session_state:
+        st.session_state["filter_prediction_status"] = "Tất cả"
+
+    if st.session_state["filter_date"] not in date_options:
+        st.session_state["filter_date"] = today_vn
+
+    if st.session_state["filter_status"] not in status_options:
+        st.session_state["filter_status"] = "Tất cả"
+
+    if (
+        st.session_state["filter_prediction_status"]
+        not in prediction_status_options
+    ):
+        st.session_state["filter_prediction_status"] = "Tất cả"
+
+    date_match_counts = (
+        matches.dropna(subset=["kickoff_date_filter"])
+        .groupby("kickoff_date_filter")
+        .size()
+        .to_dict()
+    )
+
+    (
+        selected_date,
+        status_filter,
+        prediction_status_filter
+    ) = render_match_filter_panel(
+        date_options=date_options,
+        status_options=status_options,
+        prediction_status_options=prediction_status_options,
+        date_match_counts=date_match_counts
+    )
 
     filtered = matches.copy()
 
@@ -9413,11 +9864,12 @@ def page_matches():
         ]
 
     user_predictions = load_predictions()
+
     user_prediction_map = build_user_prediction_map(
         predictions=user_predictions,
         user_id=user_id
     )
-    
+
     predicted_match_ids = set(user_prediction_map.keys())
 
     if prediction_status_filter == "Đã dự đoán":
