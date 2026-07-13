@@ -862,12 +862,29 @@ inject_worldcup_theme()
 inject_hide_streamlit_embed_footer_css()
 
 def inject_match_datepicker_calendar_theme():
+    """
+    Theme riêng cho lịch của slicer Ngày thi đấu.
+
+    - Ngày được chọn: ô tròn nhỏ màu xanh theme, chữ trắng.
+    - Ngày hôm nay: ô tròn nhỏ màu xám nhạt.
+    - Loại bỏ vòng tròn đỏ mặc định của BaseWeb.
+    - Không thay đổi logic của st.date_input.
+    """
     today = today_vietnam_date()
 
     english_month_names = [
-        "January", "February", "March", "April",
-        "May", "June", "July", "August",
-        "September", "October", "November", "December"
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December"
     ]
 
     today_month_en = english_month_names[today.month - 1]
@@ -877,201 +894,364 @@ def inject_match_datepicker_calendar_theme():
     st.markdown(
         f"""
         <style>
-        /* =========================================
-           PHẠM VI: chỉ áp dụng cho slicer filter_date
-           ========================================= */
+        /* =====================================================
+           PHẠM VI ÁP DỤNG
+           Chỉ áp dụng khi widget filter_date có mặt trên trang
+           ===================================================== */
+
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
         div[role="gridcell"] {{
             position: relative !important;
+            isolation: isolate !important;
+
             color: #0F172A !important;
             font-weight: 400 !important;
-        }}
 
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"] *,
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"] span,
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"] div,
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"] button {{
-            font-weight: 400 !important;
-        }}
+            background: transparent !important;
+            border: none !important;
+            outline: none !important;
+            box-shadow: none !important;
 
-        /* Chuẩn hóa phần tử hiển thị ngày */
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"] > div,
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"] > button {{
             border-radius: 999px !important;
+        }}
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"] * {{
+            position: relative !important;
+            z-index: 2 !important;
+
+            font-weight: 400 !important;
+            box-shadow: none !important;
+        }}
+
+        /* Reset pseudo-element mặc định của từng ngày */
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]::before {{
+            content: "" !important;
+
+            position: absolute !important;
+            left: 50% !important;
+            top: 50% !important;
+
+            width: 0 !important;
+            height: 0 !important;
+
+            transform: translate(-50%, -50%) !important;
+
+            border: none !important;
+            border-radius: 999px !important;
+
+            background: transparent !important;
+            box-shadow: none !important;
+
+            z-index: 0 !important;
+            pointer-events: none !important;
+
             transition:
-                background 0.16s ease,
-                color 0.16s ease,
-                box-shadow 0.16s ease !important;
+                width 0.15s ease,
+                height 0.15s ease,
+                background 0.15s ease !important;
         }}
 
-        /* =========================================
-           NGÀY HÔM NAY: ô tròn xám nhạt, chữ bình thường
-           ========================================= */
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"] > div,
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"] > button {{
-            background: #E5E7EB !important;
-            color: #0F172A !important;
-            font-weight: 400 !important;
+        div[role="gridcell"]::after {{
+            content: none !important;
+            display: none !important;
+
+            background: transparent !important;
+            border: none !important;
             box-shadow: none !important;
-            border-radius: 999px !important;
         }}
+
+        /* =====================================================
+           HOVER
+           ===================================================== */
 
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"] > div *,
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"] > button * {{
-            color: #0F172A !important;
-            font-weight: 400 !important;
-        }}
+        div[role="gridcell"]:not([aria-disabled="true"]):hover::before {{
+            width: 28px !important;
+            height: 28px !important;
 
-        /* =========================================
-           HOVER: nhẹ theo theme
-           ========================================= */
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:not([aria-disabled="true"]):not([aria-selected="true"]):hover > div,
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:not([aria-disabled="true"]):not([aria-selected="true"]):hover > button {{
             background: rgba(18, 60, 105, 0.08) !important;
+        }}
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:not([aria-disabled="true"]):hover,
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:not([aria-disabled="true"]):hover * {{
             color: #0F172A !important;
+            font-weight: 400 !important;
+        }}
+
+        /* =====================================================
+           NGÀY HÔM NAY
+           Luôn có ô tròn xám nhạt
+           ===================================================== */
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]
+        [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"] {{
+            font-weight: 400 !important;
+        }}
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]::before,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has(
+            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]
+        )::before {{
+            width: 28px !important;
+            height: 28px !important;
+
+            background: #E5E7EB !important;
+
+            border: none !important;
             border-radius: 999px !important;
+
             box-shadow: none !important;
         }}
 
-        /* =========================================
-           NGÀY ĐƯỢC CHỌN: xanh theme app + chữ trắng
-           ========================================= */
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-selected="true"] > div,
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"],
+
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-selected="true"] > button,
+        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"] *,
+
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="Selected"] > div,
+        div[role="gridcell"]:has(
+            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]
+        ),
+
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="Selected"] > button {{
-            background: #123C69 !important;
-            color: #FFFFFF !important;
+        div[role="gridcell"]:has(
+            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]
+        ) * {{
+            color: #0F172A !important;
             font-weight: 400 !important;
-            border-radius: 999px !important;
-            box-shadow: 0 4px 12px rgba(18, 60, 105, 0.22) !important;
+        }}
+
+        /* =====================================================
+           RESET NGÀY ĐƯỢC CHỌN
+           Xóa toàn bộ nền/vòng tròn đỏ mặc định ở các lớp con
+           ===================================================== */
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-selected="true"],
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][data-selected="true"],
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="Selected"],
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has([aria-selected="true"]),
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has([data-selected="true"]) {{
+            background: transparent !important;
+
+            border: none !important;
+            outline: none !important;
+
+            box-shadow: none !important;
+            filter: none !important;
         }}
 
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-selected="true"] > div *,
+        div[role="gridcell"][aria-selected="true"] *,
+
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-selected="true"] > button *,
+        div[role="gridcell"][data-selected="true"] *,
+
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="Selected"] > div *,
+        div[role="gridcell"][aria-label*="Selected"] *,
+
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="Selected"] > button * {{
-            color: #FFFFFF !important;
-            font-weight: 400 !important;
+        div[role="gridcell"]:has([aria-selected="true"]) *,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has([data-selected="true"]) * {{
+            background: transparent !important;
+
+            border-color: transparent !important;
+            outline: none !important;
+
+            box-shadow: none !important;
+            filter: none !important;
         }}
 
-        /* Nếu có pseudo-element mặc định màu đỏ thì ép đổi sang xanh */
+        /* Xóa pseudo-element đỏ nằm trên các phần tử con */
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-selected="true"] > *::before,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-selected="true"] > *::after,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][data-selected="true"] > *::before,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][data-selected="true"] > *::after,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="Selected"] > *::before,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="Selected"] > *::after,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has([aria-selected="true"]) > *::before,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has([aria-selected="true"]) > *::after {{
+            content: none !important;
+            display: none !important;
+
+            background: transparent !important;
+            border: none !important;
+            outline: none !important;
+
+            box-shadow: none !important;
+            filter: none !important;
+        }}
+
+        /* =====================================================
+           NGÀY ĐƯỢC CHỌN
+           Chỉ vẽ một ô tròn nhỏ màu xanh
+           ===================================================== */
+
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
         div[role="gridcell"][aria-selected="true"]::before,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][data-selected="true"]::before,
+
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
         div[role="gridcell"][aria-label*="Selected"]::before,
+
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-selected="true"] > div::before,
+        div[role="gridcell"]:has([aria-selected="true"])::before,
+
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="Selected"] > div::before,
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-selected="true"] > button::before,
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="Selected"] > button::before {{
+        div[role="gridcell"]:has([data-selected="true"])::before {{
+            content: "" !important;
+            display: block !important;
+
+            width: 28px !important;
+            height: 28px !important;
+
             background: #123C69 !important;
+
+            border: none !important;
             border-radius: 999px !important;
+
+            outline: none !important;
+            box-shadow: none !important;
+            filter: none !important;
         }}
 
-        /* =========================================
-           Nếu hôm nay đồng thời là ngày được chọn:
-           Ưu tiên style ngày được chọn
-           ========================================= */
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"] > div,
+        div[role="gridcell"][aria-selected="true"],
+
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"] > button,
+        div[role="gridcell"][aria-selected="true"] *,
+
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-label*="Selected"] > div,
+        div[role="gridcell"][data-selected="true"],
+
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-label*="Selected"] > button {{
-            background: #123C69 !important;
+        div[role="gridcell"][data-selected="true"] *,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="Selected"],
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-label*="Selected"] *,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has([aria-selected="true"]),
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has([aria-selected="true"]) *,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has([data-selected="true"]),
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:has([data-selected="true"]) * {{
             color: #FFFFFF !important;
             font-weight: 400 !important;
-            box-shadow: 0 4px 12px rgba(18, 60, 105, 0.22) !important;
         }}
 
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"] > div *,
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"] > button *,
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-label*="Selected"] > div *,
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-label*="Selected"] > button * {{
-            color: #FFFFFF !important;
-            font-weight: 400 !important;
-        }}
+        /* =====================================================
+           NGÀY KHÔNG KHẢ DỤNG
+           ===================================================== */
 
-        /* Ngày disable */
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
         div[role="gridcell"][aria-disabled="true"],
+
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
         div[role="gridcell"][aria-disabled="true"] * {{
             color: #A8B1C2 !important;
-            opacity: 0.70 !important;
             font-weight: 400 !important;
+            opacity: 0.72 !important;
         }}
         </style>
         """,
         unsafe_allow_html=True
     )
+
 def inject_mobile_match_title_css():
     st.markdown(
         """
