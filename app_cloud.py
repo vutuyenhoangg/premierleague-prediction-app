@@ -9414,6 +9414,261 @@ def render_prediction_feedback_popup():
         unsafe_allow_html=True
     )
 
+
+def _get_submitted_prediction_winner_team_id(
+    is_knockout: bool,
+    home_team_id: int | None,
+    away_team_id: int | None,
+    home_name: str,
+    away_name: str,
+    predicted_home_score: int,
+    predicted_away_score: int,
+    winner_radio_key: str | None
+) -> int | None:
+    """
+    Đọc đội thắng chung cuộc từ state của form tại thời điểm submit.
+
+    Callback phải đọc widget qua st.session_state vì callback chạy trước
+    lượt render tiếp theo của trang.
+    """
+    if not to_bool(is_knockout):
+        return None
+
+    home_team_id = to_optional_int(home_team_id)
+    away_team_id = to_optional_int(away_team_id)
+
+    if predicted_home_score > predicted_away_score:
+        return home_team_id
+
+    if predicted_away_score > predicted_home_score:
+        return away_team_id
+
+    selected_winner_name = (
+        st.session_state.get(winner_radio_key)
+        if winner_radio_key
+        else None
+    )
+
+    if selected_winner_name == home_name:
+        return home_team_id
+
+    if selected_winner_name == away_name:
+        return away_team_id
+
+    return None
+
+
+def handle_prediction_form_submit(
+    user_id: int,
+    match_id: int,
+    home_team_id: int | None,
+    away_team_id: int | None,
+    home_name: str,
+    away_name: str,
+    is_knockout: bool,
+    current_star_type: str,
+    home_score_key: str,
+    away_score_key: str,
+    star_radio_key: str,
+    winner_radio_key: str | None
+):
+    """
+    Callback duy nhất cho nút Lưu/Cập nhật dự đoán.
+
+    Luồng chạy:
+    1. Streamlit cập nhật toàn bộ widget của form vào session_state.
+    2. Callback này lưu dữ liệu và clear cache cần thiết.
+    3. Streamlit thực hiện đúng một lượt render tự nhiên của trang.
+
+    Không gọi st.rerun() trong callback, tránh tạo hai full rerun liên tiếp.
+    """
+    user_id = int(user_id)
+    match_id = int(match_id)
+    current_star_type = normalize_star_type(current_star_type)
+
+    try:
+        input_home = int(st.session_state.get(home_score_key, 0))
+        input_away = int(st.session_state.get(away_score_key, 0))
+
+        selected_star_type = normalize_star_type(
+            st.session_state.get(
+                star_radio_key,
+                current_star_type
+            )
+        )
+
+        predicted_winner_team_id = (
+            _get_submitted_prediction_winner_team_id(
+                is_knockout=is_knockout,
+                home_team_id=home_team_id,
+                away_team_id=away_team_id,
+                home_name=home_name,
+                away_name=away_name,
+                predicted_home_score=input_home,
+                predicted_away_score=input_away,
+                winner_radio_key=winner_radio_key
+            )
+        )
+
+        if (
+            selected_star_type != STAR_TYPE_NONE
+            and selected_star_type != current_star_type
+        ):
+            latest_usage = get_user_star_usage_from_db(
+                user_id=user_id,
+                exclude_match_id=match_id
+            )
+
+            if selected_star_type == STAR_TYPE_HOPE:
+                latest_left = int(latest_usage.get("hope_left", 0))
+                latest_free_left = int(
+                    latest_usage.get("hope_free_left", latest_left)
+                )
+                star_display_name = "Ngôi sao hy vọng"
+
+            elif selected_star_type == STAR_TYPE_SUPER:
+                latest_left = int(latest_usage.get("super_left", 0))
+                latest_free_left = int(
+                    latest_usage.get("super_free_left", latest_left)
+                )
+                star_display_name = "Siêu sao"
+
+            else:
+                latest_left = 0
+                latest_free_left = 0
+                star_display_name = "bổ trợ"
+
+            if latest_left <= 0:
+                set_prediction_feedback_message(
+                    match_id=match_id,
+                    message=f"Bạn đã dùng hết {star_display_name}.",
+                    tone="danger"
+                )
+                return
+
+            if latest_free_left <= 0:
+                transfer_candidates = get_star_transfer_candidates(
+                    user_id=user_id,
+                    target_match_id=match_id,
+                    star_type=selected_star_type
+                )
+
+                if not transfer_candidates:
+                    set_prediction_feedback_message(
+                        match_id=match_id,
+                        message=(
+                            f"Hiện không còn {star_display_name} "
+                            "trống để dùng cho trận này."
+                        ),
+                        tone="danger"
+                    )
+                    return
+
+                st.session_state["pending_star_transfer"] = {
+                    "target_match_id": match_id,
+                    "target_label": f"{home_name} vs {away_name}",
+                    "predicted_home_score": input_home,
+                    "predicted_away_score": input_away,
+                    "predicted_winner_team_id": predicted_winner_team_id,
+                    "star_type": selected_star_type,
+                    "candidates": transfer_candidates
+                }
+                return
+
+        save_result = save_prediction(
+            user_id=user_id,
+            match_id=match_id,
+            predicted_home_score=input_home,
+            predicted_away_score=input_away,
+            predicted_winner_team_id=predicted_winner_team_id,
+            star_type=selected_star_type
+        )
+
+        st.session_state.pop("pending_star_transfer", None)
+
+        save_status = save_result.get("status")
+
+        if save_status == "created":
+            feedback_message = (
+                "Đã lưu dự đoán. Bạn vẫn có thể cập nhật "
+                "dự đoán cho đến trước giờ bóng lăn."
+            )
+        elif save_status == "updated":
+            feedback_message = "Đã cập nhật dự đoán."
+        else:
+            feedback_message = "Dự đoán không có thay đổi."
+
+        set_prediction_feedback_message(
+            match_id=match_id,
+            message=feedback_message,
+            tone="success"
+        )
+
+    except ValueError as exc:
+        set_prediction_feedback_message(
+            match_id=match_id,
+            message=str(exc),
+            tone="danger"
+        )
+
+    except Exception:
+        set_prediction_feedback_message(
+            match_id=match_id,
+            message=(
+                "Không thể lưu dự đoán vào lúc này. "
+                "Dữ liệu cũ của bạn vẫn được giữ nguyên."
+            ),
+            tone="danger"
+        )
+
+
+def handle_delete_prediction_form_submit(
+    user_id: int,
+    match_id: int
+):
+    """
+    Callback cho nút Xóa dự đoán.
+    Không gọi st.rerun(); form tự tạo một lượt render sau callback.
+    """
+    user_id = int(user_id)
+    match_id = int(match_id)
+
+    try:
+        delete_result = delete_prediction(
+            user_id=user_id,
+            match_id=match_id
+        )
+
+        st.session_state.pop("pending_star_transfer", None)
+
+        if delete_result.get("status") == "deleted":
+            message = "Đã xóa dự đoán."
+        else:
+            message = "Dự đoán này đã được xóa trước đó."
+
+        set_prediction_feedback_message(
+            match_id=match_id,
+            message=message,
+            tone="success"
+        )
+
+    except ValueError as exc:
+        set_prediction_feedback_message(
+            match_id=match_id,
+            message=str(exc),
+            tone="danger"
+        )
+
+    except Exception:
+        set_prediction_feedback_message(
+            match_id=match_id,
+            message=(
+                "Không thể xóa dự đoán vào lúc này. "
+                "Dữ liệu cũ của bạn vẫn được giữ nguyên."
+            ),
+            tone="danger"
+        )
+
 def render_match_card(
     row,
     user_id: int,
@@ -9808,6 +10063,7 @@ def render_match_card(
 
             predicted_winner_team_id = None
             predicted_winner_team_name = None
+            winner_radio_key = None
 
             if is_knockout:
                 winner_options = {
@@ -10048,8 +10304,20 @@ def render_match_card(
                     key=star_radio_key
                 )
 
-            submitted = False
-            delete_submitted = False
+            submit_callback_kwargs = {
+                "user_id": int(user_id),
+                "match_id": int(match_id),
+                "home_team_id": home_team_id,
+                "away_team_id": away_team_id,
+                "home_name": home_name,
+                "away_name": away_name,
+                "is_knockout": is_knockout,
+                "current_star_type": current_star_type,
+                "home_score_key": f"home_score_{match_id}",
+                "away_score_key": f"away_score_{match_id}",
+                "star_radio_key": star_radio_key,
+                "winner_radio_key": winner_radio_key
+            }
 
             if existing:
                 with stylable_container(
@@ -10059,8 +10327,10 @@ def render_match_card(
                     save_col, spacer_col, delete_col = st.columns([1.45, 6.8, 0.85])
 
                     with save_col:
-                        submitted = st.form_submit_button(
-                            "Cập nhật dự đoán"
+                        st.form_submit_button(
+                            "Cập nhật dự đoán",
+                            on_click=handle_prediction_form_submit,
+                            kwargs=submit_callback_kwargs
                         )
 
                     with delete_col:
@@ -10095,9 +10365,14 @@ def render_match_card(
                             }
                             """
                         ):
-                            delete_submitted = st.form_submit_button(
+                            st.form_submit_button(
                                 "Xóa dự đoán",
-                                help="Xóa dự đoán đã lưu cho trận này."
+                                help="Xóa dự đoán đã lưu cho trận này.",
+                                on_click=handle_delete_prediction_form_submit,
+                                kwargs={
+                                    "user_id": int(user_id),
+                                    "match_id": int(match_id)
+                                }
                             )
 
             else:
@@ -10105,144 +10380,10 @@ def render_match_card(
                     key=f"prediction_action_spacing_shell_{match_id}",
                     css_styles=get_prediction_action_spacing_css()
                 ):
-                    submitted = st.form_submit_button(
-                        "Lưu dự đoán"
-                    )
-
-            if submitted:
-                try:
-                    selected_star_type = normalize_star_type(selected_star_type)
-
-                    should_save_directly = True
-
-                    if (
-                        selected_star_type != STAR_TYPE_NONE
-                        and selected_star_type != current_star_type
-                    ):
-                        latest_usage = get_user_star_usage_from_db(
-                            user_id=user_id,
-                            exclude_match_id=match_id
-                        )
-
-                        if selected_star_type == STAR_TYPE_HOPE:
-                            latest_left = int(latest_usage.get("hope_left", 0))
-                            latest_free_left = int(
-                                latest_usage.get("hope_free_left", latest_left)
-                            )
-                            star_display_name = "Ngôi sao hy vọng"
-
-                        elif selected_star_type == STAR_TYPE_SUPER:
-                            latest_left = int(latest_usage.get("super_left", 0))
-                            latest_free_left = int(
-                                latest_usage.get("super_free_left", latest_left)
-                            )
-                            star_display_name = "Siêu sao"
-
-                        else:
-                            latest_left = 0
-                            latest_free_left = 0
-                            star_display_name = "bổ trợ"
-
-                        if latest_left <= 0:
-                            should_save_directly = False
-                            st.error(f"Bạn đã dùng hết {star_display_name}.")
-
-                        elif latest_free_left <= 0:
-                            should_save_directly = False
-
-                            transfer_candidates = load_transfer_candidates_for_card(
-                                selected_star_type
-                            )
-
-                            if not transfer_candidates:
-                                st.error(
-                                    f"Hiện không còn {star_display_name} trống để dùng cho trận này."
-                                )
-                            else:
-                                st.session_state["pending_star_transfer"] = {
-                                    "target_match_id": match_id,
-                                    "target_label": f"{home_name} vs {away_name}",
-                                    "predicted_home_score": int(input_home),
-                                    "predicted_away_score": int(input_away),
-                                    "predicted_winner_team_id": predicted_winner_team_id,
-                                    "star_type": selected_star_type,
-                                    "candidates": transfer_candidates
-                                }
-
-                                st.rerun()
-
-                    if should_save_directly:
-                        save_result = save_prediction(
-                            user_id=user_id,
-                            match_id=match_id,
-                            predicted_home_score=int(input_home),
-                            predicted_away_score=int(input_away),
-                            predicted_winner_team_id=predicted_winner_team_id,
-                            star_type=selected_star_type
-                        )
-
-                        st.session_state.pop(
-                            "pending_star_transfer",
-                            None
-                        )
-
-                        save_status = save_result.get("status")
-
-                        if save_status == "created":
-                            feedback_message = (
-                                "Đã lưu dự đoán. Bạn vẫn có thể cập nhật "
-                                "dự đoán cho đến trước giờ bóng lăn."
-                            )
-
-                        elif save_status == "updated":
-                            feedback_message = "Đã cập nhật dự đoán."
-
-                        else:
-                            feedback_message = "Dự đoán không có thay đổi."
-
-                        set_prediction_feedback_message(
-                            match_id=match_id,
-                            message=feedback_message,
-                            tone="success"
-                        )
-
-                        st.rerun()
-
-                except ValueError as e:
-                    st.error(str(e))
-
-                except Exception:
-                    st.error(
-                        "Không thể lưu dự đoán vào lúc này. "
-                        "Dữ liệu cũ của bạn vẫn được giữ nguyên."
-                    )
-
-            if delete_submitted:
-                try:
-                    delete_result = delete_prediction(
-                        user_id=user_id,
-                        match_id=match_id
-                    )
-
-                    st.session_state.pop(
-                        "pending_star_transfer",
-                        None
-                    )
-
-                    if delete_result.get("status") == "deleted":
-                        st.success("Đã xóa dự đoán.")
-                    else:
-                        st.info("Dự đoán này đã được xóa trước đó.")
-
-                    st.rerun()
-
-                except ValueError as e:
-                    st.error(str(e))
-
-                except Exception:
-                    st.error(
-                        "Không thể xóa dự đoán vào lúc này. "
-                        "Dữ liệu cũ của bạn vẫn được giữ nguyên."
+                    st.form_submit_button(
+                        "Lưu dự đoán",
+                        on_click=handle_prediction_form_submit,
+                        kwargs=submit_callback_kwargs
                     )
 
         render_match_venue_footer(row, match_id)
