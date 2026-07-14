@@ -169,11 +169,21 @@ def resolve_asset_src(asset_path: str) -> str:
 
 
 st.set_page_config(
-    page_title="World Cup Prediction",
+    page_title="WC26 Prediction Arena",
     page_icon="static/app-icon.png",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
+components.html(
+    """
+    <script>
+    window.parent.document.title = "WC26 Prediction Arena";
+    </script>
+    """,
+    height=0
+)
+
 def enforce_embed_url():
     components.html(
         """
