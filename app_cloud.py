@@ -861,29 +861,8 @@ def inject_hide_streamlit_embed_footer_css():
 inject_worldcup_theme()
 inject_hide_streamlit_embed_footer_css()
 
-def inject_match_datepicker_calendar_theme(match_dates=None):
-    """
-    Tùy biến riêng lịch của bộ lọc Ngày thi đấu.
-
-    Ngoài giao diện ngày hiện tại/ngày được chọn, hàm đánh dấu các ngày
-    có trận đấu bằng một chấm xanh nhỏ phía dưới số ngày.
-    """
+def inject_match_datepicker_calendar_theme():
     today = today_vietnam_date()
-
-    match_date_iso_values = []
-
-    for value in match_dates or []:
-        parsed_value = pd.to_datetime(value, errors="coerce")
-
-        if pd.isna(parsed_value):
-            continue
-
-        match_date_iso_values.append(
-            parsed_value.date().isoformat()
-        )
-
-    match_date_iso_values = sorted(set(match_date_iso_values))
-    match_dates_payload = "|".join(match_date_iso_values)
 
     english_month_names = [
         "January",
@@ -1453,71 +1432,6 @@ def inject_match_datepicker_calendar_theme(match_dates=None):
             font-weight: 400 !important;
         }}
         /* =====================================================
-           NGÀY CÓ TRẬN ĐẤU
-           Chấm xanh siêu nhỏ, nằm dưới số ngày
-           ===================================================== */
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"].wc-has-match::after {{
-            content: "" !important;
-            display: block !important;
-
-            position: absolute !important;
-            left: 50% !important;
-            top: calc(50% + 11px) !important;
-
-            width: 4px !important;
-            height: 4px !important;
-
-            transform: translate(-50%, -50%) !important;
-
-            border: none !important;
-            border-radius: 999px !important;
-
-            background: #2563EB !important;
-            box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.10) !important;
-
-            opacity: 1 !important;
-            z-index: 3 !important;
-            pointer-events: none !important;
-        }}
-
-        /* Khi ngày có trận đang được chọn, đổi chấm thành trắng để nổi trên nền xanh */
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"].wc-has-match[aria-selected="true"]::after,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"].wc-has-match[data-selected="true"]::after,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"].wc-has-match[aria-label*="Selected"]::after,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"].wc-has-match:has([aria-selected="true"])::after,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"].wc-has-match:has([data-selected="true"])::after,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"].wc-has-match:has([aria-label*="Selected"])::after {{
-            background: #FFFFFF !important;
-            box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.28) !important;
-        }}
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"].wc-has-match[aria-disabled="true"]::after {{
-            opacity: 0.42 !important;
-        }}
-
-        /* =====================================================
            Ô ngày chỉ đọc
            ===================================================== */
 
@@ -1530,11 +1444,6 @@ def inject_match_datepicker_calendar_theme(match_dates=None):
             -webkit-touch-callout: none !important;
         }}
         </style>
-        <div
-            class="wc-filter-match-date-data"
-            data-match-dates="{match_dates_payload}"
-            style="display:none !important;"
-        ></div>
         """,
         unsafe_allow_html=True
     )
@@ -1544,64 +1453,6 @@ def inject_match_datepicker_calendar_theme(match_dates=None):
         (() => {
             const parentWindow = window.parent;
             const parentDocument = parentWindow.document;
-
-            const matchDateDataNodes = parentDocument.querySelectorAll(
-                ".wc-filter-match-date-data"
-            );
-
-            const matchDateData = matchDateDataNodes.length
-                ? matchDateDataNodes[matchDateDataNodes.length - 1]
-                : null;
-
-            const matchDateIsoValues = (
-                matchDateData?.dataset.matchDates || ""
-            )
-                .split("|")
-                .filter(Boolean);
-
-            const englishMonthNames = [
-                "January",
-                "February",
-                "March",
-                "April",
-                "May",
-                "June",
-                "July",
-                "August",
-                "September",
-                "October",
-                "November",
-                "December"
-            ];
-
-            const matchDatePatterns = matchDateIsoValues
-                .map((isoValue) => {
-                    const [year, month, day] = isoValue
-                        .split("-")
-                        .map(Number);
-
-                    const monthName = englishMonthNames[month - 1];
-
-                    if (!year || !monthName || !day) {
-                        return null;
-                    }
-
-                    return {
-                        isoValue,
-                        pattern: new RegExp(
-                            "\\\\b"
-                            + monthName
-                            + "\\\\s+"
-                            + day
-                            + "(?:st|nd|rd|th)?"
-                            + "\\\\s*,?\\\\s*"
-                            + year
-                            + "\\\\b",
-                            "i"
-                        )
-                    };
-                })
-                .filter(Boolean);
 
             /*
              * Chỉ target input thuộc widget có key="filter_date".
@@ -1669,54 +1520,6 @@ def inject_match_datepicker_calendar_theme(match_dates=None):
                     .forEach(makeInputReadonly);
             };
 
-            const applyMatchDateMarkers = () => {
-                const filterDateWidget = parentDocument.querySelector(
-                    'div[class*="st-key-filter_date"]'
-                );
-
-                if (!filterDateWidget) {
-                    return;
-                }
-
-                parentDocument
-                    .querySelectorAll(
-                        'div[data-baseweb="calendar"] div[role="gridcell"]'
-                    )
-                    .forEach((cell) => {
-                        const ariaLabels = [
-                            cell.getAttribute("aria-label") || "",
-                            ...Array.from(
-                                cell.querySelectorAll("[aria-label]"),
-                                (element) => (
-                                    element.getAttribute("aria-label") || ""
-                                )
-                            )
-                        ];
-
-                        const combinedLabel = ariaLabels.join(" ");
-
-                        const matchedDate = matchDatePatterns.find(
-                            ({ pattern }) => pattern.test(combinedLabel)
-                        );
-
-                        cell.classList.toggle(
-                            "wc-has-match",
-                            Boolean(matchedDate)
-                        );
-
-                        if (matchedDate) {
-                            cell.dataset.wcMatchDate = matchedDate.isoValue;
-                        } else {
-                            delete cell.dataset.wcMatchDate;
-                        }
-                    });
-            };
-
-            const applyCalendarEnhancements = () => {
-                applyReadonlyMode();
-                applyMatchDateMarkers();
-            };
-
             /*
              * Ngắt observer cũ nếu app vừa rerun,
              * tránh tạo nhiều observer chạy song song.
@@ -1733,14 +1536,14 @@ def inject_match_datepicker_calendar_theme(match_dates=None):
             /*
              * Áp dụng ngay nếu widget đã xuất hiện.
              */
-            applyCalendarEnhancements();
+            applyReadonlyMode();
 
             /*
              * Streamlit có thể dựng widget sau khi script đã chạy.
              * Observer sẽ tự bắt widget mới và đặt readonly.
              */
             const observer = new parentWindow.MutationObserver(
-                applyCalendarEnhancements
+                applyReadonlyMode
             );
 
             observer.observe(
@@ -10743,7 +10546,7 @@ def page_matches():
     ):
         st.session_state["filter_prediction_status"] = "Tất cả"
 
-    inject_match_datepicker_calendar_theme(available_dates)
+    inject_match_datepicker_calendar_theme()
     
     with stylable_container(
         key="match_filter_panel",
@@ -10772,27 +10575,6 @@ def page_matches():
             font-size: 13px !important;
             line-height: 1.25 !important;
             margin-bottom: 7px !important;
-        }
-
-        .wc-calendar-match-legend {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            min-height: 15px;
-            margin: 7px 2px 0 2px;
-            color: #64748B;
-            font-size: 11px;
-            font-weight: 500;
-            line-height: 1.2;
-        }
-
-        .wc-calendar-match-legend-dot {
-            width: 5px;
-            height: 5px;
-            flex: 0 0 5px;
-            border-radius: 999px;
-            background: #2563EB;
-            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.08);
         }
         /* =========================
            Bộ chọn ngày dạng lịch
@@ -11177,16 +10959,6 @@ def page_matches():
                 format="DD/MM/YYYY",
                 help="Bấm để chọn ngày thi đấu trên lịch",
                 label_visibility="collapsed"
-            )
-
-            st.markdown(
-                """
-                <div class="wc-calendar-match-legend">
-                    <span class="wc-calendar-match-legend-dot"></span>
-                    <span>Ngày có trận đấu</span>
-                </div>
-                """,
-                unsafe_allow_html=True
             )
         
         with col_filter_2:
