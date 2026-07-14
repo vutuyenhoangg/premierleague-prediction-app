@@ -1562,6 +1562,196 @@ def inject_match_datepicker_calendar_theme():
         scrolling=False
     )
 
+def inject_match_date_bold(match_dates):
+    """
+    Chỉ in đậm các ngày thực sự có trận đấu trong lịch filter_date.
+
+    Hàm chỉ thay đổi font-weight trên giao diện lịch.
+    Không thay đổi dữ liệu, lựa chọn ngày hoặc logic lọc trận đấu.
+    """
+    match_date_iso_values = sorted({
+        pd.Timestamp(date_value).date().isoformat()
+        for date_value in match_dates
+        if date_value is not None and not pd.isna(date_value)
+    })
+
+    match_date_iso_js = (
+        "["
+        + ",".join(
+            f'"{date_value}"'
+            for date_value in match_date_iso_values
+        )
+        + "]"
+    )
+
+    st.markdown(
+        """
+        <style>
+        /*
+         * Chỉ áp dụng cho các ngày đã được xác nhận có trận đấu.
+         * Không tác động tới những calendar khác trong app.
+         */
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"].wc-match-date,
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"].wc-match-date * {
+            font-weight: 800 !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    components.html(
+        """
+        <script>
+        (() => {
+            const parentWindow = window.parent;
+            const parentDocument = parentWindow.document;
+
+            /*
+             * Danh sách này được tạo trực tiếp từ
+             * matches["kickoff_date_filter"] ở Python.
+             */
+            const matchDates = new Set(
+                __WC_MATCH_DATES__
+            );
+
+            const monthNumbers = {
+                january: "01",
+                february: "02",
+                march: "03",
+                april: "04",
+                may: "05",
+                june: "06",
+                july: "07",
+                august: "08",
+                september: "09",
+                october: "10",
+                november: "11",
+                december: "12"
+            };
+
+            /*
+             * Đọc ngày thật từ aria-label của từng ô ngày trong
+             * calendar BaseWeb rồi chuyển thành YYYY-MM-DD.
+             */
+            const extractDateIso = (cell) => {
+                const labelledElement =
+                    cell.hasAttribute("aria-label")
+                        ? cell
+                        : cell.querySelector("[aria-label]");
+
+                if (!labelledElement) {
+                    return null;
+                }
+
+                const ariaLabel =
+                    labelledElement.getAttribute("aria-label") || "";
+
+                const dateMatch = ariaLabel.match(
+                    /\\b(January|February|March|April|May|June|July|August|September|October|November|December)\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,)?\\s+(\\d{4})\\b/i
+                );
+
+                if (!dateMatch) {
+                    return null;
+                }
+
+                const month =
+                    monthNumbers[
+                        dateMatch[1].toLowerCase()
+                    ];
+
+                const day = String(
+                    Number(dateMatch[2])
+                ).padStart(2, "0");
+
+                return `${dateMatch[3]}-${month}-${day}`;
+            };
+
+            const applyMatchDateBold = () => {
+                /*
+                 * Chỉ chạy khi widget filter_date có trên trang.
+                 */
+                const filterDateWidget =
+                    parentDocument.querySelector(
+                        'div[class*="st-key-filter_date"]'
+                    );
+
+                if (!filterDateWidget) {
+                    return;
+                }
+
+                parentDocument
+                    .querySelectorAll(
+                        'div[data-baseweb="calendar"] div[role="gridcell"]'
+                    )
+                    .forEach((cell) => {
+                        const dateIso =
+                            extractDateIso(cell);
+
+                        cell.classList.toggle(
+                            "wc-match-date",
+                            Boolean(
+                                dateIso
+                                && matchDates.has(dateIso)
+                            )
+                        );
+                    });
+            };
+
+            /*
+             * Ngắt observer cũ khi Streamlit rerun,
+             * tránh nhiều observer chạy trùng nhau.
+             */
+            const observerKey =
+                "__wcMatchDateBoldObserver";
+
+            const oldObserver =
+                parentWindow[observerKey];
+
+            if (oldObserver) {
+                oldObserver.disconnect();
+            }
+
+            /*
+             * Áp dụng ngay nếu calendar đang mở.
+             */
+            applyMatchDateBold();
+
+            /*
+             * Tự áp dụng lại khi:
+             * - Người dùng mở lịch
+             * - Chuyển tháng
+             * - Streamlit dựng lại calendar
+             */
+            const observer =
+                new parentWindow.MutationObserver(
+                    applyMatchDateBold
+                );
+
+            observer.observe(
+                parentDocument.body,
+                {
+                    childList: true,
+                    subtree: true
+                }
+            );
+
+            parentWindow[observerKey] = observer;
+        })();
+        </script>
+        """.replace(
+            "__WC_MATCH_DATES__",
+            match_date_iso_js
+        ),
+        height=0,
+        scrolling=False
+    )
+
 def inject_mobile_match_title_css():
     st.markdown(
         """
@@ -10547,6 +10737,7 @@ def page_matches():
         st.session_state["filter_prediction_status"] = "Tất cả"
 
     inject_match_datepicker_calendar_theme()
+    inject_match_date_bold(available_dates)
     
     with stylable_container(
         key="match_filter_panel",
