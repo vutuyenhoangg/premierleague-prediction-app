@@ -351,7 +351,7 @@ def inject_worldcup_theme():
         }}
 
         .block-container {{
-            padding-top: 1.6rem;
+            padding-top: 0.3rem;
             padding-bottom: 2.4rem;
             max-width: 1440px;
         }}
