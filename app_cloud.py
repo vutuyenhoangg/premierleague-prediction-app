@@ -175,15 +175,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-components.html(
-    """
-    <script>
-    window.parent.document.title = "WC26 Prediction Arena";
-    </script>
-    """,
-    height=0
-)
-
 def enforce_embed_url():
     components.html(
         """
@@ -289,7 +280,12 @@ def inject_worldcup_theme():
     if hero_background_src:
         hero_background_css = f"""
             background-image:
-                linear-gradient(90deg, rgba(7, 17, 31, 0.96), rgba(11, 31, 58, 0.88), rgba(18, 60, 105, 0.70)),
+                linear-gradient(
+                    90deg,
+                    rgba(7, 17, 31, 0.96),
+                    rgba(11, 31, 58, 0.88),
+                    rgba(18, 60, 105, 0.70)
+                ),
                 url("{hero_background_src}");
             background-size: cover;
             background-position: center;
@@ -297,9 +293,22 @@ def inject_worldcup_theme():
     else:
         hero_background_css = """
             background:
-                radial-gradient(circle at 12% 18%, rgba(0, 180, 216, 0.32), transparent 24%),
-                radial-gradient(circle at 82% 16%, rgba(245, 197, 66, 0.30), transparent 22%),
-                linear-gradient(135deg, #07111F 0%, #0B1F3A 52%, #123C69 100%);
+                radial-gradient(
+                    circle at 12% 18%,
+                    rgba(0, 180, 216, 0.32),
+                    transparent 24%
+                ),
+                radial-gradient(
+                    circle at 82% 16%,
+                    rgba(245, 197, 66, 0.30),
+                    transparent 22%
+                ),
+                linear-gradient(
+                    135deg,
+                    #07111F 0%,
+                    #0B1F3A 52%,
+                    #123C69 100%
+                );
         """
 
     st.markdown(
@@ -323,9 +332,21 @@ def inject_worldcup_theme():
 
         .stApp {{
             background:
-                radial-gradient(circle at top left, rgba(0, 180, 216, 0.14), transparent 28%),
-                radial-gradient(circle at top right, rgba(245, 197, 66, 0.18), transparent 24%),
-                linear-gradient(180deg, #F8FAFC 0%, #EEF4FA 100%);
+                radial-gradient(
+                    circle at top left,
+                    rgba(0, 180, 216, 0.14),
+                    transparent 28%
+                ),
+                radial-gradient(
+                    circle at top right,
+                    rgba(245, 197, 66, 0.18),
+                    transparent 24%
+                ),
+                linear-gradient(
+                    180deg,
+                    #F8FAFC 0%,
+                    #EEF4FA 100%
+                );
             color: var(--wc-ink);
         }}
 
@@ -337,8 +358,17 @@ def inject_worldcup_theme():
 
         section[data-testid="stSidebar"] {{
             background:
-                radial-gradient(circle at 30% 15%, rgba(0, 180, 216, 0.20), transparent 24%),
-                linear-gradient(180deg, #07111F 0%, #0B1F3A 66%, #04101F 100%);
+                radial-gradient(
+                    circle at 30% 15%,
+                    rgba(0, 180, 216, 0.20),
+                    transparent 24%
+                ),
+                linear-gradient(
+                    180deg,
+                    #07111F 0%,
+                    #0B1F3A 66%,
+                    #04101F 100%
+                );
             border-right: 1px solid rgba(255, 255, 255, 0.08);
         }}
 
@@ -350,17 +380,23 @@ def inject_worldcup_theme():
             gap: 8px;
         }}
 
-        section[data-testid="stSidebar"] label[data-baseweb="radio"] {{
-            background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.08);
+        section[data-testid="stSidebar"]
+        label[data-baseweb="radio"] {{
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 14px;
             padding: 10px 12px;
             margin-bottom: 6px;
         }}
 
-        section[data-testid="stSidebar"] label[data-baseweb="radio"]:has(input:checked) {{
-            background: linear-gradient(90deg, rgba(245,197,66,0.28), rgba(0,180,216,0.14));
-            border: 1px solid rgba(245,197,66,0.66);
+        section[data-testid="stSidebar"]
+        label[data-baseweb="radio"]:has(input:checked) {{
+            background: linear-gradient(
+                90deg,
+                rgba(245, 197, 66, 0.28),
+                rgba(0, 180, 216, 0.14)
+            );
+            border: 1px solid rgba(245, 197, 66, 0.66);
         }}
 
         .wc-sidebar-brand {{
@@ -379,8 +415,17 @@ def inject_worldcup_theme():
             height: 54px;
             border-radius: 18px;
             background:
-                radial-gradient(circle at 32% 28%, #F5C542 0%, #F5C542 22%, transparent 23%),
-                linear-gradient(135deg, #123C69, #00B4D8);
+                radial-gradient(
+                    circle at 32% 28%,
+                    #F5C542 0%,
+                    #F5C542 22%,
+                    transparent 23%
+                ),
+                linear-gradient(
+                    135deg,
+                    #123C69,
+                    #00B4D8
+                );
             display: flex;
             align-items: center;
             justify-content: center;
@@ -417,8 +462,8 @@ def inject_worldcup_theme():
             margin-top: 36px;
             padding: 14px;
             border-radius: 18px;
-            background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.10);
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.10);
             color: #CBD5E1;
             font-size: 13px;
         }}
@@ -432,12 +477,13 @@ def inject_worldcup_theme():
 
         .wc-hero {{
             {hero_background_css}
+
             border-radius: 28px;
             padding: 30px 34px;
             color: white;
             margin-bottom: 22px;
             box-shadow: 0 20px 48px rgba(7, 17, 31, 0.22);
-            border: 1px solid rgba(255,255,255,0.20);
+            border: 1px solid rgba(255, 255, 255, 0.20);
             overflow: hidden;
             position: relative;
         }}
@@ -450,7 +496,11 @@ def inject_worldcup_theme():
             width: 320px;
             height: 320px;
             border-radius: 50%;
-            background: radial-gradient(circle, rgba(245,197,66,0.26), transparent 62%);
+            background: radial-gradient(
+                circle,
+                rgba(245, 197, 66, 0.26),
+                transparent 62%
+            );
             pointer-events: none;
         }}
 
@@ -469,8 +519,8 @@ def inject_worldcup_theme():
             gap: 8px;
             padding: 7px 12px;
             border-radius: 999px;
-            background: rgba(255,255,255,0.10);
-            border: 1px solid rgba(255,255,255,0.20);
+            background: rgba(255, 255, 255, 0.10);
+            border: 1px solid rgba(255, 255, 255, 0.20);
             color: #E2E8F0;
             font-size: 13px;
             font-weight: 800;
@@ -508,8 +558,8 @@ def inject_worldcup_theme():
         .wc-pill {{
             padding: 9px 13px;
             border-radius: 999px;
-            border: 1px solid rgba(255,255,255,0.18);
-            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            background: rgba(255, 255, 255, 0.08);
             color: #E2E8F0;
             font-size: 13px;
             font-weight: 700;
@@ -520,14 +570,19 @@ def inject_worldcup_theme():
             height: 142px;
             border-radius: 36px;
             background:
-                radial-gradient(circle at 35% 25%, #FFF7CC, #F5C542 38%, #B45309 100%);
+                radial-gradient(
+                    circle at 35% 25%,
+                    #FFF7CC,
+                    #F5C542 38%,
+                    #B45309 100%
+                );
             color: #07111F;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 950;
             font-size: 32px;
-            box-shadow: 0 18px 38px rgba(245,197,66,0.24);
+            box-shadow: 0 18px 38px rgba(245, 197, 66, 0.24);
             transform: rotate(-6deg);
         }}
 
@@ -535,7 +590,9 @@ def inject_worldcup_theme():
             width: 150px;
             max-height: 170px;
             object-fit: contain;
-            filter: drop-shadow(0 16px 32px rgba(0,0,0,0.34));
+            filter: drop-shadow(
+                0 16px 32px rgba(0, 0, 0, 0.34)
+            );
         }}
 
         .wc-page-title {{
@@ -554,8 +611,8 @@ def inject_worldcup_theme():
         }}
 
         .wc-filter-shell {{
-            background: rgba(255,255,255,0.90);
-            border: 1px solid rgba(15,23,42,0.08);
+            background: rgba(255, 255, 255, 0.90);
+            border: 1px solid rgba(15, 23, 42, 0.08);
             border-radius: 22px;
             padding: 18px;
             box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
@@ -563,8 +620,8 @@ def inject_worldcup_theme():
         }}
 
         .wc-section-card {{
-            background: rgba(255,255,255,0.92);
-            border: 1px solid rgba(15,23,42,0.08);
+            background: rgba(255, 255, 255, 0.92);
+            border: 1px solid rgba(15, 23, 42, 0.08);
             border-radius: 22px;
             padding: 18px;
             box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
@@ -573,7 +630,10 @@ def inject_worldcup_theme():
 
         .wc-kpi-grid {{
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-template-columns: repeat(
+                4,
+                minmax(0, 1fr)
+            );
             gap: 14px;
             margin-bottom: 18px;
         }}
@@ -581,9 +641,9 @@ def inject_worldcup_theme():
         .wc-kpi-tile {{
             border-radius: 20px;
             padding: 16px 17px;
-            background: rgba(255,255,255,0.92);
-            border: 1px solid rgba(15,23,42,0.08);
-            box-shadow: 0 10px 26px rgba(15,23,42,0.06);
+            background: rgba(255, 255, 255, 0.92);
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
         }}
 
         .wc-kpi-label {{
@@ -619,8 +679,8 @@ def inject_worldcup_theme():
             gap: 8px;
             padding: 8px 11px;
             border-radius: 999px;
-            background: rgba(255,255,255,0.82);
-            border: 1px solid rgba(15,23,42,0.08);
+            background: rgba(255, 255, 255, 0.82);
+            border: 1px solid rgba(15, 23, 42, 0.08);
             font-size: 13px;
             color: #334155;
             font-weight: 700;
@@ -633,8 +693,8 @@ def inject_worldcup_theme():
         }}
 
         div[data-testid="stMetric"] {{
-            background: rgba(255,255,255,0.76);
-            border: 1px solid rgba(15,23,42,0.08);
+            background: rgba(255, 255, 255, 0.76);
+            border: 1px solid rgba(15, 23, 42, 0.08);
             padding: 12px 14px;
             border-radius: 16px;
             box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
@@ -664,18 +724,24 @@ def inject_worldcup_theme():
             transform: translateY(-1px);
         }}
 
-        /* Fix nút Đăng xuất trong sidebar: nền trắng nhưng chữ không bị trắng theo sidebar */
-        section[data-testid="stSidebar"] .stButton > button {{
+        /*
+         * Fix nút Đăng xuất trong sidebar:
+         * nền trắng nhưng chữ không bị trắng theo sidebar.
+         */
+        section[data-testid="stSidebar"]
+        .stButton > button {{
             background: rgba(255, 255, 255, 0.96) !important;
             color: #07111F !important;
             border: 1px solid rgba(245, 197, 66, 0.35) !important;
         }}
 
-        section[data-testid="stSidebar"] .stButton > button * {{
+        section[data-testid="stSidebar"]
+        .stButton > button * {{
             color: #07111F !important;
         }}
 
-        section[data-testid="stSidebar"] .stButton > button:hover {{
+        section[data-testid="stSidebar"]
+        .stButton > button:hover {{
             background: #F5C542 !important;
             color: #07111F !important;
             border-color: #F5C542 !important;
@@ -701,9 +767,9 @@ def inject_worldcup_theme():
             text-decoration: none;
         }}
 
-        /* =========================
-           Add clickable "Menu" text to Streamlit native sidebar toggle
-           ========================= */
+        /* =====================================================
+           NÚT MENU SIDEBAR
+           ===================================================== */
 
         button[data-testid="stBaseButton-headerNoPadding"]:first-of-type,
         button[kind="headerNoPadding"]:first-of-type {{
@@ -733,26 +799,36 @@ def inject_worldcup_theme():
             line-height: 1;
             margin-left: 4px;
         }}
-        /* Khi sidebar đang mở, nút nằm trên nền xanh đậm nên chữ Menu phải chuyển sang trắng */
-        section[data-testid="stSidebar"] button[data-testid="stBaseButton-headerNoPadding"]:first-of-type::after,
-        section[data-testid="stSidebar"] button[kind="headerNoPadding"]:first-of-type::after {{
+
+        /*
+         * Khi sidebar mở, nút nằm trên nền xanh đậm
+         * nên chữ Menu chuyển sang trắng.
+         */
+        section[data-testid="stSidebar"]
+        button[data-testid="stBaseButton-headerNoPadding"]:first-of-type::after,
+        section[data-testid="stSidebar"]
+        button[kind="headerNoPadding"]:first-of-type::after {{
             color: #F8FAFC !important;
         }}
 
-        section[data-testid="stSidebar"] button[data-testid="stBaseButton-headerNoPadding"]:first-of-type svg,
-        section[data-testid="stSidebar"] button[kind="headerNoPadding"]:first-of-type svg {{
+        section[data-testid="stSidebar"]
+        button[data-testid="stBaseButton-headerNoPadding"]:first-of-type svg,
+        section[data-testid="stSidebar"]
+        button[kind="headerNoPadding"]:first-of-type svg {{
             color: #F8FAFC !important;
             stroke: #F8FAFC !important;
         }}
 
-        section[data-testid="stSidebar"] button[data-testid="stBaseButton-headerNoPadding"]:first-of-type:hover,
-        section[data-testid="stSidebar"] button[kind="headerNoPadding"]:first-of-type:hover {{
-            background: rgba(255,255,255,0.08) !important;
+        section[data-testid="stSidebar"]
+        button[data-testid="stBaseButton-headerNoPadding"]:first-of-type:hover,
+        section[data-testid="stSidebar"]
+        button[kind="headerNoPadding"]:first-of-type:hover {{
+            background: rgba(255, 255, 255, 0.08) !important;
         }}
 
         button[data-testid="stBaseButton-headerNoPadding"]:first-of-type:hover,
         button[kind="headerNoPadding"]:first-of-type:hover {{
-            background: rgba(15,23,42,0.05) !important;
+            background: rgba(15, 23, 42, 0.05) !important;
         }}
 
         button[data-testid="stBaseButton-headerNoPadding"]:first-of-type svg,
@@ -762,6 +838,67 @@ def inject_worldcup_theme():
             color: #64748B !important;
             stroke: #64748B !important;
         }}
+
+        /* =====================================================
+           ẨN BIỂU TƯỢNG ANCHOR CỦA TIÊU ĐỀ STREAMLIT
+           ===================================================== */
+
+        [data-testid="stHeaderActionElements"],
+        [data-testid="stHeaderActionElements"] *,
+        a.anchor-link,
+        a[data-testid="stAnchorLink"],
+        h1 > a[href^="#"],
+        h2 > a[href^="#"],
+        h3 > a[href^="#"],
+        h4 > a[href^="#"],
+        h5 > a[href^="#"],
+        h6 > a[href^="#"] {{
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+
+            width: 0 !important;
+            min-width: 0 !important;
+            max-width: 0 !important;
+
+            height: 0 !important;
+            min-height: 0 !important;
+            max-height: 0 !important;
+
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            overflow: hidden !important;
+        }}
+
+        /*
+         * Một số phiên bản Streamlit đặt nút anchor
+         * bên trong wrapper của heading.
+         */
+        div[data-testid="stMarkdownContainer"]
+        h1 button,
+
+        div[data-testid="stMarkdownContainer"]
+        h2 button,
+
+        div[data-testid="stMarkdownContainer"]
+        h3 button,
+
+        div[data-testid="stMarkdownContainer"]
+        h4 button,
+
+        div[data-testid="stMarkdownContainer"]
+        h5 button,
+
+        div[data-testid="stMarkdownContainer"]
+        h6 button {{
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+        }}
+
         .wc-match-title-mobile {{
             display: none;
         }}
@@ -808,6 +945,7 @@ def inject_worldcup_theme():
                 font-size: 18px;
             }}
         }}
+
         @media (max-width: 900px) {{
             .wc-hero-grid {{
                 grid-template-columns: 1fr;
@@ -819,7 +957,10 @@ def inject_worldcup_theme():
             }}
 
             .wc-kpi-grid {{
-                grid-template-columns: repeat(2, minmax(0, 1fr));
+                grid-template-columns: repeat(
+                    2,
+                    minmax(0, 1fr)
+                );
             }}
         }}
         </style>
