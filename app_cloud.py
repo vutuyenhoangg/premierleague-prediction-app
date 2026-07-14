@@ -4655,19 +4655,56 @@ def get_user_star_usage(user_id: int, exclude_match_id: int | None = None) -> di
         super_reserved_used=super_reserved_used
     )
 
-def validate_star_quota(user_id: int, match_id: int, star_type: str):
+def validate_star_quota(
+    user_id: int,
+    match_id: int,
+    star_type: str,
+    usage: dict | None = None
+):
+    """
+    Kiểm tra quota sao.
+
+    usage có thể được truyền từ transaction để tránh query lặp.
+    Khi không dùng sao, hàm thoát ngay.
+    """
     star_type = normalize_star_type(star_type)
 
-    usage = get_user_star_usage_from_db(
-        user_id=user_id,
-        exclude_match_id=match_id
-    )
+    if star_type == STAR_TYPE_NONE:
+        return
 
-    if star_type == STAR_TYPE_HOPE and usage["hope_left"] <= 0:
-        raise ValueError("Bạn đã dùng hết Ngôi sao hy vọng.")
+    if usage is None:
+        usage = get_user_star_usage_from_db(
+            user_id=int(user_id),
+            exclude_match_id=int(match_id)
+        )
 
-    if star_type == STAR_TYPE_SUPER and usage["super_left"] <= 0:
-        raise ValueError("Bạn đã dùng hết Siêu sao.")
+    if star_type == STAR_TYPE_HOPE:
+        hope_left = int(usage.get("hope_left", 0))
+        hope_free_left = int(
+            usage.get("hope_free_left", hope_left)
+        )
+
+        if hope_left <= 0:
+            raise ValueError("Bạn đã dùng hết Ngôi sao hy vọng.")
+
+        if hope_free_left <= 0:
+            raise ValueError(
+                "Ngôi sao hy vọng đang được sử dụng hết ở các trận khác."
+            )
+
+    elif star_type == STAR_TYPE_SUPER:
+        super_left = int(usage.get("super_left", 0))
+        super_free_left = int(
+            usage.get("super_free_left", super_left)
+        )
+
+        if super_left <= 0:
+            raise ValueError("Bạn đã dùng hết Siêu sao.")
+
+        if super_free_left <= 0:
+            raise ValueError(
+                "Siêu sao đang được sử dụng ở một trận khác."
+            )
 
 
 def get_available_star_options(
@@ -6920,6 +6957,440 @@ def clear_data_cache():
     except NameError:
         pass
 
+
+def clear_prediction_write_cache():
+    """
+    Chỉ xóa các cache bị ảnh hưởng trực tiếp khi dự đoán thay đổi.
+    Không xóa cache trận đấu, user, cầu thủ ghi bàn hoặc AI.
+    """
+    try:
+        load_predictions.clear()
+    except (NameError, AttributeError):
+        pass
+
+    try:
+        build_leaderboard_df.clear()
+    except (NameError, AttributeError):
+        pass
+
+def _lock_user_for_prediction_write(conn, user_id: int):
+    """
+    Khóa tuần tự các thao tác ghi prediction của cùng một user.
+    Các user khác vẫn thao tác độc lập.
+    """
+    user_row = conn.execute(
+        text(
+            """
+            SELECT user_id
+            FROM users
+            WHERE user_id = :user_id
+            FOR UPDATE
+            """
+        ),
+        {"user_id": int(user_id)}
+    ).mappings().fetchone()
+
+    if user_row is None:
+        raise ValueError("Không tìm thấy người dùng.")
+
+def _get_match_in_transaction(conn, match_id: int):
+    row = conn.execute(
+        text(
+            """
+            SELECT *
+            FROM matches
+            WHERE match_id = :match_id
+            """
+        ),
+        {"match_id": int(match_id)}
+    ).mappings().fetchone()
+
+    if row is None:
+        return None
+
+    return dict(row)
+
+def _get_prediction_for_update(conn, user_id: int, match_id: int):
+    row = conn.execute(
+        text(
+            """
+            SELECT *
+            FROM predictions
+            WHERE user_id = :user_id
+              AND match_id = :match_id
+            FOR UPDATE
+            """
+        ),
+        {
+            "user_id": int(user_id),
+            "match_id": int(match_id)
+        }
+    ).mappings().fetchone()
+
+    if row is None:
+        return None
+
+    return dict(row)
+
+def _get_user_star_usage_in_transaction(
+    conn,
+    user_id: int,
+    exclude_match_id: int | None = None
+) -> dict:
+    """
+    Đọc quota sao bằng chính transaction đang lưu prediction.
+    Nhờ đó kết quả validate không bị lệch giữa lúc kiểm tra và lúc ghi.
+    """
+    query = """
+        SELECT
+            p.star_type,
+            p.match_id,
+            m.kickoff_time_utc,
+            m.is_finished
+        FROM predictions p
+        JOIN matches m
+          ON p.match_id = m.match_id
+        WHERE p.user_id = :user_id
+    """
+
+    params = {"user_id": int(user_id)}
+
+    if exclude_match_id is not None:
+        query += " AND p.match_id <> :exclude_match_id"
+        params["exclude_match_id"] = int(exclude_match_id)
+
+    rows = conn.execute(
+        text(query),
+        params
+    ).mappings().all()
+
+    hope_locked_used = 0
+    super_locked_used = 0
+    hope_reserved_used = 0
+    super_reserved_used = 0
+
+    for row in rows:
+        row_dict = dict(row)
+        row_star_type = normalize_star_type(row_dict.get("star_type"))
+
+        is_locked = is_match_locked_for_star(
+            row_dict.get("kickoff_time_utc"),
+            row_dict.get("is_finished")
+        )
+
+        is_reserved = is_match_open_for_star_transfer(
+            row_dict.get("kickoff_time_utc"),
+            row_dict.get("is_finished")
+        )
+
+        if row_star_type == STAR_TYPE_HOPE:
+            if is_locked:
+                hope_locked_used += 1
+            elif is_reserved:
+                hope_reserved_used += 1
+
+        elif row_star_type == STAR_TYPE_SUPER:
+            if is_locked:
+                super_locked_used += 1
+            elif is_reserved:
+                super_reserved_used += 1
+
+    reward_row = conn.execute(
+        text(
+            """
+            SELECT
+                COALESCE(
+                    SUM(
+                        CASE
+                            WHEN reward_type = 'hope' THEN amount
+                            ELSE 0
+                        END
+                    ),
+                    0
+                ) AS hope_bonus,
+                COALESCE(
+                    SUM(
+                        CASE
+                            WHEN reward_type = 'super' THEN amount
+                            ELSE 0
+                        END
+                    ),
+                    0
+                ) AS super_bonus
+            FROM daily_checkin_rewards
+            WHERE user_id = :user_id
+            """
+        ),
+        {"user_id": int(user_id)}
+    ).mappings().fetchone()
+
+    hope_bonus = int((reward_row or {}).get("hope_bonus") or 0)
+    super_bonus = int((reward_row or {}).get("super_bonus") or 0)
+
+    hope_total = int(HOPE_STARS_PER_USER) + hope_bonus
+    super_total = int(SUPER_STARS_PER_USER) + super_bonus
+
+    hope_left = max(0, hope_total - hope_locked_used)
+    super_left = max(0, super_total - super_locked_used)
+
+    hope_free_left = max(0, hope_left - hope_reserved_used)
+    super_free_left = max(0, super_left - super_reserved_used)
+
+    return {
+        "hope_used": hope_locked_used,
+        "super_used": super_locked_used,
+        "hope_locked_used": hope_locked_used,
+        "super_locked_used": super_locked_used,
+        "hope_reserved_used": hope_reserved_used,
+        "super_reserved_used": super_reserved_used,
+        "hope_total": hope_total,
+        "super_total": super_total,
+        "hope_bonus": hope_bonus,
+        "super_bonus": super_bonus,
+        "hope_left": hope_left,
+        "super_left": super_left,
+        "hope_free_left": hope_free_left,
+        "super_free_left": super_free_left
+    }
+
+def _normalize_prediction_for_match(
+    match: dict,
+    predicted_home_score: int,
+    predicted_away_score: int,
+    predicted_winner_team_id: int | None
+) -> int | None:
+    """
+    Chuẩn hóa và validate dữ liệu dự đoán theo đúng luật hiện tại.
+    """
+    predicted_home_score = int(predicted_home_score)
+    predicted_away_score = int(predicted_away_score)
+
+    if not 0 <= predicted_home_score <= 20:
+        raise ValueError("Tỉ số đội nhà không hợp lệ.")
+
+    if not 0 <= predicted_away_score <= 20:
+        raise ValueError("Tỉ số đội khách không hợp lệ.")
+
+    if not can_edit_prediction(match.get("kickoff_time_utc")):
+        raise ValueError("Trận đấu đã khóa dự đoán.")
+
+    if predicted_winner_team_id is not None:
+        predicted_winner_team_id = int(predicted_winner_team_id)
+
+    is_knockout = to_bool(match.get("is_knockout"))
+
+    if not is_knockout:
+        return predicted_winner_team_id
+
+    home_team_id = to_optional_int(match.get("home_team_id"))
+    away_team_id = to_optional_int(match.get("away_team_id"))
+
+    if (
+        home_team_id is None
+        or away_team_id is None
+        or home_team_id == away_team_id
+    ):
+        raise ValueError(
+            "Thông tin hai đội của trận knockout chưa hợp lệ."
+        )
+
+    if predicted_home_score > predicted_away_score:
+        return home_team_id
+
+    if predicted_away_score > predicted_home_score:
+        return away_team_id
+
+    if predicted_winner_team_id not in [home_team_id, away_team_id]:
+        raise ValueError(
+            "Trận knockout hòa. Bạn cần chọn đội thắng chung cuộc."
+        )
+
+    return predicted_winner_team_id
+
+def is_prediction_unchanged(
+    existing: dict | None,
+    predicted_home_score: int,
+    predicted_away_score: int,
+    predicted_winner_team_id: int | None,
+    star_type: str
+) -> bool:
+    """
+    Trả về True khi dữ liệu mới giống hoàn toàn dữ liệu đã lưu.
+    """
+    if existing is None:
+        return False
+
+    return (
+        to_optional_int(existing.get("predicted_home_score"))
+        == int(predicted_home_score)
+        and
+        to_optional_int(existing.get("predicted_away_score"))
+        == int(predicted_away_score)
+        and
+        to_optional_int(existing.get("predicted_winner_team_id"))
+        == to_optional_int(predicted_winner_team_id)
+        and
+        normalize_star_type(existing.get("star_type"))
+        == normalize_star_type(star_type)
+    )
+
+def _write_prediction_in_transaction(
+    conn,
+    existing: dict | None,
+    user_id: int,
+    match_id: int,
+    predicted_home_score: int,
+    predicted_away_score: int,
+    predicted_winner_team_id: int | None,
+    star_type: str,
+    now_text: str
+) -> dict:
+    """
+    INSERT hoặc UPDATE prediction trong transaction đang mở.
+    Không tự commit và không clear cache.
+    """
+    if existing is None:
+        inserted_row = conn.execute(
+            text(
+                """
+                INSERT INTO predictions (
+                    user_id,
+                    match_id,
+                    predicted_home_score,
+                    predicted_away_score,
+                    predicted_winner_team_id,
+                    star_type,
+                    base_points,
+                    star_bonus_points,
+                    points,
+                    submitted_at,
+                    updated_at
+                )
+                VALUES (
+                    :user_id,
+                    :match_id,
+                    :predicted_home_score,
+                    :predicted_away_score,
+                    :predicted_winner_team_id,
+                    :star_type,
+                    NULL,
+                    NULL,
+                    NULL,
+                    :submitted_at,
+                    :updated_at
+                )
+                RETURNING prediction_id
+                """
+            ),
+            {
+                "user_id": int(user_id),
+                "match_id": int(match_id),
+                "predicted_home_score": int(predicted_home_score),
+                "predicted_away_score": int(predicted_away_score),
+                "predicted_winner_team_id": predicted_winner_team_id,
+                "star_type": normalize_star_type(star_type),
+                "submitted_at": now_text,
+                "updated_at": now_text
+            }
+        ).mappings().fetchone()
+
+        return {
+            "status": "created",
+            "prediction_id": int(inserted_row["prediction_id"])
+        }
+
+    prediction_id = int(existing["prediction_id"])
+
+    if is_prediction_unchanged(
+        existing=existing,
+        predicted_home_score=predicted_home_score,
+        predicted_away_score=predicted_away_score,
+        predicted_winner_team_id=predicted_winner_team_id,
+        star_type=star_type
+    ):
+        return {
+            "status": "unchanged",
+            "prediction_id": prediction_id
+        }
+
+    conn.execute(
+        text(
+            """
+            INSERT INTO prediction_history (
+                prediction_id,
+                old_home_score,
+                old_away_score,
+                old_winner_team_id,
+                new_home_score,
+                new_away_score,
+                new_winner_team_id,
+                changed_at
+            )
+            VALUES (
+                :prediction_id,
+                :old_home_score,
+                :old_away_score,
+                :old_winner_team_id,
+                :new_home_score,
+                :new_away_score,
+                :new_winner_team_id,
+                :changed_at
+            )
+            """
+        ),
+        {
+            "prediction_id": prediction_id,
+            "old_home_score": existing.get("predicted_home_score"),
+            "old_away_score": existing.get("predicted_away_score"),
+            "old_winner_team_id": existing.get("predicted_winner_team_id"),
+            "new_home_score": int(predicted_home_score),
+            "new_away_score": int(predicted_away_score),
+            "new_winner_team_id": predicted_winner_team_id,
+            "changed_at": now_text
+        }
+    )
+
+    update_result = conn.execute(
+        text(
+            """
+            UPDATE predictions
+            SET
+                predicted_home_score = :predicted_home_score,
+                predicted_away_score = :predicted_away_score,
+                predicted_winner_team_id = :predicted_winner_team_id,
+                star_type = :star_type,
+                updated_at = :updated_at,
+                base_points = NULL,
+                star_bonus_points = NULL,
+                points = NULL
+            WHERE prediction_id = :prediction_id
+              AND user_id = :user_id
+              AND match_id = :match_id
+            """
+        ),
+        {
+            "predicted_home_score": int(predicted_home_score),
+            "predicted_away_score": int(predicted_away_score),
+            "predicted_winner_team_id": predicted_winner_team_id,
+            "star_type": normalize_star_type(star_type),
+            "updated_at": now_text,
+            "prediction_id": prediction_id,
+            "user_id": int(user_id),
+            "match_id": int(match_id)
+        }
+    )
+
+    if update_result.rowcount != 1:
+        raise ValueError(
+            "Dự đoán đã thay đổi ở một phiên khác. Vui lòng thao tác lại."
+        )
+
+    return {
+        "status": "updated",
+        "prediction_id": prediction_id
+    }
+
+
 def get_user_prediction_from_db(user_id: int, match_id: int):
     """
     Dùng cho thao tác ghi dữ liệu/save.
@@ -7624,167 +8095,99 @@ def save_prediction(
     predicted_away_score: int,
     predicted_winner_team_id: int | None,
     star_type: str = STAR_TYPE_NONE
-):
-    star_type = normalize_star_type(star_type)
-
+) -> dict:
+    """
+    Lưu hoặc cập nhật dự đoán an toàn trong một transaction.
+    """
+    user_id = int(user_id)
+    match_id = int(match_id)
     predicted_home_score = int(predicted_home_score)
     predicted_away_score = int(predicted_away_score)
+    star_type = normalize_star_type(star_type)
 
     if predicted_winner_team_id is not None:
         predicted_winner_team_id = int(predicted_winner_team_id)
 
-    match = get_match_by_id(match_id)
-
-    if match is None:
-        raise ValueError("Không tìm thấy trận đấu.")
-
-    if not can_edit_prediction(match["kickoff_time_utc"]):
-        raise ValueError("Trận đấu đã khóa dự đoán.")
-
-    is_knockout = to_bool(match.get("is_knockout"))
-
-    if is_knockout:
-        home_team_id = to_optional_int(match.get("home_team_id"))
-        away_team_id = to_optional_int(match.get("away_team_id"))
-
-        if predicted_home_score > predicted_away_score:
-            predicted_winner_team_id = home_team_id
-
-        elif predicted_away_score > predicted_home_score:
-            predicted_winner_team_id = away_team_id
-
-        else:
-            valid_winner_ids = [
-                home_team_id,
-                away_team_id
-            ]
-
-            if predicted_winner_team_id not in valid_winner_ids:
-                raise ValueError(
-                    "Trận knockout hòa. Bạn cần chọn đội thắng chung cuộc."
-                )
-
-    validate_star_quota(
-        user_id=user_id,
-        match_id=match_id,
-        star_type=star_type
-    )
-
-    existing = get_user_prediction_from_db(user_id, match_id)
     now_text = now_utc_iso()
 
     with get_engine().begin() as conn:
-        if existing is None:
-            conn.execute(
-                text(
-                    """
-                    INSERT INTO predictions (
-                        user_id,
-                        match_id,
-                        predicted_home_score,
-                        predicted_away_score,
-                        predicted_winner_team_id,
-                        star_type,
-                        base_points,
-                        star_bonus_points,
-                        points,
-                        submitted_at,
-                        updated_at
-                    )
-                    VALUES (
-                        :user_id,
-                        :match_id,
-                        :predicted_home_score,
-                        :predicted_away_score,
-                        :predicted_winner_team_id,
-                        :star_type,
-                        NULL,
-                        NULL,
-                        NULL,
-                        :submitted_at,
-                        :updated_at
-                    )
-                    """
-                ),
-                {
-                    "user_id": user_id,
-                    "match_id": match_id,
-                    "predicted_home_score": predicted_home_score,
-                    "predicted_away_score": predicted_away_score,
-                    "predicted_winner_team_id": predicted_winner_team_id,
-                    "star_type": star_type,
-                    "submitted_at": now_text,
-                    "updated_at": now_text
-                }
+        _lock_user_for_prediction_write(
+            conn=conn,
+            user_id=user_id
+        )
+
+        match = _get_match_in_transaction(
+            conn=conn,
+            match_id=match_id
+        )
+
+        if match is None:
+            raise ValueError("Không tìm thấy trận đấu.")
+
+        predicted_winner_team_id = _normalize_prediction_for_match(
+            match=match,
+            predicted_home_score=predicted_home_score,
+            predicted_away_score=predicted_away_score,
+            predicted_winner_team_id=predicted_winner_team_id
+        )
+
+        existing = _get_prediction_for_update(
+            conn=conn,
+            user_id=user_id,
+            match_id=match_id
+        )
+
+        if is_prediction_unchanged(
+            existing=existing,
+            predicted_home_score=predicted_home_score,
+            predicted_away_score=predicted_away_score,
+            predicted_winner_team_id=predicted_winner_team_id,
+            star_type=star_type
+        ):
+            return {
+                "status": "unchanged",
+                "prediction_id": int(existing["prediction_id"])
+            }
+
+        current_star_type = (
+            normalize_star_type(existing.get("star_type"))
+            if existing is not None
+            else STAR_TYPE_NONE
+        )
+
+        if (
+            star_type != STAR_TYPE_NONE
+            and star_type != current_star_type
+        ):
+            usage = _get_user_star_usage_in_transaction(
+                conn=conn,
+                user_id=user_id,
+                exclude_match_id=match_id
             )
 
-        else:
-            prediction_id = existing["prediction_id"]
-
-            conn.execute(
-                text(
-                    """
-                    INSERT INTO prediction_history (
-                        prediction_id,
-                        old_home_score,
-                        old_away_score,
-                        old_winner_team_id,
-                        new_home_score,
-                        new_away_score,
-                        new_winner_team_id,
-                        changed_at
-                    )
-                    VALUES (
-                        :prediction_id,
-                        :old_home_score,
-                        :old_away_score,
-                        :old_winner_team_id,
-                        :new_home_score,
-                        :new_away_score,
-                        :new_winner_team_id,
-                        :changed_at
-                    )
-                    """
-                ),
-                {
-                    "prediction_id": prediction_id,
-                    "old_home_score": existing["predicted_home_score"],
-                    "old_away_score": existing["predicted_away_score"],
-                    "old_winner_team_id": existing["predicted_winner_team_id"],
-                    "new_home_score": predicted_home_score,
-                    "new_away_score": predicted_away_score,
-                    "new_winner_team_id": predicted_winner_team_id,
-                    "changed_at": now_text
-                }
+            validate_star_quota(
+                user_id=user_id,
+                match_id=match_id,
+                star_type=star_type,
+                usage=usage
             )
 
-            conn.execute(
-                text(
-                    """
-                    UPDATE predictions
-                    SET
-                        predicted_home_score = :predicted_home_score,
-                        predicted_away_score = :predicted_away_score,
-                        predicted_winner_team_id = :predicted_winner_team_id,
-                        star_type = :star_type,
-                        updated_at = :updated_at,
-                        base_points = NULL,
-                        star_bonus_points = NULL,
-                        points = NULL
-                    WHERE prediction_id = :prediction_id
-                    """
-                ),
-                {
-                    "predicted_home_score": predicted_home_score,
-                    "predicted_away_score": predicted_away_score,
-                    "predicted_winner_team_id": predicted_winner_team_id,
-                    "star_type": star_type,
-                    "updated_at": now_text,
-                    "prediction_id": prediction_id
-                }
-            )
+        result = _write_prediction_in_transaction(
+            conn=conn,
+            existing=existing,
+            user_id=user_id,
+            match_id=match_id,
+            predicted_home_score=predicted_home_score,
+            predicted_away_score=predicted_away_score,
+            predicted_winner_team_id=predicted_winner_team_id,
+            star_type=star_type,
+            now_text=now_text
+        )
 
-    clear_data_cache()
+    if result.get("status") != "unchanged":
+        clear_prediction_write_cache()
+
+    return result
 
 def transfer_star_and_save_prediction(
     user_id: int,
@@ -7794,97 +8197,192 @@ def transfer_star_and_save_prediction(
     predicted_away_score: int,
     predicted_winner_team_id: int | None,
     star_type: str
-):
+) -> dict:
     """
-    Gỡ sao khỏi trận nguồn rồi lưu sao cho trận đích.
-    Chỉ cho chuyển từ trận còn mở dự đoán.
+    Chuyển sao và lưu dự đoán đích trong cùng một transaction.
+    Nếu bất kỳ bước nào lỗi, toàn bộ thay đổi sẽ rollback.
     """
+    user_id = int(user_id)
+    source_match_id = int(source_match_id)
+    target_match_id = int(target_match_id)
+    predicted_home_score = int(predicted_home_score)
+    predicted_away_score = int(predicted_away_score)
     star_type = normalize_star_type(star_type)
+
+    if predicted_winner_team_id is not None:
+        predicted_winner_team_id = int(predicted_winner_team_id)
 
     if star_type == STAR_TYPE_NONE:
         raise ValueError("Không có bổ trợ nào cần chuyển.")
 
-    source_match = get_match_by_id(source_match_id)
+    if source_match_id == target_match_id:
+        raise ValueError("Trận nguồn và trận đích không thể giống nhau.")
 
-    if source_match is None:
-        raise ValueError("Không tìm thấy trận đang giữ sao.")
-
-    if not can_edit_prediction(source_match["kickoff_time_utc"]):
-        raise ValueError("Trận đang giữ sao đã khóa, không thể chuyển sao nữa.")
-
-    source_prediction = get_user_prediction_from_db(
-        user_id=user_id,
-        match_id=source_match_id
-    )
-
-    if source_prediction is None:
-        raise ValueError("Trận được chọn không còn giữ bổ trợ này.")
-
-    if normalize_star_type(source_prediction.get("star_type")) != star_type:
-        raise ValueError("Trận được chọn không còn giữ đúng loại bổ trợ này.")
-
-    execute_sql(
-        """
-        UPDATE predictions
-        SET
-            star_type = 'none',
-            base_points = NULL,
-            star_bonus_points = NULL,
-            points = NULL,
-            updated_at = :updated_at
-        WHERE user_id = :user_id
-          AND match_id = :source_match_id
-          AND star_type = :star_type
-        """,
-        {
-            "updated_at": now_utc_iso(),
-            "user_id": int(user_id),
-            "source_match_id": int(source_match_id),
-            "star_type": star_type
-        }
-    )
-
-    clear_data_cache()
-
-    save_prediction(
-        user_id=user_id,
-        match_id=target_match_id,
-        predicted_home_score=predicted_home_score,
-        predicted_away_score=predicted_away_score,
-        predicted_winner_team_id=predicted_winner_team_id,
-        star_type=star_type
-    )
-
-def delete_prediction(user_id: int, match_id: int):
-    """
-    Xóa dự đoán đã lưu của user cho một trận.
-
-    Chỉ cho xóa khi trận vẫn còn mở dự đoán.
-    Khi xóa:
-    - Xóa prediction_history liên quan nếu có.
-    - Xóa prediction chính.
-    - Clear cache để UI quay về trạng thái chưa dự đoán.
-    """
-    match = get_match_by_id(match_id)
-
-    if match is None:
-        raise ValueError("Không tìm thấy trận đấu.")
-
-    if not can_edit_prediction(match["kickoff_time_utc"]):
-        raise ValueError("Trận đấu đã khóa dự đoán, bạn không thể hủy dự đoán nữa.")
-
-    existing = get_user_prediction_from_db(
-        user_id=user_id,
-        match_id=match_id
-    )
-
-    if existing is None:
-        clear_data_cache()
-        return
-
-    prediction_id = int(existing["prediction_id"])
+    now_text = now_utc_iso()
 
     with get_engine().begin() as conn:
+        _lock_user_for_prediction_write(
+            conn=conn,
+            user_id=user_id
+        )
+
+        source_match = _get_match_in_transaction(
+            conn=conn,
+            match_id=source_match_id
+        )
+
+        if source_match is None:
+            raise ValueError("Không tìm thấy trận đang giữ sao.")
+
+        if not can_edit_prediction(source_match.get("kickoff_time_utc")):
+            raise ValueError(
+                "Trận đang giữ sao đã khóa, không thể chuyển sao nữa."
+            )
+
+        target_match = _get_match_in_transaction(
+            conn=conn,
+            match_id=target_match_id
+        )
+
+        if target_match is None:
+            raise ValueError("Không tìm thấy trận đích.")
+
+        predicted_winner_team_id = _normalize_prediction_for_match(
+            match=target_match,
+            predicted_home_score=predicted_home_score,
+            predicted_away_score=predicted_away_score,
+            predicted_winner_team_id=predicted_winner_team_id
+        )
+
+        source_prediction = _get_prediction_for_update(
+            conn=conn,
+            user_id=user_id,
+            match_id=source_match_id
+        )
+
+        if source_prediction is None:
+            raise ValueError(
+                "Trận được chọn không còn giữ bổ trợ này."
+            )
+
+        if (
+            normalize_star_type(source_prediction.get("star_type"))
+            != star_type
+        ):
+            raise ValueError(
+                "Trận được chọn không còn giữ đúng loại bổ trợ này."
+            )
+
+        target_prediction = _get_prediction_for_update(
+            conn=conn,
+            user_id=user_id,
+            match_id=target_match_id
+        )
+
+        if is_prediction_unchanged(
+            existing=target_prediction,
+            predicted_home_score=predicted_home_score,
+            predicted_away_score=predicted_away_score,
+            predicted_winner_team_id=predicted_winner_team_id,
+            star_type=star_type
+        ):
+            return {
+                "status": "unchanged",
+                "prediction_id": int(target_prediction["prediction_id"])
+            }
+
+        source_update_result = conn.execute(
+            text(
+                """
+                UPDATE predictions
+                SET
+                    star_type = 'none',
+                    base_points = NULL,
+                    star_bonus_points = NULL,
+                    points = NULL,
+                    updated_at = :updated_at
+                WHERE prediction_id = :prediction_id
+                  AND user_id = :user_id
+                  AND match_id = :source_match_id
+                  AND star_type = :star_type
+                """
+            ),
+            {
+                "updated_at": now_text,
+                "prediction_id": int(source_prediction["prediction_id"]),
+                "user_id": user_id,
+                "source_match_id": source_match_id,
+                "star_type": star_type
+            }
+        )
+
+        if source_update_result.rowcount != 1:
+            raise ValueError(
+                "Bổ trợ ở trận nguồn đã thay đổi. Vui lòng thao tác lại."
+            )
+
+        target_result = _write_prediction_in_transaction(
+            conn=conn,
+            existing=target_prediction,
+            user_id=user_id,
+            match_id=target_match_id,
+            predicted_home_score=predicted_home_score,
+            predicted_away_score=predicted_away_score,
+            predicted_winner_team_id=predicted_winner_team_id,
+            star_type=star_type,
+            now_text=now_text
+        )
+
+        result = {
+            "status": "transferred",
+            "prediction_id": int(target_result["prediction_id"]),
+            "target_write_status": target_result["status"]
+        }
+
+    clear_prediction_write_cache()
+    return result
+
+def delete_prediction(user_id: int, match_id: int) -> dict:
+    """
+    Xóa dự đoán khi trận vẫn còn mở.
+    Thao tác đọc, khóa và xóa nằm trong cùng một transaction.
+    """
+    user_id = int(user_id)
+    match_id = int(match_id)
+
+    with get_engine().begin() as conn:
+        _lock_user_for_prediction_write(
+            conn=conn,
+            user_id=user_id
+        )
+
+        match = _get_match_in_transaction(
+            conn=conn,
+            match_id=match_id
+        )
+
+        if match is None:
+            raise ValueError("Không tìm thấy trận đấu.")
+
+        if not can_edit_prediction(match.get("kickoff_time_utc")):
+            raise ValueError(
+                "Trận đấu đã khóa dự đoán, bạn không thể hủy dự đoán nữa."
+            )
+
+        existing = _get_prediction_for_update(
+            conn=conn,
+            user_id=user_id,
+            match_id=match_id
+        )
+
+        if existing is None:
+            return {
+                "status": "not_found",
+                "prediction_id": None
+            }
+
+        prediction_id = int(existing["prediction_id"])
+
         conn.execute(
             text(
                 """
@@ -7892,12 +8390,10 @@ def delete_prediction(user_id: int, match_id: int):
                 WHERE prediction_id = :prediction_id
                 """
             ),
-            {
-                "prediction_id": prediction_id
-            }
+            {"prediction_id": prediction_id}
         )
 
-        conn.execute(
+        delete_result = conn.execute(
             text(
                 """
                 DELETE FROM predictions
@@ -7913,7 +8409,17 @@ def delete_prediction(user_id: int, match_id: int):
             }
         )
 
-    clear_data_cache()
+        if delete_result.rowcount != 1:
+            raise ValueError(
+                "Dự đoán đã thay đổi ở một phiên khác. Vui lòng thao tác lại."
+            )
+
+    clear_prediction_write_cache()
+
+    return {
+        "status": "deleted",
+        "prediction_id": prediction_id
+    }
 
 def score_all_predictions():
     """
@@ -8317,26 +8823,41 @@ def render_pending_star_transfer_box(user_id: int, match_id: int):
             st.rerun()
 
 @st.dialog("Xác nhận chuyển bổ trợ")
+@st.dialog("Xác nhận chuyển bổ trợ")
 def render_star_transfer_dialog(user_id: int):
     pending = st.session_state.get("pending_star_transfer")
 
     if not pending:
         st.write("Không có bổ trợ nào cần chuyển.")
-        if st.button("Đóng", use_container_width=True):
+
+        if st.button(
+            "Đóng",
+            use_container_width=True,
+            key="close_empty_star_transfer_dialog"
+        ):
             st.rerun()
+
         return
 
     star_type = normalize_star_type(pending.get("star_type"))
     star_label = format_star_short(star_type)
-    target_label = str(pending.get("target_label", "trận hiện tại"))
+    target_label = str(
+        pending.get("target_label", "trận hiện tại")
+    )
 
     candidates = pending.get("candidates", [])
 
     if not candidates:
         st.session_state.pop("pending_star_transfer", None)
         st.warning("Không còn trận hợp lệ để chuyển bổ trợ.")
-        if st.button("Đóng", use_container_width=True):
+
+        if st.button(
+            "Đóng",
+            use_container_width=True,
+            key="close_invalid_star_transfer_dialog"
+        ):
             st.rerun()
+
         return
 
     candidate_options = {
@@ -8387,84 +8908,45 @@ def render_star_transfer_dialog(user_id: int):
         st.session_state.pop("pending_star_transfer", None)
         st.rerun()
 
-    if confirm_transfer:
-        selected_candidate = candidate_options[selected_source_label]
-        source_match_id = int(selected_candidate["match_id"])
-        target_match_id = int(pending["target_match_id"])
+    if not confirm_transfer:
+        return
 
-        try:
-            source_match = get_match_by_id(source_match_id)
+    selected_candidate = candidate_options[selected_source_label]
+    target_match_id = int(pending["target_match_id"])
 
-            if source_match is None:
-                raise ValueError("Không tìm thấy trận đang giữ bổ trợ.")
+    try:
+        transfer_star_and_save_prediction(
+            user_id=int(user_id),
+            source_match_id=int(selected_candidate["match_id"]),
+            target_match_id=target_match_id,
+            predicted_home_score=int(
+                pending["predicted_home_score"]
+            ),
+            predicted_away_score=int(
+                pending["predicted_away_score"]
+            ),
+            predicted_winner_team_id=pending.get(
+                "predicted_winner_team_id"
+            ),
+            star_type=star_type
+        )
 
-            if not can_edit_prediction(source_match["kickoff_time_utc"]):
-                raise ValueError(
-                    "Trận đang giữ bổ trợ đã khóa, không thể chuyển sao."
-                )
+        st.session_state.pop("pending_star_transfer", None)
+        st.session_state["star_transfer_success_message"] = (
+            "Đã chuyển bổ trợ và lưu dự đoán."
+        )
 
-            target_match = get_match_by_id(target_match_id)
+        st.rerun()
 
-            if target_match is None:
-                raise ValueError("Không tìm thấy trận cần chuyển bổ trợ sang.")
+    except ValueError as e:
+        st.error(str(e))
 
-            if not can_edit_prediction(target_match["kickoff_time_utc"]):
-                raise ValueError(
-                    "Trận này vừa khóa dự đoán, không thể chuyển sao."
-                )
+    except Exception:
+        st.error(
+            "Không thể chuyển bổ trợ vào lúc này. "
+            "Dữ liệu cũ của bạn vẫn được giữ nguyên."
+        )
 
-            source_prediction = get_user_prediction_from_db(
-                user_id=user_id,
-                match_id=source_match_id
-            )
-
-            if source_prediction is None:
-                raise ValueError("Trận được chọn không còn giữ bổ trợ này.")
-
-            if normalize_star_type(source_prediction.get("star_type")) != star_type:
-                raise ValueError("Trận được chọn không còn giữ đúng loại bổ trợ này.")
-
-            execute_sql(
-                """
-                UPDATE predictions
-                SET
-                    star_type = 'none',
-                    base_points = NULL,
-                    star_bonus_points = NULL,
-                    points = NULL,
-                    updated_at = :updated_at
-                WHERE user_id = :user_id
-                  AND match_id = :source_match_id
-                  AND star_type = :star_type
-                """,
-                {
-                    "updated_at": now_utc_iso(),
-                    "user_id": int(user_id),
-                    "source_match_id": source_match_id,
-                    "star_type": star_type
-                }
-            )
-
-            clear_data_cache()
-
-            save_prediction(
-                user_id=user_id,
-                match_id=target_match_id,
-                predicted_home_score=int(pending["predicted_home_score"]),
-                predicted_away_score=int(pending["predicted_away_score"]),
-                predicted_winner_team_id=pending["predicted_winner_team_id"],
-                star_type=star_type
-            )
-
-            st.session_state.pop("pending_star_transfer", None)
-            st.session_state["star_transfer_success_message"] = (
-                "Đã chuyển bổ trợ và lưu dự đoán."
-            )
-
-            st.rerun()
-
-        except ValueError as e:
-            st.error(str(e))
 
 @st.dialog("AI tổng kết trận đấu")
 def render_ai_match_summary_dialog(match_id: int):
@@ -9690,7 +10172,7 @@ def render_match_card(
                                 st.rerun()
 
                     if should_save_directly:
-                        save_prediction(
+                        save_result = save_prediction(
                             user_id=user_id,
                             match_id=match_id,
                             predicted_home_score=int(input_home),
@@ -9699,32 +10181,69 @@ def render_match_card(
                             star_type=selected_star_type
                         )
 
-                        st.session_state.pop("pending_star_transfer", None)
+                        st.session_state.pop(
+                            "pending_star_transfer",
+                            None
+                        )
+
+                        save_status = save_result.get("status")
+
+                        if save_status == "created":
+                            feedback_message = (
+                                "Đã lưu dự đoán. Bạn vẫn có thể cập nhật "
+                                "dự đoán cho đến trước giờ bóng lăn."
+                            )
+
+                        elif save_status == "updated":
+                            feedback_message = "Đã cập nhật dự đoán."
+
+                        else:
+                            feedback_message = "Dự đoán không có thay đổi."
 
                         set_prediction_feedback_message(
                             match_id=match_id,
-                            message="Đã lưu dự đoán. Bạn vẫn có thể cập nhật dự đoán cho đến trước giờ bóng lăn.",
+                            message=feedback_message,
                             tone="success"
                         )
+
                         st.rerun()
 
                 except ValueError as e:
                     st.error(str(e))
 
+                except Exception:
+                    st.error(
+                        "Không thể lưu dự đoán vào lúc này. "
+                        "Dữ liệu cũ của bạn vẫn được giữ nguyên."
+                    )
+
             if delete_submitted:
                 try:
-                    delete_prediction(
+                    delete_result = delete_prediction(
                         user_id=user_id,
                         match_id=match_id
                     )
 
-                    st.session_state.pop("pending_star_transfer", None)
+                    st.session_state.pop(
+                        "pending_star_transfer",
+                        None
+                    )
 
-                    st.success("Đã xóa dự đoán.")
+                    if delete_result.get("status") == "deleted":
+                        st.success("Đã xóa dự đoán.")
+                    else:
+                        st.info("Dự đoán này đã được xóa trước đó.")
+
                     st.rerun()
 
                 except ValueError as e:
                     st.error(str(e))
+
+                except Exception:
+                    st.error(
+                        "Không thể xóa dự đoán vào lúc này. "
+                        "Dữ liệu cũ của bạn vẫn được giữ nguyên."
+                    )
 
         render_match_venue_footer(row, match_id)
 
