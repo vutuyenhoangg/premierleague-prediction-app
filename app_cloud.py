@@ -861,7 +861,7 @@ def inject_hide_streamlit_embed_footer_css():
 inject_worldcup_theme()
 inject_hide_streamlit_embed_footer_css()
 
-def inject_match_datepicker_calendar_theme():
+def inject_match_datepicker_calendar_theme(match_dates):
     today = today_vietnam_date()
 
     english_month_names = [
@@ -882,6 +882,20 @@ def inject_match_datepicker_calendar_theme():
     today_month_en = english_month_names[today.month - 1]
     today_day = today.day
     today_year = today.year
+    match_date_iso_values = sorted({
+        pd.Timestamp(date_value).date().isoformat()
+        for date_value in match_dates
+        if date_value is not None and not pd.isna(date_value)
+    })
+
+    match_date_iso_js = (
+        "["
+        + ",".join(
+            f'"{date_value}"'
+            for date_value in match_date_iso_values
+        )
+        + "]"
+    )
 
     st.markdown(
         f"""
@@ -1455,179 +1469,8 @@ def inject_match_datepicker_calendar_theme():
             const parentDocument = parentWindow.document;
 
             /*
-             * Chỉ target input thuộc widget có key="filter_date".
-             * Không tác động tới bất kỳ input nào khác trong app.
-             */
-            const inputSelector =
-                'div[class*="st-key-filter_date"] input';
-
-            const makeInputReadonly = (input) => {
-                if (
-                    !input
-                    || !(input instanceof parentWindow.HTMLInputElement)
-                ) {
-                    return;
-                }
-
-                /*
-                 * Khóa nhập liệu nhưng không disable widget.
-                 * Click, focus và thao tác mở calendar vẫn được giữ lại.
-                 */
-                input.readOnly = true;
-
-                input.setAttribute("readonly", "");
-                input.setAttribute("aria-readonly", "true");
-                input.setAttribute("inputmode", "none");
-                input.setAttribute("autocomplete", "off");
-                input.setAttribute("spellcheck", "false");
-
-                /*
-                 * Tránh gắn listener trùng lặp khi Streamlit render lại.
-                 */
-                if (input.dataset.wcDateReadonlyBound === "1") {
-                    return;
-                }
-
-                const preventManualEditing = (event) => {
-                    event.preventDefault();
-                };
-
-                /*
-                 * Chặn nhập, paste và kéo-thả nội dung vào ô ngày.
-                 * Việc chọn ngày từ calendar không bị ảnh hưởng.
-                 */
-                input.addEventListener(
-                    "beforeinput",
-                    preventManualEditing
-                );
-
-                input.addEventListener(
-                    "paste",
-                    preventManualEditing
-                );
-
-                input.addEventListener(
-                    "drop",
-                    preventManualEditing
-                );
-
-                input.dataset.wcDateReadonlyBound = "1";
-            };
-
-            const applyReadonlyMode = () => {
-                parentDocument
-                    .querySelectorAll(inputSelector)
-                    .forEach(makeInputReadonly);
-            };
-
-            /*
-             * Ngắt observer cũ nếu app vừa rerun,
-             * tránh tạo nhiều observer chạy song song.
-             */
-            const observerKey =
-                "__wcFilterDateReadonlyObserver";
-
-            const oldObserver = parentWindow[observerKey];
-
-            if (oldObserver) {
-                oldObserver.disconnect();
-            }
-
-            /*
-             * Áp dụng ngay nếu widget đã xuất hiện.
-             */
-            applyReadonlyMode();
-
-            /*
-             * Streamlit có thể dựng widget sau khi script đã chạy.
-             * Observer sẽ tự bắt widget mới và đặt readonly.
-             */
-            const observer = new parentWindow.MutationObserver(
-                applyReadonlyMode
-            );
-
-            observer.observe(
-                parentDocument.body,
-                {
-                    childList: true,
-                    subtree: true
-                }
-            );
-
-            parentWindow[observerKey] = observer;
-        })();
-        </script>
-        """,
-        height=0,
-        scrolling=False
-    )
-
-def inject_match_date_bold(match_dates):
-    """
-    Chỉ in đậm các ngày thực sự có trận đấu trong lịch filter_date.
-
-    Hàm chỉ thay đổi font-weight trên giao diện lịch.
-    Không thay đổi dữ liệu, lựa chọn ngày hoặc logic lọc trận đấu.
-    """
-    match_date_iso_values = sorted({
-        pd.Timestamp(date_value).date().isoformat()
-        for date_value in match_dates
-        if date_value is not None and not pd.isna(date_value)
-    })
-
-    match_date_iso_js = (
-        "["
-        + ",".join(
-            f'"{date_value}"'
-            for date_value in match_date_iso_values
-        )
-        + "]"
-    )
-
-    st.markdown(
-        """
-        <style>
-        /*
-         * Chỉ áp dụng cho các ngày đã được xác nhận có trận đấu.
-         * Không tác động tới những calendar khác trong app.
-         */
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"].wc-match-date,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"].wc-match-date * {
-            font-weight: 800 !important;
-        }
-        /*
-         * Giữ trạng thái in đậm khi rê chuột qua ngày có trận.
-         * Rule này chỉ target lịch filter_date và class wc-match-date.
-         */
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"].wc-match-date:not([aria-disabled="true"]):hover,
-        
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"].wc-match-date:not([aria-disabled="true"]):hover * {
-            font-weight: 800 !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
-
-    components.html(
-        """
-        <script>
-        (() => {
-            const parentWindow = window.parent;
-            const parentDocument = parentWindow.document;
-
-            /*
-             * Danh sách này được tạo trực tiếp từ
-             * matches["kickoff_date_filter"] ở Python.
+             * Danh sách ngày có trận, được truyền trực tiếp từ
+             * matches["kickoff_date_filter"].
              */
             const matchDates = new Set(
                 __WC_MATCH_DATES__
@@ -1648,46 +1491,197 @@ def inject_match_date_bold(match_dates):
                 december: "12"
             };
 
-            /*
-             * Đọc ngày thật từ aria-label của từng ô ngày trong
-             * calendar BaseWeb rồi chuyển thành YYYY-MM-DD.
-             */
-            const extractDateIso = (cell) => {
-                const labelledElement =
-                    cell.hasAttribute("aria-label")
-                        ? cell
-                        : cell.querySelector("[aria-label]");
+            const inputSelector =
+                'div[class*="st-key-filter_date"] input';
 
-                if (!labelledElement) {
-                    return null;
+            /*
+             * Giữ nguyên logic readonly hiện tại.
+             */
+            const makeInputReadonly = (input) => {
+                if (
+                    !input
+                    || !(input instanceof parentWindow.HTMLInputElement)
+                ) {
+                    return;
                 }
 
-                const ariaLabel =
-                    labelledElement.getAttribute("aria-label") || "";
+                input.readOnly = true;
 
-                const dateMatch = ariaLabel.match(
-                    /\\b(January|February|March|April|May|June|July|August|September|October|November|December)\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,)?\\s+(\\d{4})\\b/i
+                input.setAttribute("readonly", "");
+                input.setAttribute("aria-readonly", "true");
+                input.setAttribute("inputmode", "none");
+                input.setAttribute("autocomplete", "off");
+                input.setAttribute("spellcheck", "false");
+
+                if (input.dataset.wcDateReadonlyBound === "1") {
+                    return;
+                }
+
+                const preventManualEditing = (event) => {
+                    event.preventDefault();
+                };
+
+                input.addEventListener(
+                    "beforeinput",
+                    preventManualEditing
                 );
 
-                if (!dateMatch) {
-                    return null;
-                }
+                input.addEventListener(
+                    "paste",
+                    preventManualEditing
+                );
 
-                const month =
-                    monthNumbers[
-                        dateMatch[1].toLowerCase()
-                    ];
+                input.addEventListener(
+                    "drop",
+                    preventManualEditing
+                );
 
-                const day = String(
-                    Number(dateMatch[2])
-                ).padStart(2, "0");
-
-                return `${dateMatch[3]}-${month}-${day}`;
+                input.dataset.wcDateReadonlyBound = "1";
             };
 
-            const applyMatchDateBold = () => {
+            /*
+             * Lấy ngày thật từ aria-label của ô lịch.
+             * Hỗ trợ cả aria-label nằm trên gridcell
+             * và aria-label nằm trong phần tử con.
+             */
+            const extractDateIso = (cell) => {
+                const labelledElements = [];
+
+                if (cell.hasAttribute("aria-label")) {
+                    labelledElements.push(cell);
+                }
+
+                cell
+                    .querySelectorAll("[aria-label]")
+                    .forEach((element) => {
+                        labelledElements.push(element);
+                    });
+
+                for (const element of labelledElements) {
+                    const ariaLabel =
+                        element.getAttribute("aria-label") || "";
+
+                    const dateMatch = ariaLabel.match(
+                        /\\b(January|February|March|April|May|June|July|August|September|October|November|December)\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,)?\\s+(\\d{4})\\b/i
+                    );
+
+                    if (!dateMatch) {
+                        continue;
+                    }
+
+                    const month =
+                        monthNumbers[
+                            dateMatch[1].toLowerCase()
+                        ];
+
+                    const day = String(
+                        Number(dateMatch[2])
+                    ).padStart(2, "0");
+
+                    return `${dateMatch[3]}-${month}-${day}`;
+                }
+
+                return null;
+            };
+
+            /*
+             * Gán font-weight dưới dạng inline !important.
+             *
+             * Inline !important sẽ không bị các rule hover,
+             * selected hoặc today trong CSS ghi đè.
+             */
+            const setImportantFontWeight = (
+                element,
+                fontWeight
+            ) => {
+                if (!element) {
+                    return;
+                }
+
+                const currentValue =
+                    element.style.getPropertyValue(
+                        "font-weight"
+                    );
+
+                const currentPriority =
+                    element.style.getPropertyPriority(
+                        "font-weight"
+                    );
+
+                if (
+                    currentValue === fontWeight
+                    && currentPriority === "important"
+                ) {
+                    return;
+                }
+
+                element.style.setProperty(
+                    "font-weight",
+                    fontWeight,
+                    "important"
+                );
+            };
+
+            const applyDateCellWeight = (cell) => {
+                const dateIso = extractDateIso(cell);
+
+                const isMatchDate = Boolean(
+                    dateIso
+                    && matchDates.has(dateIso)
+                );
+
+                const fontWeight = (
+                    isMatchDate
+                    ? "800"
+                    : "400"
+                );
+
                 /*
-                 * Chỉ chạy khi widget filter_date có trên trang.
+                 * Xóa class từ cách triển khai cũ,
+                 * tránh CSS cũ còn sót gây xung đột.
+                 */
+                if (
+                    cell.classList.contains(
+                        "wc-match-date"
+                    )
+                ) {
+                    cell.classList.remove(
+                        "wc-match-date"
+                    );
+                }
+
+                cell.dataset.wcHasMatch = (
+                    isMatchDate
+                    ? "true"
+                    : "false"
+                );
+
+                /*
+                 * Áp trực tiếp lên cả ô ngày và phần tử chứa số.
+                 */
+                setImportantFontWeight(
+                    cell,
+                    fontWeight
+                );
+
+                cell
+                    .querySelectorAll("*")
+                    .forEach((element) => {
+                        setImportantFontWeight(
+                            element,
+                            fontWeight
+                        );
+                    });
+            };
+
+            const applyCalendarEnhancements = () => {
+                parentDocument
+                    .querySelectorAll(inputSelector)
+                    .forEach(makeInputReadonly);
+
+                /*
+                 * Chỉ xử lý calendar khi widget filter_date
+                 * đang tồn tại trên trang.
                  */
                 const filterDateWidget =
                     parentDocument.querySelector(
@@ -1702,26 +1696,49 @@ def inject_match_date_bold(match_dates):
                     .querySelectorAll(
                         'div[data-baseweb="calendar"] div[role="gridcell"]'
                     )
-                    .forEach((cell) => {
-                        const dateIso =
-                            extractDateIso(cell);
-
-                        cell.classList.toggle(
-                            "wc-match-date",
-                            Boolean(
-                                dateIso
-                                && matchDates.has(dateIso)
-                            )
-                        );
-                    });
+                    .forEach(applyDateCellWeight);
             };
 
             /*
-             * Ngắt observer cũ khi Streamlit rerun,
-             * tránh nhiều observer chạy trùng nhau.
+             * Gom nhiều mutation liên tiếp vào một lần cập nhật.
+             */
+            let updateScheduled = false;
+
+            const scheduleCalendarUpdate = () => {
+                if (updateScheduled) {
+                    return;
+                }
+
+                updateScheduled = true;
+
+                parentWindow.requestAnimationFrame(() => {
+                    updateScheduled = false;
+                    applyCalendarEnhancements();
+                });
+            };
+
+            /*
+             * Dọn observer của cách triển khai cũ.
+             */
+            const legacyObserver =
+                parentWindow.__wcMatchDateBoldObserver;
+
+            if (legacyObserver) {
+                legacyObserver.disconnect();
+
+                try {
+                    delete parentWindow.__wcMatchDateBoldObserver;
+                } catch (error) {
+                    parentWindow.__wcMatchDateBoldObserver = null;
+                }
+            }
+
+            /*
+             * Ngắt observer hiện tại trước khi tạo observer mới,
+             * tránh observer bị nhân đôi sau mỗi Streamlit rerun.
              */
             const observerKey =
-                "__wcMatchDateBoldObserver";
+                "__wcFilterDateReadonlyObserver";
 
             const oldObserver =
                 parentWindow[observerKey];
@@ -1730,27 +1747,33 @@ def inject_match_date_bold(match_dates):
                 oldObserver.disconnect();
             }
 
-            /*
-             * Áp dụng ngay nếu calendar đang mở.
-             */
-            applyMatchDateBold();
+            applyCalendarEnhancements();
 
             /*
-             * Tự áp dụng lại khi:
-             * - Người dùng mở lịch
-             * - Chuyển tháng
-             * - Streamlit dựng lại calendar
+             * Theo dõi cả việc Streamlit/BaseWeb:
+             * - Mở calendar
+             * - Đổi tháng
+             * - Render lại ngày
+             * - Thay đổi trạng thái hover/selected
              */
             const observer =
                 new parentWindow.MutationObserver(
-                    applyMatchDateBold
+                    scheduleCalendarUpdate
                 );
 
             observer.observe(
                 parentDocument.body,
                 {
                     childList: true,
-                    subtree: true
+                    subtree: true,
+                    attributes: true,
+                    attributeFilter: [
+                        "class",
+                        "style",
+                        "aria-label",
+                        "aria-selected",
+                        "data-selected"
+                    ]
                 }
             );
 
@@ -1764,6 +1787,7 @@ def inject_match_date_bold(match_dates):
         height=0,
         scrolling=False
     )
+
 
 def inject_mobile_match_title_css():
     st.markdown(
@@ -10749,8 +10773,9 @@ def page_matches():
     ):
         st.session_state["filter_prediction_status"] = "Tất cả"
 
-    inject_match_datepicker_calendar_theme()
-    inject_match_date_bold(available_dates)
+    inject_match_datepicker_calendar_theme(
+        available_dates
+    )
     
     with stylable_container(
         key="match_filter_panel",
