@@ -9050,7 +9050,6 @@ def render_pending_star_transfer_box(user_id: int, match_id: int):
             st.rerun()
 
 @st.dialog("Xác nhận chuyển bổ trợ")
-@st.dialog("Xác nhận chuyển bổ trợ")
 def render_star_transfer_dialog(user_id: int):
     pending = st.session_state.get("pending_star_transfer")
 
