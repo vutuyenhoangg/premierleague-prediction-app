@@ -1600,6 +1600,19 @@ def inject_match_date_bold(match_dates):
         div[role="gridcell"].wc-match-date * {
             font-weight: 800 !important;
         }
+        /*
+         * Giữ trạng thái in đậm khi rê chuột qua ngày có trận.
+         * Rule này chỉ target lịch filter_date và class wc-match-date.
+         */
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"].wc-match-date:not([aria-disabled="true"]):hover,
+        
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"].wc-match-date:not([aria-disabled="true"]):hover * {
+            font-weight: 800 !important;
+        }
         </style>
         """,
         unsafe_allow_html=True
