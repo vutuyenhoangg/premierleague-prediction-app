@@ -5687,31 +5687,25 @@ def get_match_card_css(status_info):
     )
 
     shimmer_config_by_status = {
-        # Đang mở dự đoán: xanh dương
         "open": {
             "opacity": "1",
-            "color": "#60A5FA",
-            "soft_color": "#BFDBFE",
-            "speed": "4.2s"
+            "color": "#3B82F6",
+            "soft_color": "#DBEAFE",
+            "speed": "3.8s"
         },
-
-        # Đã khóa dự đoán: vàng cam
         "locked": {
             "opacity": "1",
             "color": "#F59E0B",
-            "soft_color": "#FDE68A",
-            "speed": "4.2s"
+            "soft_color": "#FEF3C7",
+            "speed": "3.8s"
         },
-
-        # Đã có kết quả: xanh lá
         "finished": {
             "opacity": "1",
             "color": "#22C55E",
-            "soft_color": "#BBF7D0",
-            "speed": "4.2s"
+            "soft_color": "#DCFCE7",
+            "speed": "3.8s"
         }
     }
-
     shimmer_config = shimmer_config_by_status.get(
         status_key,
         {
