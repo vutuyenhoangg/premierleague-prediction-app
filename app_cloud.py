@@ -1011,18 +1011,19 @@ def inject_hide_streamlit_embed_footer_css():
 
 def inject_match_card_border_animation_css():
     """
-    Tạo vệt sáng chạy theo chiều kim đồng hồ
+    Tạo một vệt sáng chạy theo chiều kim đồng hồ
     quanh đúng đường viền bo góc của card trận đấu.
 
-    Phiên bản này được tăng:
-    - độ sáng
-    - độ rõ
-    - độ dày cảm nhận của vệt sáng
-    - độ lan ánh sáng
+    Phần hiệu ứng được đặt trên pseudo-element của card,
+    không nằm trong background và không phủ lên giữa card.
     """
     st.markdown(
         """
         <style>
+        /*
+         * Biến góc được trình duyệt nội suy từ 0deg đến 360deg.
+         * Đây là phần tạo chuyển động chạy quanh viền.
+         */
         @property --wc-match-card-shimmer-angle {
             syntax: "<angle>";
             initial-value: 0deg;
@@ -1039,78 +1040,83 @@ def inject_match_card_border_animation_css():
             }
         }
 
-        @keyframes wcMatchCardShimmerPulse {
-            0%, 100% {
-                opacity: var(--wc-match-card-shimmer-opacity, 1);
-                filter:
-                    drop-shadow(0 0 3px rgba(255, 255, 255, 0.95))
-                    drop-shadow(0 0 7px var(--wc-match-card-shimmer-color, #FFFFFF))
-                    drop-shadow(0 0 14px var(--wc-match-card-shimmer-soft, rgba(255,255,255,0.60)));
-            }
-
-            50% {
-                opacity: 1;
-                filter:
-                    drop-shadow(0 0 5px rgba(255, 255, 255, 1))
-                    drop-shadow(0 0 10px var(--wc-match-card-shimmer-color, #FFFFFF))
-                    drop-shadow(0 0 20px var(--wc-match-card-shimmer-soft, rgba(255,255,255,0.78)));
-            }
-        }
-
+        /*
+         * Chọn trực tiếp container card theo key:
+         * match_card_{match_id}
+         *
+         * Dùng class* thay vì class chính xác để tương thích
+         * với cả các phiên bản Streamlit/stylable_container khác nhau.
+         */
         div[class*="st-key-match_card_"] {
             position: relative !important;
             isolation: isolate !important;
         }
 
+        /*
+         * Vệt sáng riêng biệt nằm trên đúng vùng đường viền.
+         */
         div[class*="st-key-match_card_"]::before {
             content: "";
 
             position: absolute !important;
-            inset: -2px !important;
+            inset: -1px !important;
 
-            border-radius: 22px !important;
+            border-radius: 21px !important;
             padding: 3px !important;
 
             pointer-events: none !important;
             z-index: 50 !important;
 
+            /*
+             * Card ngoài 3 trạng thái chính có opacity = 0.
+             */
             opacity: var(
                 --wc-match-card-shimmer-opacity,
                 0
             ) !important;
 
+            /*
+             * Chỉ một đoạn rất nhỏ của conic-gradient có màu.
+             * Phần còn lại hoàn toàn trong suốt.
+             *
+             * Khi biến góc quay, đoạn sáng sẽ chạy theo
+             * chiều kim đồng hồ quanh card.
+             */
             background:
                 conic-gradient(
                     from var(--wc-match-card-shimmer-angle),
 
                     transparent 0deg,
-                    transparent 320deg,
+                    transparent 326deg,
 
-                    rgba(255, 255, 255, 0.00) 324deg,
-
-                    rgba(255, 255, 255, 0.40) 329deg,
+                    rgba(255, 255, 255, 0.00) 330deg,
 
                     var(
                         --wc-match-card-shimmer-soft,
-                        rgba(255, 255, 255, 0.70)
+                        rgba(255, 255, 255, 0.45)
                     ) 334deg,
 
-                    rgba(255, 255, 255, 1) 339deg,
+                    rgba(255, 255, 255, 0.92) 338deg,
 
-                    #FFFFFF 343deg,
-                    #FFFFFF 347deg,
+                    #FFFFFF 341deg,
+
+                    #FFFFFF 344deg,
 
                     var(
                         --wc-match-card-shimmer-color,
                         #FFFFFF
-                    ) 351deg,
+                    ) 348deg,
 
-                    rgba(255, 255, 255, 0.65) 355deg,
+                    rgba(255, 255, 255, 0.35) 352deg,
 
-                    transparent 358deg,
+                    transparent 356deg,
                     transparent 360deg
                 ) !important;
 
+            /*
+             * Hai lớp mask loại bỏ toàn bộ phần giữa.
+             * Chỉ giữ lại một vòng viền dày 3px.
+             */
             -webkit-mask:
                 linear-gradient(#000 0 0) content-box,
                 linear-gradient(#000 0 0) !important;
@@ -1123,24 +1129,38 @@ def inject_match_card_border_animation_css():
 
             mask-composite: exclude !important;
 
+            /*
+             * Ánh sáng lan nhẹ quanh đầu vệt sáng,
+             * tạo cảm giác lấp lánh như hình minh họa.
+             */
+            filter:
+                drop-shadow(
+                    0 0 2px
+                    rgba(255, 255, 255, 1)
+                )
+                drop-shadow(
+                    0 0 5px
+                    var(
+                        --wc-match-card-shimmer-color,
+                        #FFFFFF
+                    )
+                )
+                drop-shadow(
+                    0 0 10px
+                    var(
+                        --wc-match-card-shimmer-soft,
+                        rgba(255, 255, 255, 0.50)
+                    )
+                ) !important;
+
             animation:
                 wcMatchCardShimmerClockwise
                 var(--wc-match-card-shimmer-speed, 4.2s)
                 linear
-                infinite,
-                wcMatchCardShimmerPulse
-                1.7s
-                ease-in-out
                 infinite !important;
 
             will-change:
-                --wc-match-card-shimmer-angle, filter, opacity;
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-            div[class*="st-key-match_card_"]::before {
-                animation: none !important;
-            }
+                --wc-match-card-shimmer-angle;
         }
         </style>
         """,
@@ -5687,25 +5707,31 @@ def get_match_card_css(status_info):
     )
 
     shimmer_config_by_status = {
+        # Đang mở dự đoán: xanh dương
         "open": {
             "opacity": "1",
-            "color": "#3B82F6",
-            "soft_color": "#DBEAFE",
-            "speed": "3.8s"
+            "color": "#60A5FA",
+            "soft_color": "#BFDBFE",
+            "speed": "4.2s"
         },
+
+        # Đã khóa dự đoán: vàng cam
         "locked": {
             "opacity": "1",
             "color": "#F59E0B",
-            "soft_color": "#FEF3C7",
-            "speed": "3.8s"
+            "soft_color": "#FDE68A",
+            "speed": "4.2s"
         },
+
+        # Đã có kết quả: xanh lá
         "finished": {
             "opacity": "1",
             "color": "#22C55E",
-            "soft_color": "#DCFCE7",
-            "speed": "3.8s"
+            "soft_color": "#BBF7D0",
+            "speed": "4.2s"
         }
     }
+
     shimmer_config = shimmer_config_by_status.get(
         status_key,
         {
