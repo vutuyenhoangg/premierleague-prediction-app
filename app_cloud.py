@@ -10056,30 +10056,31 @@ def render_prediction_feedback_popup():
     """
     Hiển thị thông báo sau khi lưu/cập nhật/xóa dự đoán.
 
-    Thiết kế:
-    - Popup dạng compact card ở giữa màn hình.
-    - Tiêu đề và nội dung phụ được tách riêng.
-    - Không kéo quá dài theo chiều ngang.
-    - Tự đổi màu theo success, info và danger.
-    - Luôn render đúng một markdown element để tránh stale/ghost card.
+    Nguyên tắc:
+    - Render HTML trực tiếp bằng st.html(), không qua Markdown parser.
+    - Luôn tạo đúng một phần tử Streamlit ở mỗi lượt render.
+    - Khi không có thông báo, render placeholder ẩn.
+    - Không ảnh hưởng logic lưu, cập nhật hoặc xóa dự đoán.
     """
     feedback = st.session_state.pop(
         PREDICTION_FEEDBACK_POPUP_KEY,
         None
     )
 
-    # Luôn giữ một vị trí markdown ổn định trong cây render Streamlit.
+    # Placeholder giúp giữ ổn định cây render của Streamlit,
+    # tránh stale/ghost card sau khi popup biến mất.
     popup_html = """
     <div
         class="wc-prediction-feedback-stable-slot"
         aria-hidden="true"
         style="
-            display: none;
-            height: 0;
-            min-height: 0;
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
+            display:none;
+            width:0;
+            height:0;
+            min-height:0;
+            margin:0;
+            padding:0;
+            overflow:hidden;
         "
     ></div>
     """
@@ -10183,7 +10184,8 @@ def render_prediction_feedback_popup():
                 tone = mapped_copy["tone"]
 
             else:
-                # Tách câu đầu làm tiêu đề, phần còn lại làm nội dung phụ.
+                # Các thông báo lỗi hoặc nội dung phát sinh:
+                # câu đầu là tiêu đề, phần sau là mô tả.
                 message_parts = re.split(
                     r"(?<=[.!?])\s+",
                     message,
@@ -10250,19 +10252,20 @@ def render_prediction_feedback_popup():
             detail_html = ""
 
             if safe_detail:
-                detail_html = f"""
-                <div class="wc-prediction-popup-detail-{created_at_ms}">
-                    {safe_detail}
-                </div>
-                """
+                detail_html = (
+                    f'<div class="wc-prediction-popup-detail-'
+                    f'{created_at_ms}">'
+                    f'{safe_detail}'
+                    f'</div>'
+                )
 
-            animation_id = (
-                f"wc_prediction_popup_{created_at_ms}"
+            animation_name = (
+                f"wcPredictionPopupAnimation{created_at_ms}"
             )
 
             popup_html = f"""
             <style>
-            @keyframes {animation_id} {{
+            @keyframes {animation_name} {{
                 0% {{
                     opacity: 0;
                     transform:
@@ -10308,7 +10311,6 @@ def render_prediction_feedback_popup():
                     390px,
                     calc(100vw - 40px)
                 );
-
                 max-width: 390px;
 
                 display: grid;
@@ -10326,7 +10328,6 @@ def render_prediction_feedback_popup():
                     15px;
 
                 box-sizing: border-box;
-
                 border-radius: 18px;
 
                 border:
@@ -10345,8 +10346,8 @@ def render_prediction_feedback_popup():
                     ),
                     linear-gradient(
                         135deg,
-                        rgba(255, 255, 255, 0.985),
-                        rgba(248, 250, 252, 0.975)
+                        rgba(255, 255, 255, 0.99),
+                        rgba(248, 250, 252, 0.98)
                     );
 
                 box-shadow:
@@ -10362,7 +10363,7 @@ def render_prediction_feedback_popup():
                 pointer-events: none;
 
                 animation:
-                    {animation_id}
+                    {animation_name}
                     5.2s
                     cubic-bezier(
                         0.22,
@@ -10382,7 +10383,6 @@ def render_prediction_feedback_popup():
                 top: 0;
 
                 height: 2px;
-
                 border-radius: 999px;
 
                 background:
@@ -10405,7 +10405,6 @@ def render_prediction_feedback_popup():
                 justify-content: center;
 
                 box-sizing: border-box;
-
                 border-radius: 999px;
 
                 background:
@@ -10464,7 +10463,6 @@ def render_prediction_feedback_popup():
                         340px,
                         calc(100vw - 28px)
                     );
-
                     max-width: 340px;
 
                     grid-template-columns:
@@ -10485,7 +10483,6 @@ def render_prediction_feedback_popup():
                 .wc-prediction-popup-icon-{created_at_ms} {{
                     width: 38px;
                     height: 38px;
-
                     font-size: 19px;
                 }}
 
@@ -10511,25 +10508,31 @@ def render_prediction_feedback_popup():
                 class="wc-prediction-feedback-popup-{created_at_ms}"
                 role="status"
                 aria-live="polite"
-            >
-                <div class="wc-prediction-popup-icon-{created_at_ms}">
-                    {popup_theme["icon"]}
-                </div>
-
-                <div class="wc-prediction-popup-content-{created_at_ms}">
-                    <div class="wc-prediction-popup-title-{created_at_ms}">
-                        {safe_title}
-                    </div>
-
-                    {detail_html}
-                </div>
-            </div>
+            ><div
+                class="wc-prediction-popup-icon-{created_at_ms}"
+            >{popup_theme["icon"]}</div><div
+                class="wc-prediction-popup-content-{created_at_ms}"
+            ><div
+                class="wc-prediction-popup-title-{created_at_ms}"
+            >{safe_title}</div>{detail_html}</div></div>
             """
 
-    st.markdown(
-        popup_html,
-        unsafe_allow_html=True
-    )
+    # Loại bỏ toàn bộ mức thụt đầu dòng của chuỗi HTML.
+    popup_html = textwrap.dedent(
+        popup_html
+    ).strip()
+
+    # st.html render HTML trực tiếp, không chạy qua Markdown parser.
+    if hasattr(st, "html"):
+        st.html(popup_html)
+
+    else:
+        # Fallback cho Streamlit cũ.
+        # popup_html đã được dedent và không còn block HTML thụt dòng.
+        st.markdown(
+            popup_html,
+            unsafe_allow_html=True
+        )
 
 
 def _get_submitted_prediction_winner_team_id(
