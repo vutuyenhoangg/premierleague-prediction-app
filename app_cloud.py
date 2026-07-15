@@ -1,6 +1,6 @@
 # ============================================================
 # WORLD CUP 2026 PREDICTION APP
-# Safe refactor: duplicate overwritten helper definitions removed; runtime behavior intentionally preserved.
+# Safe performance refactor: UI, business rules and database behavior intentionally preserved.
 # Stack: Streamlit + Supabase/PostgreSQL
 # Database input: Supabase via DATABASE_URL
 # ============================================================
@@ -2388,10 +2388,11 @@ def render_daily_checkin_dialog(user_id: int):
     </div>
     """
 
-    if hasattr(st, "html"):
-        st.html(daily_checkin_html)
-    else:
-        components.html(daily_checkin_html, height=620, scrolling=True)
+    render_html_block(
+        daily_checkin_html,
+        fallback_height=620,
+        scrolling=True
+    )
 
     if not checked_today and next_day_no is not None:
         claim_clicked = st.button(
@@ -2420,159 +2421,6 @@ def render_daily_checkin_dialog(user_id: int):
 
 
 @st.dialog(" ")
-def render_daily_checkin_reward_dialog(reward_info: dict):
-    reward_label = str(reward_info.get("reward_label") or "")
-    reward_type = normalize_star_type(reward_info.get("reward_type"))
-    day_no = int(reward_info.get("day_no") or 0)
-
-    safe_reward_label = html.escape(reward_label)
-
-    reward_symbol = "✦" if reward_type == STAR_TYPE_SUPER else "★"
-
-    daily_reward_html = f"""
-    <style>
-    div[role="dialog"]:has(.wc-daily-reward-shell) {{
-        width: min(560px, calc(100vw - 32px)) !important;
-        max-width: min(560px, calc(100vw - 32px)) !important;
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        padding: 0 !important;
-    }}
-
-    div[role="dialog"]:has(.wc-daily-reward-shell) h2,
-    div[role="dialog"]:has(.wc-daily-reward-shell) [data-testid="stDialogHeader"] {{
-        display: none !important;
-    }}
-
-    div[role="dialog"]:has(.wc-daily-reward-shell) button[aria-label="Close"] {{
-        color: #FFFFFF !important;
-        background: rgba(255, 255, 255, 0.12) !important;
-        border-radius: 999px !important;
-        top: 18px !important;
-        right: 18px !important;
-    }}
-
-    .wc-daily-reward-shell {{
-        border-radius: 28px;
-        padding: 38px 34px 30px 34px;
-        background:
-            radial-gradient(circle at 50% 0%, rgba(245, 197, 66, 0.24), transparent 30%),
-            linear-gradient(135deg, rgba(7, 17, 31, 0.98), rgba(11, 31, 58, 0.97));
-        border: 1px solid rgba(255, 255, 255, 0.16);
-        box-shadow: 0 28px 70px rgba(7, 17, 31, 0.46);
-        color: #F8FAFC;
-        text-align: center;
-        overflow: hidden;
-        box-sizing: border-box;
-    }}
-
-    .wc-daily-reward-orb {{
-        width: 84px;
-        height: 84px;
-        margin: 0 auto 18px auto;
-        border-radius: 999px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: linear-gradient(135deg, #F5C542, #FFD761);
-        color: #07111F;
-        font-size: 42px;
-        font-weight: 950;
-        box-shadow:
-            0 0 0 8px rgba(245, 197, 66, 0.10),
-            0 0 32px rgba(245, 197, 66, 0.32);
-    }}
-
-    .wc-daily-reward-title {{
-        color: #F8FAFC;
-        font-size: 32px;
-        font-weight: 950;
-        line-height: 1.12;
-        letter-spacing: -0.04em;
-        margin-bottom: 10px;
-    }}
-
-    .wc-daily-reward-subtitle {{
-        color: #CBD5E1;
-        font-size: 15.5px;
-        line-height: 1.55;
-        margin-bottom: 18px;
-    }}
-
-    .wc-daily-reward-card {{
-        max-width: 420px;
-        margin: 0 auto 24px auto;
-        border: 1px solid rgba(245, 197, 66, 0.62);
-        border-radius: 18px;
-        padding: 16px 18px;
-        background: rgba(245, 197, 66, 0.08);
-        box-shadow: 0 0 28px rgba(245, 197, 66, 0.14);
-    }}
-
-    .wc-daily-reward-name {{
-        color: #F5C542;
-        font-size: 20px;
-        font-weight: 950;
-        line-height: 1.2;
-    }}
-
-    .wc-daily-reward-note {{
-        color: #CBD5E1;
-        font-size: 14px;
-        margin-top: 6px;
-    }}
-
-    div[class*="st-key-daily_reward_confirm"] {{
-        width: min(560px, calc(100vw - 32px)) !important;
-        margin: 14px auto 0 auto !important;
-    }}
-
-    div[class*="st-key-daily_reward_confirm"] button {{
-        width: 100% !important;
-        min-height: 54px !important;
-        border-radius: 999px !important;
-        border: none !important;
-        background: linear-gradient(135deg, #F5C542, #FFD761) !important;
-        color: #07111F !important;
-        font-size: 18px !important;
-        font-weight: 950 !important;
-        box-shadow: 0 14px 34px rgba(245, 197, 66, 0.24) !important;
-    }}
-
-    div[class*="st-key-daily_reward_confirm"] button:hover {{
-        transform: translateY(-1px) !important;
-        filter: brightness(1.02) !important;
-    }}
-    </style>
-
-    <div class="wc-daily-reward-shell">
-        <div class="wc-daily-reward-orb">{reward_symbol}</div>
-        <div class="wc-daily-reward-title">Phần thưởng đã nhận</div>
-
-        <div class="wc-daily-reward-subtitle">
-            Bạn đã điểm danh đủ <b style="color:#F5C542;">{day_no} ngày</b>
-            trong chu kỳ hiện tại.
-        </div>
-
-        <div class="wc-daily-reward-card">
-            <div class="wc-daily-reward-name">{safe_reward_label}</div>
-            <div class="wc-daily-reward-note">Đã được cộng vào kho bổ trợ của bạn</div>
-        </div>
-    </div>
-    """
-
-    if hasattr(st, "html"):
-        st.html(daily_reward_html)
-    else:
-        components.html(daily_reward_html, height=430, scrolling=False)
-
-    if st.button(
-        "Hoàn tất",
-        key="daily_reward_confirm",
-        use_container_width=True
-    ):
-        st.rerun()
 
 def render_daily_checkin_reward_content(reward_info: dict):
     reward_label = str(reward_info.get("reward_label") or "")
@@ -2683,10 +2531,11 @@ def render_daily_checkin_reward_content(reward_info: dict):
     </div>
     """
 
-    if hasattr(st, "html"):
-        st.html(daily_reward_html)
-    else:
-        components.html(daily_reward_html, height=430, scrolling=False)
+    render_html_block(
+        daily_reward_html,
+        fallback_height=430,
+        scrolling=False
+    )
 
     if st.button(
         "Hoàn tất",
@@ -3281,43 +3130,6 @@ def get_prediction_radio_css():
     }
     """
 
-def get_star_radio_css(
-    disable_hope: bool = False,
-    disable_super: bool = False
-) -> str:
-    css = get_prediction_radio_css()
-
-    if disable_hope:
-        css += """
-        label[data-baseweb="radio"]:nth-of-type(2) {
-            opacity: 0.48 !important;
-            pointer-events: none !important;
-            color: #94A3B8 !important;
-            background: rgba(148, 163, 184, 0.08) !important;
-            border-color: rgba(148, 163, 184, 0.16) !important;
-        }
-
-        label[data-baseweb="radio"]:nth-of-type(2) * {
-            color: #94A3B8 !important;
-        }
-        """
-
-    if disable_super:
-        css += """
-        label[data-baseweb="radio"]:nth-of-type(3) {
-            opacity: 0.48 !important;
-            pointer-events: none !important;
-            color: #94A3B8 !important;
-            background: rgba(148, 163, 184, 0.08) !important;
-            border-color: rgba(148, 163, 184, 0.16) !important;
-        }
-
-        label[data-baseweb="radio"]:nth-of-type(3) * {
-            color: #94A3B8 !important;
-        }
-        """
-
-    return css
 
 def get_prediction_action_spacing_css():
     return """
@@ -3545,18 +3357,6 @@ def render_page_title(title: str, subtitle: str = ""):
     )
 
 
-def render_status_legend():
-    st.markdown(
-        """
-        <div class="wc-status-legend">
-            <div class="wc-legend-item"><span class="wc-dot" style="background:#2563EB;"></span>Đang mở dự đoán</div>
-            <div class="wc-legend-item"><span class="wc-dot" style="background:#F59E0B;"></span>Đã khóa</div>
-            <div class="wc-legend-item"><span class="wc-dot" style="background:#16A34A;"></span>Đã có kết quả</div>
-            <div class="wc-legend-item"><span class="wc-dot" style="background:#9CA3AF;"></span>Chưa xác định đội</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
 
 
 def render_kpi_tiles(matches: pd.DataFrame):
@@ -3577,7 +3377,10 @@ def render_kpi_tiles(matches: pd.DataFrame):
             axis=1
         )
 
-        matches_for_count["is_finished_bool"] = matches_for_count["is_finished"].apply(to_bool)
+        if "is_finished_bool" not in matches_for_count.columns:
+            matches_for_count["is_finished_bool"] = (
+                matches_for_count["is_finished"].map(to_bool)
+            )
 
         now_utc = pd.Timestamp.now(tz="UTC")
 
@@ -3621,8 +3424,8 @@ def render_kpi_tiles(matches: pd.DataFrame):
         unsafe_allow_html=True
     )
 
-def render_star_balance(user_id: int):
-    usage = get_user_star_usage(user_id)
+def render_star_balance(user_id: int, usage: dict | None = None):
+    usage = usage or get_user_star_usage(user_id)
 
     st.markdown(
         """
@@ -4014,8 +3817,8 @@ def render_scoring_rules():
                 """
             )
 
-def render_sidebar_star_balance(user_id: int):
-    usage = get_user_star_usage(user_id)
+def render_sidebar_star_balance(user_id: int, usage: dict | None = None):
+    usage = usage or get_user_star_usage(user_id)
 
     st.markdown(
         f"""
@@ -4048,8 +3851,7 @@ def render_avatar_popover(user: dict):
 
     Cập nhật UI:
     - Avatar chính có viền vàng nhẹ và badge bút chì nhỏ ở chính giữa mép dưới.
-    - Popup desktop: 4 avatar mỗi hàng.
-    - Popup mobile: 2 avatar mỗi hàng, card cao hơn, ảnh avatar lớn hơn để dễ nhìn.
+    - Một grid duy nhất: desktop 4 avatar mỗi hàng, mobile tự chuyển thành 2 avatar mỗi hàng.
     - Người dùng chọn avatar bằng cách bấm trực tiếp vào khung avatar.
     - CSS target theo key riêng để hạn chế ảnh hưởng các nút khác.
     """
@@ -4395,13 +4197,6 @@ def render_avatar_popover(user: dict):
             border: 1px solid rgba(15, 23, 42, 0.10) !important;
         }}
 
-        .wc-avatar-grid-desktop-shell {{
-            display: block;
-        }}
-
-        .wc-avatar-grid-mobile-shell {{
-            display: none;
-        }}
 
         @media (max-width: 768px) {{
             {{
@@ -4471,13 +4266,6 @@ def render_avatar_popover(user: dict):
                 border-radius: 20px !important;
             }}
 
-            .wc-avatar-grid-desktop-shell {{
-                display: none !important;
-            }}
-
-            .wc-avatar-grid-mobile-shell {{
-                display: block !important;
-            }}
 
             div[data-testid="stPopoverBody"] [data-testid="column"],
             div[data-testid="stPopoverContent"] [data-testid="column"] {{
@@ -4522,38 +4310,9 @@ def render_avatar_popover(user: dict):
             )
 
             with stylable_container(
-                key="avatar_grid_desktop_shell",
+                key="avatar_grid_responsive_shell",
                 css_styles="""
-                {
-                    display: block;
-                }
-
                 @media (max-width: 768px) {
-                    {
-                        display: none !important;
-                    }
-                }
-                """
-            ):
-                st.markdown(
-                    '<div class="wc-avatar-grid-desktop-shell">',
-                    unsafe_allow_html=True
-                )
-                render_avatar_grid(avatars_per_row=4, key_prefix="desktop")
-                st.markdown("</div>", unsafe_allow_html=True)
-
-            with stylable_container(
-                key="avatar_grid_mobile_shell",
-                css_styles="""
-                {
-                    display: none;
-                }
-
-                @media (max-width: 768px) {
-                    {
-                        display: block !important;
-                    }
-
                     div[data-testid="stHorizontalBlock"] {
                         display: grid !important;
                         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -4576,12 +4335,10 @@ def render_avatar_popover(user: dict):
                 }
                 """
             ):
-                st.markdown(
-                    '<div class="wc-avatar-grid-mobile-shell">',
-                    unsafe_allow_html=True
+                render_avatar_grid(
+                    avatars_per_row=4,
+                    key_prefix="avatar"
                 )
-                render_avatar_grid(avatars_per_row=2, key_prefix="mobile")
-                st.markdown("</div>", unsafe_allow_html=True)
 # ============================================================
 # 3. BASIC UTILITIES
 # ============================================================
@@ -4660,6 +4417,37 @@ def execute_many(query: str, rows: list[dict]):
             text(query),
             rows
         )
+
+def render_html_block(
+    html_text: str,
+    *,
+    fallback_height: int,
+    scrolling: bool = False
+):
+    """Render HTML with Streamlit's native API when available."""
+    if hasattr(st, "html"):
+        st.html(html_text)
+        return
+
+    components.html(
+        html_text,
+        height=fallback_height,
+        scrolling=scrolling
+    )
+
+
+def clear_cached_functions(*cached_functions):
+    """Clear Streamlit caches safely without repeating try/except blocks."""
+    for cached_function in cached_functions:
+        clear_method = getattr(cached_function, "clear", None)
+
+        if not callable(clear_method):
+            continue
+
+        try:
+            clear_method()
+        except Exception:
+            pass
 
 
 def now_utc_iso():
@@ -4896,6 +4684,86 @@ def format_star_short(star_type) -> str:
     star_type = normalize_star_type(star_type)
     return STAR_CONFIG[star_type]["short_label"]
 
+def _get_star_lock_masks(
+    frame: pd.DataFrame,
+    *,
+    now_utc: pd.Timestamp | None = None
+) -> tuple[pd.Series, pd.Series]:
+    """Return vectorized locked/reserved masks with the existing star rules."""
+    if frame.empty:
+        empty = pd.Series(dtype=bool, index=frame.index)
+        return empty, empty
+
+    now_utc = now_utc or pd.Timestamp.now(tz="UTC")
+
+    finished = frame["is_finished"].map(to_bool)
+    kickoff = pd.to_datetime(
+        frame["kickoff_time_utc"],
+        utc=True,
+        errors="coerce"
+    )
+
+    locked = finished | kickoff.isna() | kickoff.le(now_utc)
+    reserved = (~finished) & kickoff.notna() & kickoff.gt(now_utc)
+
+    return locked, reserved
+
+
+def _summarize_star_usage_frame(frame: pd.DataFrame) -> tuple[int, int, int, int]:
+    """Count locked and reserved Hope/Super stars without row-wise apply."""
+    if frame.empty:
+        return 0, 0, 0, 0
+
+    star_type = frame["star_type"].map(normalize_star_type)
+    locked, reserved = _get_star_lock_masks(frame)
+
+    return (
+        int(((star_type == STAR_TYPE_HOPE) & locked).sum()),
+        int(((star_type == STAR_TYPE_SUPER) & locked).sum()),
+        int(((star_type == STAR_TYPE_HOPE) & reserved).sum()),
+        int(((star_type == STAR_TYPE_SUPER) & reserved).sum())
+    )
+
+
+def _compose_star_usage_result(
+    *,
+    hope_locked_used: int,
+    super_locked_used: int,
+    hope_reserved_used: int,
+    super_reserved_used: int,
+    hope_total: int,
+    super_total: int,
+    hope_bonus: int = 0,
+    super_bonus: int = 0
+) -> dict:
+    hope_locked_used = max(0, int(hope_locked_used))
+    super_locked_used = max(0, int(super_locked_used))
+    hope_reserved_used = max(0, int(hope_reserved_used))
+    super_reserved_used = max(0, int(super_reserved_used))
+    hope_total = max(0, int(hope_total))
+    super_total = max(0, int(super_total))
+
+    hope_left = max(0, hope_total - hope_locked_used)
+    super_left = max(0, super_total - super_locked_used)
+
+    return {
+        "hope_used": hope_locked_used,
+        "super_used": super_locked_used,
+        "hope_locked_used": hope_locked_used,
+        "super_locked_used": super_locked_used,
+        "hope_reserved_used": hope_reserved_used,
+        "super_reserved_used": super_reserved_used,
+        "hope_total": hope_total,
+        "super_total": super_total,
+        "hope_bonus": int(hope_bonus),
+        "super_bonus": int(super_bonus),
+        "hope_left": hope_left,
+        "super_left": super_left,
+        "hope_free_left": max(0, hope_left - hope_reserved_used),
+        "super_free_left": max(0, super_left - super_reserved_used)
+    }
+
+
 def build_star_usage_result(
     user_id: int,
     hope_locked_used: int,
@@ -4903,134 +4771,114 @@ def build_star_usage_result(
     hope_reserved_used: int,
     super_reserved_used: int
 ) -> dict:
-    """
-    Gom phần tính quota sao sau khi đã có số sao locked/reserved.
-
-    Hàm này chỉ gom logic bị lặp giữa get_user_star_usage() và
-    get_user_star_usage_from_db(), không thay đổi công thức hiện tại.
-    """
+    """Compose the public star-usage payload using the user's real quota."""
     quota = get_user_star_quota(user_id)
 
-    hope_total = int(quota["hope_total"])
-    super_total = int(quota["super_total"])
+    return _compose_star_usage_result(
+        hope_locked_used=hope_locked_used,
+        super_locked_used=super_locked_used,
+        hope_reserved_used=hope_reserved_used,
+        super_reserved_used=super_reserved_used,
+        hope_total=int(quota["hope_total"]),
+        super_total=int(quota["super_total"]),
+        hope_bonus=int(quota.get("hope_bonus", 0)),
+        super_bonus=int(quota.get("super_bonus", 0))
+    )
 
-    hope_left = max(0, hope_total - hope_locked_used)
-    super_left = max(0, super_total - super_locked_used)
 
-    hope_free_left = max(0, hope_left - hope_reserved_used)
-    super_free_left = max(0, super_left - super_reserved_used)
+def exclude_prediction_from_star_usage(
+    usage: dict,
+    existing_prediction: dict | None,
+    match_row
+) -> dict:
+    """
+    Derive quota excluding one match from a usage snapshot.
 
-    return {
-        "hope_used": hope_locked_used,
-        "super_used": super_locked_used,
+    This replaces a full predictions/matches merge for every match card while
+    preserving the exact locked/reserved inventory rules.
+    """
+    if not existing_prediction:
+        return dict(usage)
 
-        "hope_locked_used": hope_locked_used,
-        "super_locked_used": super_locked_used,
+    star_type = normalize_star_type(existing_prediction.get("star_type"))
 
-        "hope_reserved_used": hope_reserved_used,
-        "super_reserved_used": super_reserved_used,
+    if star_type == STAR_TYPE_NONE:
+        return dict(usage)
 
-        "hope_total": hope_total,
-        "super_total": super_total,
+    hope_locked = int(usage.get("hope_locked_used", 0))
+    super_locked = int(usage.get("super_locked_used", 0))
+    hope_reserved = int(usage.get("hope_reserved_used", 0))
+    super_reserved = int(usage.get("super_reserved_used", 0))
 
-        "hope_bonus": int(quota.get("hope_bonus", 0)),
-        "super_bonus": int(quota.get("super_bonus", 0)),
+    is_locked = is_match_locked_for_star(
+        match_row.get("kickoff_time_utc"),
+        match_row.get("is_finished")
+    )
+    is_reserved = is_match_open_for_star_transfer(
+        match_row.get("kickoff_time_utc"),
+        match_row.get("is_finished")
+    )
 
-        "hope_left": hope_left,
-        "super_left": super_left,
+    if star_type == STAR_TYPE_HOPE:
+        if is_locked:
+            hope_locked = max(0, hope_locked - 1)
+        elif is_reserved:
+            hope_reserved = max(0, hope_reserved - 1)
+    elif star_type == STAR_TYPE_SUPER:
+        if is_locked:
+            super_locked = max(0, super_locked - 1)
+        elif is_reserved:
+            super_reserved = max(0, super_reserved - 1)
 
-        "hope_free_left": hope_free_left,
-        "super_free_left": super_free_left
-    }
+    return _compose_star_usage_result(
+        hope_locked_used=hope_locked,
+        super_locked_used=super_locked,
+        hope_reserved_used=hope_reserved,
+        super_reserved_used=super_reserved,
+        hope_total=int(usage.get("hope_total", HOPE_STARS_PER_USER)),
+        super_total=int(usage.get("super_total", SUPER_STARS_PER_USER)),
+        hope_bonus=int(usage.get("hope_bonus", 0)),
+        super_bonus=int(usage.get("super_bonus", 0))
+    )
 
 
 def get_user_star_usage(user_id: int, exclude_match_id: int | None = None) -> dict:
     """
-    Dùng cho UI.
+    Tính kho sao từ dữ liệu đã cache cho UI.
 
-    Logic mới:
-    - locked_used: chỉ tính sao ở các trận đã khóa dự đoán.
-    - reserved_used: sao đang giữ tạm ở các trận chưa diễn ra.
-    - left: số sao còn lại theo kho chính thức, chỉ trừ locked_used.
-    - free_left: số sao còn trống để gắn ngay, đã trừ cả reserved_used.
+    Chỉ merge một lần và dùng mask vector hóa, không chạy apply theo từng dòng.
     """
     predictions = load_predictions()
     matches = load_matches()
 
     if predictions.empty or matches.empty:
-        hope_locked_used = 0
-        super_locked_used = 0
-        hope_reserved_used = 0
-        super_reserved_used = 0
+        counts = (0, 0, 0, 0)
     else:
-        user_predictions = predictions[
-            predictions["user_id"].astype(int) == int(user_id)
-        ].copy()
+        user_predictions = predictions.loc[
+            predictions["user_id"].eq(int(user_id))
+        ]
 
         if exclude_match_id is not None and not user_predictions.empty:
-            user_predictions = user_predictions[
-                user_predictions["match_id"].astype(int) != int(exclude_match_id)
+            user_predictions = user_predictions.loc[
+                ~user_predictions["match_id"].eq(int(exclude_match_id))
             ]
 
         if user_predictions.empty:
-            hope_locked_used = 0
-            super_locked_used = 0
-            hope_reserved_used = 0
-            super_reserved_used = 0
+            counts = (0, 0, 0, 0)
         else:
-            match_cols = [
-                "match_id",
-                "kickoff_time_utc",
-                "is_finished"
-            ]
-
-            match_info = matches[match_cols].copy()
-
-            df = user_predictions.merge(
-                match_info,
+            frame = user_predictions.merge(
+                matches[["match_id", "kickoff_time_utc", "is_finished"]],
                 on="match_id",
                 how="left"
             )
+            counts = _summarize_star_usage_frame(frame)
 
-            df["star_type"] = df["star_type"].apply(normalize_star_type)
-
-            df["is_star_locked"] = df.apply(
-                lambda row: is_match_locked_for_star(
-                    row.get("kickoff_time_utc"),
-                    row.get("is_finished")
-                ),
-                axis=1
-            )
-
-            df["is_star_reserved"] = df.apply(
-                lambda row: is_match_open_for_star_transfer(
-                    row.get("kickoff_time_utc"),
-                    row.get("is_finished")
-                ),
-                axis=1
-            )
-
-            hope_locked_used = int(
-                ((df["star_type"] == STAR_TYPE_HOPE) & df["is_star_locked"]).sum()
-            )
-
-            super_locked_used = int(
-                ((df["star_type"] == STAR_TYPE_SUPER) & df["is_star_locked"]).sum()
-            )
-
-            hope_reserved_used = int(
-                ((df["star_type"] == STAR_TYPE_HOPE) & df["is_star_reserved"]).sum()
-            )
-
-            super_reserved_used = int(
-                ((df["star_type"] == STAR_TYPE_SUPER) & df["is_star_reserved"]).sum()
-            )
     return build_star_usage_result(
         user_id=user_id,
-        hope_locked_used=hope_locked_used,
-        super_locked_used=super_locked_used,
-        hope_reserved_used=hope_reserved_used,
-        super_reserved_used=super_reserved_used
+        hope_locked_used=counts[0],
+        super_locked_used=counts[1],
+        hope_reserved_used=counts[2],
+        super_reserved_used=counts[3]
     )
 
 def validate_star_quota(
@@ -5085,74 +4933,8 @@ def validate_star_quota(
             )
 
 
-def get_available_star_options(
-    user_id: int,
-    match_id: int,
-    current_star_type: str,
-    usage: dict | None = None
-) -> list[str]:
-    """
-    Luôn hiển thị đủ các option bổ trợ.
-    Option hết thật sẽ được xử lý bằng label xám + validate khi lưu.
-    """
-    return [
-        STAR_TYPE_NONE,
-        STAR_TYPE_HOPE,
-        STAR_TYPE_SUPER
-    ]
 
 
-def format_star_option_label(
-    star_type: str,
-    current_star_type: str,
-    usage: dict
-) -> str:
-    """
-    Format label cho option bổ trợ.
-
-    Quy ước hiển thị:
-    - Kho còn lại = tổng sao - sao đã khóa/mất.
-      Sao đang giữ tạm ở các trận chưa khóa vẫn nằm trong kho này.
-    - Đang dùng = số sao đang giữ tạm ở các trận chưa khóa.
-    - free_left vẫn chỉ dùng ngầm cho logic chuyển sao, không đưa lên label.
-    """
-    star_type = normalize_star_type(star_type)
-    current_star_type = normalize_star_type(current_star_type)
-
-    if star_type == STAR_TYPE_NONE:
-        return "Không dùng sao"
-
-    if star_type == STAR_TYPE_HOPE:
-        hope_label = STAR_CONFIG[STAR_TYPE_HOPE]["label"]
-
-        hope_left = int(usage.get("hope_left", 0))
-        hope_using = int(usage.get("hope_reserved_used", 0))
-
-        if hope_left <= 0 and current_star_type != STAR_TYPE_HOPE:
-            return f"{hope_label} (đã hết)"
-
-        return (
-            f"{hope_label} "
-            f"(Kho còn lại: {hope_left}/{HOPE_STARS_PER_USER}; "
-            f"Đang dùng: {hope_using}/{HOPE_STARS_PER_USER})"
-        )
-
-    if star_type == STAR_TYPE_SUPER:
-        super_label = STAR_CONFIG[STAR_TYPE_SUPER]["label"]
-
-        super_left = int(usage.get("super_left", 0))
-        super_using = int(usage.get("super_reserved_used", 0))
-
-        if super_left <= 0 and current_star_type != STAR_TYPE_SUPER:
-            return f"{super_label} (đã hết)"
-
-        return (
-            f"{super_label} "
-            f"(Kho còn lại: {super_left}/{SUPER_STARS_PER_USER}; "
-            f"Đang dùng: {super_using}/{SUPER_STARS_PER_USER})"
-        )
-
-    return STAR_CONFIG[star_type]["label"]
 
 def get_prediction_result_info(
     pred_home,
@@ -5236,36 +5018,6 @@ def get_prediction_result_info(
     }
 
 
-def render_prediction_result_line(result_info):
-    if result_info is None:
-        return
-
-    st.markdown(
-        f"""
-        <div style="
-            margin-top: 8px;
-            margin-bottom: 8px;
-            font-size: 15px;
-            color: #07111F;
-        ">
-            Kết quả dự đoán:
-            <span style="
-                display: inline-block;
-                margin-left: 6px;
-                padding: 5px 11px;
-                border-radius: 999px;
-                background: {result_info["bg_color"]};
-                color: {result_info["text_color"]};
-                border: 1px solid {result_info["border_color"]};
-                font-weight: 850;
-                font-size: 14px;
-            ">
-                {result_info["label"]}
-            </span>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
 
 def calculate_display_points_for_prediction(existing, match_row) -> dict | None:
     """
@@ -6042,19 +5794,7 @@ def format_countdown_seconds(total_seconds: int) -> str:
     return f"{hours}h {minutes}m {seconds}s"
 
 def render_status_badge(status_info, row=None):
-    """
-    Hiển thị badge trạng thái ở đầu card trận đấu.
-
-    Với trận chưa diễn ra thuộc trạng thái:
-    - Đang mở dự đoán
-    - Chưa xác định đội
-
-    Badge sẽ hiển thị countdown đến giờ kickoff:
-    - Dưới 1 ngày: 12h 59m 12s
-    - Từ 1 ngày trở lên: 2d 1h 5m
-
-    Các trạng thái khác giữ nguyên label cũ.
-    """
+    """Render the current status, including a live countdown when applicable."""
     status_key = status_info.get("status_key")
     badge_label = str(status_info.get("label", ""))
 
@@ -6073,111 +5813,31 @@ def render_status_badge(status_info, row=None):
             kickoff = parse_utc_datetime(row.get("kickoff_time_utc"))
             kickoff_epoch_ms = int(kickoff.timestamp() * 1000)
 
-            initial_countdown_text = format_countdown_seconds(
-                remaining_seconds
-            )
-
-            safe_component_id = f"wc_countdown_badge_{int(row.get('match_id'))}"
-            safe_initial_text = html.escape(initial_countdown_text)
-            safe_expired_label = html.escape(badge_label)
-            safe_badge_bg = html.escape(str(status_info["badge_bg"]))
-            safe_badge_text = html.escape(str(status_info["badge_text"]))
-
-            countdown_html = f"""
-            <!doctype html>
-            <html>
-            <head>
-                <meta charset="utf-8">
-                <style>
-                    html,
-                    body {{
-                        margin: 0;
-                        padding: 0;
-                        background: transparent;
-                        overflow: hidden;
-                    }}
-
-                    .wc-countdown-badge {{
-                        display: inline-block;
-                        padding: 7px 13px;
-                        border-radius: 999px;
-                        background: {safe_badge_bg};
-                        color: {safe_badge_text};
-                        font-weight: 850;
-                        font-size: 13px;
-                        line-height: 1.25;
-                        margin-bottom: 8px;
-                        border: 1px solid rgba(15,23,42,0.06);
-                        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-                        white-space: nowrap;
-                        box-sizing: border-box;
-                    }}
-                </style>
-            </head>
-            <body>
+            st.markdown(
+                f"""
                 <div
-                    id="{safe_component_id}"
-                    class="wc-countdown-badge"
+                    class="wc-live-countdown-badge"
+                    data-wc-countdown="1"
                     data-kickoff-ms="{kickoff_epoch_ms}"
-                    data-expired-label="{safe_expired_label}"
-                >{safe_initial_text}</div>
-
-                <script>
-                (function() {{
-                    const badge = document.getElementById("{safe_component_id}");
-
-                    if (!badge) {{
-                        return;
-                    }}
-
-                    const kickoffMs = Number(badge.dataset.kickoffMs);
-                    const expiredLabel = badge.dataset.expiredLabel || "";
-
-                    function formatCountdown(totalSeconds) {{
-                        totalSeconds = Math.max(0, Math.floor(totalSeconds));
-
-                        const days = Math.floor(totalSeconds / 86400);
-                        const hours = Math.floor((totalSeconds % 86400) / 3600);
-                        const minutes = Math.floor((totalSeconds % 3600) / 60);
-                        const seconds = totalSeconds % 60;
-
-                        if (days >= 1) {{
-                            return days + "d " + hours + "h " + minutes + "m";
-                        }}
-
-                        return hours + "h " + minutes + "m " + seconds + "s";
-                    }}
-
-                    function updateCountdown() {{
-                        const remainingMs = kickoffMs - Date.now();
-
-                        if (remainingMs <= 0) {{
-                            badge.textContent = expiredLabel;
-                            window.clearInterval(timer);
-                            return;
-                        }}
-
-                        badge.textContent = formatCountdown(remainingMs / 1000);
-                    }}
-
-                    updateCountdown();
-
-                    const timer = window.setInterval(
-                        updateCountdown,
-                        1000
-                    );
-                }})();
-                </script>
-            </body>
-            </html>
-            """
-
-            components.html(
-                countdown_html,
-                height=38,
-                scrolling=False
+                    data-expired-label="{html.escape(badge_label, quote=True)}"
+                    style="
+                        display:inline-block;
+                        padding:7px 13px;
+                        border-radius:999px;
+                        background:{html.escape(str(status_info['badge_bg']))};
+                        color:{html.escape(str(status_info['badge_text']))};
+                        font-weight:850;
+                        font-size:13px;
+                        line-height:1.25;
+                        margin-bottom:8px;
+                        border:1px solid rgba(15,23,42,0.06);
+                        white-space:nowrap;
+                        box-sizing:border-box;
+                    "
+                >{html.escape(format_countdown_seconds(remaining_seconds))}</div>
+                """,
+                unsafe_allow_html=True
             )
-
             return
 
     st.markdown(
@@ -6197,6 +5857,62 @@ def render_status_badge(status_info, row=None):
         </div>
         """,
         unsafe_allow_html=True
+    )
+
+
+def inject_countdown_badge_runtime():
+    """Install one parent-page timer that updates every visible match countdown."""
+    components.html(
+        """
+        <script>
+        (() => {
+            const parentWindow = window.parent;
+            const parentDocument = parentWindow.document;
+            const timerKey = "__wcCountdownBadgeTimer";
+
+            if (parentWindow[timerKey]) {
+                parentWindow.clearInterval(parentWindow[timerKey]);
+            }
+
+            const formatCountdown = (totalSeconds) => {
+                totalSeconds = Math.max(0, Math.floor(totalSeconds));
+
+                const days = Math.floor(totalSeconds / 86400);
+                const hours = Math.floor((totalSeconds % 86400) / 3600);
+                const minutes = Math.floor((totalSeconds % 3600) / 60);
+                const seconds = totalSeconds % 60;
+
+                if (days >= 1) {
+                    return `${days}d ${hours}h ${minutes}m`;
+                }
+
+                return `${hours}h ${minutes}m ${seconds}s`;
+            };
+
+            const updateBadges = () => {
+                parentDocument
+                    .querySelectorAll('[data-wc-countdown="1"]')
+                    .forEach((badge) => {
+                        const kickoffMs = Number(badge.dataset.kickoffMs);
+                        const remainingMs = kickoffMs - Date.now();
+
+                        if (!Number.isFinite(kickoffMs) || remainingMs <= 0) {
+                            badge.textContent = badge.dataset.expiredLabel || "";
+                            badge.removeAttribute("data-wc-countdown");
+                            return;
+                        }
+
+                        badge.textContent = formatCountdown(remainingMs / 1000);
+                    });
+            };
+
+            updateBadges();
+            parentWindow[timerKey] = parentWindow.setInterval(updateBadges, 1000);
+        })();
+        </script>
+        """,
+        height=0,
+        scrolling=False
     )
 
 
@@ -6662,20 +6378,11 @@ def clear_daily_checkin_cache():
     Chỉ clear cache liên quan đến điểm danh và quota sao thưởng.
     Không clear matches/predictions/users vì điểm danh không làm thay đổi các dữ liệu đó.
     """
-    try:
-        get_daily_checkin_bonus_counts_cached.clear()
-    except Exception:
-        pass
-
-    try:
-        get_daily_checkin_state_cached.clear()
-    except Exception:
-        pass
-
-    try:
-        build_leaderboard_df.clear()
-    except Exception:
-        pass
+    clear_cached_functions(
+        get_daily_checkin_bonus_counts_cached,
+        get_daily_checkin_state_cached,
+        build_leaderboard_df
+    )
 
 @st.cache_data(ttl=60, show_spinner=False)
 def get_daily_checkin_bonus_counts_cached(user_id: int) -> dict:
@@ -7077,6 +6784,7 @@ def logout_user():
 # ============================================================
 
 @st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=30, show_spinner=False)
 def load_matches() -> pd.DataFrame:
     df = read_sql(
         """
@@ -7101,9 +6809,13 @@ def load_matches() -> pd.DataFrame:
             errors="coerce"
         ).dt.date
     else:
-        df["kickoff_date_filter"] = df["kickoff_time_utc_dt"].dt.tz_convert(
-            "Asia/Ho_Chi_Minh"
-        ).dt.date
+        df["kickoff_date_filter"] = (
+            df["kickoff_time_utc_dt"]
+            .dt.tz_convert("Asia/Ho_Chi_Minh")
+            .dt.date
+        )
+
+    df["is_finished_bool"] = df["is_finished"].map(to_bool)
 
     return df
 
@@ -7128,13 +6840,23 @@ def load_users() -> pd.DataFrame:
 
 
 @st.cache_data(ttl=10, show_spinner=False)
+@st.cache_data(ttl=10, show_spinner=False)
 def load_predictions() -> pd.DataFrame:
-    return read_sql(
+    df = read_sql(
         """
         SELECT *
         FROM predictions
         """
     )
+
+    if df.empty:
+        return df
+
+    df["user_id"] = pd.to_numeric(df["user_id"], errors="raise").astype(int)
+    df["match_id"] = pd.to_numeric(df["match_id"], errors="raise").astype(int)
+    df["star_type"] = df["star_type"].map(normalize_star_type)
+
+    return df
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -7318,38 +7040,25 @@ def render_goal_scorers_for_match(match_id: int):
     )
 
 def clear_data_cache():
-    """
-    Xóa cache dữ liệu đọc từ Supabase sau khi có thao tác ghi dữ liệu.
-    """
-    load_matches.clear()
-    load_users.clear()
-    load_predictions.clear()
-
-    try:
-        build_leaderboard_df.clear()
-    except NameError:
-        pass
-
-    try:
-        load_goal_scorers_for_match.clear()
-    except NameError:
-        pass
+    """Xóa toàn bộ cache dữ liệu đọc từ Supabase sau thao tác ghi."""
+    clear_cached_functions(
+        load_matches,
+        load_users,
+        load_predictions,
+        build_leaderboard_df,
+        load_goal_scorers_for_match
+    )
 
 
 def clear_prediction_write_cache():
     """
-    Chỉ xóa các cache bị ảnh hưởng trực tiếp khi dự đoán thay đổi.
+    Chỉ xóa cache bị ảnh hưởng trực tiếp khi dự đoán thay đổi.
     Không xóa cache trận đấu, user, cầu thủ ghi bàn hoặc AI.
     """
-    try:
-        load_predictions.clear()
-    except (NameError, AttributeError):
-        pass
-
-    try:
-        build_leaderboard_df.clear()
-    except (NameError, AttributeError):
-        pass
+    clear_cached_functions(
+        load_predictions,
+        build_leaderboard_df
+    )
 
 def _lock_user_for_prediction_write(conn, user_id: int):
     """
@@ -7415,10 +7124,7 @@ def _get_user_star_usage_in_transaction(
     user_id: int,
     exclude_match_id: int | None = None
 ) -> dict:
-    """
-    Đọc quota sao bằng chính transaction đang lưu prediction.
-    Nhờ đó kết quả validate không bị lệch giữa lúc kiểm tra và lúc ghi.
-    """
+    """Read quota and usage through the same transaction used for saving."""
     query = """
         SELECT
             p.star_type,
@@ -7437,64 +7143,15 @@ def _get_user_star_usage_in_transaction(
         query += " AND p.match_id <> :exclude_match_id"
         params["exclude_match_id"] = int(exclude_match_id)
 
-    rows = conn.execute(
-        text(query),
-        params
-    ).mappings().all()
-
-    hope_locked_used = 0
-    super_locked_used = 0
-    hope_reserved_used = 0
-    super_reserved_used = 0
-
-    for row in rows:
-        row_dict = dict(row)
-        row_star_type = normalize_star_type(row_dict.get("star_type"))
-
-        is_locked = is_match_locked_for_star(
-            row_dict.get("kickoff_time_utc"),
-            row_dict.get("is_finished")
-        )
-
-        is_reserved = is_match_open_for_star_transfer(
-            row_dict.get("kickoff_time_utc"),
-            row_dict.get("is_finished")
-        )
-
-        if row_star_type == STAR_TYPE_HOPE:
-            if is_locked:
-                hope_locked_used += 1
-            elif is_reserved:
-                hope_reserved_used += 1
-
-        elif row_star_type == STAR_TYPE_SUPER:
-            if is_locked:
-                super_locked_used += 1
-            elif is_reserved:
-                super_reserved_used += 1
+    rows = conn.execute(text(query), params).mappings().all()
+    counts = _summarize_star_usage_frame(pd.DataFrame(rows))
 
     reward_row = conn.execute(
         text(
             """
             SELECT
-                COALESCE(
-                    SUM(
-                        CASE
-                            WHEN reward_type = 'hope' THEN amount
-                            ELSE 0
-                        END
-                    ),
-                    0
-                ) AS hope_bonus,
-                COALESCE(
-                    SUM(
-                        CASE
-                            WHEN reward_type = 'super' THEN amount
-                            ELSE 0
-                        END
-                    ),
-                    0
-                ) AS super_bonus
+                COALESCE(SUM(CASE WHEN reward_type = 'hope' THEN amount ELSE 0 END), 0) AS hope_bonus,
+                COALESCE(SUM(CASE WHEN reward_type = 'super' THEN amount ELSE 0 END), 0) AS super_bonus
             FROM daily_checkin_rewards
             WHERE user_id = :user_id
             """
@@ -7505,31 +7162,16 @@ def _get_user_star_usage_in_transaction(
     hope_bonus = int((reward_row or {}).get("hope_bonus") or 0)
     super_bonus = int((reward_row or {}).get("super_bonus") or 0)
 
-    hope_total = int(HOPE_STARS_PER_USER) + hope_bonus
-    super_total = int(SUPER_STARS_PER_USER) + super_bonus
-
-    hope_left = max(0, hope_total - hope_locked_used)
-    super_left = max(0, super_total - super_locked_used)
-
-    hope_free_left = max(0, hope_left - hope_reserved_used)
-    super_free_left = max(0, super_left - super_reserved_used)
-
-    return {
-        "hope_used": hope_locked_used,
-        "super_used": super_locked_used,
-        "hope_locked_used": hope_locked_used,
-        "super_locked_used": super_locked_used,
-        "hope_reserved_used": hope_reserved_used,
-        "super_reserved_used": super_reserved_used,
-        "hope_total": hope_total,
-        "super_total": super_total,
-        "hope_bonus": hope_bonus,
-        "super_bonus": super_bonus,
-        "hope_left": hope_left,
-        "super_left": super_left,
-        "hope_free_left": hope_free_left,
-        "super_free_left": super_free_left
-    }
+    return _compose_star_usage_result(
+        hope_locked_used=counts[0],
+        super_locked_used=counts[1],
+        hope_reserved_used=counts[2],
+        super_reserved_used=counts[3],
+        hope_total=HOPE_STARS_PER_USER + hope_bonus,
+        super_total=SUPER_STARS_PER_USER + super_bonus,
+        hope_bonus=hope_bonus,
+        super_bonus=super_bonus
+    )
 
 def _normalize_prediction_for_match(
     match: dict,
@@ -7769,33 +7411,13 @@ def _write_prediction_in_transaction(
     }
 
 
-def get_user_prediction_from_db(user_id: int, match_id: int):
-    """
-    Dùng cho thao tác ghi dữ liệu/save.
-    Luôn đọc trực tiếp database để đảm bảo dữ liệu mới nhất.
-    """
-    return fetch_one(
-        """
-        SELECT *
-        FROM predictions
-        WHERE user_id = :user_id
-          AND match_id = :match_id
-        """,
-        {
-            "user_id": user_id,
-            "match_id": match_id
-        }
-    )
 
 
-def get_user_star_usage_from_db(user_id: int, exclude_match_id: int | None = None) -> dict:
-    """
-    Dùng cho validate khi lưu dự đoán.
-
-    Logic mới:
-    - Sao ở trận đã khóa mới tính là đã dùng thật.
-    - Sao ở trận chưa diễn ra tính là đang giữ tạm.
-    """
+def get_user_star_usage_from_db(
+    user_id: int,
+    exclude_match_id: int | None = None
+) -> dict:
+    """Read and validate the latest star inventory directly from PostgreSQL."""
     query = """
         SELECT
             p.star_type,
@@ -7808,62 +7430,20 @@ def get_user_star_usage_from_db(user_id: int, exclude_match_id: int | None = Non
         WHERE p.user_id = :user_id
     """
 
-    params = {
-        "user_id": user_id
-    }
+    params = {"user_id": int(user_id)}
 
     if exclude_match_id is not None:
         query += " AND p.match_id <> :exclude_match_id"
-        params["exclude_match_id"] = exclude_match_id
+        params["exclude_match_id"] = int(exclude_match_id)
 
-    df = read_sql(query, params)
-
-    if df.empty:
-        hope_locked_used = 0
-        super_locked_used = 0
-        hope_reserved_used = 0
-        super_reserved_used = 0
-    else:
-        df["star_type"] = df["star_type"].apply(normalize_star_type)
-
-        df["is_star_locked"] = df.apply(
-            lambda row: is_match_locked_for_star(
-                row.get("kickoff_time_utc"),
-                row.get("is_finished")
-            ),
-            axis=1
-        )
-
-        df["is_star_reserved"] = df.apply(
-            lambda row: is_match_open_for_star_transfer(
-                row.get("kickoff_time_utc"),
-                row.get("is_finished")
-            ),
-            axis=1
-        )
-
-        hope_locked_used = int(
-            ((df["star_type"] == STAR_TYPE_HOPE) & df["is_star_locked"]).sum()
-        )
-
-        super_locked_used = int(
-            ((df["star_type"] == STAR_TYPE_SUPER) & df["is_star_locked"]).sum()
-        )
-
-        hope_reserved_used = int(
-            ((df["star_type"] == STAR_TYPE_HOPE) & df["is_star_reserved"]).sum()
-        )
-
-        super_reserved_used = int(
-            ((df["star_type"] == STAR_TYPE_SUPER) & df["is_star_reserved"]).sum()
-        )
+    counts = _summarize_star_usage_frame(read_sql(query, params))
 
     return build_star_usage_result(
         user_id=user_id,
-        hope_locked_used=hope_locked_used,
-        super_locked_used=super_locked_used,
-        hope_reserved_used=hope_reserved_used,
-        super_reserved_used=super_reserved_used
+        hope_locked_used=counts[0],
+        super_locked_used=counts[1],
+        hope_reserved_used=counts[2],
+        super_reserved_used=counts[3]
     )
 
 def update_user_avatar(user_id: int, avatar_key: str):
@@ -7890,15 +7470,10 @@ def update_user_avatar(user_id: int, avatar_key: str):
         }
     )
 
-    try:
-        load_users.clear()
-    except Exception:
-        pass
-
-    try:
-        build_leaderboard_df.clear()
-    except Exception:
-        pass
+    clear_cached_functions(
+        load_users,
+        build_leaderboard_df
+    )
 
 def get_user_prediction(user_id: int, match_id: int):
     """
@@ -8387,84 +7962,6 @@ def get_star_transfer_candidates(
     return candidates
 
 
-def get_star_save_plan(
-    user_id: int,
-    match_id: int,
-    selected_star_type: str,
-    current_star_type: str
-) -> dict:
-    """
-    Quyết định khi lưu:
-    - save_direct: lưu thẳng.
-    - exhausted: sao đã hết thật.
-    - transfer_required: cần hỏi chuyển sao từ trận khác.
-    """
-    selected_star_type = normalize_star_type(selected_star_type)
-    current_star_type = normalize_star_type(current_star_type)
-
-    if selected_star_type == STAR_TYPE_NONE:
-        return {
-            "status": "save_direct",
-            "candidates": []
-        }
-
-    if selected_star_type == current_star_type:
-        return {
-            "status": "save_direct",
-            "candidates": []
-        }
-
-    usage = get_user_star_usage_from_db(
-        user_id=user_id,
-        exclude_match_id=match_id
-    )
-
-    if selected_star_type == STAR_TYPE_HOPE:
-        left_key = "hope_left"
-        free_key = "hope_free_left"
-        star_name = "Ngôi sao hy vọng"
-
-    elif selected_star_type == STAR_TYPE_SUPER:
-        left_key = "super_left"
-        free_key = "super_free_left"
-        star_name = "Siêu sao"
-
-    else:
-        return {
-            "status": "save_direct",
-            "candidates": []
-        }
-
-    if usage[left_key] <= 0:
-        return {
-            "status": "exhausted",
-            "message": f"Bạn đã dùng hết {star_name}.",
-            "candidates": []
-        }
-
-    if usage[free_key] > 0:
-        return {
-            "status": "save_direct",
-            "candidates": []
-        }
-
-    candidates = get_star_transfer_candidates(
-        user_id=user_id,
-        target_match_id=match_id,
-        star_type=selected_star_type
-    )
-
-    if not candidates:
-        return {
-            "status": "exhausted",
-            "message": f"Hiện không còn {star_name} trống để dùng cho trận này.",
-            "candidates": []
-        }
-
-    return {
-        "status": "transfer_required",
-        "candidates": candidates
-    }
 
 def save_prediction(
     user_id: int,
@@ -9084,121 +8581,6 @@ def render_match_title(home_name, away_name, match_id: int):
     )
 
 
-def render_pending_star_transfer_box(user_id: int, match_id: int):
-    pending = st.session_state.get("pending_star_transfer")
-
-    if not pending:
-        return
-
-    if int(pending.get("target_match_id")) != int(match_id):
-        return
-
-    star_type = normalize_star_type(pending.get("star_type"))
-    star_label = format_star_short(star_type)
-    candidates = pending.get("candidates", [])
-
-    if not candidates:
-        st.session_state.pop("pending_star_transfer", None)
-        return
-
-    candidate_options = {
-        candidate["label"]: candidate
-        for candidate in candidates
-    }
-
-    with stylable_container(
-        key=f"star_transfer_confirm_box_{match_id}",
-        css_styles="""
-        {
-            margin-top: 18px;
-            margin-bottom: 18px;
-            padding: 18px 20px;
-            border-radius: 20px;
-            border: 1px solid rgba(245, 158, 11, 0.42);
-            background:
-                radial-gradient(circle at top left, rgba(245, 197, 66, 0.18), transparent 34%),
-                linear-gradient(135deg, rgba(255, 251, 235, 0.98), rgba(255, 255, 255, 0.96));
-            box-shadow: 0 18px 42px rgba(15, 23, 42, 0.12);
-        }
-
-        div[data-testid="stSelectbox"] label {
-            color: #07111F !important;
-            font-weight: 850 !important;
-        }
-        """
-    ):
-        st.markdown(
-            f"""
-            <div style="
-                color:#07111F;
-                font-weight:950;
-                font-size:18px;
-                margin-bottom:6px;
-            ">
-                Xác nhận chuyển bổ trợ
-            </div>
-
-            <div style="
-                color:#475569;
-                font-size:14px;
-                line-height:1.55;
-                margin-bottom:14px;
-            ">
-                Bạn đang muốn dùng <b>{html.escape(star_label)}</b> cho trận
-                <b>{html.escape(str(pending.get("target_label")))}</b>.
-                Tuy nhiên bổ trợ còn lại này đang được đặt ở trận khác chưa diễn ra.
-                Hãy chọn trận muốn gỡ sao để chuyển sang trận hiện tại.
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-        selected_source_label = st.selectbox(
-            "Chọn trận muốn chuyển sao từ:",
-            options=list(candidate_options.keys()),
-            key=f"star_transfer_source_{match_id}"
-        )
-
-        confirm_col, cancel_col = st.columns([1, 1])
-
-        with confirm_col:
-            confirm_transfer = st.button(
-                "Xác nhận chuyển sao",
-                key=f"confirm_star_transfer_{match_id}",
-                use_container_width=True
-            )
-
-        with cancel_col:
-            cancel_transfer = st.button(
-                "Hủy",
-                key=f"cancel_star_transfer_{match_id}",
-                use_container_width=True
-            )
-
-        if confirm_transfer:
-            selected_candidate = candidate_options[selected_source_label]
-
-            try:
-                transfer_star_and_save_prediction(
-                    user_id=user_id,
-                    source_match_id=int(selected_candidate["match_id"]),
-                    target_match_id=int(pending["target_match_id"]),
-                    predicted_home_score=int(pending["predicted_home_score"]),
-                    predicted_away_score=int(pending["predicted_away_score"]),
-                    predicted_winner_team_id=pending["predicted_winner_team_id"],
-                    star_type=star_type
-                )
-
-                st.session_state.pop("pending_star_transfer", None)
-                st.success("Đã chuyển bổ trợ và lưu dự đoán.")
-                st.rerun()
-
-            except ValueError as e:
-                st.error(str(e))
-
-        if cancel_transfer:
-            st.session_state.pop("pending_star_transfer", None)
-            st.rerun()
 
 @st.dialog("Xác nhận chuyển bổ trợ")
 def render_star_transfer_dialog(user_id: int):
@@ -10049,7 +9431,8 @@ def handle_delete_prediction_form_submit(
 def render_match_card(
     row,
     user_id: int,
-    user_prediction_map: dict[int, dict] | None = None
+    user_prediction_map: dict[int, dict] | None = None,
+    user_star_usage: dict | None = None
 ):
     match_id = int(row["match_id"])
 
@@ -10489,19 +9872,18 @@ def render_match_card(
                     predicted_winner_team_id = winner_options[selected_winner_name]
                     predicted_winner_team_name = selected_winner_name
 
-            # Dùng cho HIỂN THỊ label:
-            # Không exclude match hiện tại để "Đang dùng" tính cả sao đang gắn
-            # ở chính trận này nếu trận đó chưa khóa.
-            star_usage_for_display = get_user_star_usage(
-                user_id=user_id,
-                exclude_match_id=None
+            # Một snapshot dùng chung cho toàn bộ card trong cùng rerun.
+            star_usage_for_display = (
+                user_star_usage
+                or get_user_star_usage(user_id=user_id)
             )
 
-            # Dùng cho LOGIC quota khi lưu/cập nhật:
-            # Exclude match hiện tại để không tự tính trùng sao đang sửa.
-            star_usage_for_quota = get_user_star_usage(
-                user_id=user_id,
-                exclude_match_id=match_id
+            # Loại prediction hiện tại khỏi snapshot bằng phép điều chỉnh O(1),
+            # thay vì merge lại toàn bộ predictions + matches cho từng card.
+            star_usage_for_quota = exclude_prediction_from_star_usage(
+                usage=star_usage_for_display,
+                existing_prediction=existing,
+                match_row=row
             )
 
             # HIỂN THỊ:
@@ -10823,7 +10205,7 @@ def render_filter_dropdown(
 
     return st.session_state[state_key]
 
-def page_matches():
+def page_matches(user_star_usage: dict | None = None):
     render_app_hero()
 
     render_page_title(
@@ -10842,6 +10224,7 @@ def page_matches():
     render_kpi_tiles(matches)
 
     user_id = st.session_state["user"]["user_id"]
+    user_star_usage = user_star_usage or get_user_star_usage(user_id)
     success_message = st.session_state.pop(
         "star_transfer_success_message",
         None
@@ -10867,7 +10250,7 @@ def page_matches():
             int(ai_suggestion_match_id)
         )
     
-    render_star_balance(user_id)
+    render_star_balance(user_id, usage=user_star_usage)
     render_scoring_rules()
 
     available_dates = sorted(matches["kickoff_date_filter"].dropna().unique())
@@ -11367,18 +10750,18 @@ def page_matches():
     if status_filter == "Sắp diễn ra":
         filtered = filtered[
             (filtered["kickoff_time_utc_dt"] > now_utc)
-            & (~filtered["is_finished"].apply(to_bool))
+            & (~filtered["is_finished_bool"])
         ]
 
     elif status_filter == "Đã khóa":
         filtered = filtered[
             (filtered["kickoff_time_utc_dt"] <= now_utc)
-            & (~filtered["is_finished"].apply(to_bool))
+            & (~filtered["is_finished_bool"])
         ]
 
     elif status_filter == "Đã có kết quả":
         filtered = filtered[
-            filtered["is_finished"].apply(to_bool)
+            filtered["is_finished_bool"]
         ]
 
     user_predictions = load_predictions()
@@ -11405,6 +10788,8 @@ def page_matches():
         st.info("Không có trận nào phù hợp với bộ lọc hiện tại.")
         return
 
+    inject_countdown_badge_runtime()
+
     for match_date, group_df in filtered.groupby("kickoff_date_filter"):
         st.markdown("---")
         st.header(format_filter_date(match_date))
@@ -11415,7 +10800,8 @@ def page_matches():
             render_match_card(
                 row,
                 user_id,
-                user_prediction_map=user_prediction_map
+                user_prediction_map=user_prediction_map,
+                user_star_usage=user_star_usage
             )
 
 def page_my_predictions():
@@ -11571,6 +10957,7 @@ def page_my_predictions():
         st.markdown("<div style='height: 24px;'></div>", unsafe_allow_html=True)
 
 @st.cache_data(ttl=10, show_spinner=False)
+@st.cache_data(ttl=10, show_spinner=False)
 def build_leaderboard_df():
     users = load_users()
     predictions = load_predictions()
@@ -11581,138 +10968,118 @@ def build_leaderboard_df():
 
     if predictions.empty:
         result = users.copy()
-        result["total_points"] = 0
-        result["base_points"] = 0
-        result["star_bonus_points"] = 0
-        result["hope_stars_used"] = 0
-        result["super_stars_used"] = 0
-        result["num_predictions"] = 0
-        result["num_scored"] = 0
-        result["exact_score_count"] = 0
-        result["correct_outcome_count"] = 0
-        result["knockout_winner_checkable"] = 0
-        result["knockout_winner_correct"] = 0
-        result["exact_score_rate"] = 0.0
-        result["outcome_rate"] = 0.0
-        result["knockout_winner_rate"] = 0.0
-        result["result_prediction_checkable"] = 0
-        result["result_prediction_correct"] = 0
-        result["result_prediction_rate"] = 0.0
+
+        zero_int_columns = [
+            "total_points",
+            "base_points",
+            "star_bonus_points",
+            "hope_stars_used",
+            "super_stars_used",
+            "num_predictions",
+            "num_scored",
+            "exact_score_count",
+            "correct_outcome_count",
+            "knockout_winner_checkable",
+            "knockout_winner_correct",
+            "result_prediction_checkable",
+            "result_prediction_correct"
+        ]
+        zero_rate_columns = [
+            "exact_score_rate",
+            "outcome_rate",
+            "knockout_winner_rate",
+            "result_prediction_rate"
+        ]
+
+        for column in zero_int_columns:
+            result[column] = 0
+
+        for column in zero_rate_columns:
+            result[column] = 0.0
 
         if "avatar_key" not in result.columns:
             result["avatar_key"] = DEFAULT_AVATAR_KEY
 
         result = result.sort_values("display_name").reset_index(drop=True)
         result["rank"] = range(1, len(result) + 1)
-
         return result
 
-    df = predictions.merge(users, on="user_id", how="left")
-    df = df.merge(matches, on="match_id", how="left")
+    frame = predictions.merge(users, on="user_id", how="left")
+    frame = frame.merge(matches, on="match_id", how="left")
 
-    if "avatar_key" not in df.columns:
-        df["avatar_key"] = DEFAULT_AVATAR_KEY
+    if "avatar_key" not in frame.columns:
+        frame["avatar_key"] = DEFAULT_AVATAR_KEY
 
-    metrics = []
+    score_columns = [
+        "predicted_home_score",
+        "predicted_away_score",
+        "home_score_for_prediction",
+        "away_score_for_prediction",
+        "predicted_winner_team_id",
+        "winner_team_id",
+        "points",
+        "base_points",
+        "star_bonus_points"
+    ]
 
-    for _, row in df.iterrows():
-        pred_home = to_optional_int(row.get("predicted_home_score"))
-        pred_away = to_optional_int(row.get("predicted_away_score"))
+    for column in score_columns:
+        frame[column] = pd.to_numeric(frame[column], errors="coerce")
 
-        actual_home = to_optional_int(row.get("home_score_for_prediction"))
-        actual_away = to_optional_int(row.get("away_score_for_prediction"))
+    finished = frame["is_finished"].map(to_bool)
+    is_knockout = frame["is_knockout"].map(to_bool)
 
-        is_scored = (
-            pred_home is not None
-            and pred_away is not None
-            and actual_home is not None
-            and actual_away is not None
-            and to_bool(row.get("is_finished"))
-        )
+    pred_home = frame["predicted_home_score"]
+    pred_away = frame["predicted_away_score"]
+    actual_home = frame["home_score_for_prediction"]
+    actual_away = frame["away_score_for_prediction"]
 
-        exact = False
-        correct_outcome = False
-
-        if is_scored:
-            exact = pred_home == actual_home and pred_away == actual_away
-            correct_outcome = (
-                get_outcome(pred_home, pred_away)
-                == get_outcome(actual_home, actual_away)
-            )
-
-        is_knockout = to_bool(row.get("is_knockout"))
-
-        knockout_winner_checkable = (
-            is_scored
-            and is_knockout
-            and to_optional_int(row.get("winner_team_id")) is not None
-        )
-
-        knockout_winner_correct = False
-
-        if knockout_winner_checkable:
-            knockout_winner_correct = (
-                to_optional_int(row.get("predicted_winner_team_id"))
-                == to_optional_int(row.get("winner_team_id"))
-            )
-
-        metrics.append({
-            "is_scored": is_scored,
-            "exact_score": exact,
-            "correct_outcome": correct_outcome,
-            "knockout_winner_checkable": knockout_winner_checkable,
-            "knockout_winner_correct": knockout_winner_correct
-        })
-
-    metrics_df = pd.DataFrame(metrics)
-
-    df = pd.concat(
-        [
-            df.reset_index(drop=True),
-            metrics_df.reset_index(drop=True)
-        ],
-        axis=1
+    frame["is_scored"] = (
+        pred_home.notna()
+        & pred_away.notna()
+        & actual_home.notna()
+        & actual_away.notna()
+        & finished
     )
 
-    df["points"] = pd.to_numeric(
-        df["points"],
-        errors="coerce"
-    ).fillna(0)
-
-    df["base_points"] = pd.to_numeric(
-        df["base_points"],
-        errors="coerce"
-    ).fillna(0)
-
-    df["star_bonus_points"] = pd.to_numeric(
-        df["star_bonus_points"],
-        errors="coerce"
-    ).fillna(0)
-
-    df["star_type"] = df["star_type"].apply(normalize_star_type)
-    
-    # Chỉ tính sao là đã dùng thật khi trận đã khóa dự đoán.
-    # Sao đang đặt ở trận chưa diễn ra không bị trừ khỏi kho sao thực tế.
-    df["is_star_locked_for_usage"] = df.apply(
-        lambda row: is_match_locked_for_star(
-            row.get("kickoff_time_utc"),
-            row.get("is_finished")
-        ),
-        axis=1
+    frame["exact_score"] = (
+        frame["is_scored"]
+        & pred_home.eq(actual_home)
+        & pred_away.eq(actual_away)
     )
-    
-    df["hope_star_used"] = (
-        (df["star_type"] == STAR_TYPE_HOPE)
-        & df["is_star_locked_for_usage"]
+
+    predicted_outcome = pred_home.gt(pred_away).astype(int) - pred_home.lt(pred_away).astype(int)
+    actual_outcome = actual_home.gt(actual_away).astype(int) - actual_home.lt(actual_away).astype(int)
+
+    frame["correct_outcome"] = (
+        frame["is_scored"]
+        & predicted_outcome.eq(actual_outcome)
     )
-    
-    df["super_star_used"] = (
-        (df["star_type"] == STAR_TYPE_SUPER)
-        & df["is_star_locked_for_usage"]
+
+    frame["knockout_winner_checkable"] = (
+        frame["is_scored"]
+        & is_knockout
+        & frame["winner_team_id"].notna()
+    )
+    frame["knockout_winner_correct"] = (
+        frame["knockout_winner_checkable"]
+        & frame["predicted_winner_team_id"].eq(frame["winner_team_id"])
+    )
+
+    for column in ["points", "base_points", "star_bonus_points"]:
+        frame[column] = frame[column].fillna(0)
+
+    frame["star_type"] = frame["star_type"].map(normalize_star_type)
+    locked, _ = _get_star_lock_masks(frame)
+
+    frame["hope_star_used"] = (
+        frame["star_type"].eq(STAR_TYPE_HOPE) & locked
+    )
+    frame["super_star_used"] = (
+        frame["star_type"].eq(STAR_TYPE_SUPER) & locked
     )
 
     summary = (
-        df
+        frame
         .groupby(
             ["user_id", "username", "display_name", "role", "avatar_key"],
             as_index=False
@@ -11732,7 +11099,7 @@ def build_leaderboard_df():
         )
     )
 
-    numeric_cols = [
+    numeric_columns = [
         "total_points",
         "base_points",
         "star_bonus_points",
@@ -11746,24 +11113,27 @@ def build_leaderboard_df():
         "knockout_winner_correct"
     ]
 
-    for col in numeric_cols:
-        summary[col] = summary[col].fillna(0).astype(int)
-
-    summary["exact_score_rate"] = summary.apply(
-        lambda row: row["exact_score_count"] / row["num_scored"]
-        if row["num_scored"] else 0,
-        axis=1
+    summary[numeric_columns] = (
+        summary[numeric_columns]
+        .fillna(0)
+        .astype(int)
     )
+
+    scored_denominator = summary["num_scored"].where(
+        summary["num_scored"].ne(0)
+    )
+    summary["exact_score_rate"] = (
+        summary["exact_score_count"] / scored_denominator
+    ).fillna(0.0)
 
     summary["result_prediction_checkable"] = summary["num_scored"]
-    
     summary["result_prediction_correct"] = summary["correct_outcome_count"]
-    
-    summary["result_prediction_rate"] = summary.apply(
-        lambda row: row["result_prediction_correct"] / row["result_prediction_checkable"]
-        if row["result_prediction_checkable"] else 0,
-        axis=1
+    result_denominator = summary["result_prediction_checkable"].where(
+        summary["result_prediction_checkable"].ne(0)
     )
+    summary["result_prediction_rate"] = (
+        summary["result_prediction_correct"] / result_denominator
+    ).fillna(0.0)
 
     summary = summary.sort_values(
         ["total_points", "exact_score_count", "correct_outcome_count"],
@@ -12658,6 +12028,7 @@ def main():
             st.stop()
 
     user = st.session_state["user"]
+    user_star_usage = get_user_star_usage(int(user["user_id"]))
 
     render_avatar_popover(user)
     maybe_render_daily_checkin_popup(user["user_id"])
@@ -12667,7 +12038,10 @@ def main():
 
         st.markdown(f"Xin chào, **{user['display_name']}**")
         st.caption(f"Role: {user['role']}")
-        render_sidebar_star_balance(user["user_id"])
+        render_sidebar_star_balance(
+            user["user_id"],
+            usage=user_star_usage
+        )
 
         if st.button("Đăng xuất", use_container_width=True):
             logout_user()
@@ -12701,7 +12075,7 @@ def main():
         render_daily_checkin_shortcut_button(
             int(user["user_id"])
         )
-        page_matches()
+        page_matches(user_star_usage=user_star_usage)
 
     elif selected_page == "Dự đoán của tôi":
         page_my_predictions()
