@@ -7839,7 +7839,7 @@ def build_ai_match_suggestion_prompt(match_row: dict) -> str:
         "- Không thêm dòng trống giữa đoạn phân tích và dòng dự đoán.\n"
         "- Không dùng HTML, CSS, Markdown, bảng, bullet point, code block hoặc thẻ div "
         "trong câu trả lời cuối cùng.\n"
-        "- Không thêm tiêu đề, nhãn 'AI gợi ý', phần 'Nguồn', lời dẫn hoặc mô tả quá "
+        "- Không thêm tiêu đề, nhãn 'AI phân tích', phần 'Nguồn', lời dẫn hoặc mô tả quá "
         "trình tìm kiếm.\n"
         "- Chỉ trả về đoạn phân tích và dòng dự đoán cuối cùng."
     )
@@ -8905,7 +8905,7 @@ def render_ai_match_summary_dialog(match_id: int):
         unsafe_allow_html=True
     )
 
-@st.dialog("AI gợi ý")
+@st.dialog("AI phân tích")
 def render_ai_match_suggestion_dialog(match_id: int):
     match_id = int(match_id)
 
@@ -8926,7 +8926,7 @@ def render_ai_match_suggestion_dialog(match_id: int):
     is_editable = can_edit_prediction(match.get("kickoff_time_utc"))
 
     if is_finished or not is_editable:
-        st.warning("Chỉ có thể tạo AI gợi ý cho trận đang mở dự đoán.")
+        st.warning("Chỉ có thể tạo AI phân tích cho trận đang mở dự đoán.")
         if st.button(
             "Đóng",
             use_container_width=True,
@@ -9006,7 +9006,7 @@ def render_ai_match_suggestion_dialog(match_id: int):
                 )
 
             except Exception as e:
-                st.error("Không tạo được AI gợi ý cho trận này.")
+                st.error("Không tạo được AI phân tích cho trận này.")
                 st.caption(str(e))
                 return
 
@@ -9679,7 +9679,7 @@ def render_match_card(
             
             elif status_info.get("status_key") == "open":
                 ai_suggestion_clicked = st.button(
-                    "AI gợi ý",
+                    "AI phân tích",
                     key=f"ai_suggestion_button_{match_id}",
                     type="secondary",
                     use_container_width=True
