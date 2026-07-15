@@ -123,7 +123,7 @@ APP_LOGO_URL = "data/static/app-logo.png"
 
 HERO_BACKGROUND_URL = "data/static/hero-background.jpeg"
 
-HERO_TROPHY_IMAGE_URL = "data/static/trophy-render.png"
+HERO_TROPHY_IMAGE_URL = "data/static/hero-logo-new.png"
 
 SIDEBAR_DECORATION_URL = "data/static/sidebar.png"
 
