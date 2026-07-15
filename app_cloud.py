@@ -1011,48 +1011,43 @@ def inject_hide_streamlit_embed_footer_css():
 
 def inject_match_card_border_animation_css():
     """
-    Khai báo animation cho viền card trận đấu.
+    CSS animation cho hiệu ứng viền card lấp lánh chạy theo chiều kim đồng hồ.
 
-    Hiệu ứng:
-    - Một dải sáng chạy theo chiều kim đồng hồ.
-    - Dải sáng bám theo đúng đường viền bo góc của card.
-    - Không tạo pseudo-element nên không che hoặc ảnh hưởng
-      tới nội dung, nút bấm và các thành phần bên trong card.
+    Lưu ý:
+    - Chỉ khai báo animation dùng chung.
+    - Phần giới hạn hiệu ứng chỉ nằm ở viền sẽ được xử lý trong get_match_card_css().
     """
     st.markdown(
         """
         <style>
-        /*
-         * Đăng ký biến góc để trình duyệt có thể nội suy
-         * chuyển động mượt từ 0deg đến 360deg.
-         */
         @property --wc-match-card-border-angle {
             syntax: "<angle>";
             initial-value: 0deg;
             inherits: false;
         }
 
-        /*
-         * Góc tăng từ 0 đến 360 độ tạo chuyển động
-         * theo chiều kim đồng hồ.
-         */
         @keyframes wcMatchCardBorderClockwise {
             from {
                 --wc-match-card-border-angle: 0deg;
             }
-
             to {
                 --wc-match-card-border-angle: 360deg;
             }
         }
 
-        /*
-         * Tôn trọng thiết lập giảm chuyển động của thiết bị.
-         * Khi được bật, card vẫn giữ nguyên viền trạng thái
-         * nhưng dừng animation.
-         */
+        @keyframes wcMatchCardBorderGlow {
+            0%, 100% {
+                opacity: 0.88;
+                filter: brightness(1);
+            }
+            50% {
+                opacity: 1;
+                filter: brightness(1.12);
+            }
+        }
+
         @media (prefers-reduced-motion: reduce) {
-            div[class*="st-key-match_card_"] {
+            div[class*="st-key-match_card_"]::before {
                 animation: none !important;
             }
         }
@@ -5563,49 +5558,36 @@ def get_match_status_info(row):
 
 def get_match_card_css(status_info):
     """
-    Tạo CSS cho card trận đấu.
+    CSS cho card trận đấu.
 
-    Ba trạng thái có animation:
-    - open: đang mở dự đoán, viền xanh dương
-    - locked: đã khóa dự đoán, viền cam
-    - finished: đã có kết quả, viền xanh lá
-
-    Trạng thái unknown giữ nguyên viền tĩnh như trước.
-
-    Hiệu ứng chỉ nằm trong vùng border, không phủ lên
-    các thành phần bên trong card.
+    Yêu cầu:
+    - Chỉ tạo hiệu ứng lấp lánh ở riêng đường viền card
+    - Không làm hiệu ứng chạy vào giữa card
+    - Không ảnh hưởng các thành phần khác trong card
+    - Áp dụng cho 3 trạng thái:
+        + open
+        + locked
+        + finished
+    - Trạng thái khác giữ nguyên như cũ
     """
-    status_key = str(
-        status_info.get("status_key") or ""
-    ).strip().lower()
-
-    border_color = str(
-        status_info.get("border_color") or "#9CA3AF"
-    )
-
+    status_key = str(status_info.get("status_key") or "").strip().lower()
+    border_color = str(status_info.get("border_color") or "#9CA3AF")
     card_background = str(
-        status_info.get("background")
-        or "rgba(255, 255, 255, 0.94)"
+        status_info.get("background") or
+        "linear-gradient(135deg, rgba(255,255,255,0.96), rgba(255,255,255,0.92))"
     )
+
+    animated_statuses = {"open", "locked", "finished"}
 
     glow_color_by_status = {
-        "open": "#93C5FD",
-        "locked": "#FDE68A",
-        "finished": "#86EFAC"
+        "open": "#93C5FD",      # xanh dương nhạt
+        "locked": "#FCD34D",    # vàng cam nhạt
+        "finished": "#86EFAC"   # xanh lá nhạt
     }
 
-    glow_color = glow_color_by_status.get(
-        status_key,
-        border_color
-    )
+    glow_color = glow_color_by_status.get(status_key, border_color)
 
-    animated_statuses = {
-        "open",
-        "locked",
-        "finished"
-    }
-
-    # Các trạng thái ngoài 3 trạng thái chính giữ nguyên CSS cũ.
+    # Giữ nguyên card thường cho các trạng thái ngoài 3 trạng thái chính
     if status_key not in animated_statuses:
         return f"""
         {{
@@ -5622,48 +5604,58 @@ def get_match_card_css(status_info):
 
     return f"""
     {{
-        --wc-match-card-border-angle: 0deg;
-        --wc-match-card-border-color: {border_color};
-        --wc-match-card-glow-color: {glow_color};
-
-        border: 2px solid transparent;
+        border: 2px solid {border_color};
         border-radius: 20px;
-
         padding: 22px 22px 16px 22px;
         margin-bottom: 22px;
+        background: {card_background};
+        box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+        position: relative;
+        overflow: hidden;
+        isolation: isolate;
+    }}
+
+    > * {{
+        position: relative;
+        z-index: 1;
+    }}
+
+    &::before {{
+        content: "";
+        position: absolute;
+        inset: -2px;
+        border-radius: 22px;
+        padding: 2px;
+        pointer-events: none;
+        z-index: 0;
 
         background:
-            {card_background} padding-box,
             conic-gradient(
                 from var(--wc-match-card-border-angle),
 
-                var(--wc-match-card-border-color) 0deg,
-                var(--wc-match-card-border-color) 298deg,
+                transparent 0deg,
+                transparent 300deg,
 
-                rgba(255, 255, 255, 0.16) 312deg,
-                var(--wc-match-card-glow-color) 325deg,
+                rgba(255, 255, 255, 0.00) 312deg,
+                rgba(255, 255, 255, 0.35) 324deg,
+                {glow_color} 336deg,
+                rgba(255, 255, 255, 0.98) 346deg,
+                {glow_color} 354deg,
+                rgba(255, 255, 255, 0.00) 360deg
+            );
 
-                rgba(255, 255, 255, 0.98) 338deg,
-
-                var(--wc-match-card-glow-color) 349deg,
-                rgba(255, 255, 255, 0.16) 358deg,
-
-                var(--wc-match-card-border-color) 360deg
-            ) border-box;
-
-        background-repeat: no-repeat;
-
-        box-shadow:
-            0 14px 34px rgba(15, 23, 42, 0.08);
-
-        position: relative;
-        overflow: hidden;
+        -webkit-mask:
+            linear-gradient(#000 0 0) content-box,
+            linear-gradient(#000 0 0);
+        -webkit-mask-composite: xor;
+        mask:
+            linear-gradient(#000 0 0) content-box,
+            linear-gradient(#000 0 0);
+        mask-composite: exclude;
 
         animation:
-            wcMatchCardBorderClockwise
-            3.4s
-            linear
-            infinite;
+            wcMatchCardBorderClockwise 3.2s linear infinite,
+            wcMatchCardBorderGlow 1.8s ease-in-out infinite;
     }}
     """
 
