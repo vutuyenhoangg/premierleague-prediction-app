@@ -9629,7 +9629,9 @@ def render_ai_match_suggestion_dialog(match_id: int):
                 st.caption(str(e))
                 return
 
-    safe_suggestion = html.escape(str(suggestion_text)).replace("\n", "<br>")
+    safe_suggestion = html.escape(
+        str(suggestion_text)
+    ).replace("\n", "<br>")
     
     st.markdown(
         f"""
@@ -9638,25 +9640,12 @@ def render_ai_match_suggestion_dialog(match_id: int):
             font-size:15.5px;
             line-height:1.75;
             font-weight:400;
-            margin-bottom:7px;
+            margin-bottom:18px;
             white-space:normal;
             word-break:normal;
             overflow-wrap:anywhere;
         ">
             {safe_suggestion}
-        </div>
-    
-        <div style="
-            color:#94A3B8;
-            font-size:11.5px;
-            line-height:1.4;
-            font-style:italic;
-            font-weight:400;
-            text-align:center;
-            margin-top:0;
-            margin-bottom:12px;
-        ">
-            Phân tích từ AI mang tính chất tham khảo
         </div>
         """,
         unsafe_allow_html=True
@@ -9669,7 +9658,24 @@ def render_ai_match_suggestion_dialog(match_id: int):
     ):
         st.session_state.pop("ai_suggestion_match_id", None)
         st.rerun()
-
+    
+    st.markdown(
+        """
+        <div style="
+            margin-top:7px;
+            margin-bottom:0;
+            color:#94A3B8;
+            font-size:11.5px;
+            line-height:1.4;
+            font-style:italic;
+            font-weight:400;
+            text-align:center;
+        ">
+            Phân tích từ AI mang tính chất tham khảo
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 def normalize_venue_text(value) -> str:
     """
     Chuẩn hóa tên SVĐ/địa điểm để hiển thị ở cuối card.
