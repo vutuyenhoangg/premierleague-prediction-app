@@ -10054,112 +10054,480 @@ def set_prediction_feedback_message(
 
 def render_prediction_feedback_popup():
     """
-    Hiển thị feedback sau khi lưu/cập nhật dự đoán dưới dạng popup text global.
+    Hiển thị thông báo sau khi lưu/cập nhật/xóa dự đoán.
 
-    Không render trong card trận đấu.
-    Không dùng st.success.
-    Hiện ở chính giữa màn hình khoảng 5 giây rồi fade out.
+    Thiết kế:
+    - Popup dạng compact card ở giữa màn hình.
+    - Tiêu đề và nội dung phụ được tách riêng.
+    - Không kéo quá dài theo chiều ngang.
+    - Tự đổi màu theo success, info và danger.
+    - Luôn render đúng một markdown element để tránh stale/ghost card.
     """
     feedback = st.session_state.pop(
         PREDICTION_FEEDBACK_POPUP_KEY,
         None
     )
 
-    if not feedback:
-        return
+    # Luôn giữ một vị trí markdown ổn định trong cây render Streamlit.
+    popup_html = """
+    <div
+        class="wc-prediction-feedback-stable-slot"
+        aria-hidden="true"
+        style="
+            display: none;
+            height: 0;
+            min-height: 0;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        "
+    ></div>
+    """
 
-    if isinstance(feedback, dict):
-        message = str(feedback.get("message", ""))
-        tone = str(feedback.get("tone", "success"))
-        created_at_ms = int(
-            feedback.get(
-                "created_at_ms",
-                int(datetime.now(timezone.utc).timestamp() * 1000)
+    if feedback:
+        if isinstance(feedback, dict):
+            message = str(
+                feedback.get("message", "")
+            ).strip()
+
+            tone = str(
+                feedback.get("tone", "success")
+            ).strip().lower()
+
+            created_at_ms = int(
+                feedback.get(
+                    "created_at_ms",
+                    int(
+                        datetime.now(
+                            timezone.utc
+                        ).timestamp() * 1000
+                    )
+                )
             )
-        )
-    else:
-        message = str(feedback)
-        tone = "success"
-        created_at_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
 
-    if not message.strip():
-        return
+        else:
+            message = str(feedback).strip()
+            tone = "success"
 
-    safe_message = html.escape(message)
+            created_at_ms = int(
+                datetime.now(
+                    timezone.utc
+                ).timestamp() * 1000
+            )
 
-    text_color = "#16A34A"
+        if message:
+            normalized_message = " ".join(
+                message.lower().split()
+            )
 
-    if tone == "danger":
-        text_color = "#DC2626"
+            popup_copy_map = {
+                (
+                    "đã lưu dự đoán. bạn vẫn có thể cập nhật "
+                    "dự đoán cho đến trước giờ bóng lăn."
+                ): {
+                    "title": "Đã lưu dự đoán",
+                    "detail": (
+                        "Bạn có thể chỉnh sửa trước giờ bóng lăn."
+                    ),
+                    "tone": "success"
+                },
 
-    animation_id = f"prediction_popup_{created_at_ms}"
+                "đã cập nhật dự đoán.": {
+                    "title": "Đã cập nhật dự đoán",
+                    "detail": (
+                        "Những lựa chọn mới đã được ghi nhận."
+                    ),
+                    "tone": "success"
+                },
 
-    st.markdown(
-        f"""
-        <style>
-        @keyframes wc_prediction_popup_fade_{animation_id} {{
-            0% {{
-                opacity: 0;
-                transform: translate(-50%, calc(-50% - 10px));
+                "dự đoán không có thay đổi.": {
+                    "title": "Không có thay đổi",
+                    "detail": (
+                        "Dự đoán hiện tại vẫn được giữ nguyên."
+                    ),
+                    "tone": "info"
+                },
+
+                "đã xóa dự đoán.": {
+                    "title": "Đã xóa dự đoán",
+                    "detail": (
+                        "Dự đoán của trận đấu đã được gỡ bỏ."
+                    ),
+                    "tone": "success"
+                },
+
+                "dự đoán này đã được xóa trước đó.": {
+                    "title": "Dự đoán đã được xóa",
+                    "detail": (
+                        "Không có dữ liệu nào cần xóa thêm."
+                    ),
+                    "tone": "info"
+                },
+
+                "đã chuyển bổ trợ và lưu dự đoán.": {
+                    "title": "Đã lưu dự đoán",
+                    "detail": (
+                        "Bổ trợ đã được chuyển sang trận đấu này."
+                    ),
+                    "tone": "success"
+                }
+            }
+
+            mapped_copy = popup_copy_map.get(
+                normalized_message
+            )
+
+            if mapped_copy:
+                popup_title = mapped_copy["title"]
+                popup_detail = mapped_copy["detail"]
+                tone = mapped_copy["tone"]
+
+            else:
+                # Tách câu đầu làm tiêu đề, phần còn lại làm nội dung phụ.
+                message_parts = re.split(
+                    r"(?<=[.!?])\s+",
+                    message,
+                    maxsplit=1
+                )
+
+                popup_title = (
+                    message_parts[0]
+                    .strip()
+                    .rstrip(".!?")
+                )
+
+                popup_detail = (
+                    message_parts[1].strip()
+                    if len(message_parts) > 1
+                    else ""
+                )
+
+                if (
+                    "không có thay đổi" in normalized_message
+                    and tone == "success"
+                ):
+                    tone = "info"
+
+            tone_config = {
+                "success": {
+                    "icon": "✓",
+                    "accent": "#16A34A",
+                    "icon_background": "#DCFCE7",
+                    "icon_border": "#86EFAC",
+                    "icon_color": "#166534"
+                },
+
+                "info": {
+                    "icon": "i",
+                    "accent": "#2563EB",
+                    "icon_background": "#DBEAFE",
+                    "icon_border": "#93C5FD",
+                    "icon_color": "#1D4ED8"
+                },
+
+                "danger": {
+                    "icon": "!",
+                    "accent": "#E63946",
+                    "icon_background": "#FEE2E2",
+                    "icon_border": "#FCA5A5",
+                    "icon_color": "#B91C1C"
+                }
+            }
+
+            popup_theme = tone_config.get(
+                tone,
+                tone_config["success"]
+            )
+
+            safe_title = html.escape(
+                popup_title
+            )
+
+            safe_detail = html.escape(
+                popup_detail
+            )
+
+            detail_html = ""
+
+            if safe_detail:
+                detail_html = f"""
+                <div class="wc-prediction-popup-detail-{created_at_ms}">
+                    {safe_detail}
+                </div>
+                """
+
+            animation_id = (
+                f"wc_prediction_popup_{created_at_ms}"
+            )
+
+            popup_html = f"""
+            <style>
+            @keyframes {animation_id} {{
+                0% {{
+                    opacity: 0;
+                    transform:
+                        translate(
+                            -50%,
+                            calc(-50% - 14px)
+                        )
+                        scale(0.96);
+                }}
+
+                8% {{
+                    opacity: 1;
+                    transform:
+                        translate(-50%, -50%)
+                        scale(1);
+                }}
+
+                84% {{
+                    opacity: 1;
+                    transform:
+                        translate(-50%, -50%)
+                        scale(1);
+                }}
+
+                100% {{
+                    opacity: 0;
+                    transform:
+                        translate(
+                            -50%,
+                            calc(-50% - 10px)
+                        )
+                        scale(0.98);
+                }}
             }}
 
-            8% {{
-                opacity: 1;
-                transform: translate(-50%, -50%);
-            }}
-
-            88% {{
-                opacity: 1;
-                transform: translate(-50%, -50%);
-            }}
-
-            100% {{
-                opacity: 0;
-                transform: translate(-50%, calc(-50% - 10px));
-            }}
-        }}
-
-        .wc-prediction-feedback-popup-{animation_id} {{
-            position: fixed;
-            left: 50%;
-            top: 50%;
-            z-index: 2147483647;
-
-            width: fit-content;
-            max-width: min(760px, calc(100vw - 36px));
-
-            color: {text_color};
-            font-size: 15px;
-            font-weight: 850;
-            line-height: 1.35;
-            text-align: center;
-            white-space: normal;
-
-            pointer-events: none;
-
-            text-shadow:
-                0 1px 8px rgba(255, 255, 255, 0.96),
-                0 4px 18px rgba(15, 23, 42, 0.18);
-
-            animation: wc_prediction_popup_fade_{animation_id} 5.6s ease forwards;
-        }}
-
-        @media (max-width: 768px) {{
-            .wc-prediction-feedback-popup-{animation_id} {{
+            .wc-prediction-feedback-popup-{created_at_ms} {{
+                position: fixed;
                 left: 50%;
                 top: 50%;
-                width: calc(100vw - 32px);
-                max-width: calc(100vw - 32px);
-                font-size: 13.5px;
-                line-height: 1.35;
-            }}
-        }}
-        </style>
+                z-index: 2147483647;
 
-        <div class="wc-prediction-feedback-popup-{animation_id}">
-            {safe_message}
-        </div>
-        """,
+                width: min(
+                    390px,
+                    calc(100vw - 40px)
+                );
+
+                max-width: 390px;
+
+                display: grid;
+                grid-template-columns:
+                    44px
+                    minmax(0, 1fr);
+
+                align-items: center;
+                gap: 13px;
+
+                padding:
+                    15px
+                    17px
+                    15px
+                    15px;
+
+                box-sizing: border-box;
+
+                border-radius: 18px;
+
+                border:
+                    1px solid
+                    rgba(18, 60, 105, 0.16);
+
+                border-left:
+                    4px solid
+                    {popup_theme["accent"]};
+
+                background:
+                    radial-gradient(
+                        circle at top right,
+                        rgba(245, 197, 66, 0.14),
+                        transparent 44%
+                    ),
+                    linear-gradient(
+                        135deg,
+                        rgba(255, 255, 255, 0.985),
+                        rgba(248, 250, 252, 0.975)
+                    );
+
+                box-shadow:
+                    0 24px 58px
+                    rgba(7, 17, 31, 0.22),
+                    0 6px 18px
+                    rgba(15, 23, 42, 0.10);
+
+                backdrop-filter: blur(14px);
+                -webkit-backdrop-filter: blur(14px);
+
+                overflow: hidden;
+                pointer-events: none;
+
+                animation:
+                    {animation_id}
+                    5.2s
+                    cubic-bezier(
+                        0.22,
+                        1,
+                        0.36,
+                        1
+                    )
+                    forwards;
+            }}
+
+            .wc-prediction-feedback-popup-{created_at_ms}::before {{
+                content: "";
+
+                position: absolute;
+                left: 18px;
+                right: 18px;
+                top: 0;
+
+                height: 2px;
+
+                border-radius: 999px;
+
+                background:
+                    linear-gradient(
+                        90deg,
+                        transparent,
+                        rgba(245, 197, 66, 0.92),
+                        transparent
+                    );
+
+                pointer-events: none;
+            }}
+
+            .wc-prediction-popup-icon-{created_at_ms} {{
+                width: 42px;
+                height: 42px;
+
+                display: flex;
+                align-items: center;
+                justify-content: center;
+
+                box-sizing: border-box;
+
+                border-radius: 999px;
+
+                background:
+                    {popup_theme["icon_background"]};
+
+                border:
+                    1px solid
+                    {popup_theme["icon_border"]};
+
+                color:
+                    {popup_theme["icon_color"]};
+
+                font-size: 21px;
+                font-weight: 950;
+                line-height: 1;
+
+                box-shadow:
+                    0 7px 16px
+                    rgba(15, 23, 42, 0.08);
+            }}
+
+            .wc-prediction-popup-content-{created_at_ms} {{
+                min-width: 0;
+                text-align: left;
+            }}
+
+            .wc-prediction-popup-title-{created_at_ms} {{
+                color: #07111F;
+
+                font-size: 15px;
+                font-weight: 950;
+                line-height: 1.25;
+
+                letter-spacing: -0.015em;
+
+                white-space: normal;
+                overflow-wrap: break-word;
+            }}
+
+            .wc-prediction-popup-detail-{created_at_ms} {{
+                margin-top: 4px;
+
+                color: #64748B;
+
+                font-size: 12.5px;
+                font-weight: 600;
+                line-height: 1.42;
+
+                white-space: normal;
+                overflow-wrap: break-word;
+            }}
+
+            @media (max-width: 768px) {{
+                .wc-prediction-feedback-popup-{created_at_ms} {{
+                    width: min(
+                        340px,
+                        calc(100vw - 28px)
+                    );
+
+                    max-width: 340px;
+
+                    grid-template-columns:
+                        40px
+                        minmax(0, 1fr);
+
+                    gap: 11px;
+
+                    padding:
+                        13px
+                        14px
+                        13px
+                        12px;
+
+                    border-radius: 16px;
+                }}
+
+                .wc-prediction-popup-icon-{created_at_ms} {{
+                    width: 38px;
+                    height: 38px;
+
+                    font-size: 19px;
+                }}
+
+                .wc-prediction-popup-title-{created_at_ms} {{
+                    font-size: 14px;
+                }}
+
+                .wc-prediction-popup-detail-{created_at_ms} {{
+                    font-size: 12px;
+                    line-height: 1.38;
+                }}
+            }}
+
+            @media (max-width: 390px) {{
+                .wc-prediction-feedback-popup-{created_at_ms} {{
+                    width: calc(100vw - 24px);
+                    max-width: calc(100vw - 24px);
+                }}
+            }}
+            </style>
+
+            <div
+                class="wc-prediction-feedback-popup-{created_at_ms}"
+                role="status"
+                aria-live="polite"
+            >
+                <div class="wc-prediction-popup-icon-{created_at_ms}">
+                    {popup_theme["icon"]}
+                </div>
+
+                <div class="wc-prediction-popup-content-{created_at_ms}">
+                    <div class="wc-prediction-popup-title-{created_at_ms}">
+                        {safe_title}
+                    </div>
+
+                    {detail_html}
+                </div>
+            </div>
+            """
+
+    st.markdown(
+        popup_html,
         unsafe_allow_html=True
     )
 
