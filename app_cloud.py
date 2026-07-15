@@ -9630,7 +9630,7 @@ def render_ai_match_suggestion_dialog(match_id: int):
                 return
 
     safe_suggestion = html.escape(str(suggestion_text)).replace("\n", "<br>")
-
+    
     st.markdown(
         f"""
         <div style="
@@ -9638,17 +9638,30 @@ def render_ai_match_suggestion_dialog(match_id: int):
             font-size:15.5px;
             line-height:1.75;
             font-weight:400;
-            margin-bottom:18px;
+            margin-bottom:7px;
             white-space:normal;
             word-break:normal;
             overflow-wrap:anywhere;
         ">
             {safe_suggestion}
         </div>
+    
+        <div style="
+            color:#94A3B8;
+            font-size:11.5px;
+            line-height:1.4;
+            font-style:italic;
+            font-weight:400;
+            text-align:center;
+            margin-top:0;
+            margin-bottom:12px;
+        ">
+            Phân tích từ AI mang tính chất tham khảo
+        </div>
         """,
         unsafe_allow_html=True
     )
-
+    
     if st.button(
         "Đóng",
         use_container_width=True,
