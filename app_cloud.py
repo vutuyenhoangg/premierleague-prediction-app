@@ -1011,45 +1011,156 @@ def inject_hide_streamlit_embed_footer_css():
 
 def inject_match_card_border_animation_css():
     """
-    CSS animation cho hiệu ứng viền card lấp lánh chạy theo chiều kim đồng hồ.
+    Tạo một vệt sáng chạy theo chiều kim đồng hồ
+    quanh đúng đường viền bo góc của card trận đấu.
 
-    Lưu ý:
-    - Chỉ khai báo animation dùng chung.
-    - Phần giới hạn hiệu ứng chỉ nằm ở viền sẽ được xử lý trong get_match_card_css().
+    Phần hiệu ứng được đặt trên pseudo-element của card,
+    không nằm trong background và không phủ lên giữa card.
     """
     st.markdown(
         """
         <style>
-        @property --wc-match-card-border-angle {
+        /*
+         * Biến góc được trình duyệt nội suy từ 0deg đến 360deg.
+         * Đây là phần tạo chuyển động chạy quanh viền.
+         */
+        @property --wc-match-card-shimmer-angle {
             syntax: "<angle>";
             initial-value: 0deg;
             inherits: false;
         }
 
-        @keyframes wcMatchCardBorderClockwise {
-            from {
-                --wc-match-card-border-angle: 0deg;
+        @keyframes wcMatchCardShimmerClockwise {
+            0% {
+                --wc-match-card-shimmer-angle: 0deg;
             }
-            to {
-                --wc-match-card-border-angle: 360deg;
+
+            100% {
+                --wc-match-card-shimmer-angle: 360deg;
             }
         }
 
-        @keyframes wcMatchCardBorderGlow {
-            0%, 100% {
-                opacity: 0.88;
-                filter: brightness(1);
-            }
-            50% {
-                opacity: 1;
-                filter: brightness(1.12);
-            }
+        /*
+         * Chọn trực tiếp container card theo key:
+         * match_card_{match_id}
+         *
+         * Dùng class* thay vì class chính xác để tương thích
+         * với cả các phiên bản Streamlit/stylable_container khác nhau.
+         */
+        div[class*="st-key-match_card_"] {
+            position: relative !important;
+            isolation: isolate !important;
         }
 
-        @media (prefers-reduced-motion: reduce) {
-            div[class*="st-key-match_card_"]::before {
-                animation: none !important;
-            }
+        /*
+         * Vệt sáng riêng biệt nằm trên đúng vùng đường viền.
+         */
+        div[class*="st-key-match_card_"]::before {
+            content: "";
+
+            position: absolute !important;
+            inset: -1px !important;
+
+            border-radius: 21px !important;
+            padding: 3px !important;
+
+            pointer-events: none !important;
+            z-index: 50 !important;
+
+            /*
+             * Card ngoài 3 trạng thái chính có opacity = 0.
+             */
+            opacity: var(
+                --wc-match-card-shimmer-opacity,
+                0
+            ) !important;
+
+            /*
+             * Chỉ một đoạn rất nhỏ của conic-gradient có màu.
+             * Phần còn lại hoàn toàn trong suốt.
+             *
+             * Khi biến góc quay, đoạn sáng sẽ chạy theo
+             * chiều kim đồng hồ quanh card.
+             */
+            background:
+                conic-gradient(
+                    from var(--wc-match-card-shimmer-angle),
+
+                    transparent 0deg,
+                    transparent 326deg,
+
+                    rgba(255, 255, 255, 0.00) 330deg,
+
+                    var(
+                        --wc-match-card-shimmer-soft,
+                        rgba(255, 255, 255, 0.45)
+                    ) 334deg,
+
+                    rgba(255, 255, 255, 0.92) 338deg,
+
+                    #FFFFFF 341deg,
+
+                    #FFFFFF 344deg,
+
+                    var(
+                        --wc-match-card-shimmer-color,
+                        #FFFFFF
+                    ) 348deg,
+
+                    rgba(255, 255, 255, 0.35) 352deg,
+
+                    transparent 356deg,
+                    transparent 360deg
+                ) !important;
+
+            /*
+             * Hai lớp mask loại bỏ toàn bộ phần giữa.
+             * Chỉ giữ lại một vòng viền dày 3px.
+             */
+            -webkit-mask:
+                linear-gradient(#000 0 0) content-box,
+                linear-gradient(#000 0 0) !important;
+
+            -webkit-mask-composite: xor !important;
+
+            mask:
+                linear-gradient(#000 0 0) content-box,
+                linear-gradient(#000 0 0) !important;
+
+            mask-composite: exclude !important;
+
+            /*
+             * Ánh sáng lan nhẹ quanh đầu vệt sáng,
+             * tạo cảm giác lấp lánh như hình minh họa.
+             */
+            filter:
+                drop-shadow(
+                    0 0 2px
+                    rgba(255, 255, 255, 1)
+                )
+                drop-shadow(
+                    0 0 5px
+                    var(
+                        --wc-match-card-shimmer-color,
+                        #FFFFFF
+                    )
+                )
+                drop-shadow(
+                    0 0 10px
+                    var(
+                        --wc-match-card-shimmer-soft,
+                        rgba(255, 255, 255, 0.50)
+                    )
+                ) !important;
+
+            animation:
+                wcMatchCardShimmerClockwise
+                var(--wc-match-card-shimmer-speed, 4.2s)
+                linear
+                infinite !important;
+
+            will-change:
+                --wc-match-card-shimmer-angle;
         }
         </style>
         """,
@@ -5558,104 +5669,132 @@ def get_match_status_info(row):
 
 def get_match_card_css(status_info):
     """
-    CSS cho card trận đấu.
+    CSS chính của card trận đấu.
 
-    Yêu cầu:
-    - Chỉ tạo hiệu ứng lấp lánh ở riêng đường viền card
-    - Không làm hiệu ứng chạy vào giữa card
-    - Không ảnh hưởng các thành phần khác trong card
-    - Áp dụng cho 3 trạng thái:
-        + open
-        + locked
-        + finished
-    - Trạng thái khác giữ nguyên như cũ
+    Giữ nguyên:
+    - Border
+    - Border radius
+    - Padding
+    - Margin
+    - Background
+    - Box shadow
+    - Layout và overflow
+
+    Chỉ bổ sung CSS variables để điều khiển vệt sáng cho:
+    - open: đang mở dự đoán
+    - locked: đã khóa dự đoán
+    - finished: đã có kết quả
+
+    Trạng thái unknown không có hiệu ứng.
     """
-    status_key = str(status_info.get("status_key") or "").strip().lower()
-    border_color = str(status_info.get("border_color") or "#9CA3AF")
-    card_background = str(
-        status_info.get("background") or
-        "linear-gradient(135deg, rgba(255,255,255,0.96), rgba(255,255,255,0.92))"
+    status_key = str(
+        status_info.get("status_key") or ""
+    ).strip().lower()
+
+    border_color = str(
+        status_info.get("border_color") or "#9CA3AF"
     )
 
-    animated_statuses = {"open", "locked", "finished"}
+    card_background = str(
+        status_info.get("background")
+        or (
+            "linear-gradient("
+            "135deg, "
+            "rgba(248,250,252,0.96), "
+            "rgba(241,245,249,0.90)"
+            ")"
+        )
+    )
 
-    glow_color_by_status = {
-        "open": "#93C5FD",      # xanh dương nhạt
-        "locked": "#FCD34D",    # vàng cam nhạt
-        "finished": "#86EFAC"   # xanh lá nhạt
+    shimmer_config_by_status = {
+        # Đang mở dự đoán: xanh dương
+        "open": {
+            "opacity": "1",
+            "color": "#60A5FA",
+            "soft_color": "#BFDBFE",
+            "speed": "4.2s"
+        },
+
+        # Đã khóa dự đoán: vàng cam
+        "locked": {
+            "opacity": "1",
+            "color": "#F59E0B",
+            "soft_color": "#FDE68A",
+            "speed": "4.2s"
+        },
+
+        # Đã có kết quả: xanh lá
+        "finished": {
+            "opacity": "1",
+            "color": "#22C55E",
+            "soft_color": "#BBF7D0",
+            "speed": "4.2s"
+        }
     }
 
-    glow_color = glow_color_by_status.get(status_key, border_color)
+    shimmer_config = shimmer_config_by_status.get(
+        status_key,
+        {
+            "opacity": "0",
+            "color": border_color,
+            "soft_color": border_color,
+            "speed": "4.2s"
+        }
+    )
 
-    # Giữ nguyên card thường cho các trạng thái ngoài 3 trạng thái chính
-    if status_key not in animated_statuses:
-        return f"""
-        {{
-            border: 2px solid {border_color};
-            border-radius: 20px;
-            padding: 22px 22px 16px 22px;
-            margin-bottom: 22px;
-            background: {card_background};
-            box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
-            position: relative;
-            overflow: hidden;
-        }}
-        """
+    shimmer_opacity = shimmer_config["opacity"]
+    shimmer_color = shimmer_config["color"]
+    shimmer_soft_color = shimmer_config["soft_color"]
+    shimmer_speed = shimmer_config["speed"]
 
     return f"""
     {{
-        border: 2px solid {border_color};
-        border-radius: 20px;
-        padding: 22px 22px 16px 22px;
-        margin-bottom: 22px;
-        background: {card_background};
-        box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
-        position: relative;
-        overflow: hidden;
-        isolation: isolate;
-    }}
+        /*
+         * Các biến này được pseudo-element toàn cục sử dụng.
+         */
+        --wc-match-card-shimmer-opacity:
+            {shimmer_opacity};
 
-    > * {{
-        position: relative;
-        z-index: 1;
-    }}
+        --wc-match-card-shimmer-color:
+            {shimmer_color};
 
-    &::before {{
-        content: "";
-        position: absolute;
-        inset: -2px;
-        border-radius: 22px;
-        padding: 2px;
-        pointer-events: none;
-        z-index: 0;
+        --wc-match-card-shimmer-soft:
+            {shimmer_soft_color};
+
+        --wc-match-card-shimmer-speed:
+            {shimmer_speed};
+
+        /*
+         * Toàn bộ thiết kế card cũ được giữ nguyên.
+         */
+        border:
+            2px solid
+            {border_color};
+
+        border-radius:
+            20px;
+
+        padding:
+            22px 22px 16px 22px;
+
+        margin-bottom:
+            22px;
 
         background:
-            conic-gradient(
-                from var(--wc-match-card-border-angle),
+            {card_background};
 
-                transparent 0deg,
-                transparent 300deg,
+        box-shadow:
+            0 14px 34px
+            rgba(15, 23, 42, 0.08);
 
-                rgba(255, 255, 255, 0.00) 312deg,
-                rgba(255, 255, 255, 0.35) 324deg,
-                {glow_color} 336deg,
-                rgba(255, 255, 255, 0.98) 346deg,
-                {glow_color} 354deg,
-                rgba(255, 255, 255, 0.00) 360deg
-            );
+        position:
+            relative;
 
-        -webkit-mask:
-            linear-gradient(#000 0 0) content-box,
-            linear-gradient(#000 0 0);
-        -webkit-mask-composite: xor;
-        mask:
-            linear-gradient(#000 0 0) content-box,
-            linear-gradient(#000 0 0);
-        mask-composite: exclude;
+        overflow:
+            hidden;
 
-        animation:
-            wcMatchCardBorderClockwise 3.2s linear infinite,
-            wcMatchCardBorderGlow 1.8s ease-in-out infinite;
+        isolation:
+            isolate;
     }}
     """
 
