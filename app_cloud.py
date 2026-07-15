@@ -1009,7 +1009,60 @@ def inject_hide_streamlit_embed_footer_css():
         unsafe_allow_html=True
     )
 
+def inject_match_card_border_animation_css():
+    """
+    Khai báo animation cho viền card trận đấu.
+
+    Hiệu ứng:
+    - Một dải sáng chạy theo chiều kim đồng hồ.
+    - Dải sáng bám theo đúng đường viền bo góc của card.
+    - Không tạo pseudo-element nên không che hoặc ảnh hưởng
+      tới nội dung, nút bấm và các thành phần bên trong card.
+    """
+    st.markdown(
+        """
+        <style>
+        /*
+         * Đăng ký biến góc để trình duyệt có thể nội suy
+         * chuyển động mượt từ 0deg đến 360deg.
+         */
+        @property --wc-match-card-border-angle {
+            syntax: "<angle>";
+            initial-value: 0deg;
+            inherits: false;
+        }
+
+        /*
+         * Góc tăng từ 0 đến 360 độ tạo chuyển động
+         * theo chiều kim đồng hồ.
+         */
+        @keyframes wcMatchCardBorderClockwise {
+            from {
+                --wc-match-card-border-angle: 0deg;
+            }
+
+            to {
+                --wc-match-card-border-angle: 360deg;
+            }
+        }
+
+        /*
+         * Tôn trọng thiết lập giảm chuyển động của thiết bị.
+         * Khi được bật, card vẫn giữ nguyên viền trạng thái
+         * nhưng dừng animation.
+         */
+        @media (prefers-reduced-motion: reduce) {
+            div[class*="st-key-match_card_"] {
+                animation: none !important;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
 inject_worldcup_theme()
+inject_match_card_border_animation_css()
 inject_hide_streamlit_embed_footer_css()
 
 def inject_match_datepicker_calendar_theme(match_dates):
@@ -5509,16 +5562,108 @@ def get_match_status_info(row):
 
 
 def get_match_card_css(status_info):
+    """
+    Tạo CSS cho card trận đấu.
+
+    Ba trạng thái có animation:
+    - open: đang mở dự đoán, viền xanh dương
+    - locked: đã khóa dự đoán, viền cam
+    - finished: đã có kết quả, viền xanh lá
+
+    Trạng thái unknown giữ nguyên viền tĩnh như trước.
+
+    Hiệu ứng chỉ nằm trong vùng border, không phủ lên
+    các thành phần bên trong card.
+    """
+    status_key = str(
+        status_info.get("status_key") or ""
+    ).strip().lower()
+
+    border_color = str(
+        status_info.get("border_color") or "#9CA3AF"
+    )
+
+    card_background = str(
+        status_info.get("background")
+        or "rgba(255, 255, 255, 0.94)"
+    )
+
+    glow_color_by_status = {
+        "open": "#93C5FD",
+        "locked": "#FDE68A",
+        "finished": "#86EFAC"
+    }
+
+    glow_color = glow_color_by_status.get(
+        status_key,
+        border_color
+    )
+
+    animated_statuses = {
+        "open",
+        "locked",
+        "finished"
+    }
+
+    # Các trạng thái ngoài 3 trạng thái chính giữ nguyên CSS cũ.
+    if status_key not in animated_statuses:
+        return f"""
+        {{
+            border: 2px solid {border_color};
+            border-radius: 20px;
+            padding: 22px 22px 16px 22px;
+            margin-bottom: 22px;
+            background: {card_background};
+            box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+            position: relative;
+            overflow: hidden;
+        }}
+        """
+
     return f"""
     {{
-        border: 2px solid {status_info["border_color"]};
+        --wc-match-card-border-angle: 0deg;
+        --wc-match-card-border-color: {border_color};
+        --wc-match-card-glow-color: {glow_color};
+
+        border: 2px solid transparent;
         border-radius: 20px;
+
         padding: 22px 22px 16px 22px;
         margin-bottom: 22px;
-        background: {status_info["background"]};
-        box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+
+        background:
+            {card_background} padding-box,
+            conic-gradient(
+                from var(--wc-match-card-border-angle),
+
+                var(--wc-match-card-border-color) 0deg,
+                var(--wc-match-card-border-color) 298deg,
+
+                rgba(255, 255, 255, 0.16) 312deg,
+                var(--wc-match-card-glow-color) 325deg,
+
+                rgba(255, 255, 255, 0.98) 338deg,
+
+                var(--wc-match-card-glow-color) 349deg,
+                rgba(255, 255, 255, 0.16) 358deg,
+
+                var(--wc-match-card-border-color) 360deg
+            ) border-box;
+
+        background-repeat: no-repeat;
+
+        box-shadow:
+            0 14px 34px rgba(15, 23, 42, 0.08);
+
         position: relative;
         overflow: hidden;
+
+        animation:
+            wcMatchCardBorderClockwise
+            3.4s
+            linear
+            infinite;
     }}
     """
 
