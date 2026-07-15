@@ -587,8 +587,8 @@ def inject_worldcup_theme():
         }}
 
         .wc-hero-img {{
-            width: 400px;
-            max-height: 400px;
+            width: 300px;
+            max-height: 300px;
             object-fit: contain;
             filter: drop-shadow(
                 0 16px 32px rgba(0, 0, 0, 0.34)
