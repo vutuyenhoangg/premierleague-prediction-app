@@ -1164,149 +1164,40 @@ def inject_match_card_border_animation_css():
         unsafe_allow_html=True
     )
 
-def inject_main_content_top_spacing_fix_css():
+def inject_main_page_lift_css():
     """
-    Loại bỏ khoảng trống vô hình phía trên nội dung chính.
+    Đẩy riêng toàn bộ nội dung trang chính lên cao hơn.
 
-    Chỉ xử lý:
-    - Các Streamlit element chỉ chứa thẻ <style>.
-    - Wrapper trong luồng của avatar fixed.
-    - Wrapper trong luồng của nút điểm danh fixed.
-
-    Không thay đổi:
-    - Vị trí top/right của avatar.
-    - Vị trí top/right của nút điểm danh.
-    - Kích thước, bố cục hoặc nội dung của app.
+    Không tác động tới:
+    - Avatar góc phải
+    - Nút điểm danh
+    - Header Streamlit
+    - Sidebar
+    - Bố cục và kích thước các thành phần bên trong trang
     """
     st.markdown(
         """
         <style>
-        /* =====================================================
-           1. THU GỌN CÁC ELEMENT CHỈ DÙNG ĐỂ CHÈN CSS
-           ===================================================== */
-
         /*
-         * Các st.markdown chỉ chứa <style> không có nội dung
-         * hiển thị nhưng wrapper của Streamlit vẫn có thể
-         * tham gia vào luồng bố cục.
-         *
-         * Chỉ thu gọn wrapper nếu <style> là phần tử duy nhất,
-         * vì vậy không ảnh hưởng các khối HTML có nội dung thật.
+         * Chỉ kéo wrapper chứa nội dung trang.
+         * Avatar và nút điểm danh nằm ngoài wrapper này
+         * nên giữ nguyên tọa độ fixed hiện tại.
          */
-        div[data-testid="stElementContainer"]:has(
-            > div[data-testid="stMarkdownContainer"]
-            > style:only-child
-        ) {
-            display: none !important;
-
-            width: 0 !important;
-            min-width: 0 !important;
-            max-width: 0 !important;
-
-            height: 0 !important;
-            min-height: 0 !important;
-            max-height: 0 !important;
-
-            margin: 0 !important;
-            padding: 0 !important;
-            border: 0 !important;
-
-            overflow: hidden !important;
+        @media (min-width: 769px) {
+            div[class*="st-key-main_page_content_shell"] {
+                margin-top: -118px !important;
+                position: relative !important;
+            }
         }
 
         /*
-         * Hỗ trợ thêm các phiên bản Streamlit có lớp HTML
-         * khác với stMarkdownContainer.
+         * Mobile hiện không có khoảng trống lớn như desktop,
+         * vì vậy không kéo nội dung để tránh chạm avatar.
          */
-        div[data-testid="stElementContainer"]:has(
-            > div[data-testid="stHtml"]
-            > style:only-child
-        ) {
-            display: none !important;
-
-            width: 0 !important;
-            min-width: 0 !important;
-            max-width: 0 !important;
-
-            height: 0 !important;
-            min-height: 0 !important;
-            max-height: 0 !important;
-
-            margin: 0 !important;
-            padding: 0 !important;
-            border: 0 !important;
-
-            overflow: hidden !important;
-        }
-
-        /* =====================================================
-           2. BỎ KHÔNG GIAN TRONG LUỒNG CỦA AVATAR FIXED
-           ===================================================== */
-
-        /*
-         * Không chỉnh trực tiếp avatar.
-         * Chỉ đưa wrapper ngoài của nó ra khỏi document flow.
-         */
-        div[data-testid="stVerticalBlock"]
-        > div:has(
-            div[class*="st-key-top_right_avatar_popover_shell"]
-        ) {
-            position: absolute !important;
-
-            width: 0 !important;
-            min-width: 0 !important;
-            max-width: 0 !important;
-
-            height: 0 !important;
-            min-height: 0 !important;
-            max-height: 0 !important;
-
-            margin: 0 !important;
-            padding: 0 !important;
-
-            border: 0 !important;
-            overflow: visible !important;
-        }
-
-        /* =====================================================
-           3. BỎ KHÔNG GIAN TRONG LUỒNG CỦA NÚT ĐIỂM DANH FIXED
-           ===================================================== */
-
-        div[data-testid="stVerticalBlock"]
-        > div:has(
-            div[class*="st-key-daily_checkin_shortcut_button"]
-        ) {
-            position: absolute !important;
-
-            width: 0 !important;
-            min-width: 0 !important;
-            max-width: 0 !important;
-
-            height: 0 !important;
-            min-height: 0 !important;
-            max-height: 0 !important;
-
-            margin: 0 !important;
-            padding: 0 !important;
-
-            border: 0 !important;
-            overflow: visible !important;
-        }
-
-        /*
-         * Selector dự phòng cho trường hợp stElementContainer
-         * chính là wrapper trực tiếp của control fixed.
-         */
-        div[data-testid="stElementContainer"]:has(
-            div[class*="st-key-top_right_avatar_popover_shell"]
-        ),
-        div[data-testid="stElementContainer"]:has(
-            div[class*="st-key-daily_checkin_shortcut_button"]
-        ) {
-            margin-top: 0 !important;
-            margin-bottom: 0 !important;
-            padding-top: 0 !important;
-            padding-bottom: 0 !important;
+        @media (max-width: 768px) {
+            div[class*="st-key-main_page_content_shell"] {
+                margin-top: 0 !important;
+            }
         }
         </style>
         """,
@@ -2316,7 +2207,7 @@ inject_third_place_match_card_css()
 inject_third_place_mobile_fix_css()
 inject_final_match_card_css()
 inject_hide_streamlit_embed_footer_css()
-inject_main_content_top_spacing_fix_css()
+inject_main_page_lift_css()
 
 def inject_match_datepicker_calendar_theme(match_dates):
     today = today_vietnam_date()
@@ -15194,25 +15085,35 @@ def main():
         )
 
         render_sidebar_footer()
+
+    # Nút điểm danh vẫn được render bên ngoài wrapper nội dung,
+    # vì vậy giữ nguyên vị trí fixed hiện tại.
     if selected_page == "Lịch thi đấu & dự đoán":
         render_daily_checkin_shortcut_button(
             int(user["user_id"])
         )
-        page_matches()
 
-    elif selected_page == "Dự đoán của tôi":
-        page_my_predictions()
+    # Chỉ wrapper này được đẩy lên trên.
+    # Avatar và nút điểm danh không nằm trong wrapper.
+    with st.container(
+        key="main_page_content_shell"
+    ):
+        if selected_page == "Lịch thi đấu & dự đoán":
+            page_matches()
 
-    elif selected_page == "Bảng xếp hạng":
-        page_leaderboard()
+        elif selected_page == "Dự đoán của tôi":
+            page_my_predictions()
 
-    elif selected_page == "Phân tích tổng quan":
-        page_dashboard()
+        elif selected_page == "Bảng xếp hạng":
+            page_leaderboard()
 
-    elif selected_page == "Admin":
-        page_admin()
+        elif selected_page == "Phân tích tổng quan":
+            page_dashboard()
 
-    render_footer()
+        elif selected_page == "Admin":
+            page_admin()
+
+        render_footer()
 
 if __name__ == "__main__":
     main()
