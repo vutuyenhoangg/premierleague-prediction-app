@@ -3398,7 +3398,7 @@ def inject_mobile_match_title_css():
 
 inject_mobile_match_title_css()
 
-@st.dialog(" ")
+@st.dialog("Điểm danh hàng ngày")
 def render_daily_checkin_dialog(user_id: int):
     reward_info = st.session_state.get("daily_checkin_reward_popup")
 
@@ -3815,7 +3815,7 @@ def render_daily_checkin_dialog(user_id: int):
         )
 
 
-@st.dialog(" ")
+@st.dialog("Phần thưởng điểm danh")
 def render_daily_checkin_reward_dialog(reward_info: dict):
     reward_label = str(reward_info.get("reward_label") or "")
     reward_type = normalize_star_type(reward_info.get("reward_type"))
@@ -6106,7 +6106,7 @@ def claim_user_popup_view_today(user_id: int, popup_key: str) -> bool:
     return row is not None
 
 
-@st.dialog(" ")
+@st.dialog("Poster chung kết World Cup 2026")
 def render_final_poster_popup():
     poster_src = resolve_asset_src(FINAL_POSTER_POPUP_IMAGE_URL)
     safe_poster_src = html.escape(poster_src, quote=True)
