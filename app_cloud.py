@@ -1166,63 +1166,111 @@ def inject_match_card_border_animation_css():
 
 def inject_mobile_prediction_score_row_css():
     """
-    Giữ hai ô nhập tỉ số luôn nằm trên cùng một hàng
-    ở giao diện điện thoại.
+    Giữ hai ô nhập tỉ số luôn nằm cùng một hàng.
 
-    Chỉ tác động tới container prediction_score_row_*.
-    Không ảnh hưởng các st.columns khác trong app.
+    Desktop:
+    - Hai ô chiếm 40% mỗi bên.
+    - Khoảng trống giữa là 20%, tương đương bố cục [2, 1, 2] cũ.
+
+    Mobile:
+    - Hai ô chia đều chiều rộng.
+    - Không ẩn bất kỳ cột nào.
+    - Không ảnh hưởng các khu vực st.columns khác.
     """
     st.markdown(
         """
         <style>
-        @media (max-width: 768px) {
-            /*
-             * Buộc riêng hàng nhập tỉ số giữ dạng ngang.
-             */
+        /* Chỉ chọn hàng chứa đúng hai number input của trận đấu */
+        div[class*="st-key-prediction_score_row_"]
+        div[data-testid="stHorizontalBlock"]:has(
+            div[class*="st-key-home_score_"]
+        ):has(
+            div[class*="st-key-away_score_"]
+        ) {
+            width: 100% !important;
+            align-items: start !important;
+        }
+
+        /*
+         * Desktop:
+         * Mô phỏng lại đúng tỉ lệ [2, 1, 2] cũ:
+         * 40% đội nhà + 20% khoảng giữa + 40% đội khách.
+         */
+        @media (min-width: 769px) {
             div[class*="st-key-prediction_score_row_"]
-            div[data-testid="stHorizontalBlock"] {
-                display: flex !important;
-                flex-direction: row !important;
-                flex-wrap: nowrap !important;
-                align-items: flex-start !important;
+            div[data-testid="stHorizontalBlock"]:has(
+                div[class*="st-key-home_score_"]
+            ):has(
+                div[class*="st-key-away_score_"]
+            ) {
+                display: grid !important;
+                grid-template-columns:
+                    minmax(0, 1fr)
+                    minmax(0, 1fr) !important;
+
+                column-gap: 20% !important;
+            }
+        }
+
+        /*
+         * Mobile:
+         * Hai đội luôn nằm trên cùng một hàng.
+         */
+        @media (max-width: 768px) {
+            div[class*="st-key-prediction_score_row_"] {
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+
+            div[class*="st-key-prediction_score_row_"]
+            div[data-testid="stHorizontalBlock"]:has(
+                div[class*="st-key-home_score_"]
+            ):has(
+                div[class*="st-key-away_score_"]
+            ) {
+                display: grid !important;
+
+                grid-template-columns:
+                    minmax(0, 1fr)
+                    minmax(0, 1fr) !important;
+
+                gap: 8px !important;
 
                 width: 100% !important;
-                gap: 10px !important;
+                max-width: 100% !important;
+
+                align-items: start !important;
             }
 
             /*
-             * Hai cột chứa ô nhập tỉ số chia đều chiều rộng.
+             * Cả hai cột đều phải được hiển thị.
+             * Không dùng nth-child và không ẩn cột nào.
              */
             div[class*="st-key-prediction_score_row_"]
-            div[data-testid="stHorizontalBlock"]
-            > div[data-testid="column"]:first-child,
-
-            div[class*="st-key-prediction_score_row_"]
-            div[data-testid="stHorizontalBlock"]
-            > div[data-testid="column"]:last-child {
+            div[data-testid="stHorizontalBlock"]:has(
+                div[class*="st-key-home_score_"]
+            ):has(
+                div[class*="st-key-away_score_"]
+            )
+            > div[data-testid="column"] {
                 display: block !important;
 
-                flex: 1 1 0 !important;
-
-                width: 0 !important;
+                width: 100% !important;
                 min-width: 0 !important;
-                max-width: none !important;
+                max-width: 100% !important;
+
+                flex: none !important;
+
+                padding-left: 0 !important;
+                padding-right: 0 !important;
             }
 
-            /*
-             * Cột giữa hiện không chứa nội dung.
-             * Chỉ ẩn trên mobile để dành đủ chiều rộng
-             * cho hai ô tỉ số.
-             */
             div[class*="st-key-prediction_score_row_"]
-            div[data-testid="stHorizontalBlock"]
-            > div[data-testid="column"]:nth-child(2) {
-                display: none !important;
-            }
+            div[class*="st-key-home_score_"],
 
-            /*
-             * Cho number input co lại đúng theo chiều rộng cột.
-             */
+            div[class*="st-key-prediction_score_row_"]
+            div[class*="st-key-away_score_"],
+
             div[class*="st-key-prediction_score_row_"]
             div[data-testid="stNumberInput"],
 
@@ -1231,11 +1279,28 @@ def inject_mobile_prediction_score_row_css():
                 width: 100% !important;
                 min-width: 0 !important;
                 max-width: 100% !important;
+
                 box-sizing: border-box !important;
             }
 
             /*
-             * Không cho các nút trừ và cộng bị co mất.
+             * Tên đội không làm cột bị nở rộng.
+             */
+            div[class*="st-key-prediction_score_row_"]
+            div[data-testid="stNumberInput"] label,
+
+            div[class*="st-key-prediction_score_row_"]
+            div[data-testid="stNumberInput"] label p {
+                width: 100% !important;
+                max-width: 100% !important;
+
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+            }
+
+            /*
+             * Giữ nút trừ và cộng nguyên vẹn.
              */
             div[class*="st-key-prediction_score_row_"]
             div[data-testid="stNumberInput"] button {
@@ -1243,21 +1308,20 @@ def inject_mobile_prediction_score_row_css():
             }
         }
 
-        /*
-         * Điện thoại rất nhỏ: giảm nhẹ khoảng cách,
-         * nhưng vẫn giữ nguyên hai ô trên một hàng.
-         */
         @media (max-width: 390px) {
             div[class*="st-key-prediction_score_row_"]
-            div[data-testid="stHorizontalBlock"] {
-                gap: 7px !important;
+            div[data-testid="stHorizontalBlock"]:has(
+                div[class*="st-key-home_score_"]
+            ):has(
+                div[class*="st-key-away_score_"]
+            ) {
+                gap: 6px !important;
             }
         }
         </style>
         """,
         unsafe_allow_html=True
     )
-
 def inject_main_page_lift_css():
     """
     Đẩy riêng nội dung trang chính lên cao hơn.
@@ -12911,16 +12975,17 @@ def render_match_card(
 
         with st.form(f"prediction_form_{match_id}"):
         
-            # Container này chỉ dùng để nhận diện riêng hàng nhập tỉ số.
-            # Không thay đổi giá trị, key hoặc logic của number input.
             with st.container(
                 key=f"prediction_score_row_{match_id}"
             ):
-                col_home, col_mid, col_away = st.columns(
-                    [2, 1, 2],
+                # Chỉ tạo đúng hai cột thật.
+                # Khoảng trống desktop được CSS tái tạo lại,
+                # không cần một cột rỗng ở giữa.
+                col_home, col_away = st.columns(
+                    [1, 1],
                     gap="small"
                 )
-        
+            
                 with col_home:
                     input_home = st.number_input(
                         home_name,
@@ -12930,7 +12995,7 @@ def render_match_card(
                         step=1,
                         key=f"home_score_{match_id}"
                     )
-        
+            
                 with col_away:
                     input_away = st.number_input(
                         away_name,
