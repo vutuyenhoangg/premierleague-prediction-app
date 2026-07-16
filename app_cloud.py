@@ -1868,7 +1868,7 @@ def inject_final_match_card_css():
 
             display: inline-flex;
             align-items: center;
-            gap: 17px;
+            gap: 16px;
 
             width: fit-content;
             max-width: 100%;
@@ -1885,16 +1885,11 @@ def inject_final_match_card_css():
             display: flex;
             align-items: baseline;
             flex-wrap: wrap;
-            gap: 9px;
+            gap: 8px;
 
             color: #071A3A;
 
-            font-size: clamp(
-                26px,
-                2.25vw,
-                34px
-            );
-
+            font-size: clamp(26px, 2.25vw, 34px);
             font-weight: 950;
             line-height: 1.08;
             letter-spacing: -0.045em;
@@ -1902,6 +1897,10 @@ def inject_final_match_card_css():
             text-shadow:
                 0 1px 0 rgba(255, 255, 255, 0.98),
                 0 5px 18px rgba(7, 17, 31, 0.10);
+        }
+
+        .wc-final-team-name {
+            display: inline-block;
         }
 
         .wc-final-versus {
@@ -1912,120 +1911,23 @@ def inject_final_match_card_css():
         }
 
         /* =====================================================
-           BIỂU TƯỢNG BÓNG, VƯƠNG MIỆN VÀ VÒNG NGUYỆT QUẾ
+           2 CÀNH VÀNG 2 BÊN - PHONG CÁCH GẦN GIỐNG HẠNG 3
            ===================================================== */
 
-        .wc-final-emblem {
+        .wc-final-laurel {
             position: relative;
 
-            width: 106px;
-            height: 86px;
+            width: 32px;
+            height: 62px;
 
-            flex: 0 0 106px;
-        }
-
-        .wc-final-crown {
-            position: absolute;
-            left: 50%;
-            top: 0;
-
-            width: 31px;
-            height: 16px;
-
-            transform: translateX(-50%);
-
-            background:
-                linear-gradient(
-                    180deg,
-                    #FFF1A8 0%,
-                    #D4A62A 50%,
-                    #996B0D 100%
-                );
-
-            clip-path:
-                polygon(
-                    0 100%,
-                    5% 40%,
-                    28% 72%,
-                    50% 0,
-                    72% 72%,
-                    95% 40%,
-                    100% 100%
-                );
-
-            filter:
-                drop-shadow(
-                    0 3px 4px
-                    rgba(106, 73, 10, 0.22)
-                );
-        }
-
-        .wc-final-ball {
-            position: absolute;
-            left: 50%;
-            top: 25px;
-
-            width: 51px;
-            height: 51px;
-
-            transform: translateX(-50%);
-
-            display: flex;
-            align-items: center;
-            justify-content: center;
-
-            box-sizing: border-box;
-
-            border-radius: 999px;
-
-            border:
-                2px solid
-                rgba(145, 99, 11, 0.70);
-
-            background:
-                radial-gradient(
-                    circle at 32% 25%,
-                    #FFF5BC 0%,
-                    #EDCB63 33%,
-                    #C59422 68%,
-                    #8C5E09 100%
-                );
-
-            color: #7A5108;
-
-            font-family:
-                "Segoe UI Symbol",
-                "Arial Unicode MS",
-                sans-serif;
-
-            font-size: 31px;
-            line-height: 1;
-
-            box-shadow:
-                inset 0 1px 0
-                rgba(255, 255, 255, 0.75),
-
-                0 8px 17px
-                rgba(122, 81, 8, 0.20),
-
-                0 0 0 5px
-                rgba(212, 166, 42, 0.08);
-        }
-
-        .wc-final-laurel {
-            position: absolute;
-            top: 24px;
-
-            width: 31px;
-            height: 59px;
+            flex: 0 0 32px;
         }
 
         .wc-final-laurel-left {
-            left: 2px;
+            transform: none;
         }
 
         .wc-final-laurel-right {
-            right: 2px;
             transform: scaleX(-1);
         }
 
@@ -2033,26 +1935,27 @@ def inject_final_match_card_css():
             content: "";
 
             position: absolute;
-            left: 17px;
-            bottom: 1px;
+            left: 16px;
+            bottom: 2px;
 
             width: 2px;
-            height: 54px;
+            height: 56px;
 
             border-radius: 999px;
 
             background:
                 linear-gradient(
                     180deg,
-                    #E8C563,
-                    #A36E10
+                    #F6D982 0%,
+                    #D4A62A 45%,
+                    #9E6D12 100%
                 );
 
-            transform:
-                rotate(-17deg);
+            transform: rotate(-16deg);
+            transform-origin: center bottom;
 
-            transform-origin:
-                center bottom;
+            box-shadow:
+                0 1px 3px rgba(158, 109, 18, 0.22);
         }
 
         .wc-final-laurel span {
@@ -2061,19 +1964,18 @@ def inject_final_match_card_css():
             width: 13px;
             height: 7px;
 
-            border-radius:
-                100% 0 100% 0;
+            border-radius: 100% 0 100% 0;
 
             background:
                 linear-gradient(
                     135deg,
-                    #F2D67C,
-                    #B68118
+                    #FFE8A3 0%,
+                    #D7A52A 55%,
+                    #A06E12 100%
                 );
 
             box-shadow:
-                0 2px 5px
-                rgba(100, 67, 8, 0.14);
+                0 2px 5px rgba(100, 67, 8, 0.14);
         }
 
         .wc-final-laurel span:nth-child(1) {
@@ -2113,7 +2015,8 @@ def inject_final_match_card_css():
         }
 
         /* =====================================================
-           BĂNG RÔN WORLD CUP FINAL
+           RIBBON WORLD CUP FINAL
+           GIỮ NGUYÊN PHONG CÁCH HIỆN TẠI
            ===================================================== */
 
         .wc-final-ribbon-row {
@@ -2178,9 +2081,7 @@ def inject_final_match_card_css():
                     0 50%
                 );
 
-            border:
-                1px solid
-                rgba(212, 166, 42, 0.92);
+            border: 1px solid rgba(212, 166, 42, 0.92);
 
             background:
                 linear-gradient(
@@ -2195,21 +2096,16 @@ def inject_final_match_card_css():
             font-size: 14px;
             font-weight: 950;
             line-height: 1;
-
             letter-spacing: 0.095em;
             text-transform: uppercase;
             white-space: nowrap;
 
             box-shadow:
-                inset 0 0 0 2px
-                rgba(245, 197, 66, 0.18),
-
-                0 8px 18px
-                rgba(7, 23, 53, 0.20);
+                inset 0 0 0 2px rgba(245, 197, 66, 0.18),
+                0 8px 18px rgba(7, 23, 53, 0.20);
 
             text-shadow:
-                0 1px 2px
-                rgba(0, 0, 0, 0.48);
+                0 1px 2px rgba(0, 0, 0, 0.48);
         }
 
         .wc-final-ribbon-symbol {
@@ -2217,6 +2113,10 @@ def inject_final_match_card_css():
             font-size: 10px;
             line-height: 1;
         }
+
+        /* =====================================================
+           MOBILE
+           ===================================================== */
 
         /* =====================================================
            MOBILE
@@ -2232,28 +2132,67 @@ def inject_final_match_card_css():
             }
 
             .wc-final-title-shell {
-                display: block !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                gap: 10px !important;
 
-                width: 100% !important;
+                width: fit-content !important;
                 max-width: 100% !important;
 
                 margin-top: 2px !important;
                 margin-bottom: 10px !important;
             }
 
-            /*
-             * Mobile ẩn biểu tượng lớn để dành chỗ cho tên đội
-             * và box trạng thái ở cột bên phải.
-             */
-            .wc-final-emblem {
-                display: none !important;
+            .wc-final-laurel {
+                width: 20px !important;
+                height: 42px !important;
+                flex: 0 0 20px !important;
+            }
+
+            .wc-final-laurel::before {
+                left: 10px !important;
+                height: 37px !important;
+                width: 1.8px !important;
+            }
+
+            .wc-final-laurel span {
+                width: 9px !important;
+                height: 5px !important;
+            }
+
+            .wc-final-laurel span:nth-child(1) {
+                left: 2px !important;
+                bottom: 5px !important;
+            }
+
+            .wc-final-laurel span:nth-child(2) {
+                left: 1px !important;
+                bottom: 11px !important;
+            }
+
+            .wc-final-laurel span:nth-child(3) {
+                left: 1px !important;
+                bottom: 17px !important;
+            }
+
+            .wc-final-laurel span:nth-child(4) {
+                left: 2px !important;
+                bottom: 23px !important;
+            }
+
+            .wc-final-laurel span:nth-child(5) {
+                left: 5px !important;
+                bottom: 29px !important;
+            }
+
+            .wc-final-laurel span:nth-child(6) {
+                left: 8px !important;
+                bottom: 34px !important;
             }
 
             .wc-final-title-center {
-                width: auto !important;
                 min-width: 0 !important;
                 max-width: 100% !important;
-
                 text-align: left !important;
             }
 
@@ -2263,38 +2202,28 @@ def inject_final_match_card_css():
                 width: 100% !important;
                 max-width: 100% !important;
 
-                font-size: clamp(
-                    20px,
-                    5.6vw,
-                    23px
-                ) !important;
-
-                line-height: 1.13 !important;
+                font-size: clamp(20px, 5.6vw, 23px) !important;
+                line-height: 1.12 !important;
                 text-align: left !important;
             }
 
             .wc-final-team-name,
             .wc-final-versus {
                 display: block !important;
-
                 width: 100% !important;
                 max-width: 100% !important;
             }
 
             .wc-final-versus {
                 margin: 1px 0 !important;
-
                 color: #B27A12 !important;
-
                 font-size: 0.82em !important;
             }
 
             .wc-final-ribbon-row {
                 display: block !important;
-
                 width: fit-content !important;
                 max-width: 100% !important;
-
                 margin-top: 7px !important;
             }
 
@@ -2323,6 +2252,20 @@ def inject_final_match_card_css():
         }
 
         @media (max-width: 390px) {
+            .wc-final-title-shell {
+                gap: 8px !important;
+            }
+
+            .wc-final-laurel {
+                width: 18px !important;
+                height: 40px !important;
+                flex: 0 0 18px !important;
+            }
+
+            .wc-final-title-center {
+                max-width: 100% !important;
+            }
+
             .wc-final-team-line {
                 font-size: 20px !important;
             }
@@ -11007,7 +10950,7 @@ def render_match_title(
     """
     Hiển thị tiêu đề trận đấu.
 
-    - Trận chung kết: giao diện navy và gold riêng.
+    - Trận chung kết: 2 cành vàng hai bên + tên đội ở giữa + ribbon World Cup Final.
     - Trận tranh hạng ba: giao diện bronze hiện tại.
     - Các trận khác: giữ nguyên giao diện desktop và mobile.
     """
@@ -11034,15 +10977,10 @@ def render_match_title(
     )
 
     def render_html_fragment(html_content: str):
-        """
-        Render HTML trực tiếp để tránh Markdown hiểu
-        các thẻ HTML thành code block trên điện thoại.
-        """
         html_content = str(html_content).strip()
 
         if hasattr(st, "html"):
             st.html(html_content)
-
         else:
             st.markdown(
                 html_content,
@@ -11053,7 +10991,7 @@ def render_match_title(
     # TRẬN CHUNG KẾT
     # ========================================================
     if is_final_match(row):
-        final_laurel_leaves_html = (
+        laurel_leaves_html = (
             "<span></span>"
             "<span></span>"
             "<span></span>"
@@ -11063,87 +11001,65 @@ def render_match_title(
         )
 
         final_title_html = (
-            f'<span '
-            f'class="wc-final-card-marker" '
-            f'aria-hidden="true">'
-            f'</span>'
+            f'<span class="wc-final-card-marker" aria-hidden="true"></span>'
 
-            f'<div '
-            f'class="wc-final-title-shell" '
+            f'<div class="wc-final-title-shell" '
             f'aria-label="{safe_home} vs {safe_away}, World Cup Final">'
 
-            f'<div '
-            f'class="wc-final-emblem" '
-            f'aria-hidden="true">'
+                f'<div class="wc-final-laurel wc-final-laurel-left" '
+                f'aria-hidden="true">'
+                    f'{laurel_leaves_html}'
+                f'</div>'
 
-            f'<div class="wc-final-crown">'
-            f'</div>'
+                f'<div class="wc-final-title-center">'
 
-            f'<div '
-            f'class="wc-final-laurel '
-            f'wc-final-laurel-left">'
-            f'{final_laurel_leaves_html}'
-            f'</div>'
+                    f'<div class="wc-final-team-line">'
 
-            f'<div class="wc-final-ball">'
-            f'&#9917;'
-            f'</div>'
+                        f'<span class="wc-final-team-name">'
+                            f'{safe_home}'
+                        f'</span>'
 
-            f'<div '
-            f'class="wc-final-laurel '
-            f'wc-final-laurel-right">'
-            f'{final_laurel_leaves_html}'
-            f'</div>'
+                        f'<span class="wc-final-versus">'
+                            f'vs'
+                        f'</span>'
 
-            f'</div>'
+                        f'<span class="wc-final-team-name">'
+                            f'{safe_away}'
+                        f'</span>'
 
-            f'<div class="wc-final-title-center">'
+                    f'</div>'
 
-            f'<div class="wc-final-team-line">'
+                    f'<div class="wc-final-ribbon-row">'
 
-            f'<span class="wc-final-team-name">'
-            f'{safe_home}'
-            f'</span>'
+                        f'<div class="wc-final-ribbon">'
 
-            f'<span class="wc-final-versus">'
-            f'vs'
-            f'</span>'
+                            f'<span class="wc-final-ribbon-symbol">'
+                                f'◆'
+                            f'</span>'
 
-            f'<span class="wc-final-team-name">'
-            f'{safe_away}'
-            f'</span>'
+                            f'<span>'
+                                f'World Cup Final'
+                            f'</span>'
 
-            f'</div>'
+                            f'<span class="wc-final-ribbon-symbol">'
+                                f'◆'
+                            f'</span>'
 
-            f'<div class="wc-final-ribbon-row">'
+                        f'</div>'
 
-            f'<div class="wc-final-ribbon">'
+                    f'</div>'
 
-            f'<span class="wc-final-ribbon-symbol">'
-            f'◆'
-            f'</span>'
+                f'</div>'
 
-            f'<span>'
-            f'World Cup Final'
-            f'</span>'
-
-            f'<span class="wc-final-ribbon-symbol">'
-            f'◆'
-            f'</span>'
-
-            f'</div>'
-
-            f'</div>'
-
-            f'</div>'
+                f'<div class="wc-final-laurel wc-final-laurel-right" '
+                f'aria-hidden="true">'
+                    f'{laurel_leaves_html}'
+                f'</div>'
 
             f'</div>'
         )
 
-        render_html_fragment(
-            final_title_html
-        )
-
+        render_html_fragment(final_title_html)
         return
 
     # ========================================================
@@ -11205,16 +11121,12 @@ def render_match_title(
             f'</div>'
         )
 
-        render_html_fragment(
-            third_place_title_html
-        )
-
+        render_html_fragment(third_place_title_html)
         return
 
     # ========================================================
     # CÁC TRẬN ĐẤU THÔNG THƯỜNG
     # ========================================================
-
     with stylable_container(
         key=f"match_title_desktop_{match_id}",
         css_styles="""
@@ -11247,9 +11159,8 @@ def render_match_title(
         f'</div>'
     )
 
-    render_html_fragment(
-        normal_mobile_title_html
-    )
+    render_html_fragment(normal_mobile_title_html)
+
 def render_pending_star_transfer_box(user_id: int, match_id: int):
     pending = st.session_state.get("pending_star_transfer")
 
