@@ -1484,11 +1484,6 @@ def inject_third_place_match_card_css():
 def inject_third_place_mobile_fix_css():
     """
     Tinh chỉnh riêng card tranh hạng ba trên điện thoại.
-
-    Chỉ áp dụng cho class wc-third-place-*:
-    - Không ảnh hưởng card trận đấu thông thường.
-    - Thu ngắn ribbon để không sát box Trạng thái.
-    - Giữ nguyên thiết kế desktop.
     """
     st.markdown(
         """
@@ -1652,10 +1647,710 @@ def inject_third_place_mobile_fix_css():
         unsafe_allow_html=True
     )
 
+def inject_final_match_card_css():
+    """
+    CSS riêng cho card trận chung kết.
+
+    Phạm vi:
+    - Chỉ tác động tới card có .wc-final-card-marker.
+    - Không ảnh hưởng card tranh hạng ba.
+    - Không ảnh hưởng các trận thông thường.
+    - Không thay đổi vị trí nút, form hoặc bố cục Streamlit.
+    """
+    st.markdown(
+        """
+        <style>
+        /* =====================================================
+           LỚP TRANG TRÍ TOÀN CARD
+           ===================================================== */
+
+        div[class*="st-key-match_card_"]:has(
+            .wc-final-card-marker
+        ) {
+            position: relative !important;
+            isolation: isolate !important;
+        }
+
+        /*
+         * Đưa toàn bộ thành phần thật của Streamlit lên phía trên
+         * lớp hoa văn trang trí.
+         */
+        div[class*="st-key-match_card_"]:has(
+            .wc-final-card-marker
+        ) > * {
+            position: relative !important;
+            z-index: 1 !important;
+        }
+
+        /*
+         * Lớp khung vàng, họa tiết góc và trang trí đáy card.
+         * Chỉ là lớp hình ảnh, không thể chặn thao tác người dùng.
+         */
+        div[class*="st-key-match_card_"]:has(
+            .wc-final-card-marker
+        )::after {
+            content: "";
+
+            position: absolute !important;
+            inset: 4px !important;
+
+            z-index: 0 !important;
+            pointer-events: none !important;
+
+            border-radius: 16px !important;
+
+            background:
+                /* Đường ánh kim phía trên */
+                linear-gradient(
+                    90deg,
+                    transparent,
+                    rgba(202, 151, 32, 0.90) 18%,
+                    rgba(255, 244, 184, 0.98) 50%,
+                    rgba(202, 151, 32, 0.90) 82%,
+                    transparent
+                )
+                center 3px /
+                calc(100% - 52px) 2px
+                no-repeat,
+
+                /* Đường trang trí phía dưới */
+                linear-gradient(
+                    90deg,
+                    transparent,
+                    rgba(202, 151, 32, 0.78) 18%,
+                    rgba(202, 151, 32, 0.94) 50%,
+                    rgba(202, 151, 32, 0.78) 82%,
+                    transparent
+                )
+                center calc(100% - 8px) /
+                48% 1px
+                no-repeat,
+
+                /* Viên kim cương chính giữa phía dưới */
+                conic-gradient(
+                    from 45deg,
+                    #D4A62A 0deg 90deg,
+                    transparent 90deg 180deg,
+                    #D4A62A 180deg 270deg,
+                    transparent 270deg 360deg
+                )
+                center calc(100% - 8px) /
+                11px 11px
+                no-repeat,
+
+                /* Góc trên trái */
+                linear-gradient(
+                    90deg,
+                    #D4A62A,
+                    #D4A62A
+                )
+                left 7px top 7px /
+                30px 1px
+                no-repeat,
+
+                linear-gradient(
+                    #D4A62A,
+                    #D4A62A
+                )
+                left 7px top 7px /
+                1px 30px
+                no-repeat,
+
+                radial-gradient(
+                    circle at left top,
+                    transparent 0 11px,
+                    rgba(212, 166, 42, 0.94) 12px 13px,
+                    transparent 14px
+                )
+                left 7px top 7px /
+                32px 32px
+                no-repeat,
+
+                /* Góc trên phải */
+                linear-gradient(
+                    90deg,
+                    #D4A62A,
+                    #D4A62A
+                )
+                right 7px top 7px /
+                30px 1px
+                no-repeat,
+
+                linear-gradient(
+                    #D4A62A,
+                    #D4A62A
+                )
+                right 7px top 7px /
+                1px 30px
+                no-repeat,
+
+                radial-gradient(
+                    circle at right top,
+                    transparent 0 11px,
+                    rgba(212, 166, 42, 0.94) 12px 13px,
+                    transparent 14px
+                )
+                right 7px top 7px /
+                32px 32px
+                no-repeat,
+
+                /* Góc dưới trái */
+                linear-gradient(
+                    90deg,
+                    #D4A62A,
+                    #D4A62A
+                )
+                left 7px bottom 7px /
+                30px 1px
+                no-repeat,
+
+                linear-gradient(
+                    #D4A62A,
+                    #D4A62A
+                )
+                left 7px bottom 7px /
+                1px 30px
+                no-repeat,
+
+                radial-gradient(
+                    circle at left bottom,
+                    transparent 0 11px,
+                    rgba(212, 166, 42, 0.94) 12px 13px,
+                    transparent 14px
+                )
+                left 7px bottom 7px /
+                32px 32px
+                no-repeat,
+
+                /* Góc dưới phải */
+                linear-gradient(
+                    90deg,
+                    #D4A62A,
+                    #D4A62A
+                )
+                right 7px bottom 7px /
+                30px 1px
+                no-repeat,
+
+                linear-gradient(
+                    #D4A62A,
+                    #D4A62A
+                )
+                right 7px bottom 7px /
+                1px 30px
+                no-repeat,
+
+                radial-gradient(
+                    circle at right bottom,
+                    transparent 0 11px,
+                    rgba(212, 166, 42, 0.94) 12px 13px,
+                    transparent 14px
+                )
+                right 7px bottom 7px /
+                32px 32px
+                no-repeat;
+
+            opacity: 0.92 !important;
+        }
+
+        /* Marker chỉ dùng để nhận diện card */
+        .wc-final-card-marker {
+            display: none !important;
+        }
+
+        /* =====================================================
+           KHỐI TIÊU ĐỀ TRẬN CHUNG KẾT
+           ===================================================== */
+
+        .wc-final-title-shell {
+            position: relative;
+            z-index: 2;
+
+            display: inline-flex;
+            align-items: center;
+            gap: 17px;
+
+            width: fit-content;
+            max-width: 100%;
+
+            margin: 0 0 13px 0;
+        }
+
+        .wc-final-title-center {
+            min-width: 0;
+            text-align: left;
+        }
+
+        .wc-final-team-line {
+            display: flex;
+            align-items: baseline;
+            flex-wrap: wrap;
+            gap: 9px;
+
+            color: #071A3A;
+
+            font-size: clamp(
+                26px,
+                2.25vw,
+                34px
+            );
+
+            font-weight: 950;
+            line-height: 1.08;
+            letter-spacing: -0.045em;
+
+            text-shadow:
+                0 1px 0 rgba(255, 255, 255, 0.98),
+                0 5px 18px rgba(7, 17, 31, 0.10);
+        }
+
+        .wc-final-versus {
+            color: #B27A12;
+            font-size: 0.75em;
+            font-weight: 950;
+            letter-spacing: -0.015em;
+        }
+
+        /* =====================================================
+           BIỂU TƯỢNG BÓNG, VƯƠNG MIỆN VÀ VÒNG NGUYỆT QUẾ
+           ===================================================== */
+
+        .wc-final-emblem {
+            position: relative;
+
+            width: 106px;
+            height: 86px;
+
+            flex: 0 0 106px;
+        }
+
+        .wc-final-crown {
+            position: absolute;
+            left: 50%;
+            top: 0;
+
+            width: 31px;
+            height: 16px;
+
+            transform: translateX(-50%);
+
+            background:
+                linear-gradient(
+                    180deg,
+                    #FFF1A8 0%,
+                    #D4A62A 50%,
+                    #996B0D 100%
+                );
+
+            clip-path:
+                polygon(
+                    0 100%,
+                    5% 40%,
+                    28% 72%,
+                    50% 0,
+                    72% 72%,
+                    95% 40%,
+                    100% 100%
+                );
+
+            filter:
+                drop-shadow(
+                    0 3px 4px
+                    rgba(106, 73, 10, 0.22)
+                );
+        }
+
+        .wc-final-ball {
+            position: absolute;
+            left: 50%;
+            top: 25px;
+
+            width: 51px;
+            height: 51px;
+
+            transform: translateX(-50%);
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            box-sizing: border-box;
+
+            border-radius: 999px;
+
+            border:
+                2px solid
+                rgba(145, 99, 11, 0.70);
+
+            background:
+                radial-gradient(
+                    circle at 32% 25%,
+                    #FFF5BC 0%,
+                    #EDCB63 33%,
+                    #C59422 68%,
+                    #8C5E09 100%
+                );
+
+            color: #7A5108;
+
+            font-family:
+                "Segoe UI Symbol",
+                "Arial Unicode MS",
+                sans-serif;
+
+            font-size: 31px;
+            line-height: 1;
+
+            box-shadow:
+                inset 0 1px 0
+                rgba(255, 255, 255, 0.75),
+
+                0 8px 17px
+                rgba(122, 81, 8, 0.20),
+
+                0 0 0 5px
+                rgba(212, 166, 42, 0.08);
+        }
+
+        .wc-final-laurel {
+            position: absolute;
+            top: 24px;
+
+            width: 31px;
+            height: 59px;
+        }
+
+        .wc-final-laurel-left {
+            left: 2px;
+        }
+
+        .wc-final-laurel-right {
+            right: 2px;
+            transform: scaleX(-1);
+        }
+
+        .wc-final-laurel::before {
+            content: "";
+
+            position: absolute;
+            left: 17px;
+            bottom: 1px;
+
+            width: 2px;
+            height: 54px;
+
+            border-radius: 999px;
+
+            background:
+                linear-gradient(
+                    180deg,
+                    #E8C563,
+                    #A36E10
+                );
+
+            transform:
+                rotate(-17deg);
+
+            transform-origin:
+                center bottom;
+        }
+
+        .wc-final-laurel span {
+            position: absolute;
+
+            width: 13px;
+            height: 7px;
+
+            border-radius:
+                100% 0 100% 0;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #F2D67C,
+                    #B68118
+                );
+
+            box-shadow:
+                0 2px 5px
+                rgba(100, 67, 8, 0.14);
+        }
+
+        .wc-final-laurel span:nth-child(1) {
+            left: 4px;
+            bottom: 7px;
+            transform: rotate(-29deg);
+        }
+
+        .wc-final-laurel span:nth-child(2) {
+            left: 2px;
+            bottom: 16px;
+            transform: rotate(-37deg);
+        }
+
+        .wc-final-laurel span:nth-child(3) {
+            left: 2px;
+            bottom: 25px;
+            transform: rotate(-45deg);
+        }
+
+        .wc-final-laurel span:nth-child(4) {
+            left: 4px;
+            bottom: 35px;
+            transform: rotate(-53deg);
+        }
+
+        .wc-final-laurel span:nth-child(5) {
+            left: 8px;
+            bottom: 44px;
+            transform: rotate(-61deg);
+        }
+
+        .wc-final-laurel span:nth-child(6) {
+            left: 13px;
+            bottom: 51px;
+            transform: rotate(-69deg);
+        }
+
+        /* =====================================================
+           BĂNG RÔN WORLD CUP FINAL
+           ===================================================== */
+
+        .wc-final-ribbon-row {
+            display: flex;
+            align-items: center;
+            gap: 11px;
+
+            width: fit-content;
+            max-width: 100%;
+
+            margin-top: 10px;
+        }
+
+        .wc-final-ribbon-row::before,
+        .wc-final-ribbon-row::after {
+            content: "";
+
+            width: 56px;
+            height: 1px;
+
+            flex: 0 0 56px;
+
+            background:
+                linear-gradient(
+                    90deg,
+                    transparent,
+                    #D4A62A
+                );
+        }
+
+        .wc-final-ribbon-row::after {
+            background:
+                linear-gradient(
+                    90deg,
+                    #D4A62A,
+                    transparent
+                );
+        }
+
+        .wc-final-ribbon {
+            position: relative;
+
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+
+            min-width: 265px;
+            min-height: 36px;
+
+            padding: 7px 24px;
+
+            box-sizing: border-box;
+
+            clip-path:
+                polygon(
+                    5% 0,
+                    95% 0,
+                    100% 50%,
+                    95% 100%,
+                    5% 100%,
+                    0 50%
+                );
+
+            border:
+                1px solid
+                rgba(212, 166, 42, 0.92);
+
+            background:
+                linear-gradient(
+                    180deg,
+                    #16366C 0%,
+                    #0A204B 48%,
+                    #071735 100%
+                );
+
+            color: #F5C542;
+
+            font-size: 14px;
+            font-weight: 950;
+            line-height: 1;
+
+            letter-spacing: 0.095em;
+            text-transform: uppercase;
+            white-space: nowrap;
+
+            box-shadow:
+                inset 0 0 0 2px
+                rgba(245, 197, 66, 0.18),
+
+                0 8px 18px
+                rgba(7, 23, 53, 0.20);
+
+            text-shadow:
+                0 1px 2px
+                rgba(0, 0, 0, 0.48);
+        }
+
+        .wc-final-ribbon-symbol {
+            color: #FFD761;
+            font-size: 10px;
+            line-height: 1;
+        }
+
+        /* =====================================================
+           MOBILE
+           ===================================================== */
+
+        @media (max-width: 768px) {
+            div[class*="st-key-match_card_"]:has(
+                .wc-final-card-marker
+            )::after {
+                inset: 3px !important;
+                border-radius: 15px !important;
+                opacity: 0.70 !important;
+            }
+
+            .wc-final-title-shell {
+                display: block !important;
+
+                width: 100% !important;
+                max-width: 100% !important;
+
+                margin-top: 2px !important;
+                margin-bottom: 10px !important;
+            }
+
+            /*
+             * Mobile ẩn biểu tượng lớn để dành chỗ cho tên đội
+             * và box trạng thái ở cột bên phải.
+             */
+            .wc-final-emblem {
+                display: none !important;
+            }
+
+            .wc-final-title-center {
+                width: auto !important;
+                min-width: 0 !important;
+                max-width: 100% !important;
+
+                text-align: left !important;
+            }
+
+            .wc-final-team-line {
+                display: block !important;
+
+                width: 100% !important;
+                max-width: 100% !important;
+
+                font-size: clamp(
+                    20px,
+                    5.6vw,
+                    23px
+                ) !important;
+
+                line-height: 1.13 !important;
+                text-align: left !important;
+            }
+
+            .wc-final-team-name,
+            .wc-final-versus {
+                display: block !important;
+
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+
+            .wc-final-versus {
+                margin: 1px 0 !important;
+
+                color: #B27A12 !important;
+
+                font-size: 0.82em !important;
+            }
+
+            .wc-final-ribbon-row {
+                display: block !important;
+
+                width: fit-content !important;
+                max-width: 100% !important;
+
+                margin-top: 7px !important;
+            }
+
+            .wc-final-ribbon-row::before,
+            .wc-final-ribbon-row::after {
+                display: none !important;
+            }
+
+            .wc-final-ribbon {
+                width: 142px !important;
+                min-width: 142px !important;
+                max-width: 142px !important;
+
+                min-height: 23px !important;
+
+                gap: 5px !important;
+                padding: 5px 8px !important;
+
+                font-size: 7.4px !important;
+                letter-spacing: 0.065em !important;
+            }
+
+            .wc-final-ribbon-symbol {
+                font-size: 6px !important;
+            }
+        }
+
+        @media (max-width: 390px) {
+            .wc-final-team-line {
+                font-size: 20px !important;
+            }
+
+            .wc-final-ribbon {
+                width: 132px !important;
+                min-width: 132px !important;
+                max-width: 132px !important;
+
+                min-height: 22px !important;
+
+                padding-left: 7px !important;
+                padding-right: 7px !important;
+
+                font-size: 7px !important;
+                letter-spacing: 0.055em !important;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
 inject_worldcup_theme()
 inject_match_card_border_animation_css()
 inject_third_place_match_card_css()
 inject_third_place_mobile_fix_css()
+inject_final_match_card_css()
 inject_hide_streamlit_embed_footer_css()
 
 def inject_match_datepicker_calendar_theme(match_dates):
@@ -6205,8 +6900,6 @@ def normalize_round_name_for_special_ui(value) -> str:
 def is_third_place_match(row) -> bool:
     """
     Kiểm tra trận đấu có phải trận tranh vị trí thứ ba hay không.
-
-    Chỉ dựa vào round_name, không thay đổi dữ liệu hoặc logic trận đấu.
     """
     if row is None:
         return False
@@ -6240,19 +6933,61 @@ def is_third_place_match(row) -> bool:
         for keyword in third_place_keywords
     )
 
+def is_final_match(row) -> bool:
+    """
+    Kiểm tra một trận có phải trận chung kết hay không.
+    """
+    if row is None:
+        return False
+
+    round_text = normalize_round_name_for_special_ui(
+        row.get("round_name")
+    )
+
+    if not round_text:
+        return False
+
+    excluded_keywords = [
+        "semi final",
+        "semifinal",
+        "quarter final",
+        "quarterfinal",
+        "third place",
+        "3rd place",
+        "match for third place",
+        "bronze match",
+        "tranh hang ba",
+        "tranh hang 3"
+    ]
+
+    if any(
+        keyword in round_text
+        for keyword in excluded_keywords
+    ):
+        return False
+
+    final_round_names = {
+        "final",
+        "final match",
+        "world cup final",
+        "fifa world cup final",
+        "chung ket",
+        "tran chung ket"
+    }
+
+    return round_text in final_round_names
+
 def get_match_card_css(status_info, row=None):
     """
     Tạo CSS cho card trận đấu.
 
-    Card thông thường:
-    - Giữ nguyên giao diện và màu theo trạng thái hiện tại.
+    Thứ tự ưu tiên:
+    1. Trận chung kết
+    2. Trận tranh vị trí thứ ba
+    3. Card thông thường
 
-    Card tranh vị trí thứ ba:
-    - Dùng nền bronze kết hợp xanh băng.
-    - Viền bronze sang trọng.
-    - Có ánh sáng sân vận động và họa tiết hình học chìm.
-    - Hiệu ứng sáng chạy quanh viền chuyển sang tông bronze.
-    - Không thay đổi padding, kích thước hoặc bố cục bên trong.
+    Chỉ thay đổi lớp nền, viền và ánh sáng.
+    Padding, margin, kích thước và bố cục card được giữ nguyên.
     """
     status_key = str(
         status_info.get("status_key") or ""
@@ -6273,6 +7008,7 @@ def get_match_card_css(status_info, row=None):
         )
     )
 
+    is_final = is_final_match(row)
     is_third_place = is_third_place_match(row)
 
     shimmer_config_by_status = {
@@ -6308,7 +7044,184 @@ def get_match_card_css(status_info, row=None):
         }
     )
 
-    if is_third_place:
+    # ========================================================
+    # TRẬN CHUNG KẾT
+    # ========================================================
+    if is_final:
+        border_color = "#081B3D"
+
+        status_glow_by_key = {
+            "open": "rgba(37, 99, 235, 0.14)",
+            "locked": "rgba(245, 158, 11, 0.15)",
+            "finished": "rgba(22, 163, 74, 0.13)",
+            "unknown": "rgba(100, 116, 139, 0.11)"
+        }
+
+        status_glow = status_glow_by_key.get(
+            status_key,
+            "rgba(37, 99, 235, 0.12)"
+        )
+
+        card_background = f"""
+            radial-gradient(
+                circle at 97% 5%,
+                rgba(255,255,255,1) 0 4px,
+                rgba(255,255,255,0.68) 5px 11px,
+                transparent 12px
+            ),
+
+            radial-gradient(
+                circle at 94% 7.5%,
+                rgba(255,255,255,0.98) 0 4px,
+                rgba(255,255,255,0.48) 5px 10px,
+                transparent 11px
+            ),
+
+            radial-gradient(
+                circle at 91% 10%,
+                rgba(255,255,255,0.94) 0 4px,
+                rgba(255,255,255,0.34) 5px 9px,
+                transparent 10px
+            ),
+
+            radial-gradient(
+                circle at 88% 12.5%,
+                rgba(255,255,255,0.88) 0 3px,
+                rgba(255,255,255,0.27) 4px 8px,
+                transparent 9px
+            ),
+
+            radial-gradient(
+                circle at 15% 7%,
+                rgba(245,197,66,0.92) 0 1.3px,
+                transparent 1.8px
+            ),
+
+            radial-gradient(
+                circle at 18% 10%,
+                rgba(245,197,66,0.70) 0 1px,
+                transparent 1.7px
+            ),
+
+            radial-gradient(
+                circle at 64% 25%,
+                rgba(245,197,66,0.76) 0 1.2px,
+                transparent 1.8px
+            ),
+
+            radial-gradient(
+                circle at 72% 42%,
+                rgba(245,197,66,0.56) 0 1px,
+                transparent 1.7px
+            ),
+
+            radial-gradient(
+                ellipse at 93% 4%,
+                rgba(255,255,255,0.98) 0%,
+                rgba(219,234,254,0.60) 22%,
+                transparent 49%
+            ),
+
+            radial-gradient(
+                ellipse at 7% 3%,
+                rgba(255,251,235,0.96) 0%,
+                rgba(245,197,66,0.13) 24%,
+                transparent 45%
+            ),
+
+            radial-gradient(
+                circle at 77% 18%,
+                {status_glow} 0%,
+                transparent 32%
+            ),
+
+            linear-gradient(
+                121deg,
+                transparent 0%,
+                transparent 25%,
+                rgba(255,255,255,0.22) 33%,
+                rgba(255,255,255,0.70) 42%,
+                rgba(255,255,255,0.18) 51%,
+                transparent 61%
+            ),
+
+            linear-gradient(
+                145deg,
+                rgba(212,166,42,0.07) 0%,
+                transparent 26%
+            ),
+
+            repeating-linear-gradient(
+                135deg,
+                transparent 0,
+                transparent 72px,
+                rgba(8,27,61,0.018) 73px,
+                rgba(8,27,61,0.018) 74px,
+                transparent 75px,
+                transparent 145px
+            ),
+
+            linear-gradient(
+                135deg,
+                rgba(255,253,246,0.985) 0%,
+                rgba(239,246,255,0.975) 48%,
+                rgba(248,251,255,0.985) 100%
+            )
+        """
+
+        box_shadow = """
+            0 0 0 2px rgba(212, 166, 42, 0.82),
+            0 22px 52px rgba(7, 27, 61, 0.18),
+            0 7px 20px rgba(15, 23, 42, 0.08),
+            inset 0 0 0 2px rgba(212, 166, 42, 0.55),
+            inset 0 1px 0 rgba(255, 255, 255, 0.98)
+        """
+
+        final_shimmer_by_status = {
+            "open": {
+                "opacity": "1",
+                "color": "#FFD761",
+                "soft_color": "#FFF4B8",
+                "speed": "4s"
+            },
+
+            "locked": {
+                "opacity": "1",
+                "color": "#F59E0B",
+                "soft_color": "#FDE68A",
+                "speed": "4.15s"
+            },
+
+            "finished": {
+                "opacity": "1",
+                "color": "#34D399",
+                "soft_color": "#FEF3C7",
+                "speed": "4.25s"
+            },
+
+            "unknown": {
+                "opacity": "0.70",
+                "color": "#CBD5E1",
+                "soft_color": "#FDE68A",
+                "speed": "4.6s"
+            }
+        }
+
+        shimmer_config = final_shimmer_by_status.get(
+            status_key,
+            {
+                "opacity": "1",
+                "color": "#FFD761",
+                "soft_color": "#FFF4B8",
+                "speed": "4s"
+            }
+        )
+
+    # ========================================================
+    # TRẬN TRANH VỊ TRÍ THỨ BA
+    # Giữ nguyên thiết kế bronze hiện tại
+    # ========================================================
+    elif is_third_place:
         border_color = "#A85F32"
 
         card_background = """
@@ -6409,6 +7322,9 @@ def get_match_card_css(status_info, row=None):
             "speed": "4.6s"
         }
 
+    # ========================================================
+    # CARD THÔNG THƯỜNG
+    # ========================================================
     else:
         border_color = default_border_color
         card_background = default_card_background
@@ -10089,12 +11005,11 @@ def render_match_title(
     row=None
 ):
     """
-    Hiển thị tên hai đội.
+    Hiển thị tiêu đề trận đấu.
 
-    - Card thông thường giữ nguyên giao diện desktop và mobile.
-    - Trận tranh hạng ba dùng tiêu đề bronze riêng.
-    - Toàn bộ HTML custom được render trực tiếp để không bị
-      Markdown biến thành code block trên điện thoại.
+    - Trận chung kết: giao diện navy và gold riêng.
+    - Trận tranh hạng ba: giao diện bronze hiện tại.
+    - Các trận khác: giữ nguyên giao diện desktop và mobile.
     """
     home_display = (
         "TBD"
@@ -10120,10 +11035,8 @@ def render_match_title(
 
     def render_html_fragment(html_content: str):
         """
-        Render HTML trực tiếp.
-
-        Fallback vẫn an toàn vì chuỗi HTML không chứa
-        dòng thụt lề có thể bị Markdown hiểu thành code.
+        Render HTML trực tiếp để tránh Markdown hiểu
+        các thẻ HTML thành code block trên điện thoại.
         """
         html_content = str(html_content).strip()
 
@@ -10135,6 +11048,103 @@ def render_match_title(
                 html_content,
                 unsafe_allow_html=True
             )
+
+    # ========================================================
+    # TRẬN CHUNG KẾT
+    # ========================================================
+    if is_final_match(row):
+        final_laurel_leaves_html = (
+            "<span></span>"
+            "<span></span>"
+            "<span></span>"
+            "<span></span>"
+            "<span></span>"
+            "<span></span>"
+        )
+
+        final_title_html = (
+            f'<span '
+            f'class="wc-final-card-marker" '
+            f'aria-hidden="true">'
+            f'</span>'
+
+            f'<div '
+            f'class="wc-final-title-shell" '
+            f'aria-label="{safe_home} vs {safe_away}, World Cup Final">'
+
+            f'<div '
+            f'class="wc-final-emblem" '
+            f'aria-hidden="true">'
+
+            f'<div class="wc-final-crown">'
+            f'</div>'
+
+            f'<div '
+            f'class="wc-final-laurel '
+            f'wc-final-laurel-left">'
+            f'{final_laurel_leaves_html}'
+            f'</div>'
+
+            f'<div class="wc-final-ball">'
+            f'&#9917;'
+            f'</div>'
+
+            f'<div '
+            f'class="wc-final-laurel '
+            f'wc-final-laurel-right">'
+            f'{final_laurel_leaves_html}'
+            f'</div>'
+
+            f'</div>'
+
+            f'<div class="wc-final-title-center">'
+
+            f'<div class="wc-final-team-line">'
+
+            f'<span class="wc-final-team-name">'
+            f'{safe_home}'
+            f'</span>'
+
+            f'<span class="wc-final-versus">'
+            f'vs'
+            f'</span>'
+
+            f'<span class="wc-final-team-name">'
+            f'{safe_away}'
+            f'</span>'
+
+            f'</div>'
+
+            f'<div class="wc-final-ribbon-row">'
+
+            f'<div class="wc-final-ribbon">'
+
+            f'<span class="wc-final-ribbon-symbol">'
+            f'◆'
+            f'</span>'
+
+            f'<span>'
+            f'World Cup Final'
+            f'</span>'
+
+            f'<span class="wc-final-ribbon-symbol">'
+            f'◆'
+            f'</span>'
+
+            f'</div>'
+
+            f'</div>'
+
+            f'</div>'
+
+            f'</div>'
+        )
+
+        render_html_fragment(
+            final_title_html
+        )
+
+        return
 
     # ========================================================
     # TRẬN TRANH VỊ TRÍ THỨ BA
@@ -10153,45 +11163,45 @@ def render_match_title(
             f'<div '
             f'class="wc-third-place-title-shell" '
             f'aria-label="{safe_home} vs {safe_away}, third-place match">'
-            
+
             f'<div '
             f'class="wc-third-place-laurel '
             f'wc-third-place-laurel-left" '
             f'aria-hidden="true">'
             f'{laurel_leaves_html}'
             f'</div>'
-            
+
             f'<div class="wc-third-place-title-center">'
-            
+
             f'<div class="wc-third-place-team-line">'
-            
+
             f'<span class="wc-third-place-team-name">'
             f'{safe_home}'
             f'</span>'
-            
+
             f'<span class="wc-third-place-versus">'
             f'vs'
             f'</span>'
-            
+
             f'<span class="wc-third-place-team-name">'
             f'{safe_away}'
             f'</span>'
-            
+
             f'</div>'
-            
+
             f'<div class="wc-third-place-ribbon">'
             f'Third-place match'
             f'</div>'
-            
+
             f'</div>'
-            
+
             f'<div '
             f'class="wc-third-place-laurel '
             f'wc-third-place-laurel-right" '
             f'aria-hidden="true">'
             f'{laurel_leaves_html}'
             f'</div>'
-            
+
             f'</div>'
         )
 
@@ -10205,7 +11215,6 @@ def render_match_title(
     # CÁC TRẬN ĐẤU THÔNG THƯỜNG
     # ========================================================
 
-    # Desktop giữ nguyên st.subheader hiện tại.
     with stylable_container(
         key=f"match_title_desktop_{match_id}",
         css_styles="""
@@ -10218,32 +11227,29 @@ def render_match_title(
             f"{home_display} vs {away_display}"
         )
 
-    # Mobile dùng HTML dạng chuỗi liên tục.
-    # Không còn nguy cơ hiện nguyên văn thẻ div.
     normal_mobile_title_html = (
         f'<div '
         f'class="wc-match-title-mobile" '
         f'aria-label="{safe_home} vs {safe_away}">'
-        
+
         f'<div class="wc-match-team">'
         f'{safe_home}'
         f'</div>'
-        
+
         f'<div class="wc-match-vs">'
         f'vs'
         f'</div>'
-        
+
         f'<div class="wc-match-team">'
         f'{safe_away}'
         f'</div>'
-        
+
         f'</div>'
     )
 
     render_html_fragment(
         normal_mobile_title_html
     )
-
 def render_pending_star_transfer_box(user_id: int, match_id: int):
     pending = st.session_state.get("pending_star_transfer")
 
