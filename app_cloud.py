@@ -1166,37 +1166,48 @@ def inject_match_card_border_animation_css():
 
 def inject_main_page_lift_css():
     """
-    Đẩy riêng toàn bộ nội dung trang chính lên cao hơn.
+    Đẩy riêng nội dung trang chính lên cao hơn.
 
-    Không tác động tới:
-    - Avatar góc phải
-    - Nút điểm danh
-    - Header Streamlit
-    - Sidebar
-    - Bố cục và kích thước các thành phần bên trong trang
+    - Desktop và mobile có mức dịch chuyển riêng.
+    - Không tác động tới sidebar.
+    - Không tác động tới avatar.
+    - Không tác động tới nút điểm danh.
+    - Không thay đổi kích thước hoặc bố cục bên trong nội dung.
     """
     st.markdown(
         """
         <style>
         /*
-         * Chỉ kéo wrapper chứa nội dung trang.
-         * Avatar và nút điểm danh nằm ngoài wrapper này
-         * nên giữ nguyên tọa độ fixed hiện tại.
+         * Desktop
          */
         @media (min-width: 769px) {
             div[class*="st-key-main_page_content_shell"] {
-                margin-top: -118px !important;
                 position: relative !important;
+                margin-top: -118px !important;
             }
         }
 
         /*
-         * Mobile hiện không có khoảng trống lớn như desktop,
-         * vì vậy không kéo nội dung để tránh chạm avatar.
+         * Điện thoại và tablet dọc.
+         *
+         * Khoảng trống hiện tại trên mobile khoảng hơn 150px.
+         * Kéo nội dung lên 92px để hero tiến gần khu vực avatar,
+         * nhưng vẫn giữ một khoảng an toàn phía dưới header.
          */
         @media (max-width: 768px) {
             div[class*="st-key-main_page_content_shell"] {
-                margin-top: 0 !important;
+                position: relative !important;
+                margin-top: -92px !important;
+            }
+        }
+
+        /*
+         * Màn hình rất nhỏ cần dịch nhẹ hơn một chút,
+         * tránh hero tiến quá sát thanh Menu.
+         */
+        @media (max-width: 390px) {
+            div[class*="st-key-main_page_content_shell"] {
+                margin-top: -84px !important;
             }
         }
         </style>
