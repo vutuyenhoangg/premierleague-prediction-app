@@ -1967,7 +1967,6 @@ def inject_final_match_card_css():
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 11px;
 
             width: fit-content;
             max-width: 100%;
@@ -1977,19 +1976,8 @@ def inject_final_match_card_css():
 
         .wc-final-ribbon-row::before,
         .wc-final-ribbon-row::after {
-            content: "";
-
-            width: 56px;
-            height: 1px;
-
-            flex: 0 0 56px;
-
-            background:
-                linear-gradient(
-                    90deg,
-                    transparent,
-                    #D4A62A
-                );
+            display: none !important;
+            content: none !important;
         }
 
         .wc-final-ribbon-row::after {
