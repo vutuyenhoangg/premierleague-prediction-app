@@ -1164,6 +1164,100 @@ def inject_match_card_border_animation_css():
         unsafe_allow_html=True
     )
 
+def inject_mobile_prediction_score_row_css():
+    """
+    Giữ hai ô nhập tỉ số luôn nằm trên cùng một hàng
+    ở giao diện điện thoại.
+
+    Chỉ tác động tới container prediction_score_row_*.
+    Không ảnh hưởng các st.columns khác trong app.
+    """
+    st.markdown(
+        """
+        <style>
+        @media (max-width: 768px) {
+            /*
+             * Buộc riêng hàng nhập tỉ số giữ dạng ngang.
+             */
+            div[class*="st-key-prediction_score_row_"]
+            div[data-testid="stHorizontalBlock"] {
+                display: flex !important;
+                flex-direction: row !important;
+                flex-wrap: nowrap !important;
+                align-items: flex-start !important;
+
+                width: 100% !important;
+                gap: 10px !important;
+            }
+
+            /*
+             * Hai cột chứa ô nhập tỉ số chia đều chiều rộng.
+             */
+            div[class*="st-key-prediction_score_row_"]
+            div[data-testid="stHorizontalBlock"]
+            > div[data-testid="column"]:first-child,
+
+            div[class*="st-key-prediction_score_row_"]
+            div[data-testid="stHorizontalBlock"]
+            > div[data-testid="column"]:last-child {
+                display: block !important;
+
+                flex: 1 1 0 !important;
+
+                width: 0 !important;
+                min-width: 0 !important;
+                max-width: none !important;
+            }
+
+            /*
+             * Cột giữa hiện không chứa nội dung.
+             * Chỉ ẩn trên mobile để dành đủ chiều rộng
+             * cho hai ô tỉ số.
+             */
+            div[class*="st-key-prediction_score_row_"]
+            div[data-testid="stHorizontalBlock"]
+            > div[data-testid="column"]:nth-child(2) {
+                display: none !important;
+            }
+
+            /*
+             * Cho number input co lại đúng theo chiều rộng cột.
+             */
+            div[class*="st-key-prediction_score_row_"]
+            div[data-testid="stNumberInput"],
+
+            div[class*="st-key-prediction_score_row_"]
+            div[data-baseweb="input"] {
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: 100% !important;
+                box-sizing: border-box !important;
+            }
+
+            /*
+             * Không cho các nút trừ và cộng bị co mất.
+             */
+            div[class*="st-key-prediction_score_row_"]
+            div[data-testid="stNumberInput"] button {
+                flex: 0 0 auto !important;
+            }
+        }
+
+        /*
+         * Điện thoại rất nhỏ: giảm nhẹ khoảng cách,
+         * nhưng vẫn giữ nguyên hai ô trên một hàng.
+         */
+        @media (max-width: 390px) {
+            div[class*="st-key-prediction_score_row_"]
+            div[data-testid="stHorizontalBlock"] {
+                gap: 7px !important;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
 def inject_main_page_lift_css():
     """
     Đẩy riêng nội dung trang chính lên cao hơn.
@@ -2217,6 +2311,7 @@ inject_match_card_border_animation_css()
 inject_third_place_match_card_css()
 inject_third_place_mobile_fix_css()
 inject_final_match_card_css()
+inject_mobile_prediction_score_row_css()
 inject_hide_streamlit_embed_footer_css()
 inject_main_page_lift_css()
 
@@ -12815,28 +12910,37 @@ def render_match_card(
             return
 
         with st.form(f"prediction_form_{match_id}"):
-            col_home, col_mid, col_away = st.columns([2, 1, 2])
-
-            with col_home:
-                input_home = st.number_input(
-                    home_name,
-                    min_value=0,
-                    max_value=20,
-                    value=pred_home,
-                    step=1,
-                    key=f"home_score_{match_id}"
+        
+            # Container này chỉ dùng để nhận diện riêng hàng nhập tỉ số.
+            # Không thay đổi giá trị, key hoặc logic của number input.
+            with st.container(
+                key=f"prediction_score_row_{match_id}"
+            ):
+                col_home, col_mid, col_away = st.columns(
+                    [2, 1, 2],
+                    gap="small"
                 )
-
-            with col_away:
-                input_away = st.number_input(
-                    away_name,
-                    min_value=0,
-                    max_value=20,
-                    value=pred_away,
-                    step=1,
-                    key=f"away_score_{match_id}"
-                )
-
+        
+                with col_home:
+                    input_home = st.number_input(
+                        home_name,
+                        min_value=0,
+                        max_value=20,
+                        value=pred_home,
+                        step=1,
+                        key=f"home_score_{match_id}"
+                    )
+        
+                with col_away:
+                    input_away = st.number_input(
+                        away_name,
+                        min_value=0,
+                        max_value=20,
+                        value=pred_away,
+                        step=1,
+                        key=f"away_score_{match_id}"
+                    )
+        
             predicted_winner_team_id = None
             predicted_winner_team_name = None
             winner_radio_key = None
