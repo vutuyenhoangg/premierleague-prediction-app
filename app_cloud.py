@@ -9921,88 +9921,106 @@ def render_match_title(
 
     - Card thông thường giữ nguyên thiết kế hiện tại.
     - Trận tranh vị trí thứ ba dùng tiêu đề bronze đặc biệt.
+    - HTML đặc biệt được render trực tiếp, không đi qua Markdown parser.
     """
     home_display = (
         "TBD"
         if home_name is None or pd.isna(home_name)
-        else str(home_name)
+        else str(home_name).strip()
     )
 
     away_display = (
         "TBD"
         if away_name is None or pd.isna(away_name)
-        else str(away_name)
+        else str(away_name).strip()
     )
 
-    safe_home = html.escape(home_display)
-    safe_away = html.escape(away_display)
+    safe_home = html.escape(
+        home_display,
+        quote=True
+    )
 
+    safe_away = html.escape(
+        away_display,
+        quote=True
+    )
+
+    # ========================================================
+    # TRẬN TRANH VỊ TRÍ THỨ BA
+    # ========================================================
     if is_third_place_match(row):
-        laurel_leaves_html = "".join(
+        laurel_leaves_html = (
             "<span></span>"
-            for _ in range(6)
+            "<span></span>"
+            "<span></span>"
+            "<span></span>"
+            "<span></span>"
+            "<span></span>"
         )
 
-        title_html = f"""
-        <span
-            class="wc-third-place-marker"
-            aria-hidden="true"
-        ></span>
-
-        <div
-            class="wc-third-place-title-shell"
-            aria-label="{safe_home} vs {safe_away}, third-place match"
-        >
-            <div
-                class="
-                    wc-third-place-laurel
-                    wc-third-place-laurel-left
-                "
-                aria-hidden="true"
-            >
-                {laurel_leaves_html}
-            </div>
-
-            <div class="wc-third-place-title-center">
-                <div class="wc-third-place-team-line">
-                    <span class="wc-third-place-team-name">
-                        {safe_home}
-                    </span>
-
-                    <span class="wc-third-place-versus">
-                        vs
-                    </span>
-
-                    <span class="wc-third-place-team-name">
-                        {safe_away}
-                    </span>
-                </div>
-
-                <div class="wc-third-place-ribbon">
-                    Third-place match
-                </div>
-            </div>
-
-            <div
-                class="
-                    wc-third-place-laurel
-                    wc-third-place-laurel-right
-                "
-                aria-hidden="true"
-            >
-                {laurel_leaves_html}
-            </div>
-        </div>
-        """
-
-        st.markdown(
-            textwrap.dedent(title_html).strip(),
-            unsafe_allow_html=True
+        # Viết HTML thành một chuỗi liên tục.
+        # Không dùng các dòng HTML thụt lề vì st.markdown có thể
+        # hiểu chúng thành code block.
+        title_html = (
+            f'<div '
+            f'class="wc-third-place-title-shell" '
+            f'aria-label="{safe_home} vs {safe_away}, third-place match">'
+            
+            f'<div '
+            f'class="wc-third-place-laurel wc-third-place-laurel-left" '
+            f'aria-hidden="true">'
+            f'{laurel_leaves_html}'
+            f'</div>'
+            
+            f'<div class="wc-third-place-title-center">'
+            
+            f'<div class="wc-third-place-team-line">'
+            f'<span class="wc-third-place-team-name">'
+            f'{safe_home}'
+            f'</span>'
+            f'<span class="wc-third-place-versus">'
+            f'vs'
+            f'</span>'
+            f'<span class="wc-third-place-team-name">'
+            f'{safe_away}'
+            f'</span>'
+            f'</div>'
+            
+            f'<div class="wc-third-place-ribbon">'
+            f'Third-place match'
+            f'</div>'
+            
+            f'</div>'
+            
+            f'<div '
+            f'class="wc-third-place-laurel wc-third-place-laurel-right" '
+            f'aria-hidden="true">'
+            f'{laurel_leaves_html}'
+            f'</div>'
+            
+            f'</div>'
         )
+
+        # st.html render HTML trực tiếp và không chạy qua
+        # Markdown parser.
+        if hasattr(st, "html"):
+            st.html(title_html)
+
+        else:
+            # Fallback cho Streamlit cũ.
+            # Chuỗi đã được viết liên tục nên không bị biến
+            # thành Markdown code block.
+            st.markdown(
+                title_html,
+                unsafe_allow_html=True
+            )
 
         return
 
-    # Card thông thường trên desktop giữ nguyên st.subheader.
+    # ========================================================
+    # CÁC CARD TRẬN ĐẤU THÔNG THƯỜNG
+    # Giữ nguyên thiết kế và cách hoạt động hiện tại
+    # ========================================================
     with stylable_container(
         key=f"match_title_desktop_{match_id}",
         css_styles="""
@@ -10015,7 +10033,6 @@ def render_match_title(
             f"{home_display} vs {away_display}"
         )
 
-    # Card thông thường trên mobile giữ nguyên dạng ba dòng.
     st.markdown(
         f"""
         <div
