@@ -1011,9 +1011,6 @@ def inject_hide_streamlit_embed_footer_css():
 
 def inject_match_card_border_animation_css():
     """
-    Tạo một vệt sáng chạy theo chiều kim đồng hồ
-    quanh đúng đường viền bo góc của card trận đấu.
-
     Phần hiệu ứng được đặt trên pseudo-element của card,
     không nằm trong background và không phủ lên giữa card.
     """
@@ -1167,8 +1164,326 @@ def inject_match_card_border_animation_css():
         unsafe_allow_html=True
     )
 
+def inject_third_place_match_card_css():
+    """
+    CSS riêng cho phần tiêu đề trận tranh vị trí thứ ba.
+
+    Chỉ tác động tới các class wc-third-place-*,
+    không ảnh hưởng các card trận đấu khác.
+    """
+    st.markdown(
+        """
+        <style>
+        .wc-third-place-title-shell {
+            position: relative;
+            z-index: 2;
+
+            display: inline-flex;
+            align-items: center;
+            gap: 14px;
+
+            width: fit-content;
+            max-width: 100%;
+
+            margin: 0 0 12px 0;
+        }
+
+        .wc-third-place-title-center {
+            min-width: 0;
+            text-align: center;
+        }
+
+        .wc-third-place-team-line {
+            display: flex;
+            align-items: baseline;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 8px;
+
+            color: #0B2345;
+
+            font-size: clamp(24px, 2vw, 31px);
+            font-weight: 950;
+            line-height: 1.12;
+            letter-spacing: -0.035em;
+
+            text-shadow:
+                0 1px 0 rgba(255,255,255,0.96),
+                0 4px 16px rgba(15,23,42,0.08);
+        }
+
+        .wc-third-place-versus {
+            color: #7C3F21;
+            font-size: 0.78em;
+            font-weight: 900;
+            letter-spacing: -0.01em;
+        }
+
+        .wc-third-place-ribbon {
+            position: relative;
+
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+
+            min-width: 210px;
+
+            margin-top: 9px;
+            padding: 6px 22px;
+
+            box-sizing: border-box;
+
+            background:
+                linear-gradient(
+                    180deg,
+                    #D89562 0%,
+                    #B76536 48%,
+                    #934522 100%
+                );
+
+            border:
+                1px solid
+                rgba(116, 53, 24, 0.34);
+
+            color: #FFF8F2;
+
+            font-size: 11px;
+            font-weight: 950;
+            line-height: 1;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+
+            box-shadow:
+                0 7px 16px rgba(109, 55, 25, 0.18),
+                inset 0 1px 0 rgba(255,255,255,0.36);
+
+            text-shadow:
+                0 1px 2px rgba(70, 29, 12, 0.38);
+        }
+
+        .wc-third-place-ribbon::before,
+        .wc-third-place-ribbon::after {
+            content: "";
+
+            position: absolute;
+            top: 4px;
+
+            width: 17px;
+            height: calc(100% - 2px);
+
+            z-index: -1;
+
+            background:
+                linear-gradient(
+                    180deg,
+                    #B9693C,
+                    #86401F
+                );
+        }
+
+        .wc-third-place-ribbon::before {
+            left: -12px;
+
+            clip-path:
+                polygon(
+                    0 0,
+                    100% 10%,
+                    78% 50%,
+                    100% 90%,
+                    0 100%,
+                    25% 50%
+                );
+        }
+
+        .wc-third-place-ribbon::after {
+            right: -12px;
+
+            clip-path:
+                polygon(
+                    100% 0,
+                    0 10%,
+                    22% 50%,
+                    0 90%,
+                    100% 100%,
+                    75% 50%
+                );
+        }
+
+        .wc-third-place-laurel {
+            position: relative;
+
+            width: 32px;
+            height: 58px;
+
+            flex: 0 0 32px;
+        }
+
+        .wc-third-place-laurel-right {
+            transform: scaleX(-1);
+        }
+
+        .wc-third-place-laurel::before {
+            content: "";
+
+            position: absolute;
+            left: 17px;
+            bottom: 2px;
+
+            width: 2px;
+            height: 51px;
+
+            border-radius: 999px;
+
+            background:
+                linear-gradient(
+                    180deg,
+                    #D79A66,
+                    #9A4F27
+                );
+
+            transform:
+                rotate(-17deg);
+
+            transform-origin:
+                center bottom;
+        }
+
+        .wc-third-place-laurel span {
+            position: absolute;
+
+            width: 12px;
+            height: 6px;
+
+            border-radius:
+                100% 0 100% 0;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #DFA370,
+                    #9F5129
+                );
+
+            box-shadow:
+                0 2px 4px
+                rgba(105, 52, 25, 0.12);
+        }
+
+        .wc-third-place-laurel span:nth-child(1) {
+            left: 5px;
+            bottom: 8px;
+            transform: rotate(-31deg);
+        }
+
+        .wc-third-place-laurel span:nth-child(2) {
+            left: 3px;
+            bottom: 16px;
+            transform: rotate(-39deg);
+        }
+
+        .wc-third-place-laurel span:nth-child(3) {
+            left: 3px;
+            bottom: 25px;
+            transform: rotate(-46deg);
+        }
+
+        .wc-third-place-laurel span:nth-child(4) {
+            left: 5px;
+            bottom: 34px;
+            transform: rotate(-54deg);
+        }
+
+        .wc-third-place-laurel span:nth-child(5) {
+            left: 9px;
+            bottom: 42px;
+            transform: rotate(-62deg);
+        }
+
+        .wc-third-place-laurel span:nth-child(6) {
+            left: 14px;
+            bottom: 49px;
+            transform: rotate(-70deg);
+        }
+
+        .wc-third-place-marker {
+            display: none !important;
+        }
+
+        @media (max-width: 768px) {
+            .wc-third-place-title-shell {
+                display: flex;
+                width: 100%;
+                max-width: 100%;
+
+                gap: 7px;
+                margin-top: 2px;
+                margin-bottom: 10px;
+            }
+
+            .wc-third-place-title-center {
+                width: 100%;
+                text-align: left;
+            }
+
+            .wc-third-place-laurel {
+                display: none;
+            }
+
+            .wc-third-place-team-line {
+                display: block;
+                width: 100%;
+
+                font-size: clamp(20px, 5.6vw, 23px);
+                line-height: 1.13;
+
+                text-align: left;
+            }
+
+            .wc-third-place-team-name,
+            .wc-third-place-versus {
+                display: block;
+                width: 100%;
+            }
+
+            .wc-third-place-versus {
+                margin: 1px 0;
+
+                font-size: 0.82em;
+                color: #9A4F27;
+            }
+
+            .wc-third-place-ribbon {
+                min-width: 180px;
+
+                margin-top: 8px;
+                padding: 6px 17px;
+
+                font-size: 9.5px;
+                letter-spacing: 0.13em;
+            }
+        }
+
+        @media (max-width: 390px) {
+            .wc-third-place-team-line {
+                font-size: 20px;
+            }
+
+            .wc-third-place-ribbon {
+                min-width: 168px;
+                padding-left: 14px;
+                padding-right: 14px;
+
+                font-size: 9px;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
 inject_worldcup_theme()
 inject_match_card_border_animation_css()
+inject_third_place_match_card_css()
 inject_hide_streamlit_embed_footer_css()
 
 def inject_match_datepicker_calendar_theme(match_dates):
@@ -5666,36 +5981,116 @@ def get_match_status_info(row):
         "badge_text": "#92400E"
     }
 
-
-def get_match_card_css(status_info):
+def normalize_round_name_for_special_ui(value) -> str:
     """
-    CSS chính của card trận đấu.
+    Chuẩn hóa tên vòng đấu để nhận diện ổn định.
 
-    Giữ nguyên:
-    - Border
-    - Border radius
-    - Padding
-    - Margin
-    - Background
-    - Box shadow
-    - Layout và overflow
+    Ví dụ:
+    - Match for third place
+    - Third-place match
+    - 3rd place playoff
+    - Tranh hạng 3
+    """
+    if value is None:
+        return ""
 
-    Chỉ bổ sung CSS variables để điều khiển vệt sáng cho:
-    - open: đang mở dự đoán
-    - locked: đã khóa dự đoán
-    - finished: đã có kết quả
+    try:
+        if pd.isna(value):
+            return ""
+    except TypeError:
+        pass
 
-    Trạng thái unknown không có hiệu ứng.
+    normalized_text = str(value).strip()
+
+    normalized_text = unicodedata.normalize(
+        "NFD",
+        normalized_text
+    )
+
+    normalized_text = "".join(
+        character
+        for character in normalized_text
+        if unicodedata.category(character) != "Mn"
+    )
+
+    normalized_text = normalized_text.lower()
+
+    normalized_text = re.sub(
+        r"[^a-z0-9]+",
+        " ",
+        normalized_text
+    )
+
+    normalized_text = re.sub(
+        r"\s+",
+        " ",
+        normalized_text
+    ).strip()
+
+    return normalized_text
+
+
+def is_third_place_match(row) -> bool:
+    """
+    Kiểm tra trận đấu có phải trận tranh vị trí thứ ba hay không.
+
+    Chỉ dựa vào round_name, không thay đổi dữ liệu hoặc logic trận đấu.
+    """
+    if row is None:
+        return False
+
+    round_text = normalize_round_name_for_special_ui(
+        row.get("round_name")
+    )
+
+    if not round_text:
+        return False
+
+    third_place_keywords = [
+        "match for third place",
+        "third place match",
+        "third place",
+        "third place playoff",
+        "third place play off",
+        "3rd place",
+        "3rd place match",
+        "3rd place playoff",
+        "bronze match",
+        "bronze medal match",
+        "tranh hang 3",
+        "tranh hang ba",
+        "tranh vi tri thu 3",
+        "tranh vi tri thu ba"
+    ]
+
+    return any(
+        keyword in round_text
+        for keyword in third_place_keywords
+    )
+
+def get_match_card_css(status_info, row=None):
+    """
+    Tạo CSS cho card trận đấu.
+
+    Card thông thường:
+    - Giữ nguyên giao diện và màu theo trạng thái hiện tại.
+
+    Card tranh vị trí thứ ba:
+    - Dùng nền bronze kết hợp xanh băng.
+    - Viền bronze sang trọng.
+    - Có ánh sáng sân vận động và họa tiết hình học chìm.
+    - Hiệu ứng sáng chạy quanh viền chuyển sang tông bronze.
+    - Không thay đổi padding, kích thước hoặc bố cục bên trong.
     """
     status_key = str(
         status_info.get("status_key") or ""
     ).strip().lower()
 
-    border_color = str(
+    default_border_color = str(
         status_info.get("border_color") or "#9CA3AF"
     )
 
-    card_background = str(
+    default_card_background = str(
         status_info.get("background")
         or (
             "linear-gradient("
@@ -5706,8 +6101,9 @@ def get_match_card_css(status_info):
         )
     )
 
+    is_third_place = is_third_place_match(row)
+
     shimmer_config_by_status = {
-        # Đang mở dự đoán: xanh dương
         "open": {
             "opacity": "1",
             "color": "#60A5FA",
@@ -5715,7 +6111,6 @@ def get_match_card_css(status_info):
             "speed": "4.2s"
         },
 
-        # Đã khóa dự đoán: vàng cam
         "locked": {
             "opacity": "1",
             "color": "#F59E0B",
@@ -5723,7 +6118,6 @@ def get_match_card_css(status_info):
             "speed": "4.2s"
         },
 
-        # Đã có kết quả: xanh lá
         "finished": {
             "opacity": "1",
             "color": "#22C55E",
@@ -5732,15 +6126,126 @@ def get_match_card_css(status_info):
         }
     }
 
-    shimmer_config = shimmer_config_by_status.get(
+    default_shimmer_config = shimmer_config_by_status.get(
         status_key,
         {
             "opacity": "0",
-            "color": border_color,
-            "soft_color": border_color,
+            "color": default_border_color,
+            "soft_color": default_border_color,
             "speed": "4.2s"
         }
     )
+
+    if is_third_place:
+        border_color = "#A85F32"
+
+        card_background = """
+            radial-gradient(
+                circle at 3.6% 4.5%,
+                rgba(255,255,255,0.98) 0 4px,
+                rgba(255,255,255,0.48) 5px 10px,
+                transparent 11px
+            ),
+            radial-gradient(
+                circle at 7.6% 4.5%,
+                rgba(255,255,255,0.94) 0 4px,
+                rgba(255,255,255,0.38) 5px 9px,
+                transparent 10px
+            ),
+            radial-gradient(
+                circle at 11.5% 4.5%,
+                rgba(255,255,255,0.88) 0 4px,
+                rgba(255,255,255,0.30) 5px 9px,
+                transparent 10px
+            ),
+            radial-gradient(
+                circle at 96.2% 5.5%,
+                rgba(255,255,255,1) 0 4px,
+                rgba(255,255,255,0.52) 5px 11px,
+                transparent 12px
+            ),
+            radial-gradient(
+                circle at 92.2% 7.6%,
+                rgba(255,255,255,0.92) 0 4px,
+                rgba(255,255,255,0.36) 5px 9px,
+                transparent 10px
+            ),
+            radial-gradient(
+                circle at 88.4% 9.8%,
+                rgba(255,255,255,0.84) 0 4px,
+                rgba(255,255,255,0.28) 5px 9px,
+                transparent 10px
+            ),
+            radial-gradient(
+                ellipse at 7% 3%,
+                rgba(255,255,255,0.96) 0%,
+                rgba(255,237,225,0.46) 20%,
+                transparent 44%
+            ),
+            radial-gradient(
+                ellipse at 93% 5%,
+                rgba(255,255,255,0.94) 0%,
+                rgba(219,234,254,0.54) 23%,
+                transparent 47%
+            ),
+            linear-gradient(
+                118deg,
+                transparent 0%,
+                transparent 31%,
+                rgba(255,255,255,0.24) 37%,
+                rgba(255,255,255,0.66) 44%,
+                rgba(255,255,255,0.12) 52%,
+                transparent 60%
+            ),
+            linear-gradient(
+                156deg,
+                rgba(168,95,50,0.12) 0%,
+                transparent 29%
+            ),
+            repeating-linear-gradient(
+                135deg,
+                transparent 0,
+                transparent 54px,
+                rgba(168,95,50,0.025) 55px,
+                rgba(168,95,50,0.025) 56px,
+                transparent 57px,
+                transparent 112px
+            ),
+            linear-gradient(
+                135deg,
+                rgba(255,243,235,0.98) 0%,
+                rgba(241,246,255,0.97) 47%,
+                rgba(248,251,255,0.98) 100%
+            )
+        """
+
+        box_shadow = """
+            0 20px 48px rgba(72, 39, 20, 0.14),
+            0 7px 18px rgba(15, 23, 42, 0.07),
+            inset 0 0 0 1px rgba(255, 255, 255, 0.82),
+            inset 0 1px 0 rgba(255, 255, 255, 0.96)
+        """
+
+        shimmer_config = {
+            "opacity": (
+                "0.72"
+                if status_key == "unknown"
+                else "1"
+            ),
+            "color": "#F4B778",
+            "soft_color": "#FFE0C2",
+            "speed": "4.6s"
+        }
+
+    else:
+        border_color = default_border_color
+        card_background = default_card_background
+
+        box_shadow = """
+            0 14px 34px rgba(15, 23, 42, 0.08)
+        """
+
+        shimmer_config = default_shimmer_config
 
     shimmer_opacity = shimmer_config["opacity"]
     shimmer_color = shimmer_config["color"]
@@ -5749,9 +6254,6 @@ def get_match_card_css(status_info):
 
     return f"""
     {{
-        /*
-         * Các biến này được pseudo-element toàn cục sử dụng.
-         */
         --wc-match-card-shimmer-opacity:
             {shimmer_opacity};
 
@@ -5764,9 +6266,6 @@ def get_match_card_css(status_info):
         --wc-match-card-shimmer-speed:
             {shimmer_speed};
 
-        /*
-         * Toàn bộ thiết kế card cũ được giữ nguyên.
-         */
         border:
             2px solid
             {border_color};
@@ -5783,9 +6282,14 @@ def get_match_card_css(status_info):
         background:
             {card_background};
 
+        background-position:
+            center;
+
+        background-repeat:
+            no-repeat;
+
         box-shadow:
-            0 14px 34px
-            rgba(15, 23, 42, 0.08);
+            {box_shadow};
 
         position:
             relative;
@@ -9406,14 +9910,99 @@ def render_auth_page():
 # ============================================================
 # 9. MATCH CARD UI
 # ============================================================
-def render_match_title(home_name, away_name, match_id: int):
-    home_display = "TBD" if home_name is None or pd.isna(home_name) else str(home_name)
-    away_display = "TBD" if away_name is None or pd.isna(away_name) else str(away_name)
+def render_match_title(
+    home_name,
+    away_name,
+    match_id: int,
+    row=None
+):
+    """
+    Hiển thị tên hai đội.
+
+    - Card thông thường giữ nguyên thiết kế hiện tại.
+    - Trận tranh vị trí thứ ba dùng tiêu đề bronze đặc biệt.
+    """
+    home_display = (
+        "TBD"
+        if home_name is None or pd.isna(home_name)
+        else str(home_name)
+    )
+
+    away_display = (
+        "TBD"
+        if away_name is None or pd.isna(away_name)
+        else str(away_name)
+    )
 
     safe_home = html.escape(home_display)
     safe_away = html.escape(away_display)
 
-    # Desktop: giữ nguyên kiểu st.subheader cũ
+    if is_third_place_match(row):
+        laurel_leaves_html = "".join(
+            "<span></span>"
+            for _ in range(6)
+        )
+
+        title_html = f"""
+        <span
+            class="wc-third-place-marker"
+            aria-hidden="true"
+        ></span>
+
+        <div
+            class="wc-third-place-title-shell"
+            aria-label="{safe_home} vs {safe_away}, third-place match"
+        >
+            <div
+                class="
+                    wc-third-place-laurel
+                    wc-third-place-laurel-left
+                "
+                aria-hidden="true"
+            >
+                {laurel_leaves_html}
+            </div>
+
+            <div class="wc-third-place-title-center">
+                <div class="wc-third-place-team-line">
+                    <span class="wc-third-place-team-name">
+                        {safe_home}
+                    </span>
+
+                    <span class="wc-third-place-versus">
+                        vs
+                    </span>
+
+                    <span class="wc-third-place-team-name">
+                        {safe_away}
+                    </span>
+                </div>
+
+                <div class="wc-third-place-ribbon">
+                    Third-place match
+                </div>
+            </div>
+
+            <div
+                class="
+                    wc-third-place-laurel
+                    wc-third-place-laurel-right
+                "
+                aria-hidden="true"
+            >
+                {laurel_leaves_html}
+            </div>
+        </div>
+        """
+
+        st.markdown(
+            textwrap.dedent(title_html).strip(),
+            unsafe_allow_html=True
+        )
+
+        return
+
+    # Card thông thường trên desktop giữ nguyên st.subheader.
     with stylable_container(
         key=f"match_title_desktop_{match_id}",
         css_styles="""
@@ -9422,15 +10011,28 @@ def render_match_title(home_name, away_name, match_id: int):
         }
         """
     ):
-        st.subheader(f"{home_display} vs {away_display}")
+        st.subheader(
+            f"{home_display} vs {away_display}"
+        )
 
-    # Mobile: hiển thị dạng 3 dòng
+    # Card thông thường trên mobile giữ nguyên dạng ba dòng.
     st.markdown(
         f"""
-        <div class="wc-match-title-mobile" aria-label="{safe_home} vs {safe_away}">
-            <div class="wc-match-team">{safe_home}</div>
-            <div class="wc-match-vs">vs</div>
-            <div class="wc-match-team">{safe_away}</div>
+        <div
+            class="wc-match-title-mobile"
+            aria-label="{safe_home} vs {safe_away}"
+        >
+            <div class="wc-match-team">
+                {safe_home}
+            </div>
+
+            <div class="wc-match-vs">
+                vs
+            </div>
+
+            <div class="wc-match-team">
+                {safe_away}
+            </div>
         </div>
         """,
         unsafe_allow_html=True
@@ -10813,7 +11415,10 @@ def render_match_card(
         existing = user_prediction_map.get(match_id)
 
     status_info = get_match_status_info(row)
-    card_css = get_match_card_css(status_info)
+    card_css = get_match_card_css(
+        status_info,
+        row=row
+    )
 
     def load_transfer_candidates_for_card(star_type: str) -> list[dict]:
         """
@@ -10902,7 +11507,12 @@ def render_match_card(
         top_left, top_right = st.columns([3, 1])
 
         with top_left:
-            render_match_title(home_name, away_name, match_id)
+            render_match_title(
+                home_name,
+                away_name,
+                match_id,
+                row=row
+            )
 
             st.caption(
                 f"{row.get('round_name')} | "
