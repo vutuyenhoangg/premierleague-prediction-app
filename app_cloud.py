@@ -1651,44 +1651,33 @@ def inject_final_match_card_css():
     """
     CSS riêng cho card trận chung kết.
 
-    Phạm vi:
-    - Chỉ tác động tới card có .wc-final-card-marker.
-    - Không ảnh hưởng card tranh hạng ba.
-    - Không ảnh hưởng các trận thông thường.
-    - Không thay đổi vị trí nút, form hoặc bố cục Streamlit.
+    Mục tiêu:
+    - Giữ phong cách sang trọng navy + gold cho card final
+    - Phần match title dùng cùng hệ bố cục với trận tranh hạng ba:
+        + 2 cành vàng hai bên
+        + tên đội ở giữa
+        + ribbon ở dưới và căn giữa chuẩn
+    - Mobile hiển thị cùng logic với card tranh hạng ba
+    - Không ảnh hưởng các card khác
     """
     st.markdown(
         """
         <style>
         /* =====================================================
-           LỚP TRANG TRÍ TOÀN CARD
+           DECOR TOÀN CARD FINAL
            ===================================================== */
 
-        div[class*="st-key-match_card_"]:has(
-            .wc-final-card-marker
-        ) {
+        div[class*="st-key-match_card_"]:has(.wc-final-card-marker) {
             position: relative !important;
             isolation: isolate !important;
         }
 
-        /*
-         * Đưa toàn bộ thành phần thật của Streamlit lên phía trên
-         * lớp hoa văn trang trí.
-         */
-        div[class*="st-key-match_card_"]:has(
-            .wc-final-card-marker
-        ) > * {
+        div[class*="st-key-match_card_"]:has(.wc-final-card-marker) > * {
             position: relative !important;
             z-index: 1 !important;
         }
 
-        /*
-         * Lớp khung vàng, họa tiết góc và trang trí đáy card.
-         * Chỉ là lớp hình ảnh, không thể chặn thao tác người dùng.
-         */
-        div[class*="st-key-match_card_"]:has(
-            .wc-final-card-marker
-        )::after {
+        div[class*="st-key-match_card_"]:has(.wc-final-card-marker)::after {
             content: "";
 
             position: absolute !important;
@@ -1700,7 +1689,6 @@ def inject_final_match_card_css():
             border-radius: 16px !important;
 
             background:
-                /* Đường ánh kim phía trên */
                 linear-gradient(
                     90deg,
                     transparent,
@@ -1713,7 +1701,6 @@ def inject_final_match_card_css():
                 calc(100% - 52px) 2px
                 no-repeat,
 
-                /* Đường trang trí phía dưới */
                 linear-gradient(
                     90deg,
                     transparent,
@@ -1726,7 +1713,6 @@ def inject_final_match_card_css():
                 48% 1px
                 no-repeat,
 
-                /* Viên kim cương chính giữa phía dưới */
                 conic-gradient(
                     from 45deg,
                     #D4A62A 0deg 90deg,
@@ -1738,20 +1724,12 @@ def inject_final_match_card_css():
                 11px 11px
                 no-repeat,
 
-                /* Góc trên trái */
-                linear-gradient(
-                    90deg,
-                    #D4A62A,
-                    #D4A62A
-                )
+                linear-gradient(90deg, #D4A62A, #D4A62A)
                 left 7px top 7px /
                 30px 1px
                 no-repeat,
 
-                linear-gradient(
-                    #D4A62A,
-                    #D4A62A
-                )
+                linear-gradient(#D4A62A, #D4A62A)
                 left 7px top 7px /
                 1px 30px
                 no-repeat,
@@ -1766,20 +1744,12 @@ def inject_final_match_card_css():
                 32px 32px
                 no-repeat,
 
-                /* Góc trên phải */
-                linear-gradient(
-                    90deg,
-                    #D4A62A,
-                    #D4A62A
-                )
+                linear-gradient(90deg, #D4A62A, #D4A62A)
                 right 7px top 7px /
                 30px 1px
                 no-repeat,
 
-                linear-gradient(
-                    #D4A62A,
-                    #D4A62A
-                )
+                linear-gradient(#D4A62A, #D4A62A)
                 right 7px top 7px /
                 1px 30px
                 no-repeat,
@@ -1794,20 +1764,12 @@ def inject_final_match_card_css():
                 32px 32px
                 no-repeat,
 
-                /* Góc dưới trái */
-                linear-gradient(
-                    90deg,
-                    #D4A62A,
-                    #D4A62A
-                )
+                linear-gradient(90deg, #D4A62A, #D4A62A)
                 left 7px bottom 7px /
                 30px 1px
                 no-repeat,
 
-                linear-gradient(
-                    #D4A62A,
-                    #D4A62A
-                )
+                linear-gradient(#D4A62A, #D4A62A)
                 left 7px bottom 7px /
                 1px 30px
                 no-repeat,
@@ -1822,20 +1784,12 @@ def inject_final_match_card_css():
                 32px 32px
                 no-repeat,
 
-                /* Góc dưới phải */
-                linear-gradient(
-                    90deg,
-                    #D4A62A,
-                    #D4A62A
-                )
+                linear-gradient(90deg, #D4A62A, #D4A62A)
                 right 7px bottom 7px /
                 30px 1px
                 no-repeat,
 
-                linear-gradient(
-                    #D4A62A,
-                    #D4A62A
-                )
+                linear-gradient(#D4A62A, #D4A62A)
                 right 7px bottom 7px /
                 1px 30px
                 no-repeat,
@@ -1853,13 +1807,12 @@ def inject_final_match_card_css():
             opacity: 0.92 !important;
         }
 
-        /* Marker chỉ dùng để nhận diện card */
         .wc-final-card-marker {
             display: none !important;
         }
 
         /* =====================================================
-           KHỐI TIÊU ĐỀ TRẬN CHUNG KẾT
+           TITLE FINAL - CÙNG TƯ DUY VỚI THIRD-PLACE
            ===================================================== */
 
         .wc-final-title-shell {
@@ -1868,35 +1821,36 @@ def inject_final_match_card_css():
 
             display: inline-flex;
             align-items: center;
-            gap: 16px;
+            gap: 14px;
 
             width: fit-content;
             max-width: 100%;
 
-            margin: 0 0 13px 0;
+            margin: 0 0 12px 0;
         }
 
         .wc-final-title-center {
             min-width: 0;
-            text-align: left;
+            text-align: center;
         }
 
         .wc-final-team-line {
             display: flex;
             align-items: baseline;
+            justify-content: center;
             flex-wrap: wrap;
             gap: 8px;
 
-            color: #071A3A;
+            color: #0B2345;
 
-            font-size: clamp(26px, 2.25vw, 34px);
+            font-size: clamp(24px, 2vw, 33px);
             font-weight: 950;
-            line-height: 1.08;
-            letter-spacing: -0.045em;
+            line-height: 1.10;
+            letter-spacing: -0.035em;
 
             text-shadow:
-                0 1px 0 rgba(255, 255, 255, 0.98),
-                0 5px 18px rgba(7, 17, 31, 0.10);
+                0 1px 0 rgba(255,255,255,0.96),
+                0 4px 16px rgba(15,23,42,0.08);
         }
 
         .wc-final-team-name {
@@ -1905,26 +1859,22 @@ def inject_final_match_card_css():
 
         .wc-final-versus {
             color: #B27A12;
-            font-size: 0.75em;
-            font-weight: 950;
-            letter-spacing: -0.015em;
+            font-size: 0.78em;
+            font-weight: 900;
+            letter-spacing: -0.01em;
         }
 
         /* =====================================================
-           2 CÀNH VÀNG 2 BÊN - PHONG CÁCH GẦN GIỐNG HẠNG 3
+           2 CÀNH VÀNG 2 BÊN
            ===================================================== */
 
         .wc-final-laurel {
             position: relative;
 
             width: 32px;
-            height: 62px;
+            height: 58px;
 
             flex: 0 0 32px;
-        }
-
-        .wc-final-laurel-left {
-            transform: none;
         }
 
         .wc-final-laurel-right {
@@ -1935,99 +1885,94 @@ def inject_final_match_card_css():
             content: "";
 
             position: absolute;
-            left: 16px;
+            left: 17px;
             bottom: 2px;
 
             width: 2px;
-            height: 56px;
+            height: 51px;
 
             border-radius: 999px;
 
             background:
                 linear-gradient(
                     180deg,
-                    #F6D982 0%,
-                    #D4A62A 45%,
-                    #9E6D12 100%
+                    #F2D67C,
+                    #B68118
                 );
 
-            transform: rotate(-16deg);
+            transform: rotate(-17deg);
             transform-origin: center bottom;
-
-            box-shadow:
-                0 1px 3px rgba(158, 109, 18, 0.22);
         }
 
         .wc-final-laurel span {
             position: absolute;
 
-            width: 13px;
-            height: 7px;
+            width: 12px;
+            height: 6px;
 
             border-radius: 100% 0 100% 0;
 
             background:
                 linear-gradient(
                     135deg,
-                    #FFE8A3 0%,
-                    #D7A52A 55%,
-                    #A06E12 100%
+                    #FFE8A3,
+                    #B68118
                 );
 
             box-shadow:
-                0 2px 5px rgba(100, 67, 8, 0.14);
+                0 2px 4px rgba(105, 52, 25, 0.12);
         }
 
         .wc-final-laurel span:nth-child(1) {
-            left: 4px;
-            bottom: 7px;
-            transform: rotate(-29deg);
+            left: 5px;
+            bottom: 8px;
+            transform: rotate(-31deg);
         }
 
         .wc-final-laurel span:nth-child(2) {
-            left: 2px;
+            left: 3px;
             bottom: 16px;
-            transform: rotate(-37deg);
+            transform: rotate(-39deg);
         }
 
         .wc-final-laurel span:nth-child(3) {
-            left: 2px;
+            left: 3px;
             bottom: 25px;
-            transform: rotate(-45deg);
+            transform: rotate(-46deg);
         }
 
         .wc-final-laurel span:nth-child(4) {
-            left: 4px;
-            bottom: 35px;
-            transform: rotate(-53deg);
+            left: 5px;
+            bottom: 34px;
+            transform: rotate(-54deg);
         }
 
         .wc-final-laurel span:nth-child(5) {
-            left: 8px;
-            bottom: 44px;
-            transform: rotate(-61deg);
+            left: 9px;
+            bottom: 42px;
+            transform: rotate(-62deg);
         }
 
         .wc-final-laurel span:nth-child(6) {
-            left: 13px;
-            bottom: 51px;
-            transform: rotate(-69deg);
+            left: 14px;
+            bottom: 49px;
+            transform: rotate(-70deg);
         }
 
         /* =====================================================
-           RIBBON WORLD CUP FINAL
-           GIỮ NGUYÊN PHONG CÁCH HIỆN TẠI
+           RIBBON FINAL - GIỮ THIẾT KẾ HIỆN TẠI
            ===================================================== */
 
         .wc-final-ribbon-row {
             display: flex;
             align-items: center;
+            justify-content: center;
             gap: 11px;
 
             width: fit-content;
             max-width: 100%;
 
-            margin-top: 10px;
+            margin-top: 9px;
         }
 
         .wc-final-ribbon-row::before,
@@ -2081,7 +2026,9 @@ def inject_final_match_card_css():
                     0 50%
                 );
 
-            border: 1px solid rgba(212, 166, 42, 0.92);
+            border:
+                1px solid
+                rgba(212, 166, 42, 0.92);
 
             background:
                 linear-gradient(
@@ -2115,95 +2062,42 @@ def inject_final_match_card_css():
         }
 
         /* =====================================================
-           MOBILE
-           ===================================================== */
-
-        /* =====================================================
-           MOBILE
+           MOBILE - CÙNG CÁCH XỬ LÝ VỚI THIRD-PLACE
            ===================================================== */
 
         @media (max-width: 768px) {
-            div[class*="st-key-match_card_"]:has(
-                .wc-final-card-marker
-            )::after {
+            div[class*="st-key-match_card_"]:has(.wc-final-card-marker)::after {
                 inset: 3px !important;
                 border-radius: 15px !important;
                 opacity: 0.70 !important;
             }
 
             .wc-final-title-shell {
-                display: inline-flex !important;
-                align-items: center !important;
-                gap: 10px !important;
-
-                width: fit-content !important;
+                display: flex !important;
+                width: 100% !important;
                 max-width: 100% !important;
 
+                gap: 7px !important;
                 margin-top: 2px !important;
                 margin-bottom: 10px !important;
             }
 
-            .wc-final-laurel {
-                width: 20px !important;
-                height: 42px !important;
-                flex: 0 0 20px !important;
-            }
-
-            .wc-final-laurel::before {
-                left: 10px !important;
-                height: 37px !important;
-                width: 1.8px !important;
-            }
-
-            .wc-final-laurel span {
-                width: 9px !important;
-                height: 5px !important;
-            }
-
-            .wc-final-laurel span:nth-child(1) {
-                left: 2px !important;
-                bottom: 5px !important;
-            }
-
-            .wc-final-laurel span:nth-child(2) {
-                left: 1px !important;
-                bottom: 11px !important;
-            }
-
-            .wc-final-laurel span:nth-child(3) {
-                left: 1px !important;
-                bottom: 17px !important;
-            }
-
-            .wc-final-laurel span:nth-child(4) {
-                left: 2px !important;
-                bottom: 23px !important;
-            }
-
-            .wc-final-laurel span:nth-child(5) {
-                left: 5px !important;
-                bottom: 29px !important;
-            }
-
-            .wc-final-laurel span:nth-child(6) {
-                left: 8px !important;
-                bottom: 34px !important;
-            }
-
             .wc-final-title-center {
-                min-width: 0 !important;
-                max-width: 100% !important;
+                width: 100% !important;
                 text-align: left !important;
+            }
+
+            .wc-final-laurel {
+                display: none !important;
             }
 
             .wc-final-team-line {
                 display: block !important;
-
                 width: 100% !important;
-                max-width: 100% !important;
 
                 font-size: clamp(20px, 5.6vw, 23px) !important;
-                line-height: 1.12 !important;
+                line-height: 1.13 !important;
+
                 text-align: left !important;
             }
 
@@ -2211,20 +2105,19 @@ def inject_final_match_card_css():
             .wc-final-versus {
                 display: block !important;
                 width: 100% !important;
-                max-width: 100% !important;
             }
 
             .wc-final-versus {
                 margin: 1px 0 !important;
-                color: #B27A12 !important;
                 font-size: 0.82em !important;
+                color: #B27A12 !important;
             }
 
             .wc-final-ribbon-row {
                 display: block !important;
                 width: fit-content !important;
                 max-width: 100% !important;
-                margin-top: 7px !important;
+                margin-top: 8px !important;
             }
 
             .wc-final-ribbon-row::before,
@@ -2233,55 +2126,46 @@ def inject_final_match_card_css():
             }
 
             .wc-final-ribbon {
-                width: 142px !important;
-                min-width: 142px !important;
-                max-width: 142px !important;
+                min-width: 132px !important;
+                width: 132px !important;
+                max-width: 132px !important;
 
-                min-height: 23px !important;
+                min-height: 22px !important;
 
-                gap: 5px !important;
-                padding: 5px 8px !important;
+                padding: 5px 7px !important;
 
-                font-size: 7.4px !important;
-                letter-spacing: 0.065em !important;
+                font-size: 7px !important;
+                letter-spacing: 0.06em !important;
+                gap: 4px !important;
             }
 
             .wc-final-ribbon-symbol {
-                font-size: 6px !important;
+                font-size: 5.5px !important;
             }
         }
 
         @media (max-width: 390px) {
-            .wc-final-title-shell {
-                gap: 8px !important;
-            }
-
-            .wc-final-laurel {
-                width: 18px !important;
-                height: 40px !important;
-                flex: 0 0 18px !important;
-            }
-
-            .wc-final-title-center {
-                max-width: 100% !important;
-            }
-
             .wc-final-team-line {
                 font-size: 20px !important;
             }
 
             .wc-final-ribbon {
-                width: 132px !important;
-                min-width: 132px !important;
-                max-width: 132px !important;
+                min-width: 124px !important;
+                width: 124px !important;
+                max-width: 124px !important;
 
-                min-height: 22px !important;
+                min-height: 21px !important;
 
-                padding-left: 7px !important;
-                padding-right: 7px !important;
+                padding-left: 6px !important;
+                padding-right: 6px !important;
 
-                font-size: 7px !important;
-                letter-spacing: 0.055em !important;
+                font-size: 6.6px !important;
+                letter-spacing: 0.045em !important;
+                gap: 3px !important;
+            }
+
+            .wc-final-ribbon-symbol {
+                font-size: 5px !important;
             }
         }
         </style>
