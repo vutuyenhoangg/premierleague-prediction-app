@@ -1166,67 +1166,25 @@ def inject_match_card_border_animation_css():
 
 def inject_mobile_prediction_score_row_css():
     """
-    Giữ hai ô nhập tỉ số luôn nằm cùng một hàng.
-
-    Desktop:
-    - Hai ô chiếm 40% mỗi bên.
-    - Khoảng trống giữa là 20%, tương đương bố cục [2, 1, 2] cũ.
-
-    Mobile:
-    - Hai ô chia đều chiều rộng.
-    - Không ẩn bất kỳ cột nào.
-    - Không ảnh hưởng các khu vực st.columns khác.
+    Chỉ trên giao diện điện thoại:
+    - Giữ hai ô nhập tỉ số trên cùng một hàng.
+    - Ẩn đúng cột trống ở giữa.
+    - Không tác động tới giao diện desktop.
+    - Không tác động tới các st.columns khác.
     """
     st.markdown(
         """
         <style>
-        /* Chỉ chọn hàng chứa đúng hai number input của trận đấu */
-        div[class*="st-key-prediction_score_row_"]
-        div[data-testid="stHorizontalBlock"]:has(
-            div[class*="st-key-home_score_"]
-        ):has(
-            div[class*="st-key-away_score_"]
-        ) {
-            width: 100% !important;
-            align-items: start !important;
-        }
-
-        /*
-         * Desktop:
-         * Mô phỏng lại đúng tỉ lệ [2, 1, 2] cũ:
-         * 40% đội nhà + 20% khoảng giữa + 40% đội khách.
-         */
-        @media (min-width: 769px) {
-            div[class*="st-key-prediction_score_row_"]
-            div[data-testid="stHorizontalBlock"]:has(
-                div[class*="st-key-home_score_"]
-            ):has(
-                div[class*="st-key-away_score_"]
-            ) {
-                display: grid !important;
-                grid-template-columns:
-                    minmax(0, 1fr)
-                    minmax(0, 1fr) !important;
-
-                column-gap: 20% !important;
-            }
-        }
-
-        /*
-         * Mobile:
-         * Hai đội luôn nằm trên cùng một hàng.
-         */
         @media (max-width: 768px) {
-            div[class*="st-key-prediction_score_row_"] {
-                width: 100% !important;
-                max-width: 100% !important;
-            }
-
+            /*
+             * Chỉ chọn đúng hàng nhập tỉ số có cả
+             * home_score_shell và away_score_shell.
+             */
             div[class*="st-key-prediction_score_row_"]
             div[data-testid="stHorizontalBlock"]:has(
-                div[class*="st-key-home_score_"]
+                div[class*="st-key-home_score_shell_"]
             ):has(
-                div[class*="st-key-away_score_"]
+                div[class*="st-key-away_score_shell_"]
             ) {
                 display: grid !important;
 
@@ -1243,16 +1201,40 @@ def inject_mobile_prediction_score_row_css():
             }
 
             /*
-             * Cả hai cột đều phải được hiển thị.
-             * Không dùng nth-child và không ẩn cột nào.
+             * Chỉ ẩn cột không chứa đội nhà
+             * và cũng không chứa đội khách.
+             *
+             * Đây chính là cột trống ở giữa.
+             * Không dùng nth-child nên không thể ẩn nhầm đội khách.
              */
             div[class*="st-key-prediction_score_row_"]
             div[data-testid="stHorizontalBlock"]:has(
-                div[class*="st-key-home_score_"]
+                div[class*="st-key-home_score_shell_"]
             ):has(
-                div[class*="st-key-away_score_"]
+                div[class*="st-key-away_score_shell_"]
             )
-            > div[data-testid="column"] {
+            > div[data-testid="column"]:not(
+                :has(div[class*="st-key-home_score_shell_"])
+            ):not(
+                :has(div[class*="st-key-away_score_shell_"])
+            ) {
+                display: none !important;
+            }
+
+            /*
+             * Hai cột thật chia đều chiều rộng.
+             */
+            div[class*="st-key-prediction_score_row_"]
+            div[data-testid="stHorizontalBlock"]
+            > div[data-testid="column"]:has(
+                div[class*="st-key-home_score_shell_"]
+            ),
+
+            div[class*="st-key-prediction_score_row_"]
+            div[data-testid="stHorizontalBlock"]
+            > div[data-testid="column"]:has(
+                div[class*="st-key-away_score_shell_"]
+            ) {
                 display: block !important;
 
                 width: 100% !important;
@@ -1265,16 +1247,18 @@ def inject_mobile_prediction_score_row_css():
                 padding-right: 0 !important;
             }
 
-            div[class*="st-key-prediction_score_row_"]
-            div[class*="st-key-home_score_"],
-
-            div[class*="st-key-prediction_score_row_"]
-            div[class*="st-key-away_score_"],
-
-            div[class*="st-key-prediction_score_row_"]
+            /*
+             * Wrapper và number input co theo chiều rộng cột.
+             */
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"],
+            div[class*="st-key-home_score_shell_"]
             div[data-testid="stNumberInput"],
-
-            div[class*="st-key-prediction_score_row_"]
+            div[class*="st-key-away_score_shell_"]
+            div[data-testid="stNumberInput"],
+            div[class*="st-key-home_score_shell_"]
+            div[data-baseweb="input"],
+            div[class*="st-key-away_score_shell_"]
             div[data-baseweb="input"] {
                 width: 100% !important;
                 min-width: 0 !important;
@@ -1284,12 +1268,18 @@ def inject_mobile_prediction_score_row_css():
             }
 
             /*
-             * Tên đội không làm cột bị nở rộng.
+             * Tên đội dài không làm vỡ hàng.
              */
-            div[class*="st-key-prediction_score_row_"]
+            div[class*="st-key-home_score_shell_"]
             div[data-testid="stNumberInput"] label,
 
-            div[class*="st-key-prediction_score_row_"]
+            div[class*="st-key-away_score_shell_"]
+            div[data-testid="stNumberInput"] label,
+
+            div[class*="st-key-home_score_shell_"]
+            div[data-testid="stNumberInput"] label p,
+
+            div[class*="st-key-away_score_shell_"]
             div[data-testid="stNumberInput"] label p {
                 width: 100% !important;
                 max-width: 100% !important;
@@ -1300,9 +1290,12 @@ def inject_mobile_prediction_score_row_css():
             }
 
             /*
-             * Giữ nút trừ và cộng nguyên vẹn.
+             * Không để nút trừ/cộng bị co hoặc biến mất.
              */
-            div[class*="st-key-prediction_score_row_"]
+            div[class*="st-key-home_score_shell_"]
+            div[data-testid="stNumberInput"] button,
+
+            div[class*="st-key-away_score_shell_"]
             div[data-testid="stNumberInput"] button {
                 flex: 0 0 auto !important;
             }
@@ -1311,9 +1304,9 @@ def inject_mobile_prediction_score_row_css():
         @media (max-width: 390px) {
             div[class*="st-key-prediction_score_row_"]
             div[data-testid="stHorizontalBlock"]:has(
-                div[class*="st-key-home_score_"]
+                div[class*="st-key-home_score_shell_"]
             ):has(
-                div[class*="st-key-away_score_"]
+                div[class*="st-key-away_score_shell_"]
             ) {
                 gap: 6px !important;
             }
@@ -1322,6 +1315,7 @@ def inject_mobile_prediction_score_row_css():
         """,
         unsafe_allow_html=True
     )
+
 def inject_main_page_lift_css():
     """
     Đẩy riêng nội dung trang chính lên cao hơn.
@@ -12978,33 +12972,38 @@ def render_match_card(
             with st.container(
                 key=f"prediction_score_row_{match_id}"
             ):
-                # Chỉ tạo đúng hai cột thật.
-                # Khoảng trống desktop được CSS tái tạo lại,
-                # không cần một cột rỗng ở giữa.
-                col_home, col_away = st.columns(
-                    [1, 1],
+                # Giữ nguyên bố cục desktop ban đầu:
+                # đội nhà 2 phần, khoảng giữa 1 phần, đội khách 2 phần.
+                col_home, col_mid, col_away = st.columns(
+                    [2, 1, 2],
                     gap="small"
                 )
             
                 with col_home:
-                    input_home = st.number_input(
-                        home_name,
-                        min_value=0,
-                        max_value=20,
-                        value=pred_home,
-                        step=1,
-                        key=f"home_score_{match_id}"
-                    )
+                    with st.container(
+                        key=f"home_score_shell_{match_id}"
+                    ):
+                        input_home = st.number_input(
+                            home_name,
+                            min_value=0,
+                            max_value=20,
+                            value=pred_home,
+                            step=1,
+                            key=f"home_score_{match_id}"
+                        )
             
                 with col_away:
-                    input_away = st.number_input(
-                        away_name,
-                        min_value=0,
-                        max_value=20,
-                        value=pred_away,
-                        step=1,
-                        key=f"away_score_{match_id}"
-                    )
+                    with st.container(
+                        key=f"away_score_shell_{match_id}"
+                    ):
+                        input_away = st.number_input(
+                            away_name,
+                            min_value=0,
+                            max_value=20,
+                            value=pred_away,
+                            step=1,
+                            key=f"away_score_{match_id}"
+                        )
         
             predicted_winner_team_id = None
             predicted_winner_team_name = None
