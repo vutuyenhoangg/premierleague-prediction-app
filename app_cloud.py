@@ -1481,9 +1481,181 @@ def inject_third_place_match_card_css():
         unsafe_allow_html=True
     )
 
+def inject_third_place_mobile_fix_css():
+    """
+    Tinh chỉnh riêng card tranh hạng ba trên điện thoại.
+
+    Chỉ áp dụng cho class wc-third-place-*:
+    - Không ảnh hưởng card trận đấu thông thường.
+    - Thu ngắn ribbon để không sát box Trạng thái.
+    - Giữ nguyên thiết kế desktop.
+    """
+    st.markdown(
+        """
+        <style>
+        @media (max-width: 768px) {
+            .wc-third-place-title-shell {
+                display: flex !important;
+                align-items: flex-start !important;
+
+                width: 100% !important;
+                max-width: 100% !important;
+
+                gap: 0 !important;
+
+                margin-top: 2px !important;
+                margin-bottom: 10px !important;
+
+                overflow: visible !important;
+            }
+
+            .wc-third-place-title-center {
+                width: auto !important;
+                min-width: 0 !important;
+                max-width: 100% !important;
+
+                text-align: left !important;
+            }
+
+            /*
+             * Ẩn vòng nguyệt quế trên mobile để dành không gian
+             * cho tên đội và box trạng thái.
+             */
+            .wc-third-place-laurel {
+                display: none !important;
+            }
+
+            .wc-third-place-team-line {
+                display: block !important;
+
+                width: 100% !important;
+                max-width: 100% !important;
+
+                color: #0B2345 !important;
+
+                font-size: clamp(
+                    20px,
+                    5.6vw,
+                    23px
+                ) !important;
+
+                font-weight: 950 !important;
+                line-height: 1.13 !important;
+                letter-spacing: -0.035em !important;
+
+                text-align: left !important;
+            }
+
+            .wc-third-place-team-name,
+            .wc-third-place-versus {
+                display: block !important;
+
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+
+            .wc-third-place-versus {
+                margin: 1px 0 !important;
+
+                color: #9A4F27 !important;
+
+                font-size: 0.82em !important;
+                font-weight: 900 !important;
+            }
+
+            /*
+             * Ribbon mobile rút từ khoảng 180px xuống 132px.
+             * Hai phần đuôi cũng được thu nhỏ và kéo vào gần hơn.
+             */
+            .wc-third-place-ribbon {
+                display: inline-flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+
+                width: 132px !important;
+                min-width: 132px !important;
+                max-width: 132px !important;
+
+                height: 22px !important;
+                min-height: 22px !important;
+
+                margin-top: 7px !important;
+                margin-left: 0 !important;
+                margin-right: 0 !important;
+
+                padding: 0 8px !important;
+
+                box-sizing: border-box !important;
+
+                font-size: 7.5px !important;
+                font-weight: 950 !important;
+                line-height: 1 !important;
+                letter-spacing: 0.075em !important;
+
+                white-space: nowrap !important;
+                overflow: visible !important;
+            }
+
+            .wc-third-place-ribbon::before,
+            .wc-third-place-ribbon::after {
+                top: 2px !important;
+
+                width: 10px !important;
+                height: 18px !important;
+            }
+
+            .wc-third-place-ribbon::before {
+                left: -6px !important;
+            }
+
+            .wc-third-place-ribbon::after {
+                right: -6px !important;
+            }
+        }
+
+        @media (max-width: 390px) {
+            .wc-third-place-team-line {
+                font-size: 20px !important;
+            }
+
+            .wc-third-place-ribbon {
+                width: 124px !important;
+                min-width: 124px !important;
+                max-width: 124px !important;
+
+                height: 21px !important;
+                min-height: 21px !important;
+
+                padding-left: 7px !important;
+                padding-right: 7px !important;
+
+                font-size: 7px !important;
+                letter-spacing: 0.065em !important;
+            }
+
+            .wc-third-place-ribbon::before,
+            .wc-third-place-ribbon::after {
+                width: 9px !important;
+                height: 17px !important;
+            }
+
+            .wc-third-place-ribbon::before {
+                left: -5px !important;
+            }
+
+            .wc-third-place-ribbon::after {
+                right: -5px !important;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
 inject_worldcup_theme()
 inject_match_card_border_animation_css()
 inject_third_place_match_card_css()
+inject_third_place_mobile_fix_css()
 inject_hide_streamlit_embed_footer_css()
 
 def inject_match_datepicker_calendar_theme(match_dates):
@@ -9919,9 +10091,10 @@ def render_match_title(
     """
     Hiển thị tên hai đội.
 
-    - Card thông thường giữ nguyên thiết kế hiện tại.
-    - Trận tranh vị trí thứ ba dùng tiêu đề bronze đặc biệt.
-    - HTML đặc biệt được render trực tiếp, không đi qua Markdown parser.
+    - Card thông thường giữ nguyên giao diện desktop và mobile.
+    - Trận tranh hạng ba dùng tiêu đề bronze riêng.
+    - Toàn bộ HTML custom được render trực tiếp để không bị
+      Markdown biến thành code block trên điện thoại.
     """
     home_display = (
         "TBD"
@@ -9945,6 +10118,24 @@ def render_match_title(
         quote=True
     )
 
+    def render_html_fragment(html_content: str):
+        """
+        Render HTML trực tiếp.
+
+        Fallback vẫn an toàn vì chuỗi HTML không chứa
+        dòng thụt lề có thể bị Markdown hiểu thành code.
+        """
+        html_content = str(html_content).strip()
+
+        if hasattr(st, "html"):
+            st.html(html_content)
+
+        else:
+            st.markdown(
+                html_content,
+                unsafe_allow_html=True
+            )
+
     # ========================================================
     # TRẬN TRANH VỊ TRÍ THỨ BA
     # ========================================================
@@ -9958,16 +10149,14 @@ def render_match_title(
             "<span></span>"
         )
 
-        # Viết HTML thành một chuỗi liên tục.
-        # Không dùng các dòng HTML thụt lề vì st.markdown có thể
-        # hiểu chúng thành code block.
-        title_html = (
+        third_place_title_html = (
             f'<div '
             f'class="wc-third-place-title-shell" '
             f'aria-label="{safe_home} vs {safe_away}, third-place match">'
             
             f'<div '
-            f'class="wc-third-place-laurel wc-third-place-laurel-left" '
+            f'class="wc-third-place-laurel '
+            f'wc-third-place-laurel-left" '
             f'aria-hidden="true">'
             f'{laurel_leaves_html}'
             f'</div>'
@@ -9975,15 +10164,19 @@ def render_match_title(
             f'<div class="wc-third-place-title-center">'
             
             f'<div class="wc-third-place-team-line">'
+            
             f'<span class="wc-third-place-team-name">'
             f'{safe_home}'
             f'</span>'
+            
             f'<span class="wc-third-place-versus">'
             f'vs'
             f'</span>'
+            
             f'<span class="wc-third-place-team-name">'
             f'{safe_away}'
             f'</span>'
+            
             f'</div>'
             
             f'<div class="wc-third-place-ribbon">'
@@ -9993,7 +10186,8 @@ def render_match_title(
             f'</div>'
             
             f'<div '
-            f'class="wc-third-place-laurel wc-third-place-laurel-right" '
+            f'class="wc-third-place-laurel '
+            f'wc-third-place-laurel-right" '
             f'aria-hidden="true">'
             f'{laurel_leaves_html}'
             f'</div>'
@@ -10001,26 +10195,17 @@ def render_match_title(
             f'</div>'
         )
 
-        # st.html render HTML trực tiếp và không chạy qua
-        # Markdown parser.
-        if hasattr(st, "html"):
-            st.html(title_html)
-
-        else:
-            # Fallback cho Streamlit cũ.
-            # Chuỗi đã được viết liên tục nên không bị biến
-            # thành Markdown code block.
-            st.markdown(
-                title_html,
-                unsafe_allow_html=True
-            )
+        render_html_fragment(
+            third_place_title_html
+        )
 
         return
 
     # ========================================================
-    # CÁC CARD TRẬN ĐẤU THÔNG THƯỜNG
-    # Giữ nguyên thiết kế và cách hoạt động hiện tại
+    # CÁC TRẬN ĐẤU THÔNG THƯỜNG
     # ========================================================
+
+    # Desktop giữ nguyên st.subheader hiện tại.
     with stylable_container(
         key=f"match_title_desktop_{match_id}",
         css_styles="""
@@ -10033,28 +10218,31 @@ def render_match_title(
             f"{home_display} vs {away_display}"
         )
 
-    st.markdown(
-        f"""
-        <div
-            class="wc-match-title-mobile"
-            aria-label="{safe_home} vs {safe_away}"
-        >
-            <div class="wc-match-team">
-                {safe_home}
-            </div>
-
-            <div class="wc-match-vs">
-                vs
-            </div>
-
-            <div class="wc-match-team">
-                {safe_away}
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
+    # Mobile dùng HTML dạng chuỗi liên tục.
+    # Không còn nguy cơ hiện nguyên văn thẻ div.
+    normal_mobile_title_html = (
+        f'<div '
+        f'class="wc-match-title-mobile" '
+        f'aria-label="{safe_home} vs {safe_away}">'
+        
+        f'<div class="wc-match-team">'
+        f'{safe_home}'
+        f'</div>'
+        
+        f'<div class="wc-match-vs">'
+        f'vs'
+        f'</div>'
+        
+        f'<div class="wc-match-team">'
+        f'{safe_away}'
+        f'</div>'
+        
+        f'</div>'
     )
 
+    render_html_fragment(
+        normal_mobile_title_html
+    )
 
 def render_pending_star_transfer_box(user_id: int, match_id: int):
     pending = st.session_state.get("pending_star_transfer")
