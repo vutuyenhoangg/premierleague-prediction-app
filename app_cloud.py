@@ -127,15 +127,6 @@ HERO_TROPHY_IMAGE_URL = "data/static/hero-logo-new.png"
 
 SIDEBAR_DECORATION_URL = "data/static/sidebar.png"
 
-FINAL_POSTER_POPUP_KEY = "final_2026_poster"
-FINAL_POSTER_POPUP_IMAGE_URL = "static/final-poster.png"
-
-FINAL_POSTER_TARGET_DATE = pd.Timestamp("2026-07-20").date()
-FINAL_POSTER_EXPIRES_AT_VN = pd.Timestamp(
-    "2026-07-20 02:00:00",
-    tz="Asia/Ho_Chi_Minh"
-)
-
 FOOTER_PROJECT_URL = ""
 
 @st.cache_data(show_spinner=False)
@@ -3398,7 +3389,7 @@ def inject_mobile_match_title_css():
 
 inject_mobile_match_title_css()
 
-@st.dialog("Điểm danh hàng ngày")
+@st.dialog(" ")
 def render_daily_checkin_dialog(user_id: int):
     reward_info = st.session_state.get("daily_checkin_reward_popup")
 
@@ -3815,7 +3806,7 @@ def render_daily_checkin_dialog(user_id: int):
         )
 
 
-@st.dialog("Phần thưởng điểm danh")
+@st.dialog(" ")
 def render_daily_checkin_reward_dialog(reward_info: dict):
     reward_label = str(reward_info.get("reward_label") or "")
     reward_type = normalize_star_type(reward_info.get("reward_type"))
@@ -6065,152 +6056,6 @@ def now_utc_iso():
 def today_vietnam_date():
     return pd.Timestamp.now(tz="Asia/Ho_Chi_Minh").date()
 
-def is_final_poster_popup_active() -> bool:
-    return pd.Timestamp.now(tz="Asia/Ho_Chi_Minh") < FINAL_POSTER_EXPIRES_AT_VN
-
-
-def claim_user_popup_view_today(user_id: int, popup_key: str) -> bool:
-    """
-    Ghi nhận popup đã hiện trong hôm nay.
-    Trả về True nếu đây là lần đầu trong ngày.
-    Trả về False nếu user đã thấy popup này hôm nay.
-    """
-    today = today_vietnam_date()
-
-    with get_engine().begin() as conn:
-        row = conn.execute(
-            text(
-                """
-                INSERT INTO user_popup_views (
-                    user_id,
-                    popup_key,
-                    shown_date
-                )
-                VALUES (
-                    :user_id,
-                    :popup_key,
-                    :shown_date
-                )
-                ON CONFLICT (user_id, popup_key, shown_date)
-                DO NOTHING
-                RETURNING view_id
-                """
-            ),
-            {
-                "user_id": int(user_id),
-                "popup_key": popup_key,
-                "shown_date": today
-            }
-        ).mappings().fetchone()
-
-    return row is not None
-
-
-@st.dialog("Poster chung kết World Cup 2026")
-def render_final_poster_popup():
-    poster_src = resolve_asset_src(FINAL_POSTER_POPUP_IMAGE_URL)
-    safe_poster_src = html.escape(poster_src, quote=True)
-
-    st.markdown(
-        f"""
-        <style>
-        div[role="dialog"]:has(.wc-final-poster-popup-shell) {{
-            width: min(760px, calc(100vw - 28px)) !important;
-            max-width: min(760px, calc(100vw - 28px)) !important;
-            background: transparent !important;
-            border: none !important;
-            box-shadow: none !important;
-            padding: 0 !important;
-        }}
-
-        div[role="dialog"]:has(.wc-final-poster-popup-shell) h2,
-        div[role="dialog"]:has(.wc-final-poster-popup-shell) [data-testid="stDialogHeader"] {{
-            display: none !important;
-        }}
-
-        div[role="dialog"]:has(.wc-final-poster-popup-shell) button[aria-label="Close"] {{
-            color: #FFFFFF !important;
-            background: rgba(7, 17, 31, 0.55) !important;
-            border-radius: 999px !important;
-            top: 14px !important;
-            right: 14px !important;
-            z-index: 5 !important;
-        }}
-
-        .wc-final-poster-popup-shell {{
-            width: 100%;
-            border-radius: 26px;
-            overflow: hidden;
-            background: #07111F;
-            border: 1px solid rgba(245, 197, 66, 0.36);
-            box-shadow: 0 28px 80px rgba(7, 17, 31, 0.48);
-        }}
-
-        .wc-final-poster-popup-shell img {{
-            display: block;
-            width: 100%;
-            height: auto;
-        }}
-
-        @media (max-width: 768px) {{
-            div[role="dialog"]:has(.wc-final-poster-popup-shell) {{
-                width: min(390px, calc(100vw - 20px)) !important;
-                max-width: min(390px, calc(100vw - 20px)) !important;
-            }}
-
-            .wc-final-poster-popup-shell {{
-                border-radius: 20px;
-            }}
-        }}
-        </style>
-
-        <div class="wc-final-poster-popup-shell">
-            <img src="{safe_poster_src}" alt="World Cup 2026 Final Poster">
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-
-def maybe_render_final_poster_popup(user_id: int, selected_date):
-    """
-    Chỉ hiện poster khi user filter đến ngày chung kết.
-    Mỗi user chỉ thấy tối đa 1 lần/ngày.
-    Tính năng tự hết hiệu lực sau 02:00 20/07/2026 giờ Việt Nam.
-    """
-    try:
-        selected_date_value = pd.Timestamp(selected_date).date()
-    except Exception:
-        return
-
-    if selected_date_value != FINAL_POSTER_TARGET_DATE:
-        return
-
-    if not is_final_poster_popup_active():
-        return
-
-    today_key = today_vietnam_date().isoformat()
-    session_guard_key = (
-        f"final_poster_popup_seen_{int(user_id)}_{today_key}"
-    )
-
-    if st.session_state.get(session_guard_key):
-        return
-
-    try:
-        should_show = claim_user_popup_view_today(
-            user_id=user_id,
-            popup_key=FINAL_POSTER_POPUP_KEY
-        )
-    except Exception:
-        return
-
-    if not should_show:
-        st.session_state[session_guard_key] = True
-        return
-
-    st.session_state[session_guard_key] = True
-    render_final_poster_popup()
 
 def tomorrow_vietnam_date():
     return today_vietnam_date() + timedelta(days=1)
@@ -8357,8 +8202,7 @@ def check_required_app_tables():
         "prediction_history",
         "login_sessions",
         "daily_checkins",
-        "daily_checkin_rewards",
-        "user_popup_views"
+        "daily_checkin_rewards"
     }
 
     missing_tables = sorted(required_tables - table_names)
@@ -8502,19 +8346,6 @@ def init_app_tables():
             token_hash TEXT NOT NULL UNIQUE,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             expires_at TIMESTAMPTZ NOT NULL
-        )
-        """
-    )
-
-    execute_sql(
-        """
-        CREATE TABLE IF NOT EXISTS user_popup_views (
-            view_id SERIAL PRIMARY KEY,
-            user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-            popup_key TEXT NOT NULL,
-            shown_date DATE NOT NULL,
-            shown_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(user_id, popup_key, shown_date)
         )
         """
     )
@@ -14117,8 +13948,6 @@ def page_matches():
                 state_key="filter_prediction_status",
                 menu_key="filter_prediction_status_menu"
             )
-
-    maybe_render_final_poster_popup(user_id, selected_date)
 
     filtered = matches.copy()
 
