@@ -1164,158 +1164,6 @@ def inject_match_card_border_animation_css():
         unsafe_allow_html=True
     )
 
-def inject_mobile_prediction_score_row_css():
-    """
-    Chỉ trên giao diện điện thoại:
-    - Giữ hai ô nhập tỉ số trên cùng một hàng.
-    - Ẩn đúng cột trống ở giữa.
-    - Không tác động tới giao diện desktop.
-    - Không tác động tới các st.columns khác.
-    """
-    st.markdown(
-        """
-        <style>
-        @media (max-width: 768px) {
-            /*
-             * Chỉ chọn đúng hàng nhập tỉ số có cả
-             * home_score_shell và away_score_shell.
-             */
-            div[class*="st-key-prediction_score_row_"]
-            div[data-testid="stHorizontalBlock"]:has(
-                div[class*="st-key-home_score_shell_"]
-            ):has(
-                div[class*="st-key-away_score_shell_"]
-            ) {
-                display: grid !important;
-
-                grid-template-columns:
-                    minmax(0, 1fr)
-                    minmax(0, 1fr) !important;
-
-                gap: 8px !important;
-
-                width: 100% !important;
-                max-width: 100% !important;
-
-                align-items: start !important;
-            }
-
-            /*
-             * Chỉ ẩn cột không chứa đội nhà
-             * và cũng không chứa đội khách.
-             *
-             * Đây chính là cột trống ở giữa.
-             * Không dùng nth-child nên không thể ẩn nhầm đội khách.
-             */
-            div[class*="st-key-prediction_score_row_"]
-            div[data-testid="stHorizontalBlock"]:has(
-                div[class*="st-key-home_score_shell_"]
-            ):has(
-                div[class*="st-key-away_score_shell_"]
-            )
-            > div[data-testid="column"]:not(
-                :has(div[class*="st-key-home_score_shell_"])
-            ):not(
-                :has(div[class*="st-key-away_score_shell_"])
-            ) {
-                display: none !important;
-            }
-
-            /*
-             * Hai cột thật chia đều chiều rộng.
-             */
-            div[class*="st-key-prediction_score_row_"]
-            div[data-testid="stHorizontalBlock"]
-            > div[data-testid="column"]:has(
-                div[class*="st-key-home_score_shell_"]
-            ),
-
-            div[class*="st-key-prediction_score_row_"]
-            div[data-testid="stHorizontalBlock"]
-            > div[data-testid="column"]:has(
-                div[class*="st-key-away_score_shell_"]
-            ) {
-                display: block !important;
-
-                width: 100% !important;
-                min-width: 0 !important;
-                max-width: 100% !important;
-
-                flex: none !important;
-
-                padding-left: 0 !important;
-                padding-right: 0 !important;
-            }
-
-            /*
-             * Wrapper và number input co theo chiều rộng cột.
-             */
-            div[class*="st-key-home_score_shell_"],
-            div[class*="st-key-away_score_shell_"],
-            div[class*="st-key-home_score_shell_"]
-            div[data-testid="stNumberInput"],
-            div[class*="st-key-away_score_shell_"]
-            div[data-testid="stNumberInput"],
-            div[class*="st-key-home_score_shell_"]
-            div[data-baseweb="input"],
-            div[class*="st-key-away_score_shell_"]
-            div[data-baseweb="input"] {
-                width: 100% !important;
-                min-width: 0 !important;
-                max-width: 100% !important;
-
-                box-sizing: border-box !important;
-            }
-
-            /*
-             * Tên đội dài không làm vỡ hàng.
-             */
-            div[class*="st-key-home_score_shell_"]
-            div[data-testid="stNumberInput"] label,
-
-            div[class*="st-key-away_score_shell_"]
-            div[data-testid="stNumberInput"] label,
-
-            div[class*="st-key-home_score_shell_"]
-            div[data-testid="stNumberInput"] label p,
-
-            div[class*="st-key-away_score_shell_"]
-            div[data-testid="stNumberInput"] label p {
-                width: 100% !important;
-                max-width: 100% !important;
-
-                white-space: nowrap !important;
-                overflow: hidden !important;
-                text-overflow: ellipsis !important;
-            }
-
-            /*
-             * Không để nút trừ/cộng bị co hoặc biến mất.
-             */
-            div[class*="st-key-home_score_shell_"]
-            div[data-testid="stNumberInput"] button,
-
-            div[class*="st-key-away_score_shell_"]
-            div[data-testid="stNumberInput"] button {
-                flex: 0 0 auto !important;
-            }
-        }
-
-        @media (max-width: 390px) {
-            div[class*="st-key-prediction_score_row_"]
-            div[data-testid="stHorizontalBlock"]:has(
-                div[class*="st-key-home_score_shell_"]
-            ):has(
-                div[class*="st-key-away_score_shell_"]
-            ) {
-                gap: 6px !important;
-            }
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
-
 def inject_main_page_lift_css():
     """
     Đẩy riêng nội dung trang chính lên cao hơn.
@@ -2357,6 +2205,184 @@ def inject_final_match_card_css():
 
             .wc-final-ribbon-symbol {
                 font-size: 5px !important;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+def inject_mobile_prediction_score_row_css():
+    """
+    Chỉ chỉnh hàng nhập tỉ số trên giao diện điện thoại.
+
+    - Desktop giữ nguyên tuyệt đối bố cục [2, 1, 2].
+    - Mobile hiển thị đội nhà và đội khách trên cùng một hàng.
+    - Chỉ ẩn cột trống ở giữa.
+    - Không thay đổi widget, key, dữ liệu hoặc logic dự đoán.
+    """
+    st.markdown(
+        """
+        <style>
+        @media (max-width: 768px) {
+            /*
+             * Chuyển riêng hàng nhập tỉ số thành grid 2 cột.
+             * Selector chỉ tác động tới prediction_score_row_*.
+             */
+            div[class*="st-key-prediction_score_row_"]
+            div[data-testid="stHorizontalBlock"]:has(
+                div[class*="st-key-home_score_shell_"]
+            ):has(
+                div[class*="st-key-away_score_shell_"]
+            ) {
+                display: grid !important;
+
+                grid-template-columns:
+                    minmax(0, 1fr)
+                    minmax(0, 1fr) !important;
+
+                column-gap: 8px !important;
+                row-gap: 0 !important;
+
+                width: 100% !important;
+                max-width: 100% !important;
+
+                align-items: start !important;
+            }
+
+            /*
+             * Hỗ trợ cả hai tên data-testid của cột Streamlit:
+             * - stColumn
+             * - column
+             *
+             * Chỉ ẩn cột không chứa home_score_shell
+             * và cũng không chứa away_score_shell.
+             * Đây chính là cột trống ở giữa.
+             */
+            div[class*="st-key-prediction_score_row_"]
+            div[data-testid="stHorizontalBlock"]
+            > :is(
+                div[data-testid="stColumn"],
+                div[data-testid="column"]
+            ):not(
+                :has(div[class*="st-key-home_score_shell_"])
+            ):not(
+                :has(div[class*="st-key-away_score_shell_"])
+            ) {
+                display: none !important;
+            }
+
+            /*
+             * Cột đội nhà luôn nằm bên trái.
+             */
+            div[class*="st-key-prediction_score_row_"]
+            div[data-testid="stHorizontalBlock"]
+            > :is(
+                div[data-testid="stColumn"],
+                div[data-testid="column"]
+            ):has(
+                div[class*="st-key-home_score_shell_"]
+            ) {
+                display: block !important;
+
+                grid-column: 1 !important;
+
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: 100% !important;
+
+                flex: none !important;
+
+                margin: 0 !important;
+                padding-left: 0 !important;
+                padding-right: 0 !important;
+            }
+
+            /*
+             * Cột đội khách luôn nằm bên phải.
+             */
+            div[class*="st-key-prediction_score_row_"]
+            div[data-testid="stHorizontalBlock"]
+            > :is(
+                div[data-testid="stColumn"],
+                div[data-testid="column"]
+            ):has(
+                div[class*="st-key-away_score_shell_"]
+            ) {
+                display: block !important;
+
+                grid-column: 2 !important;
+
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: 100% !important;
+
+                flex: none !important;
+
+                margin: 0 !important;
+                padding-left: 0 !important;
+                padding-right: 0 !important;
+            }
+
+            /*
+             * Cho hai shell và number input co vừa từng nửa hàng.
+             */
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"],
+            div[class*="st-key-home_score_shell_"]
+            div[data-testid="stNumberInput"],
+            div[class*="st-key-away_score_shell_"]
+            div[data-testid="stNumberInput"],
+            div[class*="st-key-home_score_shell_"]
+            div[data-baseweb="input"],
+            div[class*="st-key-away_score_shell_"]
+            div[data-baseweb="input"] {
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: 100% !important;
+
+                box-sizing: border-box !important;
+            }
+
+            /*
+             * Tên đội dài không được làm cột bung rộng.
+             */
+            div[class*="st-key-home_score_shell_"]
+            div[data-testid="stNumberInput"] label,
+            div[class*="st-key-away_score_shell_"]
+            div[data-testid="stNumberInput"] label,
+            div[class*="st-key-home_score_shell_"]
+            div[data-testid="stNumberInput"] label p,
+            div[class*="st-key-away_score_shell_"]
+            div[data-testid="stNumberInput"] label p {
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: 100% !important;
+
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+            }
+
+            /*
+             * Không cho các nút trừ và cộng bị co hoặc biến mất.
+             */
+            div[class*="st-key-home_score_shell_"]
+            div[data-testid="stNumberInput"] button,
+            div[class*="st-key-away_score_shell_"]
+            div[data-testid="stNumberInput"] button {
+                flex: 0 0 auto !important;
+            }
+        }
+
+        @media (max-width: 390px) {
+            div[class*="st-key-prediction_score_row_"]
+            div[data-testid="stHorizontalBlock"]:has(
+                div[class*="st-key-home_score_shell_"]
+            ):has(
+                div[class*="st-key-away_score_shell_"]
+            ) {
+                column-gap: 6px !important;
             }
         }
         </style>
