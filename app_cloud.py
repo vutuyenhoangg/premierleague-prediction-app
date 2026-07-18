@@ -2,7 +2,7 @@
 # WORLD CUP 2026 PREDICTION APP
 # Safe refactor: duplicate overwritten helper definitions removed; runtime behavior intentionally preserved.
 # Stack: Streamlit + Supabase/PostgreSQL
-# Database input: Supabase via DATABASE_URL
+# Database input: Supabase
 # ============================================================
 
 import streamlit.components.v1 as components
