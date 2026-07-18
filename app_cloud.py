@@ -4088,6 +4088,16 @@ def render_daily_checkin_reward_content(reward_info: dict):
         st.session_state.pop("daily_checkin_after_claim", None)
         rerun_current_fragment()
 
+def get_final_poster_session_keys(user_id: int) -> dict:
+    user_id = int(user_id)
+    today_key = today_vietnam_date().isoformat()
+
+    return {
+        "seen": f"final_poster_popup_seen_{user_id}_{today_key}",
+        "blocked_by_checkin": f"final_poster_blocked_by_checkin_{user_id}_{today_key}",
+        "ready_after_checkin": f"final_poster_ready_after_checkin_{user_id}_{today_key}",
+    }
+
 def maybe_render_daily_checkin_popup(user_id: int) -> bool:
     """
     Tự mở popup điểm danh lần đầu trong ngày nếu user chưa điểm danh.
@@ -4107,8 +4117,17 @@ def maybe_render_daily_checkin_popup(user_id: int) -> bool:
         not bool(state.get("checked_today", False))
         and not bool(st.session_state.get(prompt_seen_key, False))
     )
-
+    
     if should_open:
+        poster_keys = get_final_poster_session_keys(user_id)
+    
+        if (
+            is_final_poster_popup_active()
+            and not bool(st.session_state.get(poster_keys["seen"], False))
+            and not has_seen_final_poster_today(user_id)
+        ):
+            st.session_state[poster_keys["blocked_by_checkin"]] = True
+    
         st.session_state[prompt_seen_key] = True
         render_daily_checkin_dialog(user_id)
         return True
@@ -4231,24 +4250,35 @@ def render_final_poster_popup(user_id: int):
 
 def maybe_render_final_poster_popup(user_id: int) -> bool:
     user_id = int(user_id)
-    today_key = today_vietnam_date().isoformat()
-    session_key = f"final_poster_popup_seen_{user_id}_{today_key}"
+    poster_keys = get_final_poster_session_keys(user_id)
 
     if not is_final_poster_popup_active():
         return False
 
-    if st.session_state.get(session_key):
+    if st.session_state.get(poster_keys["seen"]):
         return False
 
     if has_seen_final_poster_today(user_id):
-        st.session_state[session_key] = True
+        st.session_state[poster_keys["seen"]] = True
         return False
+
+    if (
+        st.session_state.get(poster_keys["blocked_by_checkin"])
+        and not st.session_state.get(poster_keys["ready_after_checkin"])
+    ):
+        st.session_state.pop(poster_keys["blocked_by_checkin"], None)
+        st.session_state[poster_keys["ready_after_checkin"]] = True
+        st.rerun()
+
+    st.session_state.pop(poster_keys["ready_after_checkin"], None)
+
+    render_final_poster_popup(user_id)
 
     if not mark_final_poster_seen_today(user_id):
-        return False
+        st.session_state.pop(poster_keys["seen"], None)
+        return True
 
-    st.session_state[session_key] = True
-    render_final_poster_popup(user_id)
+    st.session_state[poster_keys["seen"]] = True
     return True
 
 def render_daily_checkin_shortcut_button(user_id: int):
