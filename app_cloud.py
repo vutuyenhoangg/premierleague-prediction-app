@@ -4163,7 +4163,7 @@ def mark_final_poster_seen_today(user_id: int) -> bool:
         return False
 
 
-@st.dialog("Final Poster")
+@st.dialog(" ")
 def render_final_poster_popup(user_id: int):
     poster_src = resolve_asset_src(FINAL_POSTER_IMAGE_URL)
     safe_poster_src = html.escape(poster_src, quote=True)
@@ -4194,23 +4194,20 @@ def render_final_poster_popup(user_id: int):
 
     .wc-final-poster-shell {{
         width: 100%;
-        border-radius: 28px;
-        padding: 10px;
-        background:
-            radial-gradient(circle at 50% 0%, rgba(245, 197, 66, 0.22), transparent 34%),
-            linear-gradient(135deg, rgba(7, 17, 31, 0.98), rgba(11, 31, 58, 0.97));
-        border: 1px solid rgba(245, 197, 66, 0.36);
-        box-shadow: 0 28px 72px rgba(7, 17, 31, 0.48);
+        border-radius: 0;
+        padding: 0;
+        background: transparent;
+        border: none;
+        box-shadow: none;
         box-sizing: border-box;
     }}
-
+    
     .wc-final-poster-image {{
         display: block;
         width: 100%;
         height: auto;
         border-radius: 22px;
     }}
-
     div[class*="st-key-final_poster_close_"] button {{
         width: 100% !important;
         min-height: 50px !important;
@@ -4231,14 +4228,6 @@ def render_final_poster_popup(user_id: int):
         st.html(poster_html)
     else:
         components.html(poster_html, height=720, scrolling=True)
-
-    if st.button(
-        "Đóng",
-        key=f"final_poster_close_{int(user_id)}_{today_vietnam_date().isoformat()}",
-        use_container_width=True
-    ):
-        st.rerun()
-
 
 def maybe_render_final_poster_popup(user_id: int) -> bool:
     user_id = int(user_id)
