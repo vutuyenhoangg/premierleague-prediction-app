@@ -3799,7 +3799,7 @@ def render_daily_checkin_dialog(user_id: int):
             else:
                 st.session_state["daily_checkin_after_claim"] = True
         
-            rerun_current_fragment()
+            rerun_full_app()
 
     else:
         st.button(
@@ -4086,7 +4086,7 @@ def render_daily_checkin_reward_content(reward_info: dict):
     ):
         st.session_state.pop("daily_checkin_reward_popup", None)
         st.session_state.pop("daily_checkin_after_claim", None)
-        rerun_current_fragment()
+        rerun_full_app()
 
 def get_final_poster_session_keys(user_id: int) -> dict:
     user_id = int(user_id)
@@ -4250,35 +4250,24 @@ def render_final_poster_popup(user_id: int):
 
 def maybe_render_final_poster_popup(user_id: int) -> bool:
     user_id = int(user_id)
-    poster_keys = get_final_poster_session_keys(user_id)
+    today_key = today_vietnam_date().isoformat()
+    session_key = f"final_poster_popup_seen_{user_id}_{today_key}"
 
     if not is_final_poster_popup_active():
         return False
 
-    if st.session_state.get(poster_keys["seen"]):
+    if st.session_state.get(session_key):
         return False
 
     if has_seen_final_poster_today(user_id):
-        st.session_state[poster_keys["seen"]] = True
+        st.session_state[session_key] = True
         return False
-
-    if (
-        st.session_state.get(poster_keys["blocked_by_checkin"])
-        and not st.session_state.get(poster_keys["ready_after_checkin"])
-    ):
-        st.session_state.pop(poster_keys["blocked_by_checkin"], None)
-        st.session_state[poster_keys["ready_after_checkin"]] = True
-        st.rerun()
-
-    st.session_state.pop(poster_keys["ready_after_checkin"], None)
 
     render_final_poster_popup(user_id)
 
-    if not mark_final_poster_seen_today(user_id):
-        st.session_state.pop(poster_keys["seen"], None)
-        return True
+    if mark_final_poster_seen_today(user_id):
+        st.session_state[session_key] = True
 
-    st.session_state[poster_keys["seen"]] = True
     return True
 
 def render_daily_checkin_shortcut_button(user_id: int):
@@ -6191,6 +6180,16 @@ def rerun_current_fragment():
         st.rerun(scope="fragment")
     except Exception:
         st.rerun()
+
+def rerun_full_app():
+    """
+    Rerun toàn app để main() chạy lại.
+    Dùng cho các flow cần chuyển từ popup này sang popup khác.
+    """
+    try:
+        st.rerun()
+    except Exception:
+        st.experimental_rerun()
 
 def fetch_one(query: str, params: dict | None = None):
     with get_engine().connect() as conn:
