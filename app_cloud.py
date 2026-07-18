@@ -131,12 +131,6 @@ FINAL_POSTER_IMAGE_URL = "data/static/final-poster.png"
 
 FINAL_POSTER_END_DATE = date(2026, 7, 20)
 
-FINAL_MATCH_DATE = date(2026, 7, 20)
-
-FINAL_POSTER_CLICK_PARAM = "final_poster_action"
-
-FINAL_POSTER_CLICK_VALUE = "open_final"
-
 FOOTER_PROJECT_URL = ""
 
 @st.cache_data(show_spinner=False)
@@ -4174,11 +4168,6 @@ def render_final_poster_popup(user_id: int):
     poster_src = resolve_asset_src(FINAL_POSTER_IMAGE_URL)
     safe_poster_src = html.escape(poster_src, quote=True)
 
-    poster_click_href = (
-        f"?embed=true&{FINAL_POSTER_CLICK_PARAM}={FINAL_POSTER_CLICK_VALUE}"
-    )
-    safe_poster_click_href = html.escape(poster_click_href, quote=True)
-
     poster_html = f"""
     <style>
     div[role="dialog"]:has(.wc-final-poster-shell) {{
@@ -4212,40 +4201,26 @@ def render_final_poster_popup(user_id: int):
         box-shadow: none;
         box-sizing: border-box;
     }}
-
-    .wc-final-poster-link {{
-        display: block;
-        width: 100%;
-        cursor: pointer;
-        text-decoration: none;
-    }}
-
+    
     .wc-final-poster-image {{
         display: block;
         width: 100%;
         height: auto;
         border-radius: 22px;
-        transition: filter 0.16s ease, transform 0.16s ease;
     }}
-
-    .wc-final-poster-link:hover .wc-final-poster-image {{
-        filter: brightness(1.04);
+    div[class*="st-key-final_poster_close_"] button {{
+        width: 100% !important;
+        min-height: 50px !important;
+        border-radius: 999px !important;
+        border: none !important;
+        background: linear-gradient(135deg, #F5C542, #FFD761) !important;
+        color: #07111F !important;
+        font-weight: 950 !important;
     }}
     </style>
 
     <div class="wc-final-poster-shell">
-        <a
-            class="wc-final-poster-link"
-            href="{safe_poster_click_href}"
-            target="_self"
-            aria-label="Xem trận chung kết"
-        >
-            <img
-                class="wc-final-poster-image"
-                src="{safe_poster_src}"
-                alt="Final poster"
-            >
-        </a>
+        <img class="wc-final-poster-image" src="{safe_poster_src}" alt="Final poster">
     </div>
     """
 
@@ -4275,99 +4250,6 @@ def maybe_render_final_poster_popup(user_id: int) -> bool:
     st.session_state[session_key] = True
     render_final_poster_popup(user_id)
     return True
-
-def get_query_param_value(key: str):
-    try:
-        value = st.query_params.get(key)
-    except Exception:
-        try:
-            params = st.experimental_get_query_params()
-            value = params.get(key)
-        except Exception:
-            return None
-
-    if isinstance(value, list):
-        return value[0] if value else None
-
-    return value
-
-
-def clear_query_param(key: str):
-    try:
-        if key in st.query_params:
-            del st.query_params[key]
-        return
-    except Exception:
-        pass
-
-    try:
-        params = st.experimental_get_query_params()
-        params.pop(key, None)
-        st.experimental_set_query_params(**params)
-    except Exception:
-        pass
-
-
-def handle_final_poster_click_request():
-    action = get_query_param_value(FINAL_POSTER_CLICK_PARAM)
-
-    if action != FINAL_POSTER_CLICK_VALUE:
-        return
-
-    st.session_state["selected_page"] = "Lịch thi đấu & dự đoán"
-    st.session_state["filter_date"] = FINAL_MATCH_DATE
-    st.session_state["filter_status"] = "Tất cả"
-    st.session_state["filter_prediction_status"] = "Tất cả"
-    st.session_state["scroll_to_final_match_after_filter"] = True
-
-    clear_query_param(FINAL_POSTER_CLICK_PARAM)
-
-
-def render_final_match_scroll_script():
-    if not st.session_state.pop("scroll_to_final_match_after_filter", False):
-        return
-
-    components.html(
-        """
-        <script>
-        (function() {
-            let tries = 0;
-            const maxTries = 40;
-
-            function findTarget() {
-                const doc = window.parent.document;
-
-                return (
-                    doc.getElementById("wc-final-match-target")
-                    || doc.querySelector('div[class*="st-key-match_card_"]:has(.wc-final-card-marker)')
-                    || doc.querySelector('div[class*="st-key-match_filter_panel"]')
-                );
-            }
-
-            function scrollToTarget() {
-                const target = findTarget();
-
-                if (target) {
-                    target.scrollIntoView({
-                        behavior: "smooth",
-                        block: "start"
-                    });
-                    return;
-                }
-
-                tries += 1;
-
-                if (tries < maxTries) {
-                    setTimeout(scrollToTarget, 120);
-                }
-            }
-
-            setTimeout(scrollToTarget, 450);
-        })();
-        </script>
-        """,
-        height=0
-    )
 
 def render_daily_checkin_shortcut_button(user_id: int):
     """
@@ -13735,7 +13617,7 @@ def page_matches():
     date_options_set = set(available_dates)
     date_options_set.add(today_vn)
     date_options_set.add(tomorrow_vn)
-    date_options_set.add(FINAL_MATCH_DATE)
+
     date_options = sorted(date_options_set)
 
     if "filter_date" not in st.session_state:
@@ -14264,25 +14146,16 @@ def page_matches():
 
     for match_date, group_df in filtered.groupby("kickoff_date_filter"):
         st.markdown("---")
-    
-        if match_date == FINAL_MATCH_DATE:
-            st.markdown(
-                '<div id="wc-final-match-target"></div>',
-                unsafe_allow_html=True
-            )
-    
         st.header(format_filter_date(match_date))
-    
+
         group_df = group_df.sort_values("kickoff_time_utc_dt")
-    
+
         for _, row in group_df.iterrows():
             render_match_card(
                 row,
                 user_id,
                 user_prediction_map=user_prediction_map
             )
-    
-    render_final_match_scroll_script()
 
 def page_my_predictions():
     render_page_title(
@@ -15522,10 +15395,9 @@ def main():
         if "user" not in st.session_state:
             render_footer()
             st.stop()
+
     user = st.session_state["user"]
-    
-    handle_final_poster_click_request()
-    
+
     render_avatar_popover(user)
     
     daily_checkin_popup_opened = maybe_render_daily_checkin_popup(user["user_id"])
