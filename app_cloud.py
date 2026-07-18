@@ -16,7 +16,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.engine import Engine
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 import pandas as pd
 import streamlit as st
 import plotly.express as px
@@ -126,6 +126,10 @@ HERO_BACKGROUND_URL = "data/static/hero-background.jpeg"
 HERO_TROPHY_IMAGE_URL = "data/static/hero-logo-new.png"
 
 SIDEBAR_DECORATION_URL = "data/static/sidebar.png"
+
+FINAL_POSTER_IMAGE_URL = "data/static/final-poster.png"
+
+FINAL_POSTER_END_DATE = date(2026, 7, 20)
 
 FOOTER_PROJECT_URL = ""
 
@@ -4084,17 +4088,19 @@ def render_daily_checkin_reward_content(reward_info: dict):
         st.session_state.pop("daily_checkin_after_claim", None)
         rerun_current_fragment()
 
-def maybe_render_daily_checkin_popup(user_id: int):
+def maybe_render_daily_checkin_popup(user_id: int) -> bool:
     """
     Tự mở popup điểm danh lần đầu trong ngày nếu user chưa điểm danh.
-    Hàm này chỉ chạy trong full app render bình thường.
-    Nút shortcut đã được tách sang fragment riêng.
+    Trả về True nếu đang render popup điểm danh/phần thưởng để popup khác không mở chồng.
     """
     user_id = int(user_id)
     today_key = today_vietnam_date().isoformat()
 
-    state = get_daily_checkin_state(user_id, use_cache=True)
+    if st.session_state.get("daily_checkin_reward_popup") is not None:
+        render_daily_checkin_dialog(user_id)
+        return True
 
+    state = get_daily_checkin_state(user_id, use_cache=True)
     prompt_seen_key = f"daily_checkin_prompt_seen_{user_id}_{today_key}"
 
     should_open = (
@@ -4105,6 +4111,156 @@ def maybe_render_daily_checkin_popup(user_id: int):
     if should_open:
         st.session_state[prompt_seen_key] = True
         render_daily_checkin_dialog(user_id)
+        return True
+
+    return False
+
+def is_final_poster_popup_active() -> bool:
+    return today_vietnam_date() <= FINAL_POSTER_END_DATE
+
+
+def has_seen_final_poster_today(user_id: int) -> bool:
+    try:
+        row = fetch_one(
+            """
+            SELECT 1
+            FROM final_poster_popup_views
+            WHERE user_id = :user_id
+              AND popup_date = :popup_date
+            LIMIT 1
+            """,
+            {
+                "user_id": int(user_id),
+                "popup_date": today_vietnam_date()
+            }
+        )
+        return row is not None
+    except Exception:
+        return True
+
+
+def mark_final_poster_seen_today(user_id: int) -> bool:
+    try:
+        execute_sql(
+            """
+            INSERT INTO final_poster_popup_views (
+                user_id,
+                popup_date
+            )
+            VALUES (
+                :user_id,
+                :popup_date
+            )
+            ON CONFLICT (user_id, popup_date) DO NOTHING
+            """,
+            {
+                "user_id": int(user_id),
+                "popup_date": today_vietnam_date()
+            }
+        )
+        return True
+    except Exception:
+        return False
+
+
+@st.dialog("Final Poster")
+def render_final_poster_popup(user_id: int):
+    poster_src = resolve_asset_src(FINAL_POSTER_IMAGE_URL)
+    safe_poster_src = html.escape(poster_src, quote=True)
+
+    poster_html = f"""
+    <style>
+    div[role="dialog"]:has(.wc-final-poster-shell) {{
+        width: min(520px, calc(100vw - 28px)) !important;
+        max-width: min(520px, calc(100vw - 28px)) !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+    }}
+
+    div[role="dialog"]:has(.wc-final-poster-shell) h2,
+    div[role="dialog"]:has(.wc-final-poster-shell) [data-testid="stDialogHeader"] {{
+        display: none !important;
+    }}
+
+    div[role="dialog"]:has(.wc-final-poster-shell) button[aria-label="Close"] {{
+        color: #FFFFFF !important;
+        background: rgba(7, 17, 31, 0.55) !important;
+        border-radius: 999px !important;
+        top: 14px !important;
+        right: 14px !important;
+    }}
+
+    .wc-final-poster-shell {{
+        width: 100%;
+        border-radius: 28px;
+        padding: 10px;
+        background:
+            radial-gradient(circle at 50% 0%, rgba(245, 197, 66, 0.22), transparent 34%),
+            linear-gradient(135deg, rgba(7, 17, 31, 0.98), rgba(11, 31, 58, 0.97));
+        border: 1px solid rgba(245, 197, 66, 0.36);
+        box-shadow: 0 28px 72px rgba(7, 17, 31, 0.48);
+        box-sizing: border-box;
+    }}
+
+    .wc-final-poster-image {{
+        display: block;
+        width: 100%;
+        height: auto;
+        border-radius: 22px;
+    }}
+
+    div[class*="st-key-final_poster_close_"] button {{
+        width: 100% !important;
+        min-height: 50px !important;
+        border-radius: 999px !important;
+        border: none !important;
+        background: linear-gradient(135deg, #F5C542, #FFD761) !important;
+        color: #07111F !important;
+        font-weight: 950 !important;
+    }}
+    </style>
+
+    <div class="wc-final-poster-shell">
+        <img class="wc-final-poster-image" src="{safe_poster_src}" alt="Final poster">
+    </div>
+    """
+
+    if hasattr(st, "html"):
+        st.html(poster_html)
+    else:
+        components.html(poster_html, height=720, scrolling=True)
+
+    if st.button(
+        "Đóng",
+        key=f"final_poster_close_{int(user_id)}_{today_vietnam_date().isoformat()}",
+        use_container_width=True
+    ):
+        st.rerun()
+
+
+def maybe_render_final_poster_popup(user_id: int) -> bool:
+    user_id = int(user_id)
+    today_key = today_vietnam_date().isoformat()
+    session_key = f"final_poster_popup_seen_{user_id}_{today_key}"
+
+    if not is_final_poster_popup_active():
+        return False
+
+    if st.session_state.get(session_key):
+        return False
+
+    if has_seen_final_poster_today(user_id):
+        st.session_state[session_key] = True
+        return False
+
+    if not mark_final_poster_seen_today(user_id):
+        return False
+
+    st.session_state[session_key] = True
+    render_final_poster_popup(user_id)
+    return True
 
 def render_daily_checkin_shortcut_button(user_id: int):
     """
@@ -8202,7 +8358,8 @@ def check_required_app_tables():
         "prediction_history",
         "login_sessions",
         "daily_checkins",
-        "daily_checkin_rewards"
+        "daily_checkin_rewards",
+        "final_poster_popup_views"
     }
 
     missing_tables = sorted(required_tables - table_names)
@@ -15253,7 +15410,11 @@ def main():
     user = st.session_state["user"]
 
     render_avatar_popover(user)
-    maybe_render_daily_checkin_popup(user["user_id"])
+    
+    daily_checkin_popup_opened = maybe_render_daily_checkin_popup(user["user_id"])
+    
+    if not daily_checkin_popup_opened:
+        maybe_render_final_poster_popup(user["user_id"])
 
     with st.sidebar:
         render_sidebar_brand()
