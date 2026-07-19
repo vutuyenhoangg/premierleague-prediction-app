@@ -7392,19 +7392,19 @@ def get_match_card_css(status_info, row=None):
 
             radial-gradient(
                 ellipse at center 56%,
-                rgba(255,255,255,0.74) 0%,
-                rgba(255,255,255,0.86) 46%,
-                rgba(255,255,255,0.98) 76%
+                rgba(255,255,255,0.54) 0%,
+                rgba(255,255,255,0.72) 46%,
+                rgba(255,255,255,0.92) 76%
             ),
-
+            
             linear-gradient(
                 180deg,
-                rgba(255,255,255,0.80) 0%,
-                rgba(255,255,255,0.88) 56%,
-                rgba(255,255,255,0.94) 100%
+                rgba(255,255,255,0.62) 0%,
+                rgba(255,255,255,0.76) 56%,
+                rgba(255,255,255,0.88) 100%
             ),
-
-            url("{final_background_css_url}") center center / 62% auto no-repeat,
+            
+            url("{final_background_css_url}") center center / 72% auto no-repeat,
 
             linear-gradient(
                 135deg,
