@@ -7404,6 +7404,18 @@ def get_match_card_css(status_info, row=None):
                 rgba(255,255,255,0.88) 100%
             ),
             
+            linear-gradient(
+                90deg,
+                rgba(255,253,246,0.98) 0%,
+                rgba(255,253,246,0.92) 8%,
+                rgba(255,255,255,0.66) 18%,
+                rgba(255,255,255,0.08) 32%,
+                rgba(255,255,255,0.08) 68%,
+                rgba(239,246,255,0.66) 82%,
+                rgba(239,246,255,0.92) 92%,
+                rgba(248,251,255,0.98) 100%
+            ),
+            
             url("{final_background_css_url}") center center / 72% auto no-repeat,
 
             linear-gradient(
