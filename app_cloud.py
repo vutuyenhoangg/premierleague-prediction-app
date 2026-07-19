@@ -129,6 +129,8 @@ SIDEBAR_DECORATION_URL = "data/static/sidebar.png"
 
 FINAL_POSTER_IMAGE_URL = "data/static/final-poster.png"
 
+FINAL_BACKGROUND_IMAGE_URL = "data/static/final-background.jpg"
+
 FINAL_POSTER_END_DATE = date(2026, 7, 20)
 
 FOOTER_PROJECT_URL = ""
@@ -7282,6 +7284,13 @@ def get_match_card_css(status_info, row=None):
             "rgba(37, 99, 235, 0.12)"
         )
 
+        final_background_src = resolve_asset_src(FINAL_BACKGROUND_IMAGE_URL)
+        final_background_css_url = (
+            str(final_background_src)
+            .replace("\\", "/")
+            .replace('"', '\\"')
+        )
+
         card_background = f"""
             radial-gradient(
                 circle at 97% 5%,
@@ -7380,6 +7389,22 @@ def get_match_card_css(status_info, row=None):
                 transparent 75px,
                 transparent 145px
             ),
+
+            radial-gradient(
+                ellipse at center 56%,
+                rgba(255,255,255,0.74) 0%,
+                rgba(255,255,255,0.86) 46%,
+                rgba(255,255,255,0.98) 76%
+            ),
+
+            linear-gradient(
+                180deg,
+                rgba(255,255,255,0.80) 0%,
+                rgba(255,255,255,0.88) 56%,
+                rgba(255,255,255,0.94) 100%
+            ),
+
+            url("{final_background_css_url}") center center / 62% auto no-repeat,
 
             linear-gradient(
                 135deg,
