@@ -1,4 +1,4 @@
-name: Diagnose Supabase EPL Credentials
+name: Test Supabase EPL Connection
 
 on:
   workflow_dispatch:
@@ -7,13 +7,13 @@ permissions:
   contents: read
 
 jobs:
-  diagnose-database:
+  test-database:
+    name: Test Supabase database
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
 
     steps:
       - name: Set up Python
@@ -26,16 +26,14 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install "SQLAlchemy>=2,<3" psycopg2-binary
 
-      - name: Test credentials without URL password parsing
+      - name: Test DATABASE_URL
         shell: bash
         run: |
           python - <<'PY'
           import os
-          import sys
 
-          from sqlalchemy import URL, create_engine, text
+          from sqlalchemy import create_engine, text
           from sqlalchemy.engine import make_url
-          from sqlalchemy.exc import OperationalError
 
 
           database_url = os.getenv(
@@ -43,71 +41,31 @@ jobs:
               "",
           ).strip()
 
-          raw_password = os.getenv(
-              "SUPABASE_DB_PASSWORD",
-              "",
-          )
-
           if not database_url:
               raise SystemExit(
                   "DATABASE_URL đang trống."
               )
 
-          if not raw_password:
-              raise SystemExit(
-                  "SUPABASE_DB_PASSWORD đang trống."
-              )
+          parsed = make_url(database_url)
 
-          if raw_password != raw_password.strip():
-              raise SystemExit(
-                  "SUPABASE_DB_PASSWORD có khoảng trắng "
-                  "hoặc ký tự xuống dòng ở đầu/cuối."
-              )
-
-          if (
-              raw_password.startswith('"')
-              or raw_password.endswith('"')
-              or raw_password.startswith("'")
-              or raw_password.endswith("'")
-          ):
-              raise SystemExit(
-                  "SUPABASE_DB_PASSWORD đang chứa dấu ngoặc kép "
-                  "hoặc ngoặc đơn. Hãy chỉ lưu mật khẩu thô."
-              )
-
-          try:
-              parsed = make_url(database_url)
-          except Exception as error:
-              raise SystemExit(
-                  f"DATABASE_URL không hợp lệ: {error}"
-              ) from error
-
-          print("=" * 65)
-          print("THÔNG TIN KẾT NỐI")
-          print("=" * 65)
+          print("=" * 60)
+          print("KIỂM TRA DATABASE_URL")
+          print("=" * 60)
+          print(
+              "URL:",
+              parsed.render_as_string(
+                  hide_password=True
+              ),
+          )
           print("Driver:", parsed.drivername)
           print("Username:", parsed.username)
           print("Host:", parsed.host)
           print("Port:", parsed.port)
           print("Database:", parsed.database)
-          print(
-              "Độ dài password thô:",
-              len(raw_password),
-          )
 
           if parsed.drivername != "postgresql+psycopg2":
               raise SystemExit(
                   "Driver phải là postgresql+psycopg2."
-              )
-
-          if not parsed.username:
-              raise SystemExit(
-                  "DATABASE_URL thiếu username."
-              )
-
-          if not parsed.host:
-              raise SystemExit(
-                  "DATABASE_URL thiếu hostname."
               )
 
           if parsed.port != 5432:
@@ -115,23 +73,8 @@ jobs:
                   "Session Pooler phải dùng port 5432."
               )
 
-          # Tạo URL bằng SQLAlchemy URL.create.
-          # Password được truyền riêng nên không gặp lỗi ký tự đặc biệt
-          # hoặc URL encoding.
-          test_url = URL.create(
-              drivername="postgresql+psycopg2",
-              username=parsed.username,
-              password=raw_password,
-              host=parsed.host,
-              port=parsed.port,
-              database=parsed.database or "postgres",
-              query={
-                  "sslmode": "require",
-              },
-          )
-
           engine = create_engine(
-              test_url,
+              database_url,
               pool_pre_ping=True,
               pool_size=1,
               max_overflow=0,
@@ -153,20 +96,6 @@ jobs:
                       )
                   ).mappings().one()
 
-                  print("\nPOSTGRESQL LOGIN OK")
-                  print(
-                      "Database:",
-                      info["database_name"],
-                  )
-                  print(
-                      "Database user:",
-                      info["database_user"],
-                  )
-                  print(
-                      "Server time:",
-                      info["server_time"],
-                  )
-
                   tables = connection.execute(
                       text(
                           """
@@ -178,52 +107,31 @@ jobs:
                       )
                   ).scalars().all()
 
+                  print("\nPOSTGRESQL LOGIN OK")
+                  print(
+                      "Database:",
+                      info["database_name"],
+                  )
+                  print(
+                      "User:",
+                      info["database_user"],
+                  )
+                  print(
+                      "Server time:",
+                      info["server_time"],
+                  )
+
                   print("\nCÁC BẢNG PUBLIC:")
 
                   if tables:
                       for table_name in tables:
-                          print("-", table_name)
+                          print(f"- {table_name}")
                   else:
                       print("- Chưa có bảng nào")
 
               print(
-                  "\nKẾT NỐI SUPABASE EPL THÀNH CÔNG"
+                  "\nDATABASE_URL HOẠT ĐỘNG HOÀN CHỈNH"
               )
-
-          except OperationalError as error:
-              print(
-                  "\nĐĂNG NHẬP VẪN THẤT BẠI",
-                  file=sys.stderr,
-              )
-
-              print(
-                  "Chi tiết lỗi gốc:",
-                  str(error.orig),
-                  file=sys.stderr,
-              )
-
-              print(
-                  "\nKết luận có thể:",
-                  file=sys.stderr,
-              )
-
-              print(
-                  "1. SUPABASE_DB_PASSWORD không phải "
-                  "database password hiện tại.",
-                  file=sys.stderr,
-              )
-
-              print(
-                  "2. Username/host thuộc project khác.",
-                  file=sys.stderr,
-              )
-
-              print(
-                  "3. Password reset chưa được lưu thành công.",
-                  file=sys.stderr,
-              )
-
-              raise SystemExit(1) from error
 
           finally:
               engine.dispose()
