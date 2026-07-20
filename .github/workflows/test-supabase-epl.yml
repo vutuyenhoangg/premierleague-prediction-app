@@ -1,0 +1,202 @@
+name: Test Supabase EPL Connection
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-database:
+    name: Test database
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install database libraries
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "SQLAlchemy>=2,<3" psycopg2-binary
+
+      - name: Test Supabase connection and schema
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+
+          from sqlalchemy import create_engine, text
+          from sqlalchemy.exc import SQLAlchemyError
+
+
+          EXPECTED_TABLES = {
+              "teams",
+              "matches",
+              "match_goals",
+              "users",
+              "predictions",
+              "prediction_history",
+              "login_sessions",
+              "daily_checkins",
+              "daily_checkin_rewards",
+              "final_poster_popup_views",
+              "match_ai_suggestions",
+              "match_ai_summaries",
+          }
+
+
+          database_url = os.getenv(
+              "DATABASE_URL",
+              "",
+          ).strip()
+
+          if not database_url:
+              raise SystemExit(
+                  "DATABASE_URL chưa được tạo trong "
+                  "GitHub Actions Secrets."
+              )
+
+          if not database_url.startswith(
+              "postgresql+psycopg2://"
+          ):
+              raise SystemExit(
+                  "DATABASE_URL không phải loại SQLAlchemy. "
+                  "Chuỗi phải bắt đầu bằng "
+                  "postgresql+psycopg2://"
+              )
+
+          if ":5432/" not in database_url:
+              raise SystemExit(
+                  "DATABASE_URL chưa dùng Session pooler "
+                  "port 5432."
+              )
+
+          engine = create_engine(
+              database_url,
+              pool_pre_ping=True,
+              pool_size=1,
+              max_overflow=0,
+              connect_args={
+                  "connect_timeout": 15,
+              },
+          )
+
+          try:
+              with engine.connect() as connection:
+                  database_info = connection.execute(
+                      text(
+                          """
+                          SELECT
+                              current_database() AS database_name,
+                              current_user AS database_user,
+                              NOW() AS server_time
+                          """
+                      )
+                  ).mappings().one()
+
+                  tables = set(
+                      connection.execute(
+                          text(
+                              """
+                              SELECT table_name
+                              FROM information_schema.tables
+                              WHERE table_schema = 'public'
+                              """
+                          )
+                      ).scalars().all()
+                  )
+
+                  missing_tables = sorted(
+                      EXPECTED_TABLES - tables
+                  )
+
+                  print("=" * 60)
+                  print("KẾT NỐI SUPABASE EPL THÀNH CÔNG")
+                  print("=" * 60)
+                  print(
+                      "Database:",
+                      database_info["database_name"],
+                  )
+                  print(
+                      "Database user:",
+                      database_info["database_user"],
+                  )
+                  print(
+                      "Server time:",
+                      database_info["server_time"],
+                  )
+
+                  print("\nCác bảng public:")
+
+                  for table_name in sorted(tables):
+                      print(f"- {table_name}")
+
+                  if missing_tables:
+                      print(
+                          "\nCÁC BẢNG CÒN THIẾU:"
+                      )
+
+                      for table_name in missing_tables:
+                          print(f"- {table_name}")
+
+                      raise SystemExit(
+                          "Kết nối thành công nhưng schema "
+                          "chưa đầy đủ."
+                      )
+
+                  counts = connection.execute(
+                      text(
+                          """
+                          SELECT
+                              (SELECT COUNT(*) FROM teams)
+                                  AS teams,
+                              (SELECT COUNT(*) FROM matches)
+                                  AS matches,
+                              (SELECT COUNT(*) FROM users)
+                                  AS users,
+                              (SELECT COUNT(*) FROM predictions)
+                                  AS predictions
+                          """
+                      )
+                  ).mappings().one()
+
+                  print("\nSố dòng hiện tại:")
+                  print("teams:", counts["teams"])
+                  print("matches:", counts["matches"])
+                  print("users:", counts["users"])
+                  print(
+                      "predictions:",
+                      counts["predictions"],
+                  )
+
+                  print(
+                      "\nDATABASE EPL ĐÃ SẴN SÀNG."
+                  )
+
+          except SQLAlchemyError as error:
+              print(
+                  "Không thể kết nối Supabase EPL.",
+                  file=sys.stderr,
+              )
+
+              print(
+                  f"Loại lỗi: {type(error).__name__}",
+                  file=sys.stderr,
+              )
+
+              raise SystemExit(1) from error
+
+          finally:
+              engine.dispose()
+          PY
