@@ -1,4 +1,4 @@
-name: Test Supabase EPL Connection
+name: Diagnose Supabase EPL Connection
 
 on:
   workflow_dispatch:
@@ -7,8 +7,8 @@ permissions:
   contents: read
 
 jobs:
-  test-database:
-    name: Test database
+  diagnose-database:
+    name: Diagnose Supabase connection
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -16,9 +16,6 @@ jobs:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -29,31 +26,17 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install "SQLAlchemy>=2,<3" psycopg2-binary
 
-      - name: Test Supabase connection and schema
+      - name: Diagnose Supabase connection
         shell: bash
         run: |
           python - <<'PY'
           import os
+          import socket
           import sys
 
           from sqlalchemy import create_engine, text
-          from sqlalchemy.exc import SQLAlchemyError
-
-
-          EXPECTED_TABLES = {
-              "teams",
-              "matches",
-              "match_goals",
-              "users",
-              "predictions",
-              "prediction_history",
-              "login_sessions",
-              "daily_checkins",
-              "daily_checkin_rewards",
-              "final_poster_popup_views",
-              "match_ai_suggestions",
-              "match_ai_summaries",
-          }
+          from sqlalchemy.engine import make_url
+          from sqlalchemy.exc import OperationalError
 
 
           database_url = os.getenv(
@@ -63,24 +46,126 @@ jobs:
 
           if not database_url:
               raise SystemExit(
-                  "DATABASE_URL chưa được tạo trong "
-                  "GitHub Actions Secrets."
+                  "LỖI: GitHub Actions Secret DATABASE_URL đang trống."
               )
 
-          if not database_url.startswith(
-              "postgresql+psycopg2://"
+          try:
+              parsed_url = make_url(database_url)
+          except Exception as error:
+              raise SystemExit(
+                  f"LỖI: DATABASE_URL không parse được: "
+                  f"{type(error).__name__}: {error}"
+              ) from error
+
+          safe_url = parsed_url.render_as_string(
+              hide_password=True
+          )
+
+          host = parsed_url.host
+          port = parsed_url.port
+          username = parsed_url.username
+          database_name = parsed_url.database
+          driver = parsed_url.drivername
+
+          print("=" * 70)
+          print("THÔNG TIN KẾT NỐI ĐÃ CHE PASSWORD")
+          print("=" * 70)
+          print("URL:", safe_url)
+          print("Driver:", driver)
+          print("Username:", username)
+          print("Host:", host)
+          print("Port:", port)
+          print("Database:", database_name)
+
+          errors = []
+
+          if driver != "postgresql+psycopg2":
+              errors.append(
+                  "Driver phải là postgresql+psycopg2"
+              )
+
+          if not username or not username.startswith(
+              "postgres."
           ):
-              raise SystemExit(
-                  "DATABASE_URL không phải loại SQLAlchemy. "
-                  "Chuỗi phải bắt đầu bằng "
-                  "postgresql+psycopg2://"
+              errors.append(
+                  "Username Session pooler phải có dạng "
+                  "postgres.PROJECT_REF"
               )
 
-          if ":5432/" not in database_url:
-              raise SystemExit(
-                  "DATABASE_URL chưa dùng Session pooler "
-                  "port 5432."
+          if not host or "pooler.supabase.com" not in host:
+              errors.append(
+                  "Host không phải Supabase pooler host"
               )
+
+          if port != 5432:
+              errors.append(
+                  "Session pooler phải dùng port 5432"
+              )
+
+          if database_name != "postgres":
+              errors.append(
+                  "Database name phải là postgres"
+              )
+
+          if errors:
+              print("\nCẤU TRÚC DATABASE_URL CÓ VẤN ĐỀ:")
+
+              for error in errors:
+                  print("-", error)
+
+              raise SystemExit(1)
+
+          print("\n[1/3] KIỂM TRA DNS")
+
+          try:
+              addresses = socket.getaddrinfo(
+                  host,
+                  port,
+                  type=socket.SOCK_STREAM,
+              )
+
+              unique_addresses = sorted({
+                  item[4][0]
+                  for item in addresses
+              })
+
+              print("DNS OK")
+              print(
+                  "Địa chỉ tìm được:",
+                  ", ".join(unique_addresses),
+              )
+
+          except socket.gaierror as error:
+              print(
+                  "DNS FAILED:",
+                  repr(error),
+                  file=sys.stderr,
+              )
+
+              raise SystemExit(1) from error
+
+          print("\n[2/3] KIỂM TRA TCP PORT")
+
+          try:
+              with socket.create_connection(
+                  (host, port),
+                  timeout=15,
+              ):
+                  print(
+                      f"TCP OK: kết nối được tới "
+                      f"{host}:{port}"
+                  )
+
+          except OSError as error:
+              print(
+                  "TCP FAILED:",
+                  repr(error),
+                  file=sys.stderr,
+              )
+
+              raise SystemExit(1) from error
+
+          print("\n[3/3] KIỂM TRA ĐĂNG NHẬP POSTGRESQL")
 
           engine = create_engine(
               database_url,
@@ -94,7 +179,7 @@ jobs:
 
           try:
               with engine.connect() as connection:
-                  database_info = connection.execute(
+                  result = connection.execute(
                       text(
                           """
                           SELECT
@@ -105,93 +190,84 @@ jobs:
                       )
                   ).mappings().one()
 
-                  tables = set(
-                      connection.execute(
-                          text(
-                              """
-                              SELECT table_name
-                              FROM information_schema.tables
-                              WHERE table_schema = 'public'
-                              """
-                          )
-                      ).scalars().all()
-                  )
-
-                  missing_tables = sorted(
-                      EXPECTED_TABLES - tables
-                  )
-
-                  print("=" * 60)
-                  print("KẾT NỐI SUPABASE EPL THÀNH CÔNG")
-                  print("=" * 60)
+                  print("POSTGRESQL LOGIN OK")
                   print(
                       "Database:",
-                      database_info["database_name"],
+                      result["database_name"],
                   )
                   print(
-                      "Database user:",
-                      database_info["database_user"],
+                      "User:",
+                      result["database_user"],
                   )
                   print(
                       "Server time:",
-                      database_info["server_time"],
+                      result["server_time"],
                   )
 
-                  print("\nCác bảng public:")
-
-                  for table_name in sorted(tables):
-                      print(f"- {table_name}")
-
-                  if missing_tables:
-                      print(
-                          "\nCÁC BẢNG CÒN THIẾU:"
-                      )
-
-                      for table_name in missing_tables:
-                          print(f"- {table_name}")
-
-                      raise SystemExit(
-                          "Kết nối thành công nhưng schema "
-                          "chưa đầy đủ."
-                      )
-
-                  counts = connection.execute(
+                  tables = connection.execute(
                       text(
                           """
-                          SELECT
-                              (SELECT COUNT(*) FROM teams)
-                                  AS teams,
-                              (SELECT COUNT(*) FROM matches)
-                                  AS matches,
-                              (SELECT COUNT(*) FROM users)
-                                  AS users,
-                              (SELECT COUNT(*) FROM predictions)
-                                  AS predictions
+                          SELECT table_name
+                          FROM information_schema.tables
+                          WHERE table_schema = 'public'
+                          ORDER BY table_name
                           """
                       )
-                  ).mappings().one()
+                  ).scalars().all()
 
-                  print("\nSố dòng hiện tại:")
-                  print("teams:", counts["teams"])
-                  print("matches:", counts["matches"])
-                  print("users:", counts["users"])
-                  print(
-                      "predictions:",
-                      counts["predictions"],
-                  )
+                  print("\nCÁC BẢNG PUBLIC:")
 
-                  print(
-                      "\nDATABASE EPL ĐÃ SẴN SÀNG."
-                  )
+                  if tables:
+                      for table_name in tables:
+                          print("-", table_name)
+                  else:
+                      print(
+                          "- Chưa có bảng nào trong public"
+                      )
 
-          except SQLAlchemyError as error:
+              print("\nSUPABASE EPL CONNECTION SUCCESS")
+
+          except OperationalError as error:
               print(
-                  "Không thể kết nối Supabase EPL.",
+                  "\nPOSTGRESQL LOGIN FAILED",
                   file=sys.stderr,
               )
 
               print(
-                  f"Loại lỗi: {type(error).__name__}",
+                  "Loại lỗi gốc:",
+                  type(error.orig).__name__,
+                  file=sys.stderr,
+              )
+
+              print(
+                  "Chi tiết lỗi gốc:",
+                  str(error.orig),
+                  file=sys.stderr,
+              )
+
+              print(
+                  "URL đã che password:",
+                  safe_url,
+                  file=sys.stderr,
+              )
+
+              raise SystemExit(1) from error
+
+          except Exception as error:
+              print(
+                  "\nDATABASE QUERY FAILED",
+                  file=sys.stderr,
+              )
+
+              print(
+                  "Loại lỗi:",
+                  type(error).__name__,
+                  file=sys.stderr,
+              )
+
+              print(
+                  "Chi tiết:",
+                  str(error),
                   file=sys.stderr,
               )
 
