@@ -2776,64 +2776,131 @@ def inject_match_datepicker_calendar_theme(match_dates):
 
 
 def inject_mobile_match_title_css():
+    """
+    Chỉ điều chỉnh tiêu đề trận đấu trên mobile.
+
+    Desktop và mọi thành phần khác giữ nguyên.
+    """
     st.markdown(
         """
         <style>
+        /*
+         * Mặc định ẩn title mobile trên desktop.
+         */
         .wc-match-title-mobile {
             display: none;
         }
 
         @media (max-width: 768px) {
+            /*
+             * Chỉ trên mobile mới ẩn title desktop.
+             */
             div[class*="st-key-match_title_desktop_"] {
                 display: none !important;
             }
 
             .wc-match-title-mobile {
-                display: block;
-                width: 100%;
-                max-width: 100%;
-                margin: 2px 0 10px 0;
+                display: block !important;
+
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: 100% !important;
+
+                margin: 2px 0 10px 0 !important;
+
+                box-sizing: border-box !important;
             }
 
-            .wc-match-title-mobile .wc-match-team {
-                display: block;
-                width: 100%;
-                max-width: 100%;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                color: #07111F;
-                font-size: clamp(20px, 5.6vw, 23px);
-                line-height: 1.13;
-                font-weight: 950;
-                letter-spacing: -0.035em;
+            /*
+             * Cho tên đội xuống dòng đầy đủ.
+             * Không còn dấu ...
+             */
+            .wc-match-title-mobile
+            .wc-match-team {
+                display: block !important;
+
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: 100% !important;
+
+                white-space: normal !important;
+
+                overflow: visible !important;
+                text-overflow: clip !important;
+
+                word-break: normal !important;
+                overflow-wrap: break-word !important;
+
+                color: #190021 !important;
+
+                font-size:
+                    clamp(
+                        17px,
+                        4.7vw,
+                        19px
+                    ) !important;
+
+                line-height: 1.12 !important;
+
+                font-weight: 950 !important;
+
+                letter-spacing:
+                    -0.025em !important;
             }
 
-            .wc-match-title-mobile .wc-match-vs {
-                display: block;
-                width: 100%;
-                color: #07111F;
-                font-size: clamp(18px, 5vw, 21px);
-                line-height: 1.08;
-                font-weight: 950;
-                letter-spacing: -0.025em;
+            /*
+             * Khoảng cách nhỏ giữa hai đội.
+             */
+            .wc-match-title-mobile
+            .wc-match-team-home {
+                margin-bottom: 1px !important;
+            }
+
+            .wc-match-title-mobile
+            .wc-match-team-away {
+                margin-top: 1px !important;
+            }
+
+            /*
+             * Chữ VS nhỏ hơn để dành diện tích cho tên đội.
+             */
+            .wc-match-title-mobile
+            .wc-match-vs {
+                display: block !important;
+
+                width: 100% !important;
+
+                margin: 0 !important;
+
+                color: #FF2882 !important;
+
+                font-size: 13px !important;
+                line-height: 1 !important;
+
+                font-weight: 950 !important;
+
+                letter-spacing: 0 !important;
+
+                text-transform: uppercase;
             }
         }
 
         @media (max-width: 390px) {
-            .wc-match-title-mobile .wc-match-team {
-                font-size: 20px;
+            .wc-match-title-mobile
+            .wc-match-team {
+                font-size: 17px !important;
+                line-height: 1.13 !important;
             }
 
-            .wc-match-title-mobile .wc-match-vs {
-                font-size: 18px;
+            .wc-match-title-mobile
+            .wc-match-vs {
+                font-size: 12px !important;
             }
         }
         </style>
         """,
         unsafe_allow_html=True
     )
-
 
 inject_mobile_match_title_css()
 
@@ -10492,6 +10559,57 @@ def render_auth_page():
 # ============================================================
 # 9. MATCH CARD UI
 # ============================================================
+def get_mobile_team_display_name(team_name) -> str:
+    """
+    Tạo tên ngắn gọn, rõ nghĩa dành riêng cho card mobile.
+
+    Desktop vẫn sử dụng tên đầy đủ từ database.
+    """
+    if team_name is None or pd.isna(team_name):
+        return "TBD"
+
+    full_name = str(team_name).strip()
+
+    if not full_name:
+        return "TBD"
+
+    mobile_name_overrides = {
+        "afc bournemouth": "Bournemouth",
+        "brighton & hove albion fc": "Brighton",
+        "manchester city fc": "Man City",
+        "manchester united fc": "Man United",
+        "newcastle united fc": "Newcastle",
+        "nottingham forest fc": "Nottingham Forest",
+        "tottenham hotspur fc": "Tottenham",
+        "west ham united fc": "West Ham",
+        "wolverhampton wanderers fc": "Wolves",
+    }
+
+    normalized_name = full_name.casefold()
+
+    if normalized_name in mobile_name_overrides:
+        return mobile_name_overrides[
+            normalized_name
+        ]
+
+    # Bỏ hậu tố FC hoặc AFC ở cuối tên.
+    short_name = re.sub(
+        r"\s+(?:AFC|FC)$",
+        "",
+        full_name,
+        flags=re.IGNORECASE
+    ).strip()
+
+    # Bỏ AFC ở đầu tên, ví dụ AFC Bournemouth.
+    short_name = re.sub(
+        r"^AFC\s+",
+        "",
+        short_name,
+        flags=re.IGNORECASE
+    ).strip()
+
+    return short_name or full_name
+
 def render_match_title(
     home_name,
     away_name,
@@ -10523,6 +10641,28 @@ def render_match_title(
 
     safe_away = html.escape(
         away_display,
+        quote=True
+    )
+
+    mobile_home_display = (
+        get_mobile_team_display_name(
+            home_display
+        )
+    )
+    
+    mobile_away_display = (
+        get_mobile_team_display_name(
+            away_display
+        )
+    )
+    
+    safe_mobile_home = html.escape(
+        mobile_home_display,
+        quote=True
+    )
+    
+    safe_mobile_away = html.escape(
+        mobile_away_display,
         quote=True
     )
 
@@ -10613,21 +10753,25 @@ def render_match_title(
         f'<div '
         f'class="wc-match-title-mobile" '
         f'aria-label="{safe_home} vs {safe_away}">'
-
-        f'<div class="wc-match-team">'
-        f'{safe_home}'
+    
+        f'<div '
+        f'class="wc-match-team wc-match-team-home" '
+        f'title="{safe_home}">'
+        f'{safe_mobile_home}'
         f'</div>'
-
+    
         f'<div class="wc-match-vs">'
         f'vs'
         f'</div>'
-
-        f'<div class="wc-match-team">'
-        f'{safe_away}'
+    
+        f'<div '
+        f'class="wc-match-team wc-match-team-away" '
+        f'title="{safe_away}">'
+        f'{safe_mobile_away}'
         f'</div>'
-
+    
         f'{ribbon_html}'
-
+    
         f'</div>'
     )
 
@@ -12121,7 +12265,6 @@ def render_match_card(
         css_styles=card_css
     ):
         render_status_badge(status_info, row=row)
-        render_winner_logo_overlay(row)
     
         top_left, top_right = st.columns([3, 1])
 
