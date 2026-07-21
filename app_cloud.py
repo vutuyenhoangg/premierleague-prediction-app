@@ -2902,7 +2902,184 @@ def inject_mobile_match_title_css():
         unsafe_allow_html=True
     )
 
+def inject_desktop_match_vs_style():
+    """
+    Chỉ thay đổi màu và kích thước chữ 'vs' trên desktop.
+
+    Không thay:
+    - cấu trúc heading
+    - khoảng cách với badge
+    - khoảng cách với ribbon
+    - giao diện mobile
+    """
+    st.markdown(
+        """
+        <style>
+        @media (min-width: 769px) {
+            div[class*="st-key-match_title_desktop_"]
+            h3
+            .epl-desktop-vs-only {
+                display: inline;
+
+                color: #FF2882 !important;
+
+                font-size: 0.62em !important;
+                font-weight: 950 !important;
+                line-height: inherit !important;
+
+                letter-spacing: 0 !important;
+
+                vertical-align: 0.08em;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    components.html(
+        """
+        <script>
+        (() => {
+            const parentWindow = window.parent;
+            const parentDocument = parentWindow.document;
+
+            const headingSelector =
+                'div[class*="st-key-match_title_desktop_"] h3';
+
+            const observerKey =
+                "__eplDesktopVsOnlyObserver";
+
+            /*
+             * Ngắt observer cũ sau mỗi Streamlit rerun,
+             * tránh tạo nhiều observer trùng nhau.
+             */
+            if (parentWindow[observerKey]) {
+                parentWindow[observerKey].disconnect();
+            }
+
+            const styleVsInHeading = (heading) => {
+                if (
+                    !heading
+                    || heading.dataset.eplVsStyled === "1"
+                ) {
+                    return;
+                }
+
+                const walker =
+                    parentDocument.createTreeWalker(
+                        heading,
+                        parentWindow.NodeFilter.SHOW_TEXT
+                    );
+
+                let textNode;
+
+                while (
+                    (textNode = walker.nextNode())
+                ) {
+                    const value =
+                        textNode.nodeValue || "";
+
+                    const matched =
+                        value.match(
+                            /^(.*?)(\\s+vs\\s+)(.*)$/i
+                        );
+
+                    if (!matched) {
+                        continue;
+                    }
+
+                    const fragment =
+                        parentDocument
+                        .createDocumentFragment();
+
+                    fragment.appendChild(
+                        parentDocument.createTextNode(
+                            matched[1] + " "
+                        )
+                    );
+
+                    const vsSpan =
+                        parentDocument.createElement(
+                            "span"
+                        );
+
+                    vsSpan.className =
+                        "epl-desktop-vs-only";
+
+                    vsSpan.textContent = "vs";
+
+                    fragment.appendChild(vsSpan);
+
+                    fragment.appendChild(
+                        parentDocument.createTextNode(
+                            " " + matched[3]
+                        )
+                    );
+
+                    textNode.parentNode.replaceChild(
+                        fragment,
+                        textNode
+                    );
+
+                    heading.dataset.eplVsStyled = "1";
+
+                    break;
+                }
+            };
+
+            const applyStyle = () => {
+                parentDocument
+                    .querySelectorAll(
+                        headingSelector
+                    )
+                    .forEach(
+                        styleVsInHeading
+                    );
+            };
+
+            let updateScheduled = false;
+
+            const scheduleUpdate = () => {
+                if (updateScheduled) {
+                    return;
+                }
+
+                updateScheduled = true;
+
+                parentWindow.requestAnimationFrame(
+                    () => {
+                        updateScheduled = false;
+                        applyStyle();
+                    }
+                );
+            };
+
+            applyStyle();
+
+            const observer =
+                new parentWindow.MutationObserver(
+                    scheduleUpdate
+                );
+
+            observer.observe(
+                parentDocument.body,
+                {
+                    childList: true,
+                    subtree: true
+                }
+            );
+
+            parentWindow[observerKey] = observer;
+        })();
+        </script>
+        """,
+        height=0,
+        scrolling=False
+    )
+
 inject_mobile_match_title_css()
+inject_desktop_match_vs_style()
 
 @st.dialog(" ")
 def render_daily_checkin_dialog(user_id: int):
@@ -10737,73 +10914,10 @@ def render_match_title(
         {
             display: block;
         }
-    
-        /*
-         * Khoảng cách với ribbon được tạo bằng padding,
-         * không chỉnh margin của ribbon.
-         */
-        .epl-desktop-match-title-shell {
-            display: block;
-            width: 100%;
-    
-            padding-bottom: 8px;
-    
-            box-sizing: border-box;
-        }
-    
-        .epl-desktop-match-title-shell h3 {
-            margin: 0 !important;
-            padding: 0 !important;
-        }
-    
-        .epl-desktop-match-vs {
-            display: inline-block;
-    
-            margin:
-                0 5px;
-    
-            color:
-                #FF2882 !important;
-    
-            font-size:
-                0.62em !important;
-    
-            font-weight:
-                950 !important;
-    
-            line-height:
-                1 !important;
-    
-            letter-spacing:
-                0 !important;
-    
-            vertical-align:
-                0.08em;
-        }
         """
     ):
-        desktop_title_html = (
-            '<div class="epl-desktop-match-title-shell">'
-    
-            '<h3 '
-            f'aria-label="{safe_home} vs {safe_away}">'
-    
-            f'<span>{safe_home}</span>'
-    
-            '<span class="epl-desktop-match-vs">'
-            'vs'
-            '</span>'
-    
-            f'<span>{safe_away}</span>'
-    
-            '</h3>'
-    
-            '</div>'
-        )
-    
-        st.markdown(
-            desktop_title_html,
-            unsafe_allow_html=True
+        st.subheader(
+            f"{home_display} vs {away_display}"
         )
     
         st.markdown(
