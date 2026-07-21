@@ -10737,12 +10737,64 @@ def render_match_title(
         {
             display: block;
         }
+    
+        .epl-match-title-desktop-line {
+            margin:
+                0 0 8px 0 !important;
+        }
+    
+        .epl-match-title-desktop-vs {
+            display:
+                inline-block;
+    
+            margin:
+                0 7px;
+    
+            color:
+                #FF2882 !important;
+    
+            font-size:
+                0.56em !important;
+    
+            font-weight:
+                950 !important;
+    
+            line-height:
+                1 !important;
+    
+            letter-spacing:
+                0 !important;
+    
+            text-transform:
+                lowercase;
+    
+            vertical-align:
+                0.10em;
+        }
         """
     ):
-        st.subheader(
-            f"{home_display} vs {away_display}"
+        desktop_title_html = (
+            '<h3 '
+            'class="epl-match-title-desktop-line" '
+            f'aria-label="{safe_home} vs {safe_away}">'
+    
+            f'<span>{safe_home}</span>'
+    
+            '<span '
+            'class="epl-match-title-desktop-vs">'
+            'vs'
+            '</span>'
+    
+            f'<span>{safe_away}</span>'
+    
+            '</h3>'
         )
-
+    
+        st.markdown(
+            desktop_title_html,
+            unsafe_allow_html=True
+        )
+    
         st.markdown(
             ribbon_html,
             unsafe_allow_html=True
