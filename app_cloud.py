@@ -10738,14 +10738,52 @@ def render_match_title(
             display: block;
         }
     
-        .epl-match-title-desktop-line {
+        .epl-match-title-desktop-stack {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+    
+            width: 100%;
+            max-width: 100%;
+    
+            /*
+             * Khoảng cách cố định giữa tên trận và ribbon.
+             */
+            gap: 12px;
+    
             margin:
-                0 0 8px 0 !important;
+                0 0 8px 0;
+        }
+    
+        .epl-match-title-desktop-line {
+            display: block;
+    
+            width: 100%;
+            max-width: 100%;
+    
+            margin: 0 !important;
+            padding: 0 !important;
+    
+            color: #190021 !important;
+    
+            font-size:
+                clamp(
+                    24px,
+                    2.15vw,
+                    32px
+                ) !important;
+    
+            font-weight: 950 !important;
+            line-height: 1.08 !important;
+            letter-spacing: -0.042em !important;
+    
+            text-shadow:
+                0 1px 0
+                rgba(255, 255, 255, 0.82);
         }
     
         .epl-match-title-desktop-vs {
-            display:
-                inline-block;
+            display: inline-block;
     
             margin:
                 0 7px;
@@ -10765,15 +10803,25 @@ def render_match_title(
             letter-spacing:
                 0 !important;
     
-            text-transform:
-                lowercase;
-    
             vertical-align:
                 0.10em;
+        }
+    
+        /*
+         * Xóa margin cũ của ribbon.
+         * Khoảng cách đã do gap của stack quản lý.
+         */
+        .epl-match-title-desktop-stack
+        .epl-premier-league-ribbon {
+            margin:
+                0 !important;
         }
         """
     ):
         desktop_title_html = (
+            '<div '
+            'class="epl-match-title-desktop-stack">'
+    
             '<h3 '
             'class="epl-match-title-desktop-line" '
             f'aria-label="{safe_home} vs {safe_away}">'
@@ -10788,15 +10836,14 @@ def render_match_title(
             f'<span>{safe_away}</span>'
     
             '</h3>'
+    
+            f'{ribbon_html}'
+    
+            '</div>'
         )
     
         st.markdown(
             desktop_title_html,
-            unsafe_allow_html=True
-        )
-    
-        st.markdown(
-            ribbon_html,
             unsafe_allow_html=True
         )
 
