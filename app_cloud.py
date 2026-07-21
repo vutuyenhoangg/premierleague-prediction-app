@@ -6404,41 +6404,26 @@ def should_render_winner_logo(row) -> bool:
 
 def render_winner_logo_overlay(row):
     """
-    Hiển thị logo đội thắng tại đúng vùng góc phải
-    từng dùng cho cờ đội thắng của app World Cup.
+    Hiển thị logo đội thắng bằng đúng cơ chế overlay cờ
+    đã dùng ổn định trong app World Cup.
 
-    Overlay không chiếm diện tích card và không chặn thao tác.
+    Chỉ thay nguồn ảnh từ cờ sang logo câu lạc bộ.
+    Vị trí, hiệu ứng, kích thước và responsive được giữ nguyên.
     """
-    if not should_render_winner_logo(
-        row
-    ):
+    if not should_render_winner_logo(row):
         return
 
-    match_id = int(
-        row.get("match_id")
-    )
+    match_id = int(row.get("match_id"))
 
-    logo_path = get_winner_team_logo_path(
-        row
-    )
-
-    logo_src = resolve_asset_src(
-        logo_path
-    )
+    logo_asset_path = get_winner_team_logo_path(row)
+    logo_src = resolve_asset_src(logo_asset_path)
 
     if not logo_src:
         return
 
     winner_name = (
-        get_winner_team_display_name(
-            row
-        )
+        get_winner_team_display_name(row)
         or "Đội thắng"
-    )
-
-    safe_logo_src = html.escape(
-        logo_src,
-        quote=True
     )
 
     safe_winner_name = html.escape(
@@ -6446,158 +6431,139 @@ def render_winner_logo_overlay(row):
         quote=True
     )
 
+    safe_logo_src = html.escape(
+        logo_src,
+        quote=True
+    )
+
     logo_html = f"""
     <style>
-    @keyframes eplWinnerLogoFloat_{match_id} {{
+    @keyframes wcWinnerLogoWave_{match_id} {{
         0% {{
             transform:
-                translateY(0)
-                rotate(-2deg)
-                scale(1);
+                perspective(520px)
+                rotateY(-9deg)
+                skewY(-1deg)
+                translateY(0);
+            filter: brightness(1.02) saturate(1.08);
         }}
 
         50% {{
             transform:
-                translateY(-2px)
-                rotate(2deg)
-                scale(1.035);
+                perspective(520px)
+                rotateY(9deg)
+                skewY(1.15deg)
+                translateY(-1px);
+            filter: brightness(1.08) saturate(1.14);
         }}
 
         100% {{
             transform:
-                translateY(0)
-                rotate(-2deg)
-                scale(1);
+                perspective(520px)
+                rotateY(-9deg)
+                skewY(-1deg)
+                translateY(0);
+            filter: brightness(1.02) saturate(1.08);
         }}
     }}
 
-    @keyframes eplWinnerLogoShine_{match_id} {{
+    @keyframes wcWinnerLogoShine_{match_id} {{
         0% {{
-            transform:
-                translateX(-170%)
-                skewX(-20deg);
+            transform: translateX(-150%) skewX(-22deg);
             opacity: 0;
         }}
 
-        28% {{
+        18% {{
             opacity: 0;
         }}
 
-        48% {{
-            opacity: 0.72;
+        38% {{
+            opacity: 0.75;
         }}
 
-        68% {{
-            opacity: 0.72;
+        62% {{
+            opacity: 0.75;
         }}
 
-        88% {{
+        82% {{
             opacity: 0;
         }}
 
         100% {{
-            transform:
-                translateX(190%)
-                skewX(-20deg);
+            transform: translateX(170%) skewX(-22deg);
             opacity: 0;
         }}
     }}
 
-    .epl-winner-logo-overlay-{match_id} {{
+    .wc-winner-logo-overlay-{match_id} {{
         position: absolute;
 
-        /*
-         * Giữ nguyên vùng neo góc phải
-         * của cờ đội thắng cũ.
-         */
         top: -30px;
         right: -15px;
 
         z-index: 3;
 
         width: 122px;
-        height: 100px;
+        height: 72px;
 
         pointer-events: none;
-    }}
-
-    .epl-winner-logo-frame-{match_id} {{
-        position: absolute;
-
-        top: 30px;
-        right: 15px;
-
-        width: 70px;
-        height: 70px;
 
         display: flex;
-        align-items: center;
-        justify-content: center;
+        align-items: flex-start;
+        justify-content: flex-start;
+    }}
 
-        box-sizing: border-box;
+    .wc-winner-logo-frame-{match_id} {{
+        position: absolute;
 
-        border-radius: 21px;
+        left: 11px;
+        top: 8px;
 
-        border:
-            1px solid rgba(
-                245,
-                197,
-                66,
-                0.78
-            );
+        width: fit-content;
+        height: fit-content;
 
-        background:
-            radial-gradient(
-                circle at 35% 25%,
-                rgba(255,255,255,0.99),
-                rgba(248,250,252,0.95)
-            );
+        max-width: 98px;
+        max-height: 56px;
+
+        border-radius: 7px;
+        border: 1px solid rgba(255, 255, 255, 0.78);
+        background: rgba(255, 255, 255, 0.94);
 
         box-shadow:
-            0 13px 28px
-                rgba(15,23,42,0.19),
-
-            0 0 0 4px
-                rgba(245,197,66,0.10);
+            0 12px 26px rgba(15, 23, 42, 0.18),
+            0 0 0 1px rgba(15, 23, 42, 0.06);
 
         overflow: hidden;
-
-        transform-origin: center;
+        transform-origin: left center;
 
         animation:
-            eplWinnerLogoFloat_{match_id}
-            2.8s
+            wcWinnerLogoWave_{match_id}
+            2.4s
             ease-in-out
             infinite;
     }}
 
-    .epl-winner-logo-img-{match_id} {{
+    .wc-winner-logo-img-{match_id} {{
         display: block;
 
-        width: 56px;
-        height: 56px;
+        width: auto;
+        height: auto;
 
-        max-width: 56px;
+        max-width: 98px;
         max-height: 56px;
 
         object-fit: contain;
-        object-position: center;
-
-        filter:
-            drop-shadow(
-                0 5px 7px
-                rgba(15,23,42,0.15)
-            );
+        object-position: left center;
     }}
 
-    .epl-winner-logo-shine-{match_id} {{
+    .wc-winner-logo-shine-{match_id} {{
         position: absolute;
 
-        top: -20%;
+        top: -25%;
         left: 0;
 
-        width: 42%;
-        height: 140%;
+        width: 44%;
+        height: 150%;
 
         pointer-events: none;
 
@@ -6605,107 +6571,87 @@ def render_winner_logo_overlay(row):
             linear-gradient(
                 90deg,
                 transparent 0%,
-                rgba(255,255,255,0.14) 18%,
-                rgba(255,255,255,0.90) 48%,
-                rgba(255,232,138,0.62) 62%,
+                rgba(255, 255, 255, 0.12) 18%,
+                rgba(255, 255, 255, 0.88) 48%,
+                rgba(255, 245, 180, 0.58) 62%,
+                rgba(255, 255, 255, 0.14) 78%,
                 transparent 100%
             );
 
+        filter: blur(0.3px);
         mix-blend-mode: screen;
 
         transform:
-            translateX(-170%)
-            skewX(-20deg);
+            translateX(-150%)
+            skewX(-22deg);
 
         animation:
-            eplWinnerLogoShine_{match_id}
-            3.5s
+            wcWinnerLogoShine_{match_id}
+            3.2s
             ease-in-out
             infinite;
     }}
 
     @media (max-width: 768px) {{
-        .epl-winner-logo-overlay-{match_id} {{
+        .wc-winner-logo-overlay-{match_id} {{
             top: -25px;
             right: -20px;
 
             width: 84px;
-            height: 78px;
-        }}
-
-        .epl-winner-logo-frame-{match_id} {{
-            top: 25px;
-            right: 20px;
-
-            width: 52px;
             height: 52px;
-
-            border-radius: 16px;
         }}
 
-        .epl-winner-logo-img-{match_id} {{
-            width: 41px;
-            height: 41px;
+        .wc-winner-logo-frame-{match_id} {{
+            left: 8px;
+            top: 7px;
 
-            max-width: 41px;
-            max-height: 41px;
+            max-width: 66px;
+            max-height: 39px;
+
+            border-radius: 6px;
+        }}
+
+        .wc-winner-logo-img-{match_id} {{
+            max-width: 66px;
+            max-height: 39px;
+        }}
+
+        .wc-winner-logo-shine-{match_id} {{
+            width: 48%;
         }}
     }}
 
     @media (max-width: 390px) {{
-        .epl-winner-logo-overlay-{match_id} {{
+        .wc-winner-logo-overlay-{match_id} {{
             top: 15px;
             right: 10px;
 
             width: 78px;
-            height: 56px;
+            height: 50px;
         }}
 
-        .epl-winner-logo-frame-{match_id} {{
-            top: 0;
-            right: 10px;
-
-            width: 48px;
-            height: 48px;
-
-            border-radius: 15px;
+        .wc-winner-logo-frame-{match_id} {{
+            max-width: 61px;
+            max-height: 36px;
         }}
 
-        .epl-winner-logo-img-{match_id} {{
-            width: 38px;
-            height: 38px;
-
-            max-width: 38px;
-            max-height: 38px;
+        .wc-winner-logo-img-{match_id} {{
+            max-width: 61px;
+            max-height: 36px;
         }}
     }}
     </style>
 
-    <div
-        class="epl-winner-logo-overlay-{match_id}"
-        title="Đội thắng: {safe_winner_name}"
-        aria-label="Đội thắng: {safe_winner_name}"
-    >
-        <div
-            class="epl-winner-logo-frame-{match_id}"
-        >
-            <img
-                class="epl-winner-logo-img-{match_id}"
-                src="{safe_logo_src}"
-                alt="Logo {safe_winner_name}"
-            >
-
-            <div
-                class="epl-winner-logo-shine-{match_id}"
-            ></div>
+    <div class="wc-winner-logo-overlay-{match_id}" title="Đội thắng: {safe_winner_name}">
+        <div class="wc-winner-logo-frame-{match_id}">
+            <img class="wc-winner-logo-img-{match_id}" src="{safe_logo_src}" alt="Logo {safe_winner_name}" />
+            <div class="wc-winner-logo-shine-{match_id}"></div>
         </div>
     </div>
     """
 
     st.markdown(
-        textwrap.dedent(
-            logo_html
-        ).strip(),
+        textwrap.dedent(logo_html).strip(),
         unsafe_allow_html=True
     )
 
