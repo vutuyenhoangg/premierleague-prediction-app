@@ -6515,27 +6515,24 @@ def render_winner_logo_overlay(row):
 
     .wc-winner-logo-frame-{match_id} {{
         position: absolute;
-
+    
         left: 11px;
         top: 8px;
-
+    
         width: fit-content;
         height: fit-content;
-
+    
         max-width: 98px;
-        max-height: 56px;
-
-        border-radius: 7px;
-        border: 1px solid rgba(255, 255, 255, 0.78);
-        background: rgba(255, 255, 255, 0.94);
-
-        box-shadow:
-            0 12px 26px rgba(15, 23, 42, 0.18),
-            0 0 0 1px rgba(15, 23, 42, 0.06);
-
-        overflow: hidden;
-        transform-origin: left center;
-
+        max-height: 64px;
+    
+        border: none;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+    
+        overflow: visible;
+        transform-origin: center;
+    
         animation:
             wcWinnerLogoWave_{match_id}
             2.4s
@@ -6545,53 +6542,25 @@ def render_winner_logo_overlay(row):
 
     .wc-winner-logo-img-{match_id} {{
         display: block;
-
+    
         width: auto;
         height: auto;
-
-        max-width: 98px;
-        max-height: 56px;
-
+    
+        max-width: 72px;
+        max-height: 64px;
+    
         object-fit: contain;
-        object-position: left center;
-    }}
-
-    .wc-winner-logo-shine-{match_id} {{
-        position: absolute;
-
-        top: -25%;
-        left: 0;
-
-        width: 44%;
-        height: 150%;
-
-        pointer-events: none;
-
-        background:
-            linear-gradient(
-                90deg,
-                transparent 0%,
-                rgba(255, 255, 255, 0.12) 18%,
-                rgba(255, 255, 255, 0.88) 48%,
-                rgba(255, 245, 180, 0.58) 62%,
-                rgba(255, 255, 255, 0.14) 78%,
-                transparent 100%
+        object-position: center;
+    
+        filter:
+            drop-shadow(
+                0 8px 12px
+                rgba(15, 23, 42, 0.24)
             );
-
-        filter: blur(0.3px);
-        mix-blend-mode: screen;
-
-        transform:
-            translateX(-150%)
-            skewX(-22deg);
-
-        animation:
-            wcWinnerLogoShine_{match_id}
-            3.2s
-            ease-in-out
-            infinite;
     }}
-
+    .wc-winner-logo-shine-{match_id} {{
+        display: none;
+    }}
     @media (max-width: 768px) {{
         .wc-winner-logo-overlay-{match_id} {{
             top: -25px;
