@@ -5071,49 +5071,49 @@ def render_app_hero():
             '<div class="wc-hero-orb">EPL</div>'
         )
 
+    hero_html = (
+        '<div class="wc-hero">'
+            '<div class="wc-hero-grid">'
+                '<div>'
+                    '<div class="wc-eyebrow">'
+                        '⚽ PREMIER LEAGUE PREDICTION HUB'
+                    '</div>'
+
+                    '<div class="wc-hero-title">'
+                        'Premier League '
+                        f'<span class="wc-gold">{APP_SEASON_LABEL}</span>'
+                        '<br>'
+                        'Prediction Arena'
+                    '</div>'
+
+                    '<div class="wc-hero-subtitle">'
+                        f'{APP_TAGLINE}'
+                    '</div>'
+
+                    '<div class="wc-hero-actions">'
+                        '<div class="wc-pill">'
+                            'Bảng xếp hạng'
+                        '</div>'
+
+                        '<div class="wc-pill">'
+                            'Dự đoán tỉ số'
+                        '</div>'
+
+                        '<div class="wc-pill">'
+                            '38 vòng đấu'
+                        '</div>'
+                    '</div>'
+                '</div>'
+
+                '<div>'
+                    f'{hero_visual}'
+                '</div>'
+            '</div>'
+        '</div>'
+    )
+
     st.markdown(
-        f"""
-        <div class="wc-hero">
-            <div class="wc-hero-grid">
-                <div>
-                    <div class="wc-eyebrow">
-                        ⚽ Premier League Prediction Hub
-                    </div>
-
-                    <div class="wc-hero-title">
-                        Premier League
-                        <span class="wc-gold">
-                            {APP_SEASON_LABEL}
-                        </span>
-                        <br>
-                        Prediction Arena
-                    </div>
-
-                    <div class="wc-hero-subtitle">
-                        {APP_TAGLINE}
-                    </div>
-
-                    <div class="wc-hero-actions">
-                        <div class="wc-pill">
-                            Bảng xếp hạng
-                        </div>
-
-                        <div class="wc-pill">
-                            Dự đoán tỉ số
-                        </div>
-
-                        <div class="wc-pill">
-                            38 vòng đấu
-                        </div>
-                    </div>
-                </div>
-
-                <div>
-                    {hero_visual}
-                </div>
-            </div>
-        </div>
-        """,
+        hero_html,
         unsafe_allow_html=True
     )
 
