@@ -24,7 +24,6 @@ from streamlit_extras.stylable_container import stylable_container
 import secrets
 from streamlit_cookies_controller import CookieController
 import re
-import unicodedata
 from google import genai
 from google.genai import types
 import textwrap
@@ -6201,89 +6200,19 @@ def get_match_card_css(status_info, row=None):
     }}
     """
 
-TEAM_FLAG_FOLDER = "data/static/flags"
-TEAM_FLAG_FILE_EXTENSION = ".jpg"
-
-TEAM_FLAG_ASSET_OVERRIDES = {
-    # Tên đội trong DB -> file ảnh cờ thực tế của bạn
-
-    # Mỹ
-    "usa": "data/static/flags/usa.jpg",
-    "us": "data/static/flags/usa.jpg",
-    "united states": "data/static/flags/usa.jpg",
-    "united states of america": "data/static/flags/usa.jpg",
-
-    # Một số tên có thể phát sinh sau này
-    "korea republic": "data/static/flags/south-korea.jpg",
-    "south korea": "data/static/flags/south-korea.jpg",
-
-    "cote d ivoire": "data/static/flags/ivory-coast.jpg",
-    "cote divoire": "data/static/flags/ivory-coast.jpg",
-    "ivory coast": "data/static/flags/ivory-coast.jpg",
-
-    "ir iran": "data/static/flags/iran.jpg",
-    "iran": "data/static/flags/iran.jpg",
-}
-
-
-def normalize_flag_text(value) -> str:
-    """
-    Chuẩn hóa text để so sánh tên đội / vòng đấu ổn định hơn.
-    Ví dụ:
-    - Côte d'Ivoire -> cote d ivoire
-    - Round of 16 -> round of 16
-    """
-    if value is None:
-        return ""
-
-    try:
-        if pd.isna(value):
-            return ""
-    except TypeError:
-        pass
-
-    text = str(value).strip()
-
-    text = unicodedata.normalize("NFD", text)
-    text = "".join(
-        char for char in text
-        if unicodedata.category(char) != "Mn"
-    )
-
-    text = text.lower()
-    text = re.sub(r"[^a-z0-9]+", " ", text)
-    text = re.sub(r"\s+", " ", text).strip()
-
-    return text
-
-
-def make_flag_slug(value) -> str:
-    """
-    Chuyển tên đội thành tên file.
-    Ví dụ:
-    - France -> france
-    - Switzerland -> switzerland
-    - United States -> united-states
-    """
-    text = normalize_flag_text(value)
-
-    if not text:
-        return ""
-
-    return text.replace(" ", "-")
-
-
 def local_asset_exists(asset_path: str) -> bool:
     """
     Kiểm tra file ảnh local có tồn tại không.
-    Nếu thiếu ảnh thì không render cờ, tránh ảnh vỡ trong card.
+    Nếu thiếu ảnh thì không render logo, tránh ảnh vỡ trong card.
     """
     if not asset_path:
         return False
 
     asset_path = str(asset_path).strip()
 
-    if asset_path.startswith(("http://", "https://", "data:")):
+    if asset_path.startswith(
+        ("http://", "https://", "data:")
+    ):
         return True
 
     normalized_path = asset_path.replace("\\", "/")
@@ -6294,391 +6223,489 @@ def local_asset_exists(asset_path: str) -> bool:
     if raw_path.is_absolute():
         candidate_paths.append(raw_path)
     else:
-        candidate_paths.append(BASE_DIR / raw_path)
+        candidate_paths.append(
+            BASE_DIR / raw_path
+        )
 
-        if normalized_path.startswith("data/static/"):
+        if normalized_path.startswith(
+            "data/static/"
+        ):
             candidate_paths.append(
-                BASE_DIR / normalized_path.replace(
+                BASE_DIR
+                / normalized_path.replace(
                     "data/static/",
                     "static/",
                     1
                 )
             )
 
-        candidate_paths.append(BASE_DIR / "static" / raw_path.name)
+        candidate_paths.append(
+            BASE_DIR
+            / "static"
+            / raw_path.name
+        )
 
     return any(
-        candidate_path.exists() and candidate_path.is_file()
+        candidate_path.exists()
+        and candidate_path.is_file()
         for candidate_path in candidate_paths
     )
 
 
-def is_round_of_16_or_later(row) -> bool:
+def get_winner_team_display_name(row) -> str:
     """
-    Chỉ cho hiện cờ từ Round of 16 trở đi.
-    Không hiện ở vòng bảng hoặc Round of 32.
-    """
-    if row is None:
-        return False
-
-    round_text = normalize_flag_text(row.get("round_name"))
-
-    if not round_text:
-        return False
-
-    excluded_keywords = [
-        "group",
-        "vong bang",
-        "round of 32",
-        "round 32",
-        "last 32"
-    ]
-
-    if any(keyword in round_text for keyword in excluded_keywords):
-        return False
-
-    included_keywords = [
-        "round of 16",
-        "round 16",
-        "last 16",
-        "vong 16",
-        "vong 1 8",
-
-        "quarter final",
-        "quarterfinal",
-        "quarter finals",
-        "quarterfinals",
-        "tu ket",
-
-        "semi final",
-        "semifinal",
-        "semi finals",
-        "semifinals",
-        "ban ket",
-
-        "third place",
-        "3rd place",
-        "3rd place playoff",
-        "third place playoff",
-        "third place play off",
-        "bronze",
-        "tranh hang 3",
-        "tranh hang ba",
-
-        "final",
-        "finals",
-        "chung ket"
-    ]
-
-    return any(keyword in round_text for keyword in included_keywords)
-
-
-def get_winner_team_name_for_flag(row) -> str:
-    """
-    Lấy tên đội thắng chung cuộc.
-    Ưu tiên winner_team_name đã lưu trong DB.
-    Nếu thiếu thì fallback theo winner_team_id.
+    Lấy tên đội thắng để dùng cho alt/title của logo.
     """
     if row is None:
         return ""
 
-    winner_team_id = to_optional_int(row.get("winner_team_id"))
+    display_name = row.get(
+        "winner_team_display_name"
+    )
 
-    if winner_team_id is None:
-        return ""
+    if (
+        display_name is not None
+        and not pd.isna(display_name)
+        and str(display_name).strip()
+    ):
+        return str(display_name).strip()
 
-    winner_name = row.get("winner_team_name")
+    winner_name = row.get(
+        "winner_team_name"
+    )
 
-    if winner_name is not None and not pd.isna(winner_name):
-        winner_name = str(winner_name).strip()
+    if (
+        winner_name is not None
+        and not pd.isna(winner_name)
+        and str(winner_name).strip()
+    ):
+        return str(winner_name).strip()
 
-        if winner_name:
-            return winner_name
+    winner_team_id = to_optional_int(
+        row.get("winner_team_id")
+    )
 
-    home_team_id = to_optional_int(row.get("home_team_id"))
-    away_team_id = to_optional_int(row.get("away_team_id"))
+    home_team_id = to_optional_int(
+        row.get("home_team_id")
+    )
 
-    if winner_team_id == home_team_id:
-        return str(row.get("home_team_name") or "").strip()
+    away_team_id = to_optional_int(
+        row.get("away_team_id")
+    )
 
-    if winner_team_id == away_team_id:
-        return str(row.get("away_team_name") or "").strip()
+    if (
+        winner_team_id is not None
+        and winner_team_id == home_team_id
+    ):
+        return str(
+            row.get("home_team_name") or ""
+        ).strip()
+
+    if (
+        winner_team_id is not None
+        and winner_team_id == away_team_id
+    ):
+        return str(
+            row.get("away_team_name") or ""
+        ).strip()
 
     return ""
 
 
-def get_winner_flag_asset_path(row) -> str:
+def get_winner_team_logo_path(row) -> str:
     """
-    Trả về đường dẫn file cờ đội thắng.
-    Bộ ảnh hiện tại của bạn đang dùng .jpg.
+    Lấy logo của đội thắng từ metadata đã JOIN trong load_matches().
     """
-    winner_name = get_winner_team_name_for_flag(row)
-
-    if not winner_name:
+    if row is None:
         return ""
 
-    normalized_winner_name = normalize_flag_text(winner_name)
+    direct_logo_path = row.get(
+        "winner_team_logo_path"
+    )
 
-    if normalized_winner_name in TEAM_FLAG_ASSET_OVERRIDES:
-        return TEAM_FLAG_ASSET_OVERRIDES[normalized_winner_name]
+    if (
+        direct_logo_path is not None
+        and not pd.isna(direct_logo_path)
+        and str(direct_logo_path).strip()
+    ):
+        return str(direct_logo_path).strip()
 
-    flag_slug = make_flag_slug(winner_name)
+    winner_team_id = to_optional_int(
+        row.get("winner_team_id")
+    )
 
-    if not flag_slug:
+    home_team_id = to_optional_int(
+        row.get("home_team_id")
+    )
+
+    away_team_id = to_optional_int(
+        row.get("away_team_id")
+    )
+
+    if winner_team_id is None:
         return ""
 
-    return f"{TEAM_FLAG_FOLDER}/{flag_slug}{TEAM_FLAG_FILE_EXTENSION}"
+    if winner_team_id == home_team_id:
+        logo_path = row.get(
+            "home_team_logo_path"
+        )
+
+    elif winner_team_id == away_team_id:
+        logo_path = row.get(
+            "away_team_logo_path"
+        )
+
+    else:
+        return ""
+
+    if (
+        logo_path is None
+        or pd.isna(logo_path)
+    ):
+        return ""
+
+    return str(logo_path).strip()
 
 
-def should_render_winner_flag(row) -> bool:
+def should_render_winner_logo(row) -> bool:
     """
-    Điều kiện hiển thị cờ:
-    - Trận đã có kết quả
-    - Từ Round of 16 trở đi
-    - Có đội thắng chung cuộc
-    - Có file ảnh cờ
+    Chỉ hiển thị logo khi:
+    - Trận đã kết thúc.
+    - Có đội thắng, không phải trận hòa.
+    - Metadata có logo hợp lệ.
     """
     if row is None:
         return False
 
-    if not to_bool(row.get("is_finished")):
+    if not to_bool(
+        row.get("is_finished")
+    ):
         return False
 
-    if not is_round_of_16_or_later(row):
+    if (
+        to_optional_int(
+            row.get("winner_team_id")
+        )
+        is None
+    ):
         return False
 
-    if to_optional_int(row.get("winner_team_id")) is None:
+    logo_path = get_winner_team_logo_path(
+        row
+    )
+
+    if not logo_path:
         return False
 
-    flag_asset_path = get_winner_flag_asset_path(row)
-
-    if not flag_asset_path:
-        return False
-
-    return local_asset_exists(flag_asset_path)
+    return local_asset_exists(
+        logo_path
+    )
 
 
-def render_winner_flag_overlay(row):
+def render_winner_logo_overlay(row):
     """
-    Render 1 lá cờ đội thắng trong card.
+    Hiển thị logo đội thắng tại đúng vùng góc phải
+    từng dùng cho cờ đội thắng của app World Cup.
 
-    Không ảnh hưởng layout:
-    - dùng position:absolute
-    - dùng pointer-events:none để không chặn click nút AI / nút ghi bàn / form
-    - giữ đúng tỉ lệ thật của từng lá cờ bằng max-width/max-height
+    Overlay không chiếm diện tích card và không chặn thao tác.
     """
-    if not should_render_winner_flag(row):
+    if not should_render_winner_logo(
+        row
+    ):
         return
 
-    match_id = int(row.get("match_id"))
-    flag_asset_path = get_winner_flag_asset_path(row)
-    flag_src = resolve_asset_src(flag_asset_path)
+    match_id = int(
+        row.get("match_id")
+    )
 
-    winner_name = get_winner_team_name_for_flag(row)
-    safe_winner_name = html.escape(winner_name)
+    logo_path = get_winner_team_logo_path(
+        row
+    )
 
-    flag_html = f"""
+    logo_src = resolve_asset_src(
+        logo_path
+    )
+
+    if not logo_src:
+        return
+
+    winner_name = (
+        get_winner_team_display_name(
+            row
+        )
+        or "Đội thắng"
+    )
+
+    safe_logo_src = html.escape(
+        logo_src,
+        quote=True
+    )
+
+    safe_winner_name = html.escape(
+        winner_name,
+        quote=True
+    )
+
+    logo_html = f"""
     <style>
-    @keyframes wcWinnerFlagWave_{match_id} {{
+    @keyframes eplWinnerLogoFloat_{match_id} {{
         0% {{
             transform:
-                perspective(520px)
-                rotateY(-9deg)
-                skewY(-1deg)
-                translateY(0);
-            filter: brightness(1.02) saturate(1.08);
+                translateY(0)
+                rotate(-2deg)
+                scale(1);
         }}
 
         50% {{
             transform:
-                perspective(520px)
-                rotateY(9deg)
-                skewY(1.15deg)
-                translateY(-1px);
-            filter: brightness(1.08) saturate(1.14);
+                translateY(-2px)
+                rotate(2deg)
+                scale(1.035);
         }}
 
         100% {{
             transform:
-                perspective(520px)
-                rotateY(-9deg)
-                skewY(-1deg)
-                translateY(0);
-            filter: brightness(1.02) saturate(1.08);
+                translateY(0)
+                rotate(-2deg)
+                scale(1);
         }}
     }}
 
-    @keyframes wcWinnerFlagShine_{match_id} {{
+    @keyframes eplWinnerLogoShine_{match_id} {{
         0% {{
-            transform: translateX(-150%) skewX(-22deg);
+            transform:
+                translateX(-170%)
+                skewX(-20deg);
             opacity: 0;
         }}
-    
-        18% {{
+
+        28% {{
             opacity: 0;
         }}
-    
-        38% {{
-            opacity: 0.75;
+
+        48% {{
+            opacity: 0.72;
         }}
-    
-        62% {{
-            opacity: 0.75;
+
+        68% {{
+            opacity: 0.72;
         }}
-    
-        82% {{
+
+        88% {{
             opacity: 0;
         }}
-    
+
         100% {{
-            transform: translateX(170%) skewX(-22deg);
+            transform:
+                translateX(190%)
+                skewX(-20deg);
             opacity: 0;
         }}
     }}
 
-    .wc-winner-flag-overlay-{match_id} {{
+    .epl-winner-logo-overlay-{match_id} {{
         position: absolute;
 
-        /* Desktop: vị trí vùng góc phải */
+        /*
+         * Giữ nguyên vùng neo góc phải
+         * của cờ đội thắng cũ.
+         */
         top: -30px;
         right: -15px;
 
         z-index: 3;
 
         width: 122px;
-        height: 72px;
+        height: 100px;
 
         pointer-events: none;
+    }}
+
+    .epl-winner-logo-frame-{match_id} {{
+        position: absolute;
+
+        top: 30px;
+        right: 15px;
+
+        width: 70px;
+        height: 70px;
 
         display: flex;
-        align-items: flex-start;
-        justify-content: flex-start;
+        align-items: center;
+        justify-content: center;
+
+        box-sizing: border-box;
+
+        border-radius: 21px;
+
+        border:
+            1px solid rgba(
+                245,
+                197,
+                66,
+                0.78
+            );
+
+        background:
+            radial-gradient(
+                circle at 35% 25%,
+                rgba(255,255,255,0.99),
+                rgba(248,250,252,0.95)
+            );
+
+        box-shadow:
+            0 13px 28px
+                rgba(15,23,42,0.19),
+
+            0 0 0 4px
+                rgba(245,197,66,0.10);
+
+        overflow: hidden;
+
+        transform-origin: center;
+
+        animation:
+            eplWinnerLogoFloat_{match_id}
+            2.8s
+            ease-in-out
+            infinite;
     }}
 
-    .wc-winner-flag-frame-{match_id} {{
-        position: absolute;
-        left: 11px;
-        top: 8px;
-    
-        width: fit-content;
-        height: fit-content;
-    
-        max-width: 98px;
-        max-height: 56px;
-    
-        border-radius: 7px;
-        border: 1px solid rgba(255, 255, 255, 0.78);
-        background: rgba(255, 255, 255, 0.94);
-    
-        box-shadow:
-            0 12px 26px rgba(15, 23, 42, 0.18),
-            0 0 0 1px rgba(15, 23, 42, 0.06);
-    
-        overflow: hidden;
-        transform-origin: left center;
-        animation: wcWinnerFlagWave_{match_id} 2.4s ease-in-out infinite;
-    }}
-    
-    .wc-winner-flag-img-{match_id} {{
+    .epl-winner-logo-img-{match_id} {{
         display: block;
-    
-        width: auto;
-        height: auto;
-        max-width: 98px;
+
+        width: 56px;
+        height: 56px;
+
+        max-width: 56px;
         max-height: 56px;
-    
+
         object-fit: contain;
-        object-position: left center;
+        object-position: center;
+
+        filter:
+            drop-shadow(
+                0 5px 7px
+                rgba(15,23,42,0.15)
+            );
     }}
-    
-    .wc-winner-flag-shine-{match_id} {{
+
+    .epl-winner-logo-shine-{match_id} {{
         position: absolute;
-        top: -25%;
+
+        top: -20%;
         left: 0;
-    
-        width: 44%;
-        height: 150%;
-    
+
+        width: 42%;
+        height: 140%;
+
         pointer-events: none;
-    
+
         background:
             linear-gradient(
                 90deg,
                 transparent 0%,
-                rgba(255, 255, 255, 0.12) 18%,
-                rgba(255, 255, 255, 0.88) 48%,
-                rgba(255, 245, 180, 0.58) 62%,
-                rgba(255, 255, 255, 0.14) 78%,
+                rgba(255,255,255,0.14) 18%,
+                rgba(255,255,255,0.90) 48%,
+                rgba(255,232,138,0.62) 62%,
                 transparent 100%
             );
-    
-        filter: blur(0.3px);
+
         mix-blend-mode: screen;
-    
-        transform: translateX(-150%) skewX(-22deg);
-        animation: wcWinnerFlagShine_{match_id} 3.2s ease-in-out infinite;
+
+        transform:
+            translateX(-170%)
+            skewX(-20deg);
+
+        animation:
+            eplWinnerLogoShine_{match_id}
+            3.5s
+            ease-in-out
+            infinite;
     }}
+
     @media (max-width: 768px) {{
-        .wc-winner-flag-overlay-{match_id} {{
-            /* Mobile: vị trí vùng góc phải */
+        .epl-winner-logo-overlay-{match_id} {{
             top: -25px;
             right: -20px;
 
             width: 84px;
-            height: 52px;
+            height: 78px;
         }}
 
-        .wc-winner-flag-frame-{match_id} {{
-            left: 8px;
-            top: 7px;
-        
-            max-width: 66px;
-            max-height: 39px;
-        
-            border-radius: 6px;
+        .epl-winner-logo-frame-{match_id} {{
+            top: 25px;
+            right: 20px;
+
+            width: 52px;
+            height: 52px;
+
+            border-radius: 16px;
         }}
-        
-        .wc-winner-flag-img-{match_id} {{
-            max-width: 66px;
-            max-height: 39px;
-        }}
-        
-        .wc-winner-flag-shine-{match_id} {{
-            width: 48%;
+
+        .epl-winner-logo-img-{match_id} {{
+            width: 41px;
+            height: 41px;
+
+            max-width: 41px;
+            max-height: 41px;
         }}
     }}
 
     @media (max-width: 390px) {{
-        .wc-winner-flag-overlay-{match_id} {{
+        .epl-winner-logo-overlay-{match_id} {{
             top: 15px;
             right: 10px;
 
             width: 78px;
-            height: 50px;
+            height: 56px;
         }}
 
-        .wc-winner-flag-frame-{match_id} {{
-            max-width: 61px;
-            max-height: 36px;
+        .epl-winner-logo-frame-{match_id} {{
+            top: 0;
+            right: 10px;
+
+            width: 48px;
+            height: 48px;
+
+            border-radius: 15px;
         }}
-        
-        .wc-winner-flag-img-{match_id} {{
-            max-width: 61px;
-            max-height: 36px;
+
+        .epl-winner-logo-img-{match_id} {{
+            width: 38px;
+            height: 38px;
+
+            max-width: 38px;
+            max-height: 38px;
         }}
     }}
     </style>
 
-    <div class="wc-winner-flag-overlay-{match_id}" title="Đội thắng chung cuộc: {safe_winner_name}">
-        <div class="wc-winner-flag-frame-{match_id}">
-            <img class="wc-winner-flag-img-{match_id}" src="{flag_src}" alt="Cờ {safe_winner_name}" />
-            <div class="wc-winner-flag-shine-{match_id}"></div>
+    <div
+        class="epl-winner-logo-overlay-{match_id}"
+        title="Đội thắng: {safe_winner_name}"
+        aria-label="Đội thắng: {safe_winner_name}"
+    >
+        <div
+            class="epl-winner-logo-frame-{match_id}"
+        >
+            <img
+                class="epl-winner-logo-img-{match_id}"
+                src="{safe_logo_src}"
+                alt="Logo {safe_winner_name}"
+            >
+
+            <div
+                class="epl-winner-logo-shine-{match_id}"
+            ></div>
         </div>
     </div>
     """
 
     st.markdown(
-        textwrap.dedent(flag_html).strip(),
+        textwrap.dedent(
+            logo_html
+        ).strip(),
         unsafe_allow_html=True
     )
 
@@ -6961,6 +6988,7 @@ def check_required_app_tables():
     table_names = set(tables["name"].tolist())
 
     required_tables = {
+        "teams",
         "matches",
         "users",
         "predictions",
@@ -6971,13 +6999,49 @@ def check_required_app_tables():
         "final_poster_popup_views"
     }
 
-    missing_tables = sorted(required_tables - table_names)
+    missing_tables = sorted(
+        required_tables - table_names
+    )
 
     if missing_tables:
         st.error(
             "Database đang thiếu bảng bắt buộc: "
             + ", ".join(missing_tables)
-            + ". Hãy bật RUN_DB_MIGRATIONS=true một lần để khởi tạo schema."
+            + ". Hãy kiểm tra lại schema Supabase."
+        )
+        st.stop()
+
+    team_columns = read_sql(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'teams'
+        """
+    )
+
+    actual_team_columns = set(
+        team_columns["column_name"].tolist()
+    )
+
+    required_team_columns = {
+        "team_id",
+        "team_name",
+        "logo_path",
+        "stadium_name",
+        "stadium_city"
+    }
+
+    missing_team_columns = sorted(
+        required_team_columns
+        - actual_team_columns
+    )
+
+    if missing_team_columns:
+        st.error(
+            "Bảng `teams` đang thiếu cột metadata: "
+            + ", ".join(missing_team_columns)
+            + ". Hãy chạy câu lệnh ALTER TABLE trước khi mở app."
         )
         st.stop()
 
@@ -7766,9 +7830,6 @@ def load_matches() -> pd.DataFrame:
         SELECT
             m.*,
 
-            home_team.short_name
-                AS home_team_short_name,
-
             home_team.logo_path
                 AS home_team_logo_path,
 
@@ -7778,9 +7839,6 @@ def load_matches() -> pd.DataFrame:
             home_team.stadium_city
                 AS home_team_stadium_city,
 
-            away_team.short_name
-                AS away_team_short_name,
-
             away_team.logo_path
                 AS away_team_logo_path,
 
@@ -7789,6 +7847,29 @@ def load_matches() -> pd.DataFrame:
 
             away_team.stadium_city
                 AS away_team_stadium_city,
+
+            CASE
+                WHEN m.winner_team_id = m.home_team_id
+                    THEN home_team.logo_path
+
+                WHEN m.winner_team_id = m.away_team_id
+                    THEN away_team.logo_path
+
+                ELSE NULL
+            END AS winner_team_logo_path,
+
+            COALESCE(
+                NULLIF(TRIM(m.winner_team_name), ''),
+                CASE
+                    WHEN m.winner_team_id = m.home_team_id
+                        THEN m.home_team_name
+
+                    WHEN m.winner_team_id = m.away_team_id
+                        THEN m.away_team_name
+
+                    ELSE NULL
+                END
+            ) AS winner_team_display_name,
 
             COALESCE(
                 NULLIF(TRIM(m.venue), ''),
@@ -9853,413 +9934,69 @@ def render_match_title(
     match_id: int,
     row=None
 ):
-    row = row if row is not None else {}
-
+    """
+    Giữ nguyên match title theo thiết kế cũ.
+    Không hiển thị logo câu lạc bộ cạnh tên đội.
+    """
     home_display = (
-        row.get("home_team_short_name")
-        or home_name
-        or "TBD"
+        "TBD"
+        if home_name is None or pd.isna(home_name)
+        else str(home_name).strip()
     )
 
     away_display = (
-        row.get("away_team_short_name")
-        or away_name
-        or "TBD"
+        "TBD"
+        if away_name is None or pd.isna(away_name)
+        else str(away_name).strip()
     )
 
-    home_display = str(home_display).strip()
-    away_display = str(away_display).strip()
-
-    home_logo_path = str(
-        row.get("home_team_logo_path")
-        or ""
-    ).strip()
-
-    away_logo_path = str(
-        row.get("away_team_logo_path")
-        or ""
-    ).strip()
-
-    home_logo_src = (
-        resolve_asset_src(home_logo_path)
-        if home_logo_path
-        else ""
-    )
-
-    away_logo_src = (
-        resolve_asset_src(away_logo_path)
-        if away_logo_path
-        else ""
-    )
-
-    safe_home_name = html.escape(
+    safe_home = html.escape(
         home_display,
         quote=True
     )
 
-    safe_away_name = html.escape(
+    safe_away = html.escape(
         away_display,
         quote=True
     )
 
-    safe_home_logo_src = html.escape(
-        home_logo_src,
-        quote=True
-    )
-
-    safe_away_logo_src = html.escape(
-        away_logo_src,
-        quote=True
-    )
-
-    winner_team_id = to_optional_int(
-        row.get("winner_team_id")
-    )
-
-    home_team_id = to_optional_int(
-        row.get("home_team_id")
-    )
-
-    away_team_id = to_optional_int(
-        row.get("away_team_id")
-    )
-
-    home_winner_class = (
-        " epl-team-winner"
-        if (
-            winner_team_id is not None
-            and winner_team_id == home_team_id
-        )
-        else ""
-    )
-
-    away_winner_class = (
-        " epl-team-winner"
-        if (
-            winner_team_id is not None
-            and winner_team_id == away_team_id
-        )
-        else ""
-    )
-
-    def build_logo_html(
-        logo_src: str,
-        team_name: str
-    ) -> str:
-        if not logo_src:
-            return (
-                '<div class="epl-team-logo-fallback">'
-                '⚽'
-                '</div>'
-            )
-
-        return (
-            f'<img '
-            f'class="epl-team-logo" '
-            f'src="{logo_src}" '
-            f'alt="{team_name} logo">'
+    with stylable_container(
+        key=f"match_title_desktop_{match_id}",
+        css_styles="""
+        {
+            display: block;
+        }
+        """
+    ):
+        st.subheader(
+            f"{home_display} vs {away_display}"
         )
 
-    home_logo_html = build_logo_html(
-        safe_home_logo_src,
-        safe_home_name
+    mobile_title_html = (
+        f'<div '
+        f'class="wc-match-title-mobile" '
+        f'aria-label="{safe_home} vs {safe_away}">'
+
+        f'<div class="wc-match-team">'
+        f'{safe_home}'
+        f'</div>'
+
+        f'<div class="wc-match-vs">'
+        f'vs'
+        f'</div>'
+
+        f'<div class="wc-match-team">'
+        f'{safe_away}'
+        f'</div>'
+
+        f'</div>'
     )
-
-    away_logo_html = build_logo_html(
-        safe_away_logo_src,
-        safe_away_name
-    )
-
-    matchup_html = f"""
-    <style>
-    .epl-matchup-title-{match_id} {{
-        width: 100%;
-        max-width: 760px;
-
-        display: grid;
-        grid-template-columns:
-            minmax(0, 1fr)
-            auto
-            minmax(0, 1fr);
-
-        align-items: center;
-        gap: 16px;
-
-        margin: 1px 0 11px 0;
-    }}
-
-    .epl-matchup-title-{match_id}
-    .epl-team-block {{
-        min-width: 0;
-
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }}
-
-    .epl-matchup-title-{match_id}
-    .epl-team-home {{
-        justify-content: flex-end;
-        text-align: right;
-    }}
-
-    .epl-matchup-title-{match_id}
-    .epl-team-away {{
-        justify-content: flex-start;
-        text-align: left;
-    }}
-
-    .epl-matchup-title-{match_id}
-    .epl-team-logo-shell {{
-        position: relative;
-
-        width: 58px;
-        height: 58px;
-
-        min-width: 58px;
-        flex: 0 0 58px;
-
-        display: flex;
-        align-items: center;
-        justify-content: center;
-
-        border-radius: 18px;
-
-        background:
-            radial-gradient(
-                circle at 35% 25%,
-                rgba(255,255,255,0.98),
-                rgba(248,250,252,0.94)
-            );
-
-        border:
-            1px solid rgba(15,23,42,0.10);
-
-        box-shadow:
-            0 9px 22px rgba(15,23,42,0.10);
-
-        box-sizing: border-box;
-    }}
-
-    .epl-matchup-title-{match_id}
-    .epl-team-logo {{
-        display: block;
-
-        width: 44px;
-        height: 44px;
-
-        max-width: 44px;
-        max-height: 44px;
-
-        object-fit: contain;
-
-        filter:
-            drop-shadow(
-                0 4px 6px rgba(15,23,42,0.13)
-            );
-    }}
-
-    .epl-matchup-title-{match_id}
-    .epl-team-logo-fallback {{
-        font-size: 24px;
-        line-height: 1;
-    }}
-
-    .epl-matchup-title-{match_id}
-    .epl-team-name {{
-        min-width: 0;
-
-        color: #07111F;
-
-        font-size: clamp(21px, 2vw, 29px);
-        font-weight: 950;
-        line-height: 1.08;
-        letter-spacing: -0.035em;
-
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }}
-
-    .epl-matchup-title-{match_id}
-    .epl-versus {{
-        display: flex;
-        align-items: center;
-        justify-content: center;
-
-        min-width: 42px;
-        height: 32px;
-
-        padding: 0 9px;
-
-        border-radius: 999px;
-
-        background:
-            linear-gradient(
-                135deg,
-                #07111F,
-                #123C69
-            );
-
-        color: #F5C542;
-
-        font-size: 11px;
-        font-weight: 950;
-        letter-spacing: 0.08em;
-
-        box-shadow:
-            0 7px 16px rgba(7,17,31,0.18);
-    }}
-
-    .epl-matchup-title-{match_id}
-    .epl-team-winner
-    .epl-team-logo-shell {{
-        border-color:
-            rgba(245,197,66,0.90);
-
-        box-shadow:
-            0 0 0 4px rgba(245,197,66,0.12),
-            0 10px 25px rgba(245,197,66,0.22);
-    }}
-
-    .epl-matchup-title-{match_id}
-    .epl-team-winner
-    .epl-team-logo-shell::after {{
-        content: "✓";
-
-        position: absolute;
-        right: -5px;
-        bottom: -5px;
-
-        width: 20px;
-        height: 20px;
-
-        display: flex;
-        align-items: center;
-        justify-content: center;
-
-        border-radius: 999px;
-
-        background: #F5C542;
-        color: #07111F;
-
-        border: 2px solid #FFFFFF;
-
-        font-size: 11px;
-        font-weight: 950;
-
-        box-shadow:
-            0 5px 12px rgba(15,23,42,0.18);
-    }}
-
-    @media (max-width: 768px) {{
-        .epl-matchup-title-{match_id} {{
-            grid-template-columns:
-                minmax(0, 1fr)
-                34px
-                minmax(0, 1fr);
-
-            gap: 7px;
-            max-width: 100%;
-            margin-bottom: 10px;
-        }}
-
-        .epl-matchup-title-{match_id}
-        .epl-team-block {{
-            flex-direction: column;
-            justify-content: flex-start;
-            gap: 6px;
-
-            text-align: center;
-        }}
-
-        .epl-matchup-title-{match_id}
-        .epl-team-home {{
-            flex-direction: column;
-        }}
-
-        .epl-matchup-title-{match_id}
-        .epl-team-away {{
-            flex-direction: column;
-        }}
-
-        .epl-matchup-title-{match_id}
-        .epl-team-logo-shell {{
-            width: 48px;
-            height: 48px;
-
-            min-width: 48px;
-            flex-basis: 48px;
-
-            border-radius: 15px;
-        }}
-
-        .epl-matchup-title-{match_id}
-        .epl-team-logo {{
-            width: 37px;
-            height: 37px;
-
-            max-width: 37px;
-            max-height: 37px;
-        }}
-
-        .epl-matchup-title-{match_id}
-        .epl-team-name {{
-            width: 100%;
-            max-width: 100%;
-
-            font-size: clamp(13px, 3.7vw, 15px);
-            line-height: 1.12;
-
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }}
-
-        .epl-matchup-title-{match_id}
-        .epl-versus {{
-            min-width: 32px;
-            width: 32px;
-            height: 26px;
-
-            padding: 0;
-
-            font-size: 8px;
-        }}
-    }}
-    </style>
-
-    <div class="epl-matchup-title-{match_id}">
-        <div class="epl-team-block epl-team-home{home_winner_class}">
-            <div class="epl-team-name">
-                {safe_home_name}
-            </div>
-
-            <div class="epl-team-logo-shell">
-                {home_logo_html}
-            </div>
-        </div>
-
-        <div class="epl-versus">
-            VS
-        </div>
-
-        <div class="epl-team-block epl-team-away{away_winner_class}">
-            <div class="epl-team-logo-shell">
-                {away_logo_html}
-            </div>
-
-            <div class="epl-team-name">
-                {safe_away_name}
-            </div>
-        </div>
-    </div>
-    """
 
     if hasattr(st, "html"):
-        st.html(matchup_html)
+        st.html(mobile_title_html)
     else:
         st.markdown(
-            matchup_html,
+            mobile_title_html,
             unsafe_allow_html=True
         )
 
@@ -11743,6 +11480,7 @@ def render_match_card(
         css_styles=card_css
     ):
         render_status_badge(status_info, row=row)
+        render_winner_logo_overlay(row)
     
         top_left, top_right = st.columns([3, 1])
 
