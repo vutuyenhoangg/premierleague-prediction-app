@@ -7756,18 +7756,67 @@ def logout_user():
 # 6. DATA LOADING
 # ============================================================
 
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(
+    ttl=30,
+    show_spinner=False
+)
 def load_matches() -> pd.DataFrame:
     df = read_sql(
         """
-        SELECT *
-        FROM matches
-        ORDER BY kickoff_time_utc
+        SELECT
+            m.*,
+
+            home_team.short_name
+                AS home_team_short_name,
+
+            home_team.logo_path
+                AS home_team_logo_path,
+
+            home_team.stadium_name
+                AS home_team_stadium_name,
+
+            home_team.stadium_city
+                AS home_team_stadium_city,
+
+            away_team.short_name
+                AS away_team_short_name,
+
+            away_team.logo_path
+                AS away_team_logo_path,
+
+            away_team.stadium_name
+                AS away_team_stadium_name,
+
+            away_team.stadium_city
+                AS away_team_stadium_city,
+
+            COALESCE(
+                NULLIF(TRIM(m.venue), ''),
+                home_team.stadium_name
+            ) AS display_venue,
+
+            COALESCE(
+                NULLIF(TRIM(m.city), ''),
+                home_team.stadium_city
+            ) AS display_city
+
+        FROM matches AS m
+
+        LEFT JOIN teams AS home_team
+          ON home_team.team_id = m.home_team_id
+
+        LEFT JOIN teams AS away_team
+          ON away_team.team_id = m.away_team_id
+
+        ORDER BY m.kickoff_time_utc
         """
     )
 
     if df.empty:
         return df
+
+    df["venue"] = df["display_venue"]
+    df["city"] = df["display_city"]
 
     df["kickoff_time_utc_dt"] = pd.to_datetime(
         df["kickoff_time_utc"],
@@ -7781,12 +7830,13 @@ def load_matches() -> pd.DataFrame:
             errors="coerce"
         ).dt.date
     else:
-        df["kickoff_date_filter"] = df["kickoff_time_utc_dt"].dt.tz_convert(
-            "Asia/Ho_Chi_Minh"
-        ).dt.date
+        df["kickoff_date_filter"] = (
+            df["kickoff_time_utc_dt"]
+            .dt.tz_convert("Asia/Ho_Chi_Minh")
+            .dt.date
+        )
 
     return df
-
 
 @st.cache_data(ttl=30, show_spinner=False)
 def load_users() -> pd.DataFrame:
@@ -9803,68 +9853,413 @@ def render_match_title(
     match_id: int,
     row=None
 ):
-    """
-    Hiển thị tiêu đề trận đấu EPL trên desktop và mobile.
-    """
+    row = row if row is not None else {}
+
     home_display = (
-        "TBD"
-        if home_name is None or pd.isna(home_name)
-        else str(home_name).strip()
+        row.get("home_team_short_name")
+        or home_name
+        or "TBD"
     )
 
     away_display = (
-        "TBD"
-        if away_name is None or pd.isna(away_name)
-        else str(away_name).strip()
+        row.get("away_team_short_name")
+        or away_name
+        or "TBD"
     )
 
-    safe_home = html.escape(
+    home_display = str(home_display).strip()
+    away_display = str(away_display).strip()
+
+    home_logo_path = str(
+        row.get("home_team_logo_path")
+        or ""
+    ).strip()
+
+    away_logo_path = str(
+        row.get("away_team_logo_path")
+        or ""
+    ).strip()
+
+    home_logo_src = (
+        resolve_asset_src(home_logo_path)
+        if home_logo_path
+        else ""
+    )
+
+    away_logo_src = (
+        resolve_asset_src(away_logo_path)
+        if away_logo_path
+        else ""
+    )
+
+    safe_home_name = html.escape(
         home_display,
         quote=True
     )
 
-    safe_away = html.escape(
+    safe_away_name = html.escape(
         away_display,
         quote=True
     )
 
-    with stylable_container(
-        key=f"match_title_desktop_{match_id}",
-        css_styles="""
-        {
-            display: block;
-        }
-        """
-    ):
-        st.subheader(
-            f"{home_display} vs {away_display}"
-        )
-
-    mobile_title_html = (
-        f'<div '
-        f'class="wc-match-title-mobile" '
-        f'aria-label="{safe_home} vs {safe_away}">'
-
-        f'<div class="wc-match-team">'
-        f'{safe_home}'
-        f'</div>'
-
-        f'<div class="wc-match-vs">'
-        f'vs'
-        f'</div>'
-
-        f'<div class="wc-match-team">'
-        f'{safe_away}'
-        f'</div>'
-
-        f'</div>'
+    safe_home_logo_src = html.escape(
+        home_logo_src,
+        quote=True
     )
 
+    safe_away_logo_src = html.escape(
+        away_logo_src,
+        quote=True
+    )
+
+    winner_team_id = to_optional_int(
+        row.get("winner_team_id")
+    )
+
+    home_team_id = to_optional_int(
+        row.get("home_team_id")
+    )
+
+    away_team_id = to_optional_int(
+        row.get("away_team_id")
+    )
+
+    home_winner_class = (
+        " epl-team-winner"
+        if (
+            winner_team_id is not None
+            and winner_team_id == home_team_id
+        )
+        else ""
+    )
+
+    away_winner_class = (
+        " epl-team-winner"
+        if (
+            winner_team_id is not None
+            and winner_team_id == away_team_id
+        )
+        else ""
+    )
+
+    def build_logo_html(
+        logo_src: str,
+        team_name: str
+    ) -> str:
+        if not logo_src:
+            return (
+                '<div class="epl-team-logo-fallback">'
+                '⚽'
+                '</div>'
+            )
+
+        return (
+            f'<img '
+            f'class="epl-team-logo" '
+            f'src="{logo_src}" '
+            f'alt="{team_name} logo">'
+        )
+
+    home_logo_html = build_logo_html(
+        safe_home_logo_src,
+        safe_home_name
+    )
+
+    away_logo_html = build_logo_html(
+        safe_away_logo_src,
+        safe_away_name
+    )
+
+    matchup_html = f"""
+    <style>
+    .epl-matchup-title-{match_id} {{
+        width: 100%;
+        max-width: 760px;
+
+        display: grid;
+        grid-template-columns:
+            minmax(0, 1fr)
+            auto
+            minmax(0, 1fr);
+
+        align-items: center;
+        gap: 16px;
+
+        margin: 1px 0 11px 0;
+    }}
+
+    .epl-matchup-title-{match_id}
+    .epl-team-block {{
+        min-width: 0;
+
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }}
+
+    .epl-matchup-title-{match_id}
+    .epl-team-home {{
+        justify-content: flex-end;
+        text-align: right;
+    }}
+
+    .epl-matchup-title-{match_id}
+    .epl-team-away {{
+        justify-content: flex-start;
+        text-align: left;
+    }}
+
+    .epl-matchup-title-{match_id}
+    .epl-team-logo-shell {{
+        position: relative;
+
+        width: 58px;
+        height: 58px;
+
+        min-width: 58px;
+        flex: 0 0 58px;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        border-radius: 18px;
+
+        background:
+            radial-gradient(
+                circle at 35% 25%,
+                rgba(255,255,255,0.98),
+                rgba(248,250,252,0.94)
+            );
+
+        border:
+            1px solid rgba(15,23,42,0.10);
+
+        box-shadow:
+            0 9px 22px rgba(15,23,42,0.10);
+
+        box-sizing: border-box;
+    }}
+
+    .epl-matchup-title-{match_id}
+    .epl-team-logo {{
+        display: block;
+
+        width: 44px;
+        height: 44px;
+
+        max-width: 44px;
+        max-height: 44px;
+
+        object-fit: contain;
+
+        filter:
+            drop-shadow(
+                0 4px 6px rgba(15,23,42,0.13)
+            );
+    }}
+
+    .epl-matchup-title-{match_id}
+    .epl-team-logo-fallback {{
+        font-size: 24px;
+        line-height: 1;
+    }}
+
+    .epl-matchup-title-{match_id}
+    .epl-team-name {{
+        min-width: 0;
+
+        color: #07111F;
+
+        font-size: clamp(21px, 2vw, 29px);
+        font-weight: 950;
+        line-height: 1.08;
+        letter-spacing: -0.035em;
+
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }}
+
+    .epl-matchup-title-{match_id}
+    .epl-versus {{
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        min-width: 42px;
+        height: 32px;
+
+        padding: 0 9px;
+
+        border-radius: 999px;
+
+        background:
+            linear-gradient(
+                135deg,
+                #07111F,
+                #123C69
+            );
+
+        color: #F5C542;
+
+        font-size: 11px;
+        font-weight: 950;
+        letter-spacing: 0.08em;
+
+        box-shadow:
+            0 7px 16px rgba(7,17,31,0.18);
+    }}
+
+    .epl-matchup-title-{match_id}
+    .epl-team-winner
+    .epl-team-logo-shell {{
+        border-color:
+            rgba(245,197,66,0.90);
+
+        box-shadow:
+            0 0 0 4px rgba(245,197,66,0.12),
+            0 10px 25px rgba(245,197,66,0.22);
+    }}
+
+    .epl-matchup-title-{match_id}
+    .epl-team-winner
+    .epl-team-logo-shell::after {{
+        content: "✓";
+
+        position: absolute;
+        right: -5px;
+        bottom: -5px;
+
+        width: 20px;
+        height: 20px;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        border-radius: 999px;
+
+        background: #F5C542;
+        color: #07111F;
+
+        border: 2px solid #FFFFFF;
+
+        font-size: 11px;
+        font-weight: 950;
+
+        box-shadow:
+            0 5px 12px rgba(15,23,42,0.18);
+    }}
+
+    @media (max-width: 768px) {{
+        .epl-matchup-title-{match_id} {{
+            grid-template-columns:
+                minmax(0, 1fr)
+                34px
+                minmax(0, 1fr);
+
+            gap: 7px;
+            max-width: 100%;
+            margin-bottom: 10px;
+        }}
+
+        .epl-matchup-title-{match_id}
+        .epl-team-block {{
+            flex-direction: column;
+            justify-content: flex-start;
+            gap: 6px;
+
+            text-align: center;
+        }}
+
+        .epl-matchup-title-{match_id}
+        .epl-team-home {{
+            flex-direction: column;
+        }}
+
+        .epl-matchup-title-{match_id}
+        .epl-team-away {{
+            flex-direction: column;
+        }}
+
+        .epl-matchup-title-{match_id}
+        .epl-team-logo-shell {{
+            width: 48px;
+            height: 48px;
+
+            min-width: 48px;
+            flex-basis: 48px;
+
+            border-radius: 15px;
+        }}
+
+        .epl-matchup-title-{match_id}
+        .epl-team-logo {{
+            width: 37px;
+            height: 37px;
+
+            max-width: 37px;
+            max-height: 37px;
+        }}
+
+        .epl-matchup-title-{match_id}
+        .epl-team-name {{
+            width: 100%;
+            max-width: 100%;
+
+            font-size: clamp(13px, 3.7vw, 15px);
+            line-height: 1.12;
+
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+
+        .epl-matchup-title-{match_id}
+        .epl-versus {{
+            min-width: 32px;
+            width: 32px;
+            height: 26px;
+
+            padding: 0;
+
+            font-size: 8px;
+        }}
+    }}
+    </style>
+
+    <div class="epl-matchup-title-{match_id}">
+        <div class="epl-team-block epl-team-home{home_winner_class}">
+            <div class="epl-team-name">
+                {safe_home_name}
+            </div>
+
+            <div class="epl-team-logo-shell">
+                {home_logo_html}
+            </div>
+        </div>
+
+        <div class="epl-versus">
+            VS
+        </div>
+
+        <div class="epl-team-block epl-team-away{away_winner_class}">
+            <div class="epl-team-logo-shell">
+                {away_logo_html}
+            </div>
+
+            <div class="epl-team-name">
+                {safe_away_name}
+            </div>
+        </div>
+    </div>
+    """
+
     if hasattr(st, "html"):
-        st.html(mobile_title_html)
+        st.html(matchup_html)
     else:
         st.markdown(
-            mobile_title_html,
+            matchup_html,
             unsafe_allow_html=True
         )
 
@@ -10399,22 +10794,39 @@ def normalize_venue_text(value) -> str:
     return str(value).strip()
 
 
-def render_match_venue_footer(row, match_id: int):
-    """
-    Hiển thị thông tin sân vận động/địa điểm ở cuối card trận đấu.
+def render_match_venue_footer(
+    row,
+    match_id: int
+):
+    venue = row.get("venue")
+    city = row.get("city")
 
-    Chỉ hiển thị dạng:
-    Icon: Tên sân vận động
+    venue_text = (
+        ""
+        if venue is None or pd.isna(venue)
+        else str(venue).strip()
+    )
 
-    Không nằm trong form dự đoán.
-    Không ảnh hưởng logic lưu/cập nhật/xóa dự đoán.
-    """
-    venue = normalize_venue_text(row.get("venue"))
+    city_text = (
+        ""
+        if city is None or pd.isna(city)
+        else str(city).strip()
+    )
 
-    if not venue:
+    if not venue_text:
         return
 
-    safe_venue = html.escape(venue)
+    location_text = venue_text
+
+    if city_text:
+        location_text = (
+            f"{venue_text}, {city_text}"
+        )
+
+    safe_venue = html.escape(
+        location_text,
+        quote=True
+    )
 
     soccer_field_icon_svg = """
     <svg xmlns="http://www.w3.org/2000/svg"
@@ -11331,7 +11743,6 @@ def render_match_card(
         css_styles=card_css
     ):
         render_status_badge(status_info, row=row)
-        render_winner_flag_overlay(row)
     
         top_left, top_right = st.columns([3, 1])
 
