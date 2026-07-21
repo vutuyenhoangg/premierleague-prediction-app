@@ -12173,43 +12173,9 @@ def render_match_card(
                 if value
             ]
             
-            with stylable_container(
-                key=f"match_schedule_{match_id}",
-                css_styles="""
-                {
-                    margin-top: 0 !important;
-                    margin-bottom: 0 !important;
-                }
-            
-                @media (max-width: 768px) {
-                    {
-                        margin-top: -14px !important;
-                        margin-bottom: 0 !important;
-                    }
-            
-                    div[data-testid="stCaptionContainer"] {
-                        margin-top: 0 !important;
-                        margin-bottom: 0 !important;
-                        padding-top: 0 !important;
-                        padding-bottom: 0 !important;
-                    }
-            
-                    div[data-testid="stCaptionContainer"] p {
-                        margin-top: 0 !important;
-                        margin-bottom: 0 !important;
-                    }
-                }
-            
-                @media (max-width: 390px) {
-                    {
-                        margin-top: -12px !important;
-                    }
-                }
-                """
-            ):
-                st.caption(
-                    " • ".join(schedule_parts)
-                )
+            st.caption(
+                " • ".join(schedule_parts)
+            )
 
             if is_finished:
                 actual_home_for_goal_button = to_optional_int(
