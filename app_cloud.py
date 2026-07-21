@@ -134,6 +134,10 @@ FINAL_POSTER_IMAGE_URL = ""
 
 FINAL_BACKGROUND_IMAGE_URL = ""
 
+EPL_MATCH_BACKGROUND_IMAGE_URL = (
+    "data/static/epl-match-background.jpg"
+)
+
 FINAL_POSTER_END_DATE = date(2026, 7, 20)
 
 FOOTER_PROJECT_URL = ""
@@ -6872,6 +6876,71 @@ def get_match_card_css(status_info, row=None):
         else "0"
     )
 
+    epl_background_src = resolve_asset_src(
+        EPL_MATCH_BACKGROUND_IMAGE_URL
+    )
+    
+    epl_background_src = str(
+        epl_background_src or ""
+    ).strip()
+    
+    # resolve_asset_src() trả lại chính đường dẫn đầu vào
+    # khi không tìm thấy file.
+    # Chỉ chèn ảnh khi nguồn đã được resolve thật sự.
+    if not epl_background_src.startswith(
+        (
+            "data:image/",
+            "http://",
+            "https://",
+            "/app/static/",
+        )
+    ):
+        epl_background_src = ""
+    
+    safe_epl_background_src = (
+        epl_background_src
+        .replace("\\", "/")
+        .replace('"', '\\"')
+    )
+    
+    desktop_image_layers = ""
+    mobile_image_layers = ""
+    
+    if safe_epl_background_src:
+        desktop_image_layers = f"""
+                linear-gradient(
+                    90deg,
+                    rgba(255, 251, 254, 0.90) 0%,
+                    rgba(255, 255, 255, 0.52) 20%,
+                    rgba(255, 255, 255, 0.18) 36%,
+                    rgba(255, 255, 255, 0.18) 64%,
+                    rgba(247, 255, 252, 0.52) 80%,
+                    rgba(247, 255, 252, 0.90) 100%
+                ),
+    
+                url("{safe_epl_background_src}")
+                center 54%
+                / 72% auto
+                no-repeat,
+        """
+    
+        mobile_image_layers = f"""
+                    linear-gradient(
+                        90deg,
+                        rgba(255, 251, 254, 0.88) 0%,
+                        rgba(255, 255, 255, 0.48) 18%,
+                        rgba(255, 255, 255, 0.16) 34%,
+                        rgba(255, 255, 255, 0.16) 66%,
+                        rgba(247, 255, 252, 0.48) 82%,
+                        rgba(247, 255, 252, 0.88) 100%
+                    ),
+    
+                    url("{safe_epl_background_src}")
+                    center 56%
+                    / 135% auto
+                    no-repeat,
+        """
+
     return f"""
     {{
         --wc-match-card-shimmer-opacity:
@@ -6999,6 +7068,8 @@ def get_match_card_css(status_info, row=None):
                 transparent 27px
             ),
 
+            {desktop_image_layers}
+
             linear-gradient(
                 135deg,
                 rgba(255, 251, 254, 0.99) 0%,
@@ -7120,6 +7191,8 @@ def get_match_card_css(status_info, row=None):
                     rgba(0, 255, 133, 0.10),
                     transparent 22%
                 ),
+
+                {mobile_image_layers}
 
                 linear-gradient(
                     135deg,
