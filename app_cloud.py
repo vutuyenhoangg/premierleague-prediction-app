@@ -10730,6 +10730,7 @@ def render_match_title(
             '</div>'
         )
 
+    # Desktop
     with stylable_container(
         key=f"match_title_desktop_{match_id}",
         css_styles="""
@@ -10737,11 +10738,29 @@ def render_match_title(
             display: block;
         }
     
+        /*
+         * Khoảng cách với ribbon được tạo bằng padding,
+         * không chỉnh margin của ribbon.
+         */
+        .epl-desktop-match-title-shell {
+            display: block;
+            width: 100%;
+    
+            padding-bottom: 8px;
+    
+            box-sizing: border-box;
+        }
+    
+        .epl-desktop-match-title-shell h3 {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+    
         .epl-desktop-match-vs {
             display: inline-block;
     
             margin:
-                0 6px;
+                0 5px;
     
             color:
                 #FF2882 !important;
@@ -10764,7 +10783,10 @@ def render_match_title(
         """
     ):
         desktop_title_html = (
-            '<h3>'
+            '<div class="epl-desktop-match-title-shell">'
+    
+            '<h3 '
+            f'aria-label="{safe_home} vs {safe_away}">'
     
             f'<span>{safe_home}</span>'
     
@@ -10775,6 +10797,8 @@ def render_match_title(
             f'<span>{safe_away}</span>'
     
             '</h3>'
+    
+            '</div>'
         )
     
         st.markdown(
