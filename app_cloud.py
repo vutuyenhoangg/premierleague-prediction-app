@@ -10730,19 +10730,58 @@ def render_match_title(
             '</div>'
         )
 
-    # Desktop
     with stylable_container(
         key=f"match_title_desktop_{match_id}",
         css_styles="""
         {
             display: block;
         }
+    
+        .epl-desktop-match-vs {
+            display: inline-block;
+    
+            margin:
+                0 6px;
+    
+            color:
+                #FF2882 !important;
+    
+            font-size:
+                0.62em !important;
+    
+            font-weight:
+                950 !important;
+    
+            line-height:
+                1 !important;
+    
+            letter-spacing:
+                0 !important;
+    
+            vertical-align:
+                0.08em;
+        }
         """
     ):
-        st.subheader(
-            f"{home_display} vs {away_display}"
+        desktop_title_html = (
+            '<h3>'
+    
+            f'<span>{safe_home}</span>'
+    
+            '<span class="epl-desktop-match-vs">'
+            'vs'
+            '</span>'
+    
+            f'<span>{safe_away}</span>'
+    
+            '</h3>'
         )
-
+    
+        st.markdown(
+            desktop_title_html,
+            unsafe_allow_html=True
+        )
+    
         st.markdown(
             ribbon_html,
             unsafe_allow_html=True
