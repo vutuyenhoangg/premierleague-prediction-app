@@ -134,6 +134,10 @@ FINAL_POSTER_IMAGE_URL = ""
 
 FINAL_BACKGROUND_IMAGE_URL = ""
 
+EPL_MATCH_BACKGROUND_IMAGE_URL = (
+    "data/static/epl-match-card-background.png"
+)
+
 FINAL_POSTER_END_DATE = date(2026, 7, 20)
 
 FOOTER_PROJECT_URL = ""
@@ -6872,6 +6876,16 @@ def get_match_card_css(status_info, row=None):
         else "0"
     )
 
+    epl_background_src = resolve_asset_src(
+        EPL_MATCH_BACKGROUND_IMAGE_URL
+    )
+    
+    epl_background_css_url = (
+        str(epl_background_src)
+        .replace("\\", "/")
+        .replace('"', '\\"')
+    )
+
     return f"""
     {{
         --wc-match-card-shimmer-opacity:
@@ -6998,12 +7012,61 @@ def get_match_card_css(status_info, row=None):
                 transparent 1px,
                 transparent 27px
             ),
-
+            
+            /*
+             * Lớp trắng làm ảnh chìm vào chính giữa card.
+             * Giữ đúng cấu trúc của card chung kết World Cup.
+             */
+            radial-gradient(
+                ellipse at center 56%,
+                rgba(255, 255, 255, 0.54) 0%,
+                rgba(255, 255, 255, 0.72) 46%,
+                rgba(255, 255, 255, 0.92) 76%
+            ),
+            
+            /*
+             * Lớp phủ trắng theo chiều dọc.
+             */
+            linear-gradient(
+                180deg,
+                rgba(255, 255, 255, 0.54) 0%,
+                rgba(255, 255, 255, 0.68) 56%,
+                rgba(255, 255, 255, 0.84) 100%
+            ),
+            
+            /*
+             * Làm chìm hai mép trái và phải của ảnh,
+             * tránh lộ hình chữ nhật.
+             */
+            linear-gradient(
+                90deg,
+                rgba(255, 251, 254, 0.98) 0%,
+                rgba(255, 251, 254, 0.92) 8%,
+                rgba(255, 255, 255, 0.78) 22%,
+                rgba(255, 255, 255, 0.00) 32%,
+                rgba(255, 255, 255, 0.00) 68%,
+                rgba(247, 255, 252, 0.78) 78%,
+                rgba(247, 255, 252, 0.92) 92%,
+                rgba(247, 255, 252, 0.98) 100%
+            ),
+            
+            /*
+             * Ảnh thực tế, cùng vị trí và tỷ lệ
+             * với ảnh card chung kết World Cup.
+             */
+            url("{epl_background_css_url}")
+            center center
+            / 72% auto
+            no-repeat,
+            
+            /*
+             * Nền gốc nằm dưới cùng.
+             */
             linear-gradient(
                 135deg,
-                rgba(255, 251, 254, 0.99) 0%,
-                rgba(250, 248, 255, 0.98) 48%,
-                rgba(246, 255, 251, 0.98) 100%
+                rgba(255, 251, 254, 0.99),
+                rgba(248, 250, 255, 0.98) 54%,
+                rgba(247, 255, 252, 0.98)
             );
 
         box-shadow:
@@ -7120,7 +7183,38 @@ def get_match_card_css(status_info, row=None):
                     rgba(0, 255, 133, 0.10),
                     transparent 22%
                 ),
-
+                
+                radial-gradient(
+                    ellipse at center 56%,
+                    rgba(255, 255, 255, 0.54) 0%,
+                    rgba(255, 255, 255, 0.72) 46%,
+                    rgba(255, 255, 255, 0.92) 76%
+                ),
+                
+                linear-gradient(
+                    180deg,
+                    rgba(255, 255, 255, 0.54) 0%,
+                    rgba(255, 255, 255, 0.68) 56%,
+                    rgba(255, 255, 255, 0.84) 100%
+                ),
+                
+                linear-gradient(
+                    90deg,
+                    rgba(255, 251, 254, 0.98) 0%,
+                    rgba(255, 251, 254, 0.92) 8%,
+                    rgba(255, 255, 255, 0.78) 22%,
+                    rgba(255, 255, 255, 0.00) 32%,
+                    rgba(255, 255, 255, 0.00) 68%,
+                    rgba(247, 255, 252, 0.78) 78%,
+                    rgba(247, 255, 252, 0.92) 92%,
+                    rgba(247, 255, 252, 0.98) 100%
+                ),
+                
+                url("{epl_background_css_url}")
+                center center
+                / 72% auto
+                no-repeat,
+                
                 linear-gradient(
                     135deg,
                     rgba(255, 251, 254, 0.99),
