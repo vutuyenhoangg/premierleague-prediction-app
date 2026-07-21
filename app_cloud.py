@@ -9869,8 +9869,8 @@ def build_ai_match_suggestion_prompt(match_row: dict) -> str:
 
         "Yêu cầu đầu ra:\n"
         "- Viết hoàn toàn bằng tiếng Việt và chỉ dùng văn bản thuần.\n"
-        "- Tổng độ dài không quá 120 từ, gồm cả dòng dự đoán.\n"
-        "- Phân tích thành một đoạn ngắn, mạch lạc.\n"
+        "- Tổng độ dài không quá 200 từ, gồm cả dòng dự đoán.\n"
+        "- Phân tích thành một đoạn súc tích, mạch lạc.\n"
         "- Nêu riêng đối đầu lịch sử và 3 đến 5 lần gặp gần nhất nếu có dữ liệu.\n"
         "- Sau đoạn phân tích, xuống dòng đúng một lần và viết: Dự đoán: X-Y.\n"
         "- Không dùng HTML, CSS, Markdown, bảng, bullet point hoặc code block "
