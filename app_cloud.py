@@ -56,6 +56,7 @@ GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 GEMINI_MODEL_NAME = st.secrets.get("GEMINI_MODEL_NAME", "gemini-2.5-flash")
 ENABLE_FINAL_POSTER = False
 ENABLE_AI_FEATURES = True
+AI_SUGGESTION_MAX_DAYS = 3
 
 AVATAR_FOLDER = "data/static/avatars"
 DEFAULT_AVATAR_KEY = "avatar_default_1.png"
@@ -6000,6 +6001,43 @@ def can_edit_prediction(kickoff_time_utc) -> bool:
 
     return now < kickoff
 
+def can_use_ai_match_suggestion(
+    kickoff_time_utc,
+    is_finished=False
+) -> bool:
+    """
+    Chỉ cho phép AI phân tích trong tối đa 3 ngày
+    trước chính xác giờ kickoff.
+
+    Ví dụ:
+    - Còn 72 giờ: được phép
+    - Còn 72 giờ 1 phút: không được phép
+    - Đã kickoff: không được phép
+    - Đã có kết quả: không được phép
+    """
+    if to_bool(is_finished):
+        return False
+
+    kickoff = parse_utc_datetime(
+        kickoff_time_utc
+    )
+
+    if pd.isna(kickoff):
+        return False
+
+    now = pd.Timestamp.now(tz="UTC")
+
+    ai_window_start = (
+        kickoff
+        - pd.Timedelta(
+            days=AI_SUGGESTION_MAX_DAYS
+        )
+    )
+
+    return (
+        ai_window_start <= now < kickoff
+    )
+
 def is_match_locked_for_star(kickoff_time_utc, is_finished=False) -> bool:
     """
     Một sao chỉ được tính là đã dùng thật khi trận đã khóa dự đoán:
@@ -11342,11 +11380,47 @@ def render_ai_match_suggestion_dialog(match_id: int):
             st.rerun()
         return
 
-    is_finished = to_bool(match.get("is_finished"))
-    is_editable = can_edit_prediction(match.get("kickoff_time_utc"))
-
-    if is_finished or not is_editable:
-        st.warning("Chỉ có thể tạo AI phân tích cho trận đang mở dự đoán.")
+    is_finished = to_bool(
+        match.get("is_finished")
+    )
+    
+    is_editable = can_edit_prediction(
+        match.get("kickoff_time_utc")
+    )
+    
+    is_ai_suggestion_available = (
+        can_use_ai_match_suggestion(
+            match.get("kickoff_time_utc"),
+            is_finished=is_finished
+        )
+    )
+    
+    if (
+        is_finished
+        or not is_editable
+        or not is_ai_suggestion_available
+    ):
+        st.warning(
+            "AI phân tích chỉ khả dụng "
+            "trong vòng 3 ngày trước giờ bóng lăn."
+        )
+    
+        if st.button(
+            "Đóng",
+            use_container_width=True,
+            key=(
+                f"close_ai_suggestion_"
+                f"unavailable_{match_id}"
+            )
+        ):
+            st.session_state.pop(
+                "ai_suggestion_match_id",
+                None
+            )
+    
+            st.rerun()
+    
+        return
         if st.button(
             "Đóng",
             use_container_width=True,
@@ -12550,6 +12624,10 @@ def render_match_card(
             elif (
                 ENABLE_AI_FEATURES
                 and status_info.get("status_key") == "open"
+                and can_use_ai_match_suggestion(
+                    row.get("kickoff_time_utc"),
+                    is_finished=is_finished
+                )
             ):
                 ai_suggestion_clicked = st.button(
                     "AI phân tích",
