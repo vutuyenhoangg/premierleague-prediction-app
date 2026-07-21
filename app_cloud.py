@@ -1474,6 +1474,135 @@ def inject_epl_premium_match_card_css():
                     15px;
             }
         }
+
+        /* =====================================================
+           RIBBON PREMIER LEAGUE GỌN HƠN
+           ===================================================== */
+        
+        .epl-premier-league-ribbon {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        
+            width: fit-content !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            min-height: 30px !important;
+        
+            padding:
+                6px 15px 7px 15px !important;
+        
+            margin:
+                3px 0 8px 0 !important;
+        
+            gap: 6px !important;
+        
+            box-sizing: border-box !important;
+        
+            white-space: nowrap !important;
+            overflow: hidden !important;
+        }
+        
+        .epl-premier-league-ribbon-text,
+        .epl-premier-league-ribbon-round {
+            display: inline-block;
+        
+            min-width: 0;
+        
+            color: #FFFFFF;
+        
+            font-size: 10.5px;
+            font-weight: 950;
+            line-height: 1;
+        
+            letter-spacing: 0.075em;
+            text-transform: uppercase;
+        
+            white-space: nowrap;
+        }
+        
+        .epl-premier-league-ribbon-separator {
+            display: inline-block;
+        
+            color: #00FF85;
+        
+            font-size: 10px;
+            font-weight: 950;
+            line-height: 1;
+        
+            flex: 0 0 auto;
+        
+            text-shadow:
+                0 0 7px
+                rgba(0, 255, 133, 0.55);
+        }
+        
+        /* Điện thoại */
+        @media (max-width: 768px) {
+            .wc-match-title-mobile
+            .epl-premier-league-ribbon {
+                width: fit-content !important;
+                min-width: 0 !important;
+                max-width: 100% !important;
+        
+                min-height: 25px !important;
+        
+                padding:
+                    5px 8px 6px 8px !important;
+        
+                margin:
+                    8px 0 6px 0 !important;
+        
+                gap: 4px !important;
+        
+                overflow: hidden !important;
+            }
+        
+            .wc-match-title-mobile
+            .epl-premier-league-ribbon-text,
+        
+            .wc-match-title-mobile
+            .epl-premier-league-ribbon-round {
+                font-size: 8px !important;
+                letter-spacing: 0.045em !important;
+            }
+        
+            .wc-match-title-mobile
+            .epl-premier-league-ribbon-separator {
+                font-size: 7.5px !important;
+            }
+        }
+        
+        /* Điện thoại rất nhỏ */
+        @media (max-width: 390px) {
+            .wc-match-title-mobile
+            .epl-premier-league-ribbon {
+                width: fit-content !important;
+                min-width: 0 !important;
+                max-width: 100% !important;
+        
+                min-height: 24px !important;
+        
+                padding-left: 7px !important;
+                padding-right: 7px !important;
+        
+                gap: 3px !important;
+            }
+        
+            .wc-match-title-mobile
+            .epl-premier-league-ribbon-text,
+        
+            .wc-match-title-mobile
+            .epl-premier-league-ribbon-round {
+                font-size: 7.5px !important;
+                letter-spacing: 0.035em !important;
+            }
+        
+            .wc-match-title-mobile
+            .epl-premier-league-ribbon-separator {
+                font-size: 7px !important;
+            }
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -10370,12 +10499,10 @@ def render_match_title(
     row=None
 ):
     """
-    Tiêu đề card Premier League.
+    Hiển thị tiêu đề trận đấu và băng rôn Premier League.
 
-    - Giữ nguyên tên hai đội.
-    - Không hiển thị logo cạnh match title.
-    - Thêm băng rôn Premier League phía dưới.
-    - Không có cành cọ.
+    Băng rôn có dạng:
+    Premier League * Vòng 38
     """
     home_display = (
         "TBD"
@@ -10399,14 +10526,71 @@ def render_match_title(
         quote=True
     )
 
-    ribbon_html = (
-        '<div class="epl-premier-league-ribbon">'
-        '<span class="epl-premier-league-ribbon-diamond">◆</span>'
-        '<span class="epl-premier-league-ribbon-text">Premier League</span>'
-        '<span class="epl-premier-league-ribbon-diamond">◆</span>'
-        '</div>'
+    # Lấy vòng đấu từ chính row của trận.
+    round_value = (
+        row.get("round_name")
+        if row is not None
+        else ""
     )
 
+    round_text = (
+        ""
+        if (
+            round_value is None
+            or pd.isna(round_value)
+        )
+        else str(round_value).strip()
+    )
+
+    # Chuẩn hóa cả hai dạng:
+    # "Vòng 38" và "Matchday 38"
+    # thành "Vòng 38".
+    round_number_match = re.search(
+        r"\d+",
+        round_text
+    )
+
+    if round_number_match:
+        round_text = (
+            f"Vòng {round_number_match.group(0)}"
+        )
+
+    safe_round = html.escape(
+        round_text,
+        quote=True
+    )
+
+    if safe_round:
+        ribbon_html = (
+            '<div class="epl-premier-league-ribbon">'
+
+            '<span class="epl-premier-league-ribbon-text">'
+            'Premier League'
+            '</span>'
+
+            '<span class="epl-premier-league-ribbon-separator">'
+            '*'
+            '</span>'
+
+            '<span class="epl-premier-league-ribbon-round">'
+            f'{safe_round}'
+            '</span>'
+
+            '</div>'
+        )
+
+    else:
+        ribbon_html = (
+            '<div class="epl-premier-league-ribbon">'
+
+            '<span class="epl-premier-league-ribbon-text">'
+            'Premier League'
+            '</span>'
+
+            '</div>'
+        )
+
+    # Desktop
     with stylable_container(
         key=f"match_title_desktop_{match_id}",
         css_styles="""
@@ -10424,6 +10608,7 @@ def render_match_title(
             unsafe_allow_html=True
         )
 
+    # Mobile
     mobile_title_html = (
         f'<div '
         f'class="wc-match-title-mobile" '
@@ -10447,7 +10632,9 @@ def render_match_title(
     )
 
     if hasattr(st, "html"):
-        st.html(mobile_title_html)
+        st.html(
+            mobile_title_html
+        )
     else:
         st.markdown(
             mobile_title_html,
@@ -11947,7 +12134,6 @@ def render_match_card(
             )
 
             st.caption(
-                f"{row.get('round_name')} | "
                 f"{row.get('kickoff_weekday_vietnam', '')} "
                 f"{row.get('kickoff_date_display_vietnam', row.get('kickoff_date_vietnam', ''))} "
                 f"lúc {row.get('kickoff_time_vietnam', '')}"
