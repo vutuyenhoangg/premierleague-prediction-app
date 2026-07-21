@@ -55,7 +55,7 @@ CHECKIN_SUPER_REWARD_DAY = 7
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 GEMINI_MODEL_NAME = st.secrets.get("GEMINI_MODEL_NAME", "gemini-2.5-flash")
 ENABLE_FINAL_POSTER = False
-ENABLE_AI_FEATURES = False
+ENABLE_AI_FEATURES = True
 
 AVATAR_FOLDER = "data/static/avatars"
 DEFAULT_AVATAR_KEY = "avatar_default_1.png"
