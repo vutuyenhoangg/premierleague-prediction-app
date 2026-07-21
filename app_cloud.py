@@ -1172,6 +1172,313 @@ def inject_match_card_border_animation_css():
         unsafe_allow_html=True
     )
 
+def inject_epl_premium_match_card_css():
+    """
+    CSS dùng chung cho phong cách Premier League cao cấp.
+
+    Hàm này chỉ thay đổi trình bày:
+    - Match title
+    - Băng rôn Premier League
+    - Khoảng cách và typography bên trong card
+    - Responsive desktop/mobile
+
+    Không đụng đến dữ liệu, prediction, AI, sao hoặc kết quả.
+    """
+    st.markdown(
+        """
+        <style>
+        div[class*="st-key-match_card_"] {
+            isolation: isolate !important;
+        }
+
+        div[class*="st-key-match_card_"]
+        > div {
+            position: relative;
+            z-index: 2;
+        }
+
+        div[class*="st-key-match_title_desktop_"] h3 {
+            margin:
+                0 0 8px 0 !important;
+
+            color:
+                #190021 !important;
+
+            font-size:
+                clamp(24px, 2.15vw, 32px) !important;
+
+            font-weight:
+                950 !important;
+
+            line-height:
+                1.08 !important;
+
+            letter-spacing:
+                -0.042em !important;
+
+            text-shadow:
+                0 1px 0 rgba(255, 255, 255, 0.82);
+        }
+
+        div[class*="st-key-match_title_desktop_"] h3 strong {
+            color:
+                #37003C !important;
+        }
+
+        .epl-premier-league-ribbon {
+            position: relative;
+
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 11px;
+
+            min-width: 250px;
+            min-height: 34px;
+
+            padding:
+                7px 24px 8px 24px;
+
+            margin:
+                0 0 13px 0;
+
+            border-radius:
+                7px 7px 11px 11px;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #24002A 0%,
+                    #37003C 44%,
+                    #5B0F63 100%
+                );
+
+            border:
+                1px solid rgba(232, 201, 106, 0.68);
+
+            box-shadow:
+                0 9px 20px rgba(55, 0, 60, 0.20),
+                inset 0 1px 0 rgba(255, 255, 255, 0.14);
+
+            color:
+                #FFF9E8;
+
+            overflow:
+                hidden;
+
+            box-sizing:
+                border-box;
+        }
+
+        .epl-premier-league-ribbon::before {
+            content: "";
+
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 0;
+
+            height: 2px;
+
+            background:
+                linear-gradient(
+                    90deg,
+                    transparent,
+                    #FF2882 24%,
+                    #00FF85 76%,
+                    transparent
+                );
+        }
+
+        .epl-premier-league-ribbon::after {
+            content: "";
+
+            position: absolute;
+            left: 50%;
+            bottom: -9px;
+
+            width: 34px;
+            height: 18px;
+
+            transform:
+                translateX(-50%)
+                rotate(45deg);
+
+            background:
+                #37003C;
+
+            border-right:
+                1px solid rgba(232, 201, 106, 0.55);
+
+            border-bottom:
+                1px solid rgba(232, 201, 106, 0.55);
+
+            z-index:
+                -1;
+        }
+
+        .epl-premier-league-ribbon-text {
+            color:
+                #FFF9E8;
+
+            font-size:
+                12px;
+
+            font-weight:
+                950;
+
+            line-height:
+                1;
+
+            letter-spacing:
+                0.13em;
+
+            text-transform:
+                uppercase;
+
+            white-space:
+                nowrap;
+        }
+
+        .epl-premier-league-ribbon-diamond {
+            color:
+                #00FF85;
+
+            font-size:
+                8px;
+
+            line-height:
+                1;
+
+            filter:
+                drop-shadow(
+                    0 0 6px rgba(0, 255, 133, 0.42)
+                );
+        }
+
+        div[class*="st-key-match_card_"]
+        div[data-testid="stCaptionContainer"] {
+            color:
+                #5B4B67 !important;
+
+            font-weight:
+                650 !important;
+        }
+
+        div[class*="st-key-match_card_"]
+        div[data-testid="stCaptionContainer"] p {
+            color:
+                #5B4B67 !important;
+        }
+
+        div[class*="st-key-match_card_"]
+        div[data-testid="stNumberInput"] input {
+            background:
+                rgba(255, 255, 255, 0.88) !important;
+
+            border-color:
+                rgba(55, 0, 60, 0.18) !important;
+        }
+
+        div[class*="st-key-match_card_"]
+        div[data-testid="stNumberInput"]:focus-within {
+            box-shadow:
+                0 0 0 3px rgba(255, 40, 130, 0.10) !important;
+        }
+
+        @media (max-width: 768px) {
+            div[class*="st-key-match_title_desktop_"] {
+                display:
+                    none !important;
+            }
+
+            .wc-match-title-mobile {
+                margin:
+                    2px 0 11px 0 !important;
+            }
+
+            .wc-match-title-mobile
+            .wc-match-team {
+                color:
+                    #190021 !important;
+
+                font-weight:
+                    950 !important;
+            }
+
+            .wc-match-title-mobile
+            .wc-match-vs {
+                color:
+                    #FF2882 !important;
+
+                font-size:
+                    15px !important;
+
+                font-weight:
+                    950 !important;
+
+                line-height:
+                    1.05 !important;
+
+                text-transform:
+                    uppercase;
+            }
+
+            .wc-match-title-mobile
+            .epl-premier-league-ribbon {
+                display:
+                    inline-flex;
+
+                min-width:
+                    210px;
+
+                min-height:
+                    31px;
+
+                padding:
+                    6px 18px 7px 18px;
+
+                margin:
+                    10px 0 8px 0;
+
+                gap:
+                    9px;
+            }
+
+            .wc-match-title-mobile
+            .epl-premier-league-ribbon-text {
+                font-size:
+                    10.5px;
+
+                letter-spacing:
+                    0.11em;
+            }
+
+            .wc-match-title-mobile
+            .epl-premier-league-ribbon-diamond {
+                font-size:
+                    7px;
+            }
+        }
+
+        @media (max-width: 390px) {
+            .wc-match-title-mobile
+            .epl-premier-league-ribbon {
+                min-width:
+                    196px;
+
+                padding-left:
+                    15px;
+
+                padding-right:
+                    15px;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
 def inject_main_page_lift_css():
     """
     Đẩy riêng nội dung trang chính lên cao hơn.
@@ -1406,6 +1713,7 @@ def inject_mobile_prediction_score_row_css():
 
 inject_epl_theme()
 inject_match_card_border_animation_css()
+inject_epl_premium_match_card_css()
 inject_mobile_prediction_score_row_css()
 inject_hide_streamlit_embed_footer_css()
 inject_main_page_lift_css()
@@ -6103,91 +6411,196 @@ def get_match_status_info(row):
 
 def get_match_card_css(status_info, row=None):
     """
-    Tạo CSS card trận đấu EPL theo trạng thái.
-    Không còn nhánh thiết kế riêng cho chung kết hoặc tranh hạng ba.
+    Thiết kế chung cho toàn bộ card Premier League.
+
+    Mục tiêu:
+    - Giữ nguyên toàn bộ logic theo trạng thái.
+    - Dùng một khung thiết kế đồng bộ, danh giá.
+    - Màu chủ đạo Premier League: tím đậm, hồng, xanh mint.
+    - Giữ màu trạng thái cho badge và hiệu ứng chạy viền.
     """
     status_key = str(
         status_info.get("status_key") or ""
     ).strip().lower()
 
-    border_color = str(
-        status_info.get("border_color") or "#9CA3AF"
-    )
-
-    card_background = str(
-        status_info.get("background")
-        or (
-            "linear-gradient("
-            "135deg, "
-            "rgba(248,250,252,0.96), "
-            "rgba(241,245,249,0.90)"
-            ")"
-        )
-    )
-
-    shimmer_config_by_status = {
+    status_accent_by_key = {
         "open": {
-            "opacity": "1",
-            "color": "#60A5FA",
-            "soft_color": "#BFDBFE",
-            "speed": "4.2s"
+            "accent": "#00A8E8",
+            "soft": "#9FE7FF",
+            "glow": "rgba(0, 168, 232, 0.22)",
+            "shimmer": "#5DD8FF",
         },
         "locked": {
-            "opacity": "1",
-            "color": "#F59E0B",
-            "soft_color": "#FDE68A",
-            "speed": "4.2s"
+            "accent": "#F5B700",
+            "soft": "#FFE7A3",
+            "glow": "rgba(245, 183, 0, 0.22)",
+            "shimmer": "#FFD45C",
         },
         "finished": {
-            "opacity": "1",
-            "color": "#22C55E",
-            "soft_color": "#BBF7D0",
-            "speed": "4.2s"
-        }
+            "accent": "#00A86B",
+            "soft": "#A7F3D0",
+            "glow": "rgba(0, 168, 107, 0.20)",
+            "shimmer": "#52E3A6",
+        },
+        "unknown": {
+            "accent": "#94A3B8",
+            "soft": "#E2E8F0",
+            "glow": "rgba(100, 116, 139, 0.14)",
+            "shimmer": "#CBD5E1",
+        },
     }
 
-    shimmer_config = shimmer_config_by_status.get(
+    accent_config = status_accent_by_key.get(
         status_key,
-        {
-            "opacity": "0",
-            "color": border_color,
-            "soft_color": border_color,
-            "speed": "4.2s"
-        }
+        status_accent_by_key["unknown"]
+    )
+
+    shimmer_opacity = (
+        "1"
+        if status_key in {"open", "locked", "finished"}
+        else "0"
     )
 
     return f"""
     {{
         --wc-match-card-shimmer-opacity:
-            {shimmer_config["opacity"]};
+            {shimmer_opacity};
 
         --wc-match-card-shimmer-color:
-            {shimmer_config["color"]};
+            {accent_config["shimmer"]};
 
         --wc-match-card-shimmer-soft:
-            {shimmer_config["soft_color"]};
+            {accent_config["soft"]};
 
         --wc-match-card-shimmer-speed:
-            {shimmer_config["speed"]};
+            4.2s;
+
+        --epl-card-status-accent:
+            {accent_config["accent"]};
+
+        --epl-card-status-glow:
+            {accent_config["glow"]};
 
         border:
-            2px solid
-            {border_color};
+            2px solid #37003C;
 
         border-radius:
             20px;
 
         padding:
-            22px 22px 16px 22px;
+            24px 24px 18px 24px;
 
-        margin-bottom:
-            22px;
+        margin:
+            4px 4px 28px 4px;
 
         background:
-            {card_background};
+            linear-gradient(
+                #E8C96A,
+                #E8C96A
+            )
+            left 12px top 12px
+            / 24px 1px
+            no-repeat,
+
+            linear-gradient(
+                #E8C96A,
+                #E8C96A
+            )
+            left 12px top 12px
+            / 1px 24px
+            no-repeat,
+
+            linear-gradient(
+                #E8C96A,
+                #E8C96A
+            )
+            right 12px top 12px
+            / 24px 1px
+            no-repeat,
+
+            linear-gradient(
+                #E8C96A,
+                #E8C96A
+            )
+            right 12px top 12px
+            / 1px 24px
+            no-repeat,
+
+            linear-gradient(
+                #E8C96A,
+                #E8C96A
+            )
+            left 12px bottom 12px
+            / 24px 1px
+            no-repeat,
+
+            linear-gradient(
+                #E8C96A,
+                #E8C96A
+            )
+            left 12px bottom 12px
+            / 1px 24px
+            no-repeat,
+
+            linear-gradient(
+                #E8C96A,
+                #E8C96A
+            )
+            right 12px bottom 12px
+            / 24px 1px
+            no-repeat,
+
+            linear-gradient(
+                #E8C96A,
+                #E8C96A
+            )
+            right 12px bottom 12px
+            / 1px 24px
+            no-repeat,
+
+            linear-gradient(
+                90deg,
+                transparent,
+                var(--epl-card-status-accent),
+                transparent
+            )
+            center top
+            / 38% 2px
+            no-repeat,
+
+            radial-gradient(
+                circle at 8% 8%,
+                rgba(255, 40, 130, 0.13),
+                transparent 25%
+            ),
+
+            radial-gradient(
+                circle at 90% 10%,
+                rgba(0, 255, 133, 0.12),
+                transparent 24%
+            ),
+
+            repeating-linear-gradient(
+                125deg,
+                rgba(55, 0, 60, 0.018) 0,
+                rgba(55, 0, 60, 0.018) 1px,
+                transparent 1px,
+                transparent 27px
+            ),
+
+            linear-gradient(
+                135deg,
+                rgba(255, 251, 254, 0.99) 0%,
+                rgba(250, 248, 255, 0.98) 48%,
+                rgba(246, 255, 251, 0.98) 100%
+            );
 
         box-shadow:
-            0 14px 34px rgba(15, 23, 42, 0.08);
+            0 0 0 2px rgba(232, 201, 106, 0.94),
+            0 0 0 4px rgba(55, 0, 60, 0.96),
+            0 18px 44px rgba(55, 0, 60, 0.15),
+            0 8px 24px var(--epl-card-status-glow),
+            inset 0 0 0 1px rgba(255, 255, 255, 0.88);
 
         position:
             relative;
@@ -6197,6 +6610,113 @@ def get_match_card_css(status_info, row=None):
 
         isolation:
             isolate;
+    }}
+
+    @media (max-width: 768px) {{
+        {{
+            padding:
+                20px 16px 15px 16px;
+
+            margin:
+                4px 3px 26px 3px;
+
+            border-radius:
+                18px;
+
+            background:
+                linear-gradient(
+                    #E8C96A,
+                    #E8C96A
+                )
+                left 9px top 9px
+                / 18px 1px
+                no-repeat,
+
+                linear-gradient(
+                    #E8C96A,
+                    #E8C96A
+                )
+                left 9px top 9px
+                / 1px 18px
+                no-repeat,
+
+                linear-gradient(
+                    #E8C96A,
+                    #E8C96A
+                )
+                right 9px top 9px
+                / 18px 1px
+                no-repeat,
+
+                linear-gradient(
+                    #E8C96A,
+                    #E8C96A
+                )
+                right 9px top 9px
+                / 1px 18px
+                no-repeat,
+
+                linear-gradient(
+                    #E8C96A,
+                    #E8C96A
+                )
+                left 9px bottom 9px
+                / 18px 1px
+                no-repeat,
+
+                linear-gradient(
+                    #E8C96A,
+                    #E8C96A
+                )
+                left 9px bottom 9px
+                / 1px 18px
+                no-repeat,
+
+                linear-gradient(
+                    #E8C96A,
+                    #E8C96A
+                )
+                right 9px bottom 9px
+                / 18px 1px
+                no-repeat,
+
+                linear-gradient(
+                    #E8C96A,
+                    #E8C96A
+                )
+                right 9px bottom 9px
+                / 1px 18px
+                no-repeat,
+
+                linear-gradient(
+                    90deg,
+                    transparent,
+                    var(--epl-card-status-accent),
+                    transparent
+                )
+                center top
+                / 44% 2px
+                no-repeat,
+
+                radial-gradient(
+                    circle at 5% 5%,
+                    rgba(255, 40, 130, 0.10),
+                    transparent 24%
+                ),
+
+                radial-gradient(
+                    circle at 94% 7%,
+                    rgba(0, 255, 133, 0.10),
+                    transparent 22%
+                ),
+
+                linear-gradient(
+                    135deg,
+                    rgba(255, 251, 254, 0.99),
+                    rgba(248, 250, 255, 0.98) 54%,
+                    rgba(247, 255, 252, 0.98)
+                );
+        }}
     }}
     """
 
@@ -9850,8 +10370,12 @@ def render_match_title(
     row=None
 ):
     """
-    Giữ nguyên match title theo thiết kế cũ.
-    Không hiển thị logo câu lạc bộ cạnh tên đội.
+    Tiêu đề card Premier League.
+
+    - Giữ nguyên tên hai đội.
+    - Không hiển thị logo cạnh match title.
+    - Thêm băng rôn Premier League phía dưới.
+    - Không có cành cọ.
     """
     home_display = (
         "TBD"
@@ -9875,6 +10399,14 @@ def render_match_title(
         quote=True
     )
 
+    ribbon_html = (
+        '<div class="epl-premier-league-ribbon">'
+        '<span class="epl-premier-league-ribbon-diamond">◆</span>'
+        '<span class="epl-premier-league-ribbon-text">Premier League</span>'
+        '<span class="epl-premier-league-ribbon-diamond">◆</span>'
+        '</div>'
+    )
+
     with stylable_container(
         key=f"match_title_desktop_{match_id}",
         css_styles="""
@@ -9885,6 +10417,11 @@ def render_match_title(
     ):
         st.subheader(
             f"{home_display} vs {away_display}"
+        )
+
+        st.markdown(
+            ribbon_html,
+            unsafe_allow_html=True
         )
 
     mobile_title_html = (
@@ -9903,6 +10440,8 @@ def render_match_title(
         f'<div class="wc-match-team">'
         f'{safe_away}'
         f'</div>'
+
+        f'{ribbon_html}'
 
         f'</div>'
     )
