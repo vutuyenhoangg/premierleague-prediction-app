@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+from pathlib import Path
 import hashlib
 import json
 import os
@@ -45,6 +45,14 @@ TARGET_TIMEZONE = "Asia/Ho_Chi_Minh"
 EXPECTED_TEAM_COUNT = 20
 EXPECTED_MATCH_COUNT = 380
 EXPECTED_MATCHDAYS = set(range(1, 39))
+
+BASE_DIR = Path(__file__).resolve().parent
+
+TEAM_METADATA_PATH = (
+    BASE_DIR
+    / "data"
+    / "epl_team_metadata.json"
+)
 
 REQUEST_TIMEOUT_SECONDS = 30
 
@@ -323,9 +331,58 @@ def extract_raw_matches(
 
     return matches
 
+def load_team_metadata() -> dict[str, dict[str, Any]]:
+    if not TEAM_METADATA_PATH.exists():
+        raise FileNotFoundError(
+            f"Không tìm thấy metadata đội bóng: "
+            f"{TEAM_METADATA_PATH}"
+        )
+
+    with TEAM_METADATA_PATH.open(
+        "r",
+        encoding="utf-8"
+    ) as file:
+        metadata = json.load(file)
+
+    if not isinstance(metadata, dict):
+        raise TypeError(
+            "epl_team_metadata.json phải là JSON object."
+        )
+
+    normalized_metadata = {}
+
+    for team_name, values in metadata.items():
+        clean_team_name = normalize_text(team_name)
+
+        if not clean_team_name:
+            continue
+
+        if not isinstance(values, dict):
+            raise TypeError(
+                f"Metadata của {clean_team_name} "
+                f"không phải object."
+            )
+
+        normalized_metadata[clean_team_name] = {
+            "short_name": normalize_text(
+                values.get("short_name")
+            ),
+            "logo_path": normalize_text(
+                values.get("logo_path")
+            ),
+            "stadium_name": normalize_text(
+                values.get("stadium_name")
+            ),
+            "stadium_city": normalize_text(
+                values.get("stadium_city")
+            ),
+        }
+
+    return normalized_metadata
 
 def build_teams(
     raw_matches: list[dict[str, Any]],
+    team_metadata: dict[str, dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     team_names: set[str] = set()
 
@@ -339,9 +396,26 @@ def build_teams(
         if away_name:
             team_names.add(away_name)
 
+    missing_metadata = sorted(
+        team_name
+        for team_name in team_names
+        if team_name not in team_metadata
+    )
+
+    if missing_metadata:
+        raise RuntimeError(
+            "Các đội chưa có metadata:\n- "
+            + "\n- ".join(missing_metadata)
+        )
+
     records: list[dict[str, Any]] = []
 
-    for team_name in sorted(team_names, key=str.casefold):
+    for team_name in sorted(
+        team_names,
+        key=str.casefold
+    ):
+        metadata = team_metadata[team_name]
+
         records.append(
             {
                 "team_id": stable_postgres_integer(
@@ -349,10 +423,25 @@ def build_teams(
                     canonical_key_text(team_name),
                 ),
                 "team_name": team_name,
+                "short_name": metadata.get(
+                    "short_name"
+                ),
+                "logo_path": metadata.get(
+                    "logo_path"
+                ),
+                "stadium_name": metadata.get(
+                    "stadium_name"
+                ),
+                "stadium_city": metadata.get(
+                    "stadium_city"
+                ),
             }
         )
 
-    ids = [record["team_id"] for record in records]
+    ids = [
+        record["team_id"]
+        for record in records
+    ]
 
     if len(ids) != len(set(ids)):
         raise RuntimeError(
@@ -688,7 +777,14 @@ def ensure_database_schema(engine) -> None:
         )
 
     expected_columns = {
-        "teams": {"team_id", "team_name"},
+        "teams": {
+            "team_id",
+            "team_name",
+            "short_name",
+            "logo_path",
+            "stadium_name",
+            "stadium_city",
+        },
         "matches": set(MATCH_COLUMNS),
         "predictions": {
             "prediction_id",
@@ -956,7 +1052,19 @@ def sync_database(
                     set_={
                         "team_name": (
                             team_insert.excluded.team_name
-                        )
+                        ),
+                        "short_name": (
+                            team_insert.excluded.short_name
+                        ),
+                        "logo_path": (
+                            team_insert.excluded.logo_path
+                        ),
+                        "stadium_name": (
+                            team_insert.excluded.stadium_name
+                        ),
+                        "stadium_city": (
+                            team_insert.excluded.stadium_city
+                        ),
                     },
                 )
             )
@@ -1036,8 +1144,11 @@ def main() -> None:
 
     raw_matches = extract_raw_matches(payload)
 
+    team_metadata = load_team_metadata()
+    
     teams, team_name_to_id = build_teams(
-        raw_matches
+        raw_matches,
+        team_metadata,
     )
 
     matches, matchdays = normalize_matches(
