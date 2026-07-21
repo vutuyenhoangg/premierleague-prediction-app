@@ -134,6 +134,10 @@ FINAL_POSTER_IMAGE_URL = ""
 
 FINAL_BACKGROUND_IMAGE_URL = ""
 
+MATCH_CARD_BACKGROUND_IMAGE_URL = (
+    "data/static/epl-match-card-background.png"
+)
+
 FINAL_POSTER_END_DATE = date(2026, 7, 20)
 
 FOOTER_PROJECT_URL = ""
@@ -1609,6 +1613,177 @@ def inject_epl_premium_match_card_css():
         unsafe_allow_html=True
     )
 
+def inject_match_card_background_image_css():
+    """
+    Hiển thị một ảnh nền chìm bên trong tất cả card trận đấu.
+
+    Nguyên lý giống card chung kết World Cup:
+    - Ảnh nằm chính giữa card.
+    - Ảnh không chiếm diện tích bố cục.
+    - Ảnh nằm dưới toàn bộ nội dung.
+    - Hai mép ảnh được làm mờ để hòa vào nền card.
+    - Desktop và mobile có kích thước riêng.
+    """
+    background_src = resolve_asset_src(
+        MATCH_CARD_BACKGROUND_IMAGE_URL
+    )
+
+    if not background_src:
+        return
+
+    safe_background_src = (
+        str(background_src)
+        .replace("\\", "/")
+        .replace('"', '\\"')
+    )
+
+    st.markdown(
+        f"""
+        <style>
+        /*
+         * Card đã dùng ::before cho shimmer chạy quanh viền.
+         * Vì vậy ảnh nền phải dùng ::after.
+         */
+        div[class*="st-key-match_card_"] {{
+            position: relative !important;
+            isolation: isolate !important;
+            overflow: hidden !important;
+        }}
+
+        /*
+         * Lớp ảnh nằm trên background gốc của card,
+         * nhưng nằm dưới toàn bộ nội dung.
+         */
+        div[class*="st-key-match_card_"]::after {{
+            content: "";
+
+            position: absolute !important;
+            inset: 0 !important;
+
+            z-index: 0 !important;
+            pointer-events: none !important;
+
+            border-radius: inherit !important;
+
+            background-image:
+                url("{safe_background_src}") !important;
+
+            background-position:
+                center 50% !important;
+
+            background-size:
+                72% auto !important;
+
+            background-repeat:
+                no-repeat !important;
+
+            /*
+             * Ảnh chìm tương tự nền card chung kết.
+             */
+            opacity:
+                0.17 !important;
+
+            filter:
+                saturate(0.78)
+                contrast(0.94)
+                brightness(1.04);
+
+            /*
+             * Làm mờ dần các mép ảnh.
+             * Tránh ảnh lộ thành một hình chữ nhật.
+             */
+            -webkit-mask-image:
+                radial-gradient(
+                    ellipse 68% 76% at center,
+                    rgba(0, 0, 0, 1) 0%,
+                    rgba(0, 0, 0, 0.96) 48%,
+                    rgba(0, 0, 0, 0.58) 70%,
+                    transparent 100%
+                );
+
+            mask-image:
+                radial-gradient(
+                    ellipse 68% 76% at center,
+                    rgba(0, 0, 0, 1) 0%,
+                    rgba(0, 0, 0, 0.96) 48%,
+                    rgba(0, 0, 0, 0.58) 70%,
+                    transparent 100%
+                );
+
+            -webkit-mask-repeat:
+                no-repeat;
+
+            mask-repeat:
+                no-repeat;
+
+            -webkit-mask-size:
+                100% 100%;
+
+            mask-size:
+                100% 100%;
+        }}
+
+        /*
+         * Giữ toàn bộ nội dung phía trên lớp ảnh.
+         */
+        div[class*="st-key-match_card_"]
+        > div {{
+            position: relative !important;
+            z-index: 2 !important;
+        }}
+
+        /*
+         * Mobile:
+         * Card hẹp và cao hơn nên ảnh cần phóng lớn hơn.
+         */
+        @media (max-width: 768px) {{
+            div[class*="st-key-match_card_"]::after {{
+                background-position:
+                    center 48% !important;
+
+                background-size:
+                    135% auto !important;
+
+                opacity:
+                    0.13 !important;
+
+                -webkit-mask-image:
+                    radial-gradient(
+                        ellipse 88% 72% at center,
+                        rgba(0, 0, 0, 1) 0%,
+                        rgba(0, 0, 0, 0.92) 46%,
+                        rgba(0, 0, 0, 0.48) 70%,
+                        transparent 100%
+                    );
+
+                mask-image:
+                    radial-gradient(
+                        ellipse 88% 72% at center,
+                        rgba(0, 0, 0, 1) 0%,
+                        rgba(0, 0, 0, 0.92) 46%,
+                        rgba(0, 0, 0, 0.48) 70%,
+                        transparent 100%
+                    );
+            }}
+        }}
+
+        @media (max-width: 390px) {{
+            div[class*="st-key-match_card_"]::after {{
+                background-position:
+                    center 46% !important;
+
+                background-size:
+                    148% auto !important;
+
+                opacity:
+                    0.12 !important;
+            }}
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
 def inject_main_page_lift_css():
     """
     Đẩy riêng nội dung trang chính lên cao hơn.
@@ -1844,6 +2019,7 @@ def inject_mobile_prediction_score_row_css():
 inject_epl_theme()
 inject_match_card_border_animation_css()
 inject_epl_premium_match_card_css()
+inject_match_card_background_image_css()
 inject_mobile_prediction_score_row_css()
 inject_hide_streamlit_embed_footer_css()
 inject_main_page_lift_css()
