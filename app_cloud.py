@@ -134,6 +134,10 @@ FINAL_POSTER_IMAGE_URL = ""
 
 FINAL_BACKGROUND_IMAGE_URL = ""
 
+EPL_MATCH_BACKGROUND_IMAGE_URL = (
+    "data/static/epl-match-background.jpg"
+)
+
 FINAL_POSTER_END_DATE = date(2026, 7, 20)
 
 FOOTER_PROJECT_URL = ""
@@ -6824,11 +6828,12 @@ def get_match_card_css(status_info, row=None):
     """
     Thiết kế chung cho toàn bộ card Premier League.
 
-    Mục tiêu:
-    - Giữ nguyên toàn bộ logic theo trạng thái.
-    - Dùng một khung thiết kế đồng bộ, danh giá.
-    - Màu chủ đạo Premier League: tím đậm, hồng, xanh mint.
-    - Giữ màu trạng thái cho badge và hiệu ứng chạy viền.
+    Cơ chế ảnh nền được triển khai theo đúng kiến trúc card chung kết
+    của app World Cup:
+    - resolve ảnh thành data URL;
+    - tạo trọn vẹn chuỗi background nhiều lớp;
+    - gán chuỗi đó vào đúng một thuộc tính background;
+    - không dùng thẻ img hoặc pseudo-element để chứa ảnh.
     """
     status_key = str(
         status_info.get("status_key") or ""
@@ -6872,6 +6877,188 @@ def get_match_card_css(status_info, row=None):
         else "0"
     )
 
+    background_src = resolve_asset_src(
+        EPL_MATCH_BACKGROUND_IMAGE_URL
+    )
+
+    background_css_url = (
+        str(background_src)
+        .replace("\\", "/")
+        .replace('"', '\\"')
+    )
+
+    card_background = f"""
+        linear-gradient(#E8C96A, #E8C96A)
+        left 12px top 12px / 24px 1px no-repeat,
+
+        linear-gradient(#E8C96A, #E8C96A)
+        left 12px top 12px / 1px 24px no-repeat,
+
+        linear-gradient(#E8C96A, #E8C96A)
+        right 12px top 12px / 24px 1px no-repeat,
+
+        linear-gradient(#E8C96A, #E8C96A)
+        right 12px top 12px / 1px 24px no-repeat,
+
+        linear-gradient(#E8C96A, #E8C96A)
+        left 12px bottom 12px / 24px 1px no-repeat,
+
+        linear-gradient(#E8C96A, #E8C96A)
+        left 12px bottom 12px / 1px 24px no-repeat,
+
+        linear-gradient(#E8C96A, #E8C96A)
+        right 12px bottom 12px / 24px 1px no-repeat,
+
+        linear-gradient(#E8C96A, #E8C96A)
+        right 12px bottom 12px / 1px 24px no-repeat,
+
+        linear-gradient(
+            90deg,
+            transparent,
+            var(--epl-card-status-accent),
+            transparent
+        )
+        center top / 38% 2px no-repeat,
+
+        radial-gradient(
+            circle at 8% 8%,
+            rgba(255, 40, 130, 0.13),
+            transparent 25%
+        ),
+
+        radial-gradient(
+            circle at 90% 10%,
+            rgba(0, 255, 133, 0.12),
+            transparent 24%
+        ),
+
+        repeating-linear-gradient(
+            125deg,
+            rgba(55, 0, 60, 0.018) 0,
+            rgba(55, 0, 60, 0.018) 1px,
+            transparent 1px,
+            transparent 27px
+        ),
+
+        radial-gradient(
+            ellipse at center 56%,
+            rgba(255, 255, 255, 0.22) 0%,
+            rgba(255, 255, 255, 0.42) 48%,
+            rgba(255, 255, 255, 0.76) 80%
+        ),
+
+        linear-gradient(
+            180deg,
+            rgba(255, 255, 255, 0.18) 0%,
+            rgba(255, 255, 255, 0.34) 58%,
+            rgba(255, 255, 255, 0.58) 100%
+        ),
+
+        linear-gradient(
+            90deg,
+            rgba(255, 251, 254, 0.96) 0%,
+            rgba(255, 251, 254, 0.82) 10%,
+            rgba(255, 255, 255, 0.48) 23%,
+            rgba(255, 255, 255, 0.00) 34%,
+            rgba(255, 255, 255, 0.00) 66%,
+            rgba(247, 255, 252, 0.48) 77%,
+            rgba(247, 255, 252, 0.82) 90%,
+            rgba(247, 255, 252, 0.96) 100%
+        ),
+
+        url("{background_css_url}")
+        center center / 72% auto no-repeat,
+
+        linear-gradient(
+            135deg,
+            rgba(255, 251, 254, 0.99) 0%,
+            rgba(250, 248, 255, 0.98) 48%,
+            rgba(246, 255, 251, 0.98) 100%
+        )
+    """
+
+    mobile_card_background = f"""
+        linear-gradient(#E8C96A, #E8C96A)
+        left 9px top 9px / 18px 1px no-repeat,
+
+        linear-gradient(#E8C96A, #E8C96A)
+        left 9px top 9px / 1px 18px no-repeat,
+
+        linear-gradient(#E8C96A, #E8C96A)
+        right 9px top 9px / 18px 1px no-repeat,
+
+        linear-gradient(#E8C96A, #E8C96A)
+        right 9px top 9px / 1px 18px no-repeat,
+
+        linear-gradient(#E8C96A, #E8C96A)
+        left 9px bottom 9px / 18px 1px no-repeat,
+
+        linear-gradient(#E8C96A, #E8C96A)
+        left 9px bottom 9px / 1px 18px no-repeat,
+
+        linear-gradient(#E8C96A, #E8C96A)
+        right 9px bottom 9px / 18px 1px no-repeat,
+
+        linear-gradient(#E8C96A, #E8C96A)
+        right 9px bottom 9px / 1px 18px no-repeat,
+
+        linear-gradient(
+            90deg,
+            transparent,
+            var(--epl-card-status-accent),
+            transparent
+        )
+        center top / 44% 2px no-repeat,
+
+        radial-gradient(
+            circle at 5% 5%,
+            rgba(255, 40, 130, 0.10),
+            transparent 24%
+        ),
+
+        radial-gradient(
+            circle at 94% 7%,
+            rgba(0, 255, 133, 0.10),
+            transparent 22%
+        ),
+
+        radial-gradient(
+            ellipse at center 54%,
+            rgba(255, 255, 255, 0.20) 0%,
+            rgba(255, 255, 255, 0.38) 50%,
+            rgba(255, 255, 255, 0.72) 82%
+        ),
+
+        linear-gradient(
+            180deg,
+            rgba(255, 255, 255, 0.16) 0%,
+            rgba(255, 255, 255, 0.30) 58%,
+            rgba(255, 255, 255, 0.54) 100%
+        ),
+
+        linear-gradient(
+            90deg,
+            rgba(255, 251, 254, 0.92) 0%,
+            rgba(255, 251, 254, 0.66) 12%,
+            rgba(255, 255, 255, 0.18) 28%,
+            rgba(255, 255, 255, 0.00) 38%,
+            rgba(255, 255, 255, 0.00) 62%,
+            rgba(247, 255, 252, 0.18) 72%,
+            rgba(247, 255, 252, 0.66) 88%,
+            rgba(247, 255, 252, 0.92) 100%
+        ),
+
+        url("{background_css_url}")
+        center 54% / 132% auto no-repeat,
+
+        linear-gradient(
+            135deg,
+            rgba(255, 251, 254, 0.99),
+            rgba(248, 250, 255, 0.98) 54%,
+            rgba(247, 255, 252, 0.98)
+        )
+    """
+
     return f"""
     {{
         --wc-match-card-shimmer-opacity:
@@ -6905,106 +7092,7 @@ def get_match_card_css(status_info, row=None):
             4px 4px 28px 4px;
 
         background:
-            linear-gradient(
-                #E8C96A,
-                #E8C96A
-            )
-            left 12px top 12px
-            / 24px 1px
-            no-repeat,
-
-            linear-gradient(
-                #E8C96A,
-                #E8C96A
-            )
-            left 12px top 12px
-            / 1px 24px
-            no-repeat,
-
-            linear-gradient(
-                #E8C96A,
-                #E8C96A
-            )
-            right 12px top 12px
-            / 24px 1px
-            no-repeat,
-
-            linear-gradient(
-                #E8C96A,
-                #E8C96A
-            )
-            right 12px top 12px
-            / 1px 24px
-            no-repeat,
-
-            linear-gradient(
-                #E8C96A,
-                #E8C96A
-            )
-            left 12px bottom 12px
-            / 24px 1px
-            no-repeat,
-
-            linear-gradient(
-                #E8C96A,
-                #E8C96A
-            )
-            left 12px bottom 12px
-            / 1px 24px
-            no-repeat,
-
-            linear-gradient(
-                #E8C96A,
-                #E8C96A
-            )
-            right 12px bottom 12px
-            / 24px 1px
-            no-repeat,
-
-            linear-gradient(
-                #E8C96A,
-                #E8C96A
-            )
-            right 12px bottom 12px
-            / 1px 24px
-            no-repeat,
-
-            linear-gradient(
-                90deg,
-                transparent,
-                var(--epl-card-status-accent),
-                transparent
-            )
-            center top
-            / 38% 2px
-            no-repeat,
-
-            radial-gradient(
-                circle at 8% 8%,
-                rgba(255, 40, 130, 0.13),
-                transparent 25%
-            ),
-
-            radial-gradient(
-                circle at 90% 10%,
-                rgba(0, 255, 133, 0.12),
-                transparent 24%
-            ),
-
-            repeating-linear-gradient(
-                125deg,
-                rgba(55, 0, 60, 0.018) 0,
-                rgba(55, 0, 60, 0.018) 1px,
-                transparent 1px,
-                transparent 27px
-            ),
-
-            linear-gradient(
-                135deg,
-                rgba(255, 251, 254, 0.99) 0%,
-                rgba(250, 248, 255, 0.98) 48%,
-                rgba(246, 255, 251, 0.98) 100%
-            );
+            {card_background};
 
         box-shadow:
             0 0 0 2px rgba(232, 201, 106, 0.94),
@@ -7035,102 +7123,10 @@ def get_match_card_css(status_info, row=None):
                 18px;
 
             background:
-                linear-gradient(
-                    #E8C96A,
-                    #E8C96A
-                )
-                left 9px top 9px
-                / 18px 1px
-                no-repeat,
-
-                linear-gradient(
-                    #E8C96A,
-                    #E8C96A
-                )
-                left 9px top 9px
-                / 1px 18px
-                no-repeat,
-
-                linear-gradient(
-                    #E8C96A,
-                    #E8C96A
-                )
-                right 9px top 9px
-                / 18px 1px
-                no-repeat,
-
-                linear-gradient(
-                    #E8C96A,
-                    #E8C96A
-                )
-                right 9px top 9px
-                / 1px 18px
-                no-repeat,
-
-                linear-gradient(
-                    #E8C96A,
-                    #E8C96A
-                )
-                left 9px bottom 9px
-                / 18px 1px
-                no-repeat,
-
-                linear-gradient(
-                    #E8C96A,
-                    #E8C96A
-                )
-                left 9px bottom 9px
-                / 1px 18px
-                no-repeat,
-
-                linear-gradient(
-                    #E8C96A,
-                    #E8C96A
-                )
-                right 9px bottom 9px
-                / 18px 1px
-                no-repeat,
-
-                linear-gradient(
-                    #E8C96A,
-                    #E8C96A
-                )
-                right 9px bottom 9px
-                / 1px 18px
-                no-repeat,
-
-                linear-gradient(
-                    90deg,
-                    transparent,
-                    var(--epl-card-status-accent),
-                    transparent
-                )
-                center top
-                / 44% 2px
-                no-repeat,
-
-                radial-gradient(
-                    circle at 5% 5%,
-                    rgba(255, 40, 130, 0.10),
-                    transparent 24%
-                ),
-
-                radial-gradient(
-                    circle at 94% 7%,
-                    rgba(0, 255, 133, 0.10),
-                    transparent 22%
-                ),
-
-                linear-gradient(
-                    135deg,
-                    rgba(255, 251, 254, 0.99),
-                    rgba(248, 250, 255, 0.98) 54%,
-                    rgba(247, 255, 252, 0.98)
-                );
+                {mobile_card_background};
         }}
     }}
     """
-
 def local_asset_exists(asset_path: str) -> bool:
     """
     Kiểm tra file ảnh local có tồn tại không.
