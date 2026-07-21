@@ -10569,7 +10569,7 @@ def render_match_title(
             '</span>'
 
             '<span class="epl-premier-league-ribbon-separator">'
-            '*'
+            '&bull;'
             '</span>'
 
             '<span class="epl-premier-league-ribbon-round">'
@@ -12133,10 +12133,48 @@ def render_match_card(
                 row=row
             )
 
+            date_value = row.get(
+                "kickoff_date_display_vietnam",
+                row.get(
+                    "kickoff_date_vietnam",
+                    ""
+                )
+            )
+            
+            time_value = row.get(
+                "kickoff_time_vietnam",
+                ""
+            )
+            
+            date_text = (
+                ""
+                if (
+                    date_value is None
+                    or pd.isna(date_value)
+                )
+                else str(date_value).strip()
+            )
+            
+            time_text = (
+                ""
+                if (
+                    time_value is None
+                    or pd.isna(time_value)
+                )
+                else str(time_value).strip()
+            )
+            
+            schedule_parts = [
+                value
+                for value in [
+                    time_text,
+                    date_text
+                ]
+                if value
+            ]
+            
             st.caption(
-                f"{row.get('kickoff_weekday_vietnam', '')} "
-                f"{row.get('kickoff_date_display_vietnam', row.get('kickoff_date_vietnam', ''))} "
-                f"lúc {row.get('kickoff_time_vietnam', '')}"
+                " • ".join(schedule_parts)
             )
 
             if is_finished:
