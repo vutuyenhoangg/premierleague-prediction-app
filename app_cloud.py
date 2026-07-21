@@ -6499,7 +6499,7 @@ def render_winner_logo_overlay(row):
         position: absolute;
 
         top: -50px;
-        right: -40px;
+        right: -48px;
 
         z-index: 3;
 
