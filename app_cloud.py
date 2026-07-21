@@ -135,7 +135,7 @@ FINAL_POSTER_IMAGE_URL = ""
 FINAL_BACKGROUND_IMAGE_URL = ""
 
 EPL_MATCH_BACKGROUND_IMAGE_URL = (
-    "data/static/epl-match-background.jpg"
+    "data/static/epl-match-background.png"
 )
 
 FINAL_POSTER_END_DATE = date(2026, 7, 20)
