@@ -6498,8 +6498,8 @@ def render_winner_logo_overlay(row):
     .wc-winner-logo-overlay-{match_id} {{
         position: absolute;
 
-        top: -30px;
-        right: -15px;
+        top: -35px;
+        right: -20px;
 
         z-index: 3;
 
@@ -6546,8 +6546,8 @@ def render_winner_logo_overlay(row):
         width: auto;
         height: auto;
     
-        max-width: 72px;
-        max-height: 64px;
+        max-width: 56px;
+        max-height: 50px;
     
         object-fit: contain;
         object-position: center;
