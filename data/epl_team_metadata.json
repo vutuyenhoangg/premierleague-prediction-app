@@ -1,0 +1,122 @@
+{
+  "Arsenal FC": {
+    "short_name": "Arsenal",
+    "logo_path": "data/static/team-logos/arsenal.png",
+    "stadium_name": "Emirates Stadium",
+    "stadium_city": "London"
+  },
+  "Aston Villa FC": {
+    "short_name": "Aston Villa",
+    "logo_path": "data/static/team-logos/aston-villa.png",
+    "stadium_name": "Villa Park",
+    "stadium_city": "Birmingham"
+  },
+  "AFC Bournemouth": {
+    "short_name": "Bournemouth",
+    "logo_path": "data/static/team-logos/bournemouth.png",
+    "stadium_name": "Vitality Stadium",
+    "stadium_city": "Bournemouth"
+  },
+  "Brentford FC": {
+    "short_name": "Brentford",
+    "logo_path": "data/static/team-logos/brentford.png",
+    "stadium_name": "Gtech Community Stadium",
+    "stadium_city": "London"
+  },
+  "Brighton & Hove Albion FC": {
+    "short_name": "Brighton",
+    "logo_path": "data/static/team-logos/brighton.png",
+    "stadium_name": "Amex Stadium",
+    "stadium_city": "Brighton"
+  },
+  "Burnley FC": {
+    "short_name": "Burnley",
+    "logo_path": "data/static/team-logos/burnley.png",
+    "stadium_name": "Turf Moor",
+    "stadium_city": "Burnley"
+  },
+  "Chelsea FC": {
+    "short_name": "Chelsea",
+    "logo_path": "data/static/team-logos/chelsea.png",
+    "stadium_name": "Stamford Bridge",
+    "stadium_city": "London"
+  },
+  "Crystal Palace FC": {
+    "short_name": "Crystal Palace",
+    "logo_path": "data/static/team-logos/crystal-palace.png",
+    "stadium_name": "Selhurst Park",
+    "stadium_city": "London"
+  },
+  "Everton FC": {
+    "short_name": "Everton",
+    "logo_path": "data/static/team-logos/everton.png",
+    "stadium_name": "Hill Dickinson Stadium",
+    "stadium_city": "Liverpool"
+  },
+  "Fulham FC": {
+    "short_name": "Fulham",
+    "logo_path": "data/static/team-logos/fulham.png",
+    "stadium_name": "Craven Cottage",
+    "stadium_city": "London"
+  },
+  "Leeds United FC": {
+    "short_name": "Leeds United",
+    "logo_path": "data/static/team-logos/leeds.png",
+    "stadium_name": "Elland Road",
+    "stadium_city": "Leeds"
+  },
+  "Liverpool FC": {
+    "short_name": "Liverpool",
+    "logo_path": "data/static/team-logos/liverpool.png",
+    "stadium_name": "Anfield",
+    "stadium_city": "Liverpool"
+  },
+  "Manchester City FC": {
+    "short_name": "Manchester City",
+    "logo_path": "data/static/team-logos/manchester-city.png",
+    "stadium_name": "Etihad Stadium",
+    "stadium_city": "Manchester"
+  },
+  "Manchester United FC": {
+    "short_name": "Manchester United",
+    "logo_path": "data/static/team-logos/manchester-united.png",
+    "stadium_name": "Old Trafford",
+    "stadium_city": "Manchester"
+  },
+  "Newcastle United FC": {
+    "short_name": "Newcastle United",
+    "logo_path": "data/static/team-logos/newcastle.png",
+    "stadium_name": "St. James' Park",
+    "stadium_city": "Newcastle upon Tyne"
+  },
+  "Nottingham Forest FC": {
+    "short_name": "Nottingham Forest",
+    "logo_path": "data/static/team-logos/nottingham-forest.png",
+    "stadium_name": "The City Ground",
+    "stadium_city": "Nottingham"
+  },
+  "Sunderland AFC": {
+    "short_name": "Sunderland",
+    "logo_path": "data/static/team-logos/sunderland.png",
+    "stadium_name": "Stadium of Light",
+    "stadium_city": "Sunderland"
+  },
+  "Tottenham Hotspur FC": {
+    "short_name": "Tottenham Hotspur",
+    "logo_path": "data/static/team-logos/tottenham.png",
+    "stadium_name": "Tottenham Hotspur Stadium",
+    "stadium_city": "London"
+  },
+  "West Ham United FC": {
+    "short_name": "West Ham United",
+    "logo_path": "data/static/team-logos/west-ham.png",
+    "stadium_name": "London Stadium",
+    "stadium_city": "London"
+  },
+  "Wolverhampton Wanderers FC": {
+    "short_name": "Wolves",
+    "logo_path": "data/static/team-logos/wolves.png",
+    "stadium_name": "Molineux Stadium",
+    "stadium_city": "Wolverhampton"
+  }
+}
