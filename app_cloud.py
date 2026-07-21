@@ -42,10 +42,11 @@ RUN_DB_MIGRATIONS = str(
     )
 ).strip().lower() in ["true", "1", "yes", "y"]
 
-APP_NAME = "World Cup 2026 Prediction Arena"
-APP_SHORT_NAME = "WC 2026"
-APP_TAGLINE = "Dự đoán tỉ số, tích điểm và leo bảng xếp hạng cùng bạn bè."
-COOKIE_NAME = "wc_session_token"
+APP_NAME = "EPL Prediction Arena"
+APP_SHORT_NAME = "EPL"
+APP_SEASON_LABEL = "2025/26"
+APP_TAGLINE = "Dự đoán tỉ số Ngoại hạng Anh, tích điểm và tranh tài cùng bạn bè."
+COOKIE_NAME = "epl_session_token"
 SESSION_DAYS = 30
 HOPE_STARS_PER_USER = 5
 SUPER_STARS_PER_USER = 1
@@ -54,6 +55,8 @@ CHECKIN_HOPE_REWARD_DAY = 5
 CHECKIN_SUPER_REWARD_DAY = 7
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 GEMINI_MODEL_NAME = st.secrets.get("GEMINI_MODEL_NAME", "gemini-2.5-flash")
+ENABLE_FINAL_POSTER = False
+ENABLE_AI_FEATURES = False
 
 AVATAR_FOLDER = "data/static/avatars"
 DEFAULT_AVATAR_KEY = "avatar_default_1.png"
@@ -119,17 +122,17 @@ STAR_CONFIG = {
 # TODO LINK AREA
 # ============================================================
 
-APP_LOGO_URL = "data/static/app-logo.png"
+APP_LOGO_URL = ""
 
-HERO_BACKGROUND_URL = "data/static/hero-background.jpeg"
+HERO_BACKGROUND_URL = ""
 
-HERO_TROPHY_IMAGE_URL = "data/static/hero-logo-new.png"
+HERO_TROPHY_IMAGE_URL = ""
 
-SIDEBAR_DECORATION_URL = "data/static/sidebar.png"
+SIDEBAR_DECORATION_URL = ""
 
-FINAL_POSTER_IMAGE_URL = "data/static/final-poster.png"
+FINAL_POSTER_IMAGE_URL = ""
 
-FINAL_BACKGROUND_IMAGE_URL = "data/static/final-background.jpg"
+FINAL_BACKGROUND_IMAGE_URL = ""
 
 FINAL_POSTER_END_DATE = date(2026, 7, 20)
 
@@ -175,8 +178,8 @@ def resolve_asset_src(asset_path: str) -> str:
 
 
 st.set_page_config(
-    page_title="WC26 Prediction Arena",
-    page_icon="static/app-icon.png",
+    page_title="EPL Prediction Arena",
+    page_icon="⚽",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -4137,7 +4140,10 @@ def maybe_render_daily_checkin_popup(user_id: int) -> bool:
     return False
 
 def is_final_poster_popup_active() -> bool:
-    return today_vietnam_date() <= FINAL_POSTER_END_DATE
+    return (
+        ENABLE_FINAL_POSTER
+        and today_vietnam_date() <= FINAL_POSTER_END_DATE
+    )
 
 
 def has_seen_final_poster_today(user_id: int) -> bool:
@@ -4997,7 +5003,7 @@ def render_sidebar_brand():
     if app_logo_src:
         logo_html = f'<img class="wc-logo-img" src="{app_logo_src}" alt="App logo">'
     else:
-        logo_html = '<div class="wc-logo-fallback">WC<br>26</div>'
+        logo_html = '<div class="wc-logo-fallback">EPL</div>'
 
     st.markdown(
         f"""
@@ -5037,7 +5043,7 @@ def render_sidebar_footer():
     st.markdown(
         f"""
         <div class="wc-sidebar-footer">
-            <strong>One World. One Game.</strong>
+            <strong>Every Match. Every Point.</strong>
             <div style="margin-top:6px;color:#CBD5E1;">
                 Developed by JKH
             </div>
@@ -5050,32 +5056,58 @@ def render_sidebar_footer():
 
 
 def render_app_hero():
-    hero_trophy_src = resolve_asset_src(HERO_TROPHY_IMAGE_URL)
+    hero_visual_src = resolve_asset_src(
+        HERO_TROPHY_IMAGE_URL
+    )
 
-    if hero_trophy_src:
-        hero_visual = f'<img class="wc-hero-img" src="{hero_trophy_src}" alt="Hero visual">'
+    if hero_visual_src:
+        hero_visual = (
+            f'<img class="wc-hero-img" '
+            f'src="{hero_visual_src}" '
+            f'alt="EPL visual">'
+        )
     else:
-        hero_visual = '<div class="wc-hero-orb">2026</div>'
+        hero_visual = (
+            '<div class="wc-hero-orb">EPL</div>'
+        )
 
     st.markdown(
         f"""
         <div class="wc-hero">
             <div class="wc-hero-grid">
                 <div>
-                    <div class="wc-eyebrow">⚽ Tournament Prediction Hub</div>
+                    <div class="wc-eyebrow">
+                        ⚽ Premier League Prediction Hub
+                    </div>
+
                     <div class="wc-hero-title">
-                        World Cup <span class="wc-gold">2026</span><br>
+                        Premier League
+                        <span class="wc-gold">
+                            {APP_SEASON_LABEL}
+                        </span>
+                        <br>
                         Prediction Arena
                     </div>
+
                     <div class="wc-hero-subtitle">
                         {APP_TAGLINE}
                     </div>
+
                     <div class="wc-hero-actions">
-                        <div class="wc-pill">Leaderboard</div>
-                        <div class="wc-pill">Exact score challenge</div>
-                        <div class="wc-pill">North America 2026</div>
+                        <div class="wc-pill">
+                            Bảng xếp hạng
+                        </div>
+
+                        <div class="wc-pill">
+                            Dự đoán tỉ số
+                        </div>
+
+                        <div class="wc-pill">
+                            38 vòng đấu
+                        </div>
                     </div>
                 </div>
+
                 <div>
                     {hero_visual}
                 </div>
@@ -12996,7 +13028,7 @@ def render_match_card(
                 and score_pen_home is not None
                 and score_pen_away is not None
             )
-            if is_finished:
+            if ENABLE_AI_FEATURES and is_finished:
                 ai_summary_clicked = st.button(
                     "AI tóm tắt",
                     key=f"ai_summary_button_{match_id}",
@@ -13008,7 +13040,10 @@ def render_match_card(
                     st.session_state["ai_summary_match_id"] = match_id
                     st.rerun()
             
-            elif status_info.get("status_key") == "open":
+            elif (
+                ENABLE_AI_FEATURES
+                and status_info.get("status_key") == "open"
+            ):
                 ai_suggestion_clicked = st.button(
                     "AI phân tích",
                     key=f"ai_suggestion_button_{match_id}",
@@ -15417,9 +15452,14 @@ def page_admin():
 
 def render_footer():
     if FOOTER_PROJECT_URL:
-        footer_link = f'<a href="{FOOTER_PROJECT_URL}" target="_blank">Project repo / portfolio</a>'
+        footer_link = (
+            f'<a href="{FOOTER_PROJECT_URL}" '
+            f'target="_blank">'
+            f'Project repo / portfolio'
+            f'</a>'
+        )
     else:
-        footer_link = "World Cup Prediction Arena"
+        footer_link = "EPL Prediction Arena"
 
     st.markdown(
         f"""
