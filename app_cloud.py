@@ -14377,7 +14377,7 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
         if logo_src:
             logo_html = f'<img class="epl-team-logo" src="{html.escape(logo_src, quote=True)}" alt="{team_name}">'
         else:
-            logo_html = '<span class="epl-team-logo-fallback">FC</span>'
+            logo_html = ""
 
         cells_html = []
 
@@ -14420,6 +14420,7 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
         border: 1px solid rgba(15, 23, 42, 0.08);
         background: #FFFFFF;
         box-shadow: 0 18px 45px rgba(15, 23, 42, 0.10);
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }}
     .epl-standings-scroll {{
         overflow-x: auto;
@@ -14431,6 +14432,7 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
         border-collapse: collapse;
         font-size: 14px;
         color: #0F172A;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }}
     .epl-standings-table th {{
         background: linear-gradient(135deg, #07111F, #14213A);
@@ -14468,24 +14470,16 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
         align-items: center;
         gap: 11px;
     }}
-    .epl-team-logo,
-    .epl-team-logo-fallback {{
+    .epl-team-logo {{
         width: 30px;
         height: 30px;
         flex: 0 0 30px;
-        border-radius: 999px;
         object-fit: contain;
-        background: #FFFFFF;
-        border: 1px solid rgba(15, 23, 42, 0.10);
-        box-shadow: 0 5px 12px rgba(15, 23, 42, 0.14);
-    }}
-    .epl-team-logo-fallback {{
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 10px;
-        font-weight: 900;
-        color: #0F172A;
+        display: block;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
     }}
     .points-cell {{
         font-weight: 950;
