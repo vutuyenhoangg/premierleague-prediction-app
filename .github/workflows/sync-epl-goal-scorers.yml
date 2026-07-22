@@ -7,6 +7,10 @@ on:
         description: "Optional Supabase matches.match_id to sync one match only"
         required: false
         type: string
+      event_id:
+        description: "Optional TheSportsDB idEvent to force for one match"
+        required: false
+        type: string
       dry_run:
         description: "Fetch and validate without writing to Supabase"
         required: false
@@ -46,13 +50,21 @@ jobs:
           THESPORTSDB_SEASON: "2025-2026"
           WRITE_PARTIAL_SCORERS: "false"
           INPUT_MATCH_ID: ${{ github.event.inputs.match_id || '' }}
+          INPUT_EVENT_ID: ${{ github.event.inputs.event_id || '' }}
           INPUT_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
         run: |
           ARGS=""
+
           if [ -n "$INPUT_MATCH_ID" ]; then
             ARGS="$ARGS --match-id $INPUT_MATCH_ID"
           fi
+
+          if [ -n "$INPUT_EVENT_ID" ]; then
+            ARGS="$ARGS --event-id $INPUT_EVENT_ID"
+          fi
+
           if [ "$INPUT_DRY_RUN" = "true" ]; then
             ARGS="$ARGS --dry-run"
           fi
+
           python scripts/sync_epl_goal_scorers.py $ARGS
