@@ -4763,7 +4763,7 @@ def render_sidebar_brand():
     if app_logo_src:
         logo_html = f'<img class="wc-logo-img" src="{app_logo_src}" alt="App logo">'
     else:
-        logo_html = '<div class="wc-logo-fallback">EPL 2026/27</div>'
+        logo_html = '<div class="wc-logo-fallback">EPL</div>'
 
     st.markdown(
         f"""
