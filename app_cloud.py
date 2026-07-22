@@ -126,7 +126,7 @@ APP_LOGO_URL = "data/static/epl-prediction-arena.png"
 
 HERO_BACKGROUND_URL = "data/static/epl-banner.png"
 
-HERO_TROPHY_IMAGE_URL = "data/static/epl-logo.png"
+HERO_TROPHY_IMAGE_URL = "data/static/logo-epl.png"
 
 SIDEBAR_DECORATION_URL = "data/static/epl-sidebar.png"
 
