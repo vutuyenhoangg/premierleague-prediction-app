@@ -14276,18 +14276,7 @@ def build_leaderboard_df():
     return summary
 
 def build_epl_standings_df(matches: pd.DataFrame) -> pd.DataFrame:
-    columns = [
-        "Logo",
-        "Đội bóng",
-        "Trận",
-        "Thắng",
-        "Hòa",
-        "Thua",
-        "Bàn thắng",
-        "Bàn thua",
-        "Hiệu số",
-        "Điểm"
-    ]
+    columns = ["Logo", "Đội bóng", "Trận", "Thắng", "Hòa", "Thua", "Bàn thắng", "Bàn thua", "Hiệu số", "Điểm"]
 
     if matches.empty:
         return pd.DataFrame(columns=columns)
@@ -14296,12 +14285,7 @@ def build_epl_standings_df(matches: pd.DataFrame) -> pd.DataFrame:
 
     def ensure_team(team_id, team_name, logo_path=None):
         team_id_int = to_optional_int(team_id)
-        
-        team_key = (
-            f"id:{team_id_int}"
-            if team_id_int is not None
-            else f"name:{str(team_name).strip().lower()}"
-        )
+        team_key = f"id:{team_id_int}" if team_id_int is not None else f"name:{str(team_name).strip().lower()}"
 
         if team_key not in table:
             table[team_key] = {
@@ -14316,27 +14300,17 @@ def build_epl_standings_df(matches: pd.DataFrame) -> pd.DataFrame:
                 "Hiệu số": 0,
                 "Điểm": 0
             }
-
         elif not table[team_key]["Logo"] and logo_path and not pd.isna(logo_path):
             table[team_key]["Logo"] = str(logo_path).strip()
 
         return table[team_key]
 
-    # Cho hiện đủ đội ngay cả khi chưa đá trận nào.
     for _, row in matches.iterrows():
         if pd.notna(row.get("home_team_name")):
-            ensure_team(
-                row.get("home_team_id"),
-                row.get("home_team_name"),
-                row.get("home_team_logo_path")
-            )
+            ensure_team(row.get("home_team_id"), row.get("home_team_name"), row.get("home_team_logo_path"))
 
         if pd.notna(row.get("away_team_name")):
-            ensure_team(
-                row.get("away_team_id"),
-                row.get("away_team_name"),
-                row.get("away_team_logo_path")
-            )
+            ensure_team(row.get("away_team_id"), row.get("away_team_name"), row.get("away_team_logo_path"))
 
     for _, row in matches.iterrows():
         if not to_bool(row.get("is_finished")):
@@ -14348,24 +14322,13 @@ def build_epl_standings_df(matches: pd.DataFrame) -> pd.DataFrame:
         if home_goals is None or away_goals is None:
             continue
 
-        home_team = ensure_team(
-            row.get("home_team_id"),
-            row.get("home_team_name"),
-            row.get("home_team_logo_path")
-        )
-
-        away_team = ensure_team(
-            row.get("away_team_id"),
-            row.get("away_team_name"),
-            row.get("away_team_logo_path")
-        )
+        home_team = ensure_team(row.get("home_team_id"), row.get("home_team_name"), row.get("home_team_logo_path"))
+        away_team = ensure_team(row.get("away_team_id"), row.get("away_team_name"), row.get("away_team_logo_path"))
 
         home_team["Trận"] += 1
         away_team["Trận"] += 1
-
         home_team["Bàn thắng"] += home_goals
         home_team["Bàn thua"] += away_goals
-
         away_team["Bàn thắng"] += away_goals
         away_team["Bàn thua"] += home_goals
 
@@ -14373,12 +14336,10 @@ def build_epl_standings_df(matches: pd.DataFrame) -> pd.DataFrame:
             home_team["Thắng"] += 1
             away_team["Thua"] += 1
             home_team["Điểm"] += 3
-
         elif away_goals > home_goals:
             away_team["Thắng"] += 1
             home_team["Thua"] += 1
             away_team["Điểm"] += 3
-
         else:
             home_team["Hòa"] += 1
             away_team["Hòa"] += 1
@@ -14399,21 +14360,12 @@ def build_epl_standings_df(matches: pd.DataFrame) -> pd.DataFrame:
 
     return standings[columns]
 
+
 def render_epl_standings_table(standings_df: pd.DataFrame):
     if standings_df.empty:
         return
 
-    stat_columns = [
-        "Trận",
-        "Thắng",
-        "Hòa",
-        "Thua",
-        "Bàn thắng",
-        "Bàn thua",
-        "Hiệu số",
-        "Điểm"
-    ]
-
+    stat_columns = ["Trận", "Thắng", "Hòa", "Thua", "Bàn thắng", "Bàn thua", "Hiệu số", "Điểm"]
     rows_html = []
 
     for index, row in standings_df.reset_index(drop=True).iterrows():
@@ -14423,11 +14375,7 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
         logo_src = resolve_asset_src(logo_path) if logo_path else ""
 
         if logo_src:
-            logo_html = f'''
-                <img class="epl-team-logo"
-                     src="{html.escape(logo_src, quote=True)}"
-                     alt="{team_name}">
-            '''
+            logo_html = f'<img class="epl-team-logo" src="{html.escape(logo_src, quote=True)}" alt="{team_name}">'
         else:
             logo_html = '<span class="epl-team-logo-fallback">FC</span>'
 
@@ -14444,11 +14392,9 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
                 value_class = ""
 
             if col == "Điểm":
-                value_class += " points-cell"
+                value_class = f"{value_class} points-cell".strip()
 
-            cells_html.append(
-                f'<td class="{value_class.strip()}">{html.escape(display_value)}</td>'
-            )
+            cells_html.append(f'<td class="{value_class}">{html.escape(display_value)}</td>')
 
         rows_html.append(
             f"""
@@ -14466,156 +14412,140 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
         )
 
     standings_html = f"""
-        <style>
+    <style>
+    .epl-standings-box {{
+        margin-top: 18px;
+        border-radius: 18px;
+        overflow: hidden;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        background: #FFFFFF;
+        box-shadow: 0 18px 45px rgba(15, 23, 42, 0.10);
+    }}
+    .epl-standings-scroll {{
+        overflow-x: auto;
+        width: 100%;
+    }}
+    .epl-standings-table {{
+        width: 100%;
+        min-width: 900px;
+        border-collapse: collapse;
+        font-size: 14px;
+        color: #0F172A;
+    }}
+    .epl-standings-table th {{
+        background: linear-gradient(135deg, #07111F, #14213A);
+        color: #F8FAFC;
+        padding: 14px 12px;
+        font-size: 12px;
+        font-weight: 900;
+        text-align: center;
+        white-space: nowrap;
+    }}
+    .epl-standings-table th:nth-child(2) {{
+        text-align: left;
+    }}
+    .epl-standings-table td {{
+        padding: 13px 12px;
+        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+        text-align: center;
+        background: rgba(255, 255, 255, 0.94);
+    }}
+    .epl-standings-table tr:hover td {{
+        background: #EAF6FF;
+    }}
+    .rank-cell {{
+        width: 64px;
+        font-weight: 900;
+        color: #334155;
+    }}
+    .team-cell {{
+        text-align: left !important;
+        min-width: 260px;
+        font-weight: 850;
+    }}
+    .team-wrap {{
+        display: flex;
+        align-items: center;
+        gap: 11px;
+    }}
+    .epl-team-logo,
+    .epl-team-logo-fallback {{
+        width: 30px;
+        height: 30px;
+        flex: 0 0 30px;
+        border-radius: 999px;
+        object-fit: contain;
+        background: #FFFFFF;
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        box-shadow: 0 5px 12px rgba(15, 23, 42, 0.14);
+    }}
+    .epl-team-logo-fallback {{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 900;
+        color: #0F172A;
+    }}
+    .points-cell {{
+        font-weight: 950;
+        color: #07111F;
+        background: rgba(245, 197, 66, 0.22) !important;
+    }}
+    .positive {{
+        color: #047857;
+        font-weight: 850;
+    }}
+    .negative {{
+        color: #B91C1C;
+        font-weight: 850;
+    }}
+    @media (max-width: 768px) {{
         .epl-standings-box {{
-            margin-top: 18px;
-            border-radius: 18px;
-            overflow: hidden;
-            border: 1px solid rgba(15, 23, 42, 0.08);
-            background: #FFFFFF;
-            box-shadow: 0 18px 45px rgba(15, 23, 42, 0.10);
+            border-radius: 14px;
         }}
-
-        .epl-standings-scroll {{
-            overflow-x: auto;
-            width: 100%;
-        }}
-
         .epl-standings-table {{
-            width: 100%;
-            min-width: 900px;
-            border-collapse: collapse;
-            font-size: 14px;
-            color: #0F172A;
+            min-width: 820px;
+            font-size: 13px;
         }}
-
-        .epl-standings-table th {{
-            background: linear-gradient(135deg, #07111F, #14213A);
-            color: #F8FAFC;
-            padding: 14px 12px;
-            font-size: 12px;
-            font-weight: 900;
-            text-align: center;
-            white-space: nowrap;
-        }}
-
-        .epl-standings-table th:nth-child(2) {{
-            text-align: left;
-        }}
-
+        .epl-standings-table th,
         .epl-standings-table td {{
-            padding: 13px 12px;
-            border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-            text-align: center;
-            background: rgba(255, 255, 255, 0.92);
+            padding: 11px 10px;
         }}
+    }}
+    </style>
 
-        .epl-standings-table tr:hover td {{
-            background: #EAF6FF;
-        }}
-
-        .rank-cell {{
-            width: 64px;
-            font-weight: 900;
-            color: #334155;
-        }}
-
-        .team-cell {{
-            text-align: left !important;
-            min-width: 260px;
-            font-weight: 850;
-        }}
-
-        .team-wrap {{
-            display: flex;
-            align-items: center;
-            gap: 11px;
-        }}
-
-        .epl-team-logo,
-        .epl-team-logo-fallback {{
-            width: 30px;
-            height: 30px;
-            flex: 0 0 30px;
-            border-radius: 999px;
-            object-fit: contain;
-            background: #FFFFFF;
-            border: 1px solid rgba(15, 23, 42, 0.10);
-            box-shadow: 0 5px 12px rgba(15, 23, 42, 0.14);
-        }}
-
-        .epl-team-logo-fallback {{
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 10px;
-            font-weight: 900;
-            color: #0F172A;
-        }}
-
-        .points-cell {{
-            font-weight: 950;
-            color: #07111F;
-            background: rgba(245, 197, 66, 0.20) !important;
-        }}
-
-        .positive {{
-            color: #047857;
-            font-weight: 850;
-        }}
-
-        .negative {{
-            color: #B91C1C;
-            font-weight: 850;
-        }}
-
-        @media (max-width: 768px) {{
-            .epl-standings-box {{
-                border-radius: 14px;
-            }}
-
-            .epl-standings-table {{
-                min-width: 820px;
-                font-size: 13px;
-            }}
-
-            .epl-standings-table th,
-            .epl-standings-table td {{
-                padding: 11px 10px;
-            }}
-        }}
-        </style>
-
-        <div class="epl-standings-box">
-            <div class="epl-standings-scroll">
-                <table class="epl-standings-table">
-                    <thead>
-                        <tr>
-                            <th>Hạng</th>
-                            <th>Đội bóng</th>
-                            <th>Trận</th>
-                            <th>Thắng</th>
-                            <th>Hòa</th>
-                            <th>Thua</th>
-                            <th>Bàn thắng</th>
-                            <th>Bàn thua</th>
-                            <th>Hiệu số</th>
-                            <th>Điểm</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {''.join(rows_html)}
-                    </tbody>
-                </table>
-            </div>
+    <div class="epl-standings-box">
+        <div class="epl-standings-scroll">
+            <table class="epl-standings-table">
+                <thead>
+                    <tr>
+                        <th>Hạng</th>
+                        <th>Đội bóng</th>
+                        <th>Trận</th>
+                        <th>Thắng</th>
+                        <th>Hòa</th>
+                        <th>Thua</th>
+                        <th>Bàn thắng</th>
+                        <th>Bàn thua</th>
+                        <th>Hiệu số</th>
+                        <th>Điểm</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {''.join(rows_html)}
+                </tbody>
+            </table>
         </div>
-        """
-        
-        components.html(
-            standings_html,
-            height=820,
-            scrolling=True
-        )
+    </div>
+    """
+
+    components.html(
+        standings_html,
+        height=820,
+        scrolling=True
+    )
+
 
 def page_competition_stats():
     render_page_title(
@@ -14631,10 +14561,7 @@ def page_competition_stats():
         return
 
     finished_count = int(matches["is_finished"].apply(to_bool).sum())
-
-    st.caption(
-        f"Đã tính từ {finished_count} trận đã có kết quả trong hệ thống."
-    )
+    st.caption(f"Đã tính từ {finished_count} trận đã có kết quả trong hệ thống.")
 
     render_epl_standings_table(standings)
 
