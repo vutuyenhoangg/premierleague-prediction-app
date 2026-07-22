@@ -221,27 +221,27 @@ def find_event_for_match(
         return None, "no_team_pair_match"
 
     scored_candidates = []
+
     for event in candidates:
         event_date = parse_date(event.get("dateEvent"))
-        if not match_date or not event_date:
-            date_distance = 99
-        else:
-            date_distance = abs((match_date - event_date).days)
 
-        if date_distance > 1:
-            continue
+        if match_date and event_date:
+            date_distance = abs((match_date - event_date).days)
+        else:
+            date_distance = 99
 
         scored_candidates.append((date_distance, str(event.get("idEvent") or ""), event))
-
-    if not scored_candidates:
-        return None, "team_pair_found_but_date_mismatch"
 
     scored_candidates.sort(key=lambda item: (item[0], item[1]))
 
     best_distance = scored_candidates[0][0]
     same_best = [item for item in scored_candidates if item[0] == best_distance]
+
     if len(same_best) > 1:
-        return None, "ambiguous_candidates"
+        return None, "ambiguous_team_pair_candidates"
+
+    if best_distance > 1:
+        return scored_candidates[0][2], "matched_team_pair_date_warning"
 
     return scored_candidates[0][2], "matched"
 
