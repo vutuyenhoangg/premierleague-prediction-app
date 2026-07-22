@@ -134,6 +134,8 @@ FINAL_POSTER_IMAGE_URL = ""
 
 FINAL_BACKGROUND_IMAGE_URL = ""
 
+EPL_MATCH_BACKGROUND_IMAGE_URL = "data/static/epl-match-background.png"
+
 FINAL_POSTER_END_DATE = date(2026, 7, 20)
 
 FOOTER_PROJECT_URL = ""
@@ -1609,6 +1611,79 @@ def inject_epl_premium_match_card_css():
         unsafe_allow_html=True
     )
 
+def inject_epl_match_card_background_css():
+    """
+    Thêm ảnh nền chìm cho toàn bộ card trận đấu.
+    Ảnh nằm ở lớp dưới content/nút/input, không làm thay đổi layout.
+    """
+    match_background_src = resolve_asset_src(EPL_MATCH_BACKGROUND_IMAGE_URL)
+
+    if not match_background_src:
+        return
+
+    safe_match_background_src = html.escape(
+        match_background_src,
+        quote=True
+    )
+
+    st.markdown(
+        f"""
+        <style>
+        div[class*="st-key-match_card_"] {{
+            position: relative !important;
+            overflow: hidden !important;
+            isolation: isolate !important;
+        }}
+
+        div[class*="st-key-match_card_"]::after {{
+            content: "";
+
+            position: absolute !important;
+            inset: 0 !important;
+
+            border-radius: inherit !important;
+
+            pointer-events: none !important;
+            z-index: 0 !important;
+
+            background-image:
+                linear-gradient(
+                    135deg,
+                    rgba(255, 251, 254, 0.72),
+                    rgba(255, 255, 255, 0.58) 46%,
+                    rgba(247, 255, 252, 0.72)
+                ),
+                url("{safe_match_background_src}");
+
+            background-size: cover !important;
+            background-position: center center !important;
+            background-repeat: no-repeat !important;
+
+            opacity: 0.18 !important;
+
+            filter:
+                saturate(0.95)
+                contrast(1.04) !important;
+
+            transform: scale(1.02) !important;
+        }}
+
+        div[class*="st-key-match_card_"] > div {{
+            position: relative !important;
+            z-index: 2 !important;
+        }}
+
+        @media (max-width: 768px) {{
+            div[class*="st-key-match_card_"]::after {{
+                opacity: 0.14 !important;
+                background-position: center center !important;
+            }}
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
 def inject_main_page_lift_css():
     """
     Đẩy riêng nội dung trang chính lên cao hơn.
@@ -1844,6 +1919,7 @@ def inject_mobile_prediction_score_row_css():
 inject_epl_theme()
 inject_match_card_border_animation_css()
 inject_epl_premium_match_card_css()
+inject_epl_match_card_background_css()
 inject_mobile_prediction_score_row_css()
 inject_hide_streamlit_embed_footer_css()
 inject_main_page_lift_css()
