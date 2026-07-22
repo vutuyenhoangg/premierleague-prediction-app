@@ -7918,7 +7918,8 @@ def check_required_app_tables():
         "login_sessions",
         "daily_checkins",
         "daily_checkin_rewards",
-        "final_poster_popup_views"
+        "final_poster_popup_views",
+        "match_goals"
     }
 
     missing_tables = sorted(
