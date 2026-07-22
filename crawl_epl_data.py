@@ -39,6 +39,19 @@ SOURCE_URL = os.getenv(
 COMPETITION_KEY = "epl"
 SEASON_SLUG = os.getenv("EPL_SEASON_SLUG", "2025-26").strip()
 
+THESPORTSDB_API_KEY = os.getenv(
+    "THESPORTSDB_API_KEY",
+    "123",
+).strip()
+THESPORTSDB_LEAGUE_ID = os.getenv(
+    "THESPORTSDB_LEAGUE_ID",
+    "4328",
+).strip()
+THESPORTSDB_BASE_URL = (
+    f"https://www.thesportsdb.com/api/v1/json/"
+    f"{THESPORTSDB_API_KEY}"
+)
+
 SOURCE_TIMEZONE = "Europe/London"
 TARGET_TIMEZONE = "Asia/Ho_Chi_Minh"
 
@@ -97,6 +110,21 @@ RESULT_STATE_COLUMNS = [
     "away_score_for_prediction",
     "is_finished",
     "winner_team_id",
+]
+
+MATCH_GOAL_COLUMNS = [
+    "goal_key",
+    "match_id",
+    "team_id",
+    "team_name",
+    "team_side",
+    "player_name",
+    "minute",
+    "is_penalty",
+    "is_own_goal",
+    "source_provider",
+    "source_event_id",
+    "raw_goal_text",
 ]
 
 
@@ -168,7 +196,7 @@ def translate_round_name(value: Any) -> str | None:
     )
 
     if match:
-        return f"Vòng {int(match.group(1))}"
+        return f"VÃ²ng {int(match.group(1))}"
 
     return round_text
 
@@ -190,17 +218,17 @@ def to_optional_score(value: Any) -> int | None:
         return None
 
     if isinstance(value, bool):
-        raise TypeError(f"Tỉ số không hợp lệ: {value!r}")
+        raise TypeError(f"Tá»‰ sá»‘ khÃ´ng há»£p lá»‡: {value!r}")
 
     try:
         score = int(value)
     except (TypeError, ValueError) as exc:
         raise TypeError(
-            f"Tỉ số không hợp lệ: {value!r}"
+            f"Tá»‰ sá»‘ khÃ´ng há»£p lá»‡: {value!r}"
         ) from exc
 
     if score < 0:
-        raise ValueError(f"Tỉ số không được âm: {score}")
+        raise ValueError(f"Tá»‰ sá»‘ khÃ´ng Ä‘Æ°á»£c Ã¢m: {score}")
 
     return score
 
@@ -252,7 +280,7 @@ def parse_kickoff(
 
     if not date_text or not time_text:
         raise ValueError(
-            f"Thiếu date/time: date={date_text!r}, time={time_text!r}"
+            f"Thiáº¿u date/time: date={date_text!r}, time={time_text!r}"
         )
 
     try:
@@ -262,7 +290,7 @@ def parse_kickoff(
         )
     except ValueError as exc:
         raise ValueError(
-            f"Không parse được kickoff: {date_text} {time_text}"
+            f"KhÃ´ng parse Ä‘Æ°á»£c kickoff: {date_text} {time_text}"
         ) from exc
 
     london_datetime = naive_datetime.replace(
@@ -279,18 +307,18 @@ def parse_kickoff(
 
 def weekday_vietnamese(weekday_en: str) -> str:
     return {
-        "Monday": "Thứ 2",
-        "Tuesday": "Thứ 3",
-        "Wednesday": "Thứ 4",
-        "Thursday": "Thứ 5",
-        "Friday": "Thứ 6",
-        "Saturday": "Thứ 7",
-        "Sunday": "Chủ nhật",
+        "Monday": "Thá»© 2",
+        "Tuesday": "Thá»© 3",
+        "Wednesday": "Thá»© 4",
+        "Thursday": "Thá»© 5",
+        "Friday": "Thá»© 6",
+        "Saturday": "Thá»© 7",
+        "Sunday": "Chá»§ nháº­t",
     }.get(weekday_en, weekday_en)
 
 
 def download_source() -> dict[str, Any]:
-    print("Đang tải:", SOURCE_URL)
+    print("Äang táº£i:", SOURCE_URL)
 
     response = HTTP_SESSION.get(
         SOURCE_URL,
@@ -302,12 +330,12 @@ def download_source() -> dict[str, Any]:
         payload = response.json()
     except ValueError as exc:
         raise RuntimeError(
-            "Nguồn không trả JSON hợp lệ."
+            "Nguá»“n khÃ´ng tráº£ JSON há»£p lá»‡."
         ) from exc
 
     if not isinstance(payload, dict):
         raise TypeError(
-            "JSON top-level phải là object."
+            "JSON top-level pháº£i lÃ  object."
         )
 
     return payload
@@ -320,13 +348,13 @@ def extract_raw_matches(
 
     if not isinstance(matches, list):
         raise ValueError(
-            "JSON không có key matches dạng list."
+            "JSON khÃ´ng cÃ³ key matches dáº¡ng list."
         )
 
     for index, item in enumerate(matches):
         if not isinstance(item, dict):
             raise TypeError(
-                f"matches[{index}] không phải object."
+                f"matches[{index}] khÃ´ng pháº£i object."
             )
 
     return matches
@@ -334,7 +362,7 @@ def extract_raw_matches(
 def load_team_metadata() -> dict[str, dict[str, Any]]:
     if not TEAM_METADATA_PATH.exists():
         raise FileNotFoundError(
-            f"Không tìm thấy metadata đội bóng: "
+            f"KhÃ´ng tÃ¬m tháº¥y metadata Ä‘á»™i bÃ³ng: "
             f"{TEAM_METADATA_PATH}"
         )
 
@@ -346,7 +374,7 @@ def load_team_metadata() -> dict[str, dict[str, Any]]:
 
     if not isinstance(metadata, dict):
         raise TypeError(
-            "epl_team_metadata.json phải là JSON object."
+            "epl_team_metadata.json pháº£i lÃ  JSON object."
         )
 
     normalized_metadata = {}
@@ -359,8 +387,8 @@ def load_team_metadata() -> dict[str, dict[str, Any]]:
 
         if not isinstance(values, dict):
             raise TypeError(
-                f"Metadata của {clean_team_name} "
-                f"không phải object."
+                f"Metadata cá»§a {clean_team_name} "
+                f"khÃ´ng pháº£i object."
             )
 
         normalized_metadata[clean_team_name] = {
@@ -404,7 +432,7 @@ def build_teams(
 
     if missing_metadata:
         raise RuntimeError(
-            "Các đội chưa có metadata:\n- "
+            "CÃ¡c Ä‘á»™i chÆ°a cÃ³ metadata:\n- "
             + "\n- ".join(missing_metadata)
         )
 
@@ -445,7 +473,7 @@ def build_teams(
 
     if len(ids) != len(set(ids)):
         raise RuntimeError(
-            "Phát hiện hash collision ở team_id."
+            "PhÃ¡t hiá»‡n hash collision á»Ÿ team_id."
         )
 
     name_to_id = {
@@ -481,24 +509,24 @@ def normalize_matches(
         )
 
         if not round_name:
-            raise ValueError(f"Thiếu round: {context}")
+            raise ValueError(f"Thiáº¿u round: {context}")
 
         if not home_name or not away_name:
-            raise ValueError(f"Thiếu tên đội: {context}")
+            raise ValueError(f"Thiáº¿u tÃªn Ä‘á»™i: {context}")
 
         if home_name == away_name:
             raise ValueError(
-                f"Đội nhà và đội khách trùng nhau: {context}"
+                f"Äá»™i nhÃ  vÃ  Ä‘á»™i khÃ¡ch trÃ¹ng nhau: {context}"
             )
 
         if home_name not in team_name_to_id:
             raise KeyError(
-                f"Không tìm thấy team_id cho {home_name}"
+                f"KhÃ´ng tÃ¬m tháº¥y team_id cho {home_name}"
             )
 
         if away_name not in team_name_to_id:
             raise KeyError(
-                f"Không tìm thấy team_id cho {away_name}"
+                f"KhÃ´ng tÃ¬m tháº¥y team_id cho {away_name}"
             )
 
         kickoff_utc, kickoff_vietnam = parse_kickoff(
@@ -512,7 +540,7 @@ def normalize_matches(
 
         if (score_home is None) != (score_away is None):
             raise ValueError(
-                f"Tỉ số chỉ có một phía: {context}"
+                f"Tá»‰ sá»‘ chá»‰ cÃ³ má»™t phÃ­a: {context}"
             )
 
         is_finished = (
@@ -552,7 +580,7 @@ def normalize_matches(
 
         if matchday is None:
             raise ValueError(
-                f"Không đọc được số vòng: {round_name}"
+                f"KhÃ´ng Ä‘á»c Ä‘Æ°á»£c sá»‘ vÃ²ng: {round_name}"
             )
 
         matchdays.append(matchday)
@@ -623,6 +651,417 @@ def normalize_matches(
     return records, matchdays
 
 
+TEAM_NAME_ALIASES = {
+    "arsenal": "arsenal",
+    "aston villa": "aston villa",
+    "bournemouth": "bournemouth",
+    "afc bournemouth": "bournemouth",
+    "brentford": "brentford",
+    "brighton": "brighton",
+    "brighton and hove albion": "brighton",
+    "brighton hove albion": "brighton",
+    "chelsea": "chelsea",
+    "crystal palace": "crystal palace",
+    "everton": "everton",
+    "fulham": "fulham",
+    "leeds": "leeds united",
+    "leeds united": "leeds united",
+    "liverpool": "liverpool",
+    "man city": "manchester city",
+    "manchester city": "manchester city",
+    "man united": "manchester united",
+    "man utd": "manchester united",
+    "manchester united": "manchester united",
+    "manchester utd": "manchester united",
+    "newcastle": "newcastle united",
+    "newcastle united": "newcastle united",
+    "nottingham forest": "nottingham forest",
+    "nottm forest": "nottingham forest",
+    "sunderland": "sunderland",
+    "tottenham": "tottenham hotspur",
+    "tottenham hotspur": "tottenham hotspur",
+    "spurs": "tottenham hotspur",
+    "west ham": "west ham united",
+    "west ham united": "west ham united",
+    "wolves": "wolverhampton wanderers",
+    "wolverhampton": "wolverhampton wanderers",
+    "wolverhampton wanderers": "wolverhampton wanderers",
+}
+
+
+def to_thesportsdb_season(season_slug: str) -> str:
+    parts = season_slug.split("-")
+
+    if len(parts) != 2:
+        return season_slug
+
+    start, end = parts
+
+    if len(end) == 2 and len(start) == 4:
+        end = start[:2] + end
+
+    return f"{start}-{end}"
+
+
+def normalize_team_match_key(value: Any) -> str:
+    text_value = normalize_text(value)
+
+    if not text_value:
+        return ""
+
+    normalized = (
+        unicodedata.normalize("NFKD", text_value)
+        .encode("ascii", "ignore")
+        .decode("ascii")
+    )
+    normalized = normalized.casefold()
+    normalized = normalized.replace("&", " and ")
+    normalized = re.sub(r"\bfc\b|\bafc\b", " ", normalized)
+    normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
+    normalized = " ".join(normalized.split())
+
+    return TEAM_NAME_ALIASES.get(normalized, normalized)
+
+
+def download_thesportsdb_season_events() -> list[dict[str, Any]]:
+    if not THESPORTSDB_API_KEY:
+        print("Bá» qua TheSportsDB vÃ¬ chÆ°a cÃ³ API key.")
+        return []
+
+    season = to_thesportsdb_season(SEASON_SLUG)
+    print("Äang táº£i TheSportsDB EPL season:", season)
+
+    response = HTTP_SESSION.get(
+        f"{THESPORTSDB_BASE_URL}/eventsseason.php",
+        params={
+            "id": THESPORTSDB_LEAGUE_ID,
+            "s": season,
+        },
+        timeout=REQUEST_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise RuntimeError(
+            "TheSportsDB khÃ´ng tráº£ JSON há»£p lá»‡."
+        ) from exc
+
+    events = payload.get("events") or []
+
+    if not isinstance(events, list):
+        return []
+
+    return [
+        event
+        for event in events
+        if isinstance(event, dict)
+    ]
+
+
+def download_thesportsdb_event_detail(
+    event_id: str,
+    cache: dict[str, dict[str, Any] | None],
+) -> dict[str, Any] | None:
+    if not event_id:
+        return None
+
+    if event_id in cache:
+        return cache[event_id]
+
+    response = HTTP_SESSION.get(
+        f"{THESPORTSDB_BASE_URL}/lookupevent.php",
+        params={
+            "id": event_id,
+        },
+        timeout=REQUEST_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+
+    try:
+        payload = response.json()
+    except ValueError:
+        cache[event_id] = None
+        return None
+
+    events = payload.get("events") or []
+
+    if not isinstance(events, list) or not events:
+        cache[event_id] = None
+        return None
+
+    detail = events[0]
+    cache[event_id] = detail if isinstance(detail, dict) else None
+    return cache[event_id]
+
+
+def build_thesportsdb_event_index(
+    events: list[dict[str, Any]],
+) -> dict[tuple[str, str, str], dict[str, Any]]:
+    index: dict[tuple[str, str, str], dict[str, Any]] = {}
+
+    for event in events:
+        date_value = normalize_text(
+            event.get("dateEventLocal")
+            or event.get("dateEvent")
+        )
+        home_key = normalize_team_match_key(
+            event.get("strHomeTeam")
+        )
+        away_key = normalize_team_match_key(
+            event.get("strAwayTeam")
+        )
+
+        if not date_value or not home_key or not away_key:
+            continue
+
+        index[(date_value, home_key, away_key)] = event
+
+    return index
+
+
+def split_goal_detail_chunks(detail_text: Any) -> list[str]:
+    text_value = normalize_text(detail_text)
+
+    if not text_value:
+        return []
+
+    normalized = text_value.replace("\r", "\n")
+    chunks = [
+        chunk.strip()
+        for chunk in re.split(r";|\n", normalized)
+        if chunk.strip()
+    ]
+
+    if len(chunks) <= 1 and "," in normalized:
+        chunks = [
+            chunk.strip()
+            for chunk in re.split(r",\s+", normalized)
+            if chunk.strip()
+        ]
+
+    return chunks
+
+
+def parse_goal_detail_text(
+    detail_text: Any,
+    match: dict[str, Any],
+    team_side: str,
+    source_event_id: str,
+) -> list[dict[str, Any]]:
+    chunks = split_goal_detail_chunks(detail_text)
+
+    if not chunks:
+        return []
+
+    if team_side == "home":
+        team_id = match["home_team_id"]
+        team_name = match["home_team_name"]
+    elif team_side == "away":
+        team_id = match["away_team_id"]
+        team_name = match["away_team_name"]
+    else:
+        raise ValueError(f"team_side khÃ´ng há»£p lá»‡: {team_side}")
+
+    records: list[dict[str, Any]] = []
+
+    for order, raw_goal_text in enumerate(chunks, start=1):
+        lowered = raw_goal_text.casefold()
+        is_penalty = bool(
+            re.search(
+                r"\bpen\b|\bpenalty\b|\(p\)",
+                lowered,
+            )
+        )
+        is_own_goal = bool(
+            re.search(
+                r"\bog\b|\bown goal\b",
+                lowered,
+            )
+        )
+
+        minute_match = re.search(
+            r"(\d{1,3}(?:\+\d{1,2})?)\s*['â€™]?",
+            raw_goal_text,
+        )
+        minute = (
+            f"{minute_match.group(1)}'"
+            if minute_match
+            else None
+        )
+
+        player_name = raw_goal_text
+        player_name = re.sub(
+            r"\d{1,3}(?:\+\d{1,2})?\s*['â€™]?",
+            " ",
+            player_name,
+        )
+        player_name = re.sub(
+            r"\(?\bpenalty\b\)?|\(?\bpen\b\)?|\(?\bp\b\)?",
+            " ",
+            player_name,
+            flags=re.IGNORECASE,
+        )
+        player_name = re.sub(
+            r"\(?\bown goal\b\)?|\(?\bog\b\)?",
+            " ",
+            player_name,
+            flags=re.IGNORECASE,
+        )
+        player_name = re.sub(r"\s+", " ", player_name)
+        player_name = player_name.strip(" -,:;()[]{}")
+
+        if not player_name:
+            continue
+
+        records.append(
+            {
+                "goal_key": f"{team_side}_{order:03d}",
+                "match_id": match["match_id"],
+                "team_id": team_id,
+                "team_name": team_name,
+                "team_side": team_side,
+                "player_name": player_name,
+                "minute": minute,
+                "is_penalty": is_penalty,
+                "is_own_goal": is_own_goal,
+                "source_provider": "thesportsdb",
+                "source_event_id": source_event_id,
+                "raw_goal_text": raw_goal_text,
+            }
+        )
+
+    return records
+
+
+def score_value_matches(
+    event_score: Any,
+    match_score: int | None,
+) -> bool:
+    if event_score in (None, ""):
+        return True
+
+    try:
+        return int(event_score) == int(match_score)
+    except (TypeError, ValueError):
+        return True
+
+
+def build_match_goals_from_thesportsdb(
+    matches: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[int]]:
+    events = download_thesportsdb_season_events()
+
+    if not events:
+        print("KhÃ´ng cÃ³ event TheSportsDB Ä‘á»ƒ sync scorer.")
+        return [], []
+
+    event_index = build_thesportsdb_event_index(events)
+    event_detail_cache: dict[str, dict[str, Any] | None] = {}
+    goal_records: list[dict[str, Any]] = []
+    clear_goal_match_ids: list[int] = []
+
+    for match in matches:
+        if not match["is_finished"]:
+            continue
+
+        home_score = match["score_ft_home"]
+        away_score = match["score_ft_away"]
+
+        total_goals = int(home_score or 0) + int(away_score or 0)
+
+        if total_goals == 0:
+            clear_goal_match_ids.append(match["match_id"])
+            continue
+
+        event_key = (
+            match["date_source"],
+            normalize_team_match_key(match["home_team_name"]),
+            normalize_team_match_key(match["away_team_name"]),
+        )
+        event = event_index.get(event_key)
+
+        if not event:
+            print("KhÃ´ng map Ä‘Æ°á»£c TheSportsDB event:", event_key)
+            continue
+
+        if not (
+            score_value_matches(
+                event.get("intHomeScore"),
+                home_score,
+            )
+            and score_value_matches(
+                event.get("intAwayScore"),
+                away_score,
+            )
+        ):
+            print(
+                "Bá» qua scorer vÃ¬ tá»‰ sá»‘ TheSportsDB lá»‡ch:",
+                match["home_team_name"],
+                "vs",
+                match["away_team_name"],
+            )
+            continue
+
+        source_event_id = str(
+            event.get("idEvent") or ""
+        ).strip()
+
+        detail = event
+
+        if not (
+            normalize_text(event.get("strHomeGoalDetails"))
+            or normalize_text(event.get("strAwayGoalDetails"))
+        ):
+            event_detail = download_thesportsdb_event_detail(
+                source_event_id,
+                event_detail_cache,
+            )
+
+            if event_detail:
+                detail = event_detail
+
+        records: list[dict[str, Any]] = []
+        records.extend(
+            parse_goal_detail_text(
+                detail.get("strHomeGoalDetails"),
+                match,
+                "home",
+                source_event_id,
+            )
+        )
+        records.extend(
+            parse_goal_detail_text(
+                detail.get("strAwayGoalDetails"),
+                match,
+                "away",
+                source_event_id,
+            )
+        )
+
+        if len(records) != total_goals:
+            print(
+                "Bá» qua scorer vÃ¬ sá»‘ bÃ n khÃ´ng khá»›p:",
+                match["home_team_name"],
+                "vs",
+                match["away_team_name"],
+                "score_goals=",
+                total_goals,
+                "parsed_goals=",
+                len(records),
+            )
+            continue
+
+        clear_goal_match_ids.append(match["match_id"])
+        goal_records.extend(records)
+
+    print("Sá»‘ tráº­n sáº½ cáº­p nháº­t scorer:", len(clear_goal_match_ids))
+    print("Sá»‘ dÃ²ng scorer parse Ä‘Æ°á»£c:", len(goal_records))
+
+    return goal_records, clear_goal_match_ids
+
+
 def validate_dataset(
     teams: list[dict[str, Any]],
     matches: list[dict[str, Any]],
@@ -632,29 +1071,29 @@ def validate_dataset(
 
     if len(teams) != EXPECTED_TEAM_COUNT:
         errors.append(
-            f"Số đội={len(teams)}, kỳ vọng={EXPECTED_TEAM_COUNT}."
+            f"Sá»‘ Ä‘á»™i={len(teams)}, ká»³ vá»ng={EXPECTED_TEAM_COUNT}."
         )
 
     if len(matches) != EXPECTED_MATCH_COUNT:
         errors.append(
-            f"Số trận={len(matches)}, kỳ vọng={EXPECTED_MATCH_COUNT}."
+            f"Sá»‘ tráº­n={len(matches)}, ká»³ vá»ng={EXPECTED_MATCH_COUNT}."
         )
 
     match_ids = [row["match_id"] for row in matches]
     source_ids = [row["source_match_id"] for row in matches]
 
     if len(match_ids) != len(set(match_ids)):
-        errors.append("Có match_id bị trùng.")
+        errors.append("CÃ³ match_id bá»‹ trÃ¹ng.")
 
     if len(source_ids) != len(set(source_ids)):
-        errors.append("Có source_match_id bị trùng.")
+        errors.append("CÃ³ source_match_id bá»‹ trÃ¹ng.")
 
     observed_matchdays = set(matchdays)
 
     if observed_matchdays != EXPECTED_MATCHDAYS:
         errors.append(
-            "Vòng đấu không đủ 1 đến 38. "
-            f"Đang có: {sorted(observed_matchdays)}"
+            "VÃ²ng Ä‘áº¥u khÃ´ng Ä‘á»§ 1 Ä‘áº¿n 38. "
+            f"Äang cÃ³: {sorted(observed_matchdays)}"
         )
 
     matchday_counts = Counter(matchdays)
@@ -667,7 +1106,7 @@ def validate_dataset(
 
     if invalid_round_counts:
         errors.append(
-            "Một số vòng không có đúng 10 trận: "
+            "Má»™t sá»‘ vÃ²ng khÃ´ng cÃ³ Ä‘Ãºng 10 tráº­n: "
             f"{invalid_round_counts}"
         )
 
@@ -693,7 +1132,7 @@ def validate_dataset(
 
     if invalid_team_schedules:
         errors.append(
-            "Lịch sân nhà/sân khách không hợp lệ: "
+            "Lá»‹ch sÃ¢n nhÃ /sÃ¢n khÃ¡ch khÃ´ng há»£p lá»‡: "
             + json.dumps(
                 invalid_team_schedules,
                 ensure_ascii=False,
@@ -707,7 +1146,7 @@ def validate_dataset(
             row["score_ft_away"] is None
         ):
             errors.append(
-                f"Tỉ số thiếu một phía tại match_id={row['match_id']}"
+                f"Tá»‰ sá»‘ thiáº¿u má»™t phÃ­a táº¡i match_id={row['match_id']}"
             )
 
     if errors:
@@ -720,12 +1159,12 @@ def validate_dataset(
         1 for row in matches if row["is_finished"]
     )
 
-    print("Validation thành công")
-    print("Số đội:", len(teams))
-    print("Số trận:", len(matches))
-    print("Số vòng:", len(observed_matchdays))
-    print("Đã có kết quả:", finished_count)
-    print("Chưa có kết quả:", len(matches) - finished_count)
+    print("Validation thÃ nh cÃ´ng")
+    print("Sá»‘ Ä‘á»™i:", len(teams))
+    print("Sá»‘ tráº­n:", len(matches))
+    print("Sá»‘ vÃ²ng:", len(observed_matchdays))
+    print("ÄÃ£ cÃ³ káº¿t quáº£:", finished_count)
+    print("ChÆ°a cÃ³ káº¿t quáº£:", len(matches) - finished_count)
 
 
 def get_database_url() -> str:
@@ -736,19 +1175,19 @@ def get_database_url() -> str:
 
     if not database_url:
         raise RuntimeError(
-            "Thiếu environment variable DATABASE_URL."
+            "Thiáº¿u environment variable DATABASE_URL."
         )
 
     parsed = make_url(database_url)
 
     if parsed.drivername != "postgresql+psycopg2":
         raise RuntimeError(
-            "DATABASE_URL phải dùng postgresql+psycopg2."
+            "DATABASE_URL pháº£i dÃ¹ng postgresql+psycopg2."
         )
 
     if parsed.port != 5432:
         raise RuntimeError(
-            "DATABASE_URL phải dùng Session Pooler port 5432."
+            "DATABASE_URL pháº£i dÃ¹ng Session Pooler port 5432."
         )
 
     return database_url
@@ -758,6 +1197,7 @@ def ensure_database_schema(engine) -> None:
     required_tables = {
         "teams",
         "matches",
+        "match_goals",
         "predictions",
     }
 
@@ -772,7 +1212,7 @@ def ensure_database_schema(engine) -> None:
 
     if missing_tables:
         raise RuntimeError(
-            "Database còn thiếu bảng: "
+            "Database cÃ²n thiáº¿u báº£ng: "
             + ", ".join(missing_tables)
         )
 
@@ -796,6 +1236,20 @@ def ensure_database_schema(engine) -> None:
             "star_bonus_points",
             "points",
         },
+        "match_goals": {
+            "goal_key",
+            "match_id",
+            "team_id",
+            "team_name",
+            "team_side",
+            "player_name",
+            "minute",
+            "is_penalty",
+            "is_own_goal",
+            "source_provider",
+            "source_event_id",
+            "raw_goal_text",
+        },
     }
 
     for table_name, required_columns in (
@@ -815,7 +1269,7 @@ def ensure_database_schema(engine) -> None:
 
         if missing_columns:
             raise RuntimeError(
-                f"Bảng {table_name} thiếu cột: "
+                f"Báº£ng {table_name} thiáº¿u cá»™t: "
                 + ", ".join(missing_columns)
             )
 
@@ -992,7 +1446,12 @@ def rescore_predictions(
 def sync_database(
     teams: list[dict[str, Any]],
     matches: list[dict[str, Any]],
+    match_goals: list[dict[str, Any]] | None = None,
+    clear_goal_match_ids: list[int] | None = None,
 ) -> dict[str, int]:
+    match_goals = match_goals or []
+    clear_goal_match_ids = clear_goal_match_ids or []
+
     database_url = get_database_url()
 
     engine = create_engine(
@@ -1015,6 +1474,11 @@ def sync_database(
         )
         matches_table = Table(
             "matches",
+            metadata,
+            autoload_with=engine,
+        )
+        match_goals_table = Table(
+            "match_goals",
             metadata,
             autoload_with=engine,
         )
@@ -1094,6 +1558,52 @@ def sync_database(
 
             connection.execute(match_upsert)
 
+            if clear_goal_match_ids:
+                connection.execute(
+                    text(
+                        """
+                        DELETE FROM match_goals
+                        WHERE match_id IN :match_ids
+                        """
+                    ).bindparams(
+                        bindparam(
+                            "match_ids",
+                            expanding=True,
+                        )
+                    ),
+                    {
+                        "match_ids": clear_goal_match_ids,
+                    },
+                )
+
+            if match_goals:
+                goal_insert = pg_insert(
+                    match_goals_table
+                ).values(match_goals)
+
+                goal_upsert = (
+                    goal_insert
+                    .on_conflict_do_update(
+                        index_elements=[
+                            match_goals_table.c.match_id,
+                            match_goals_table.c.goal_key,
+                        ],
+                        set_={
+                            column: getattr(
+                                goal_insert.excluded,
+                                column,
+                            )
+                            for column in MATCH_GOAL_COLUMNS
+                            if column not in {
+                                "match_id",
+                                "goal_key",
+                            }
+                        },
+                    )
+                )
+
+                connection.execute(goal_upsert)
+
             rescored_predictions = (
                 rescore_predictions(
                     connection,
@@ -1109,6 +1619,8 @@ def sync_database(
                             AS teams,
                         (SELECT COUNT(*) FROM matches)
                             AS matches,
+                        (SELECT COUNT(*) FROM match_goals)
+                            AS match_goals,
                         (SELECT COUNT(*) FROM predictions)
                             AS predictions
                     """
@@ -1118,6 +1630,9 @@ def sync_database(
         return {
             "teams": int(database_counts["teams"]),
             "matches": int(database_counts["matches"]),
+            "match_goals": int(
+                database_counts["match_goals"]
+            ),
             "predictions": int(
                 database_counts["predictions"]
             ),
@@ -1135,12 +1650,12 @@ def sync_database(
 
 def main() -> None:
     print("=" * 72)
-    print("EPL OPENFOOTBALL → SUPABASE")
+    print("EPL OPENFOOTBALL â†’ SUPABASE")
     print("=" * 72)
     print("Season:", SEASON_SLUG)
 
     payload = download_source()
-    print("Tên giải:", payload.get("name"))
+    print("TÃªn giáº£i:", payload.get("name"))
 
     raw_matches = extract_raw_matches(payload)
 
@@ -1162,32 +1677,44 @@ def main() -> None:
         matchdays,
     )
 
+    match_goals, clear_goal_match_ids = (
+        build_match_goals_from_thesportsdb(
+            matches,
+        )
+    )
+
     result = sync_database(
         teams,
         matches,
+        match_goals=match_goals,
+        clear_goal_match_ids=clear_goal_match_ids,
     )
 
     print("\n" + "=" * 72)
-    print("SYNC THÀNH CÔNG")
+    print("SYNC THÃ€NH CÃ”NG")
     print("=" * 72)
     print(
-        "Số đội trong database:",
+        "Sá»‘ Ä‘á»™i trong database:",
         result["teams"],
     )
     print(
-        "Số trận trong database:",
+        "Sá»‘ tráº­n trong database:",
         result["matches"],
     )
     print(
-        "Số prediction hiện có:",
+        "Sá»‘ dÃ²ng scorer trong database:",
+        result["match_goals"],
+    )
+    print(
+        "Sá»‘ prediction hiá»‡n cÃ³:",
         result["predictions"],
     )
     print(
-        "Số trận có dữ liệu thay đổi:",
+        "Sá»‘ tráº­n cÃ³ dá»¯ liá»‡u thay Ä‘á»•i:",
         result["changed_matches"],
     )
     print(
-        "Số prediction được chấm lại:",
+        "Sá»‘ prediction Ä‘Æ°á»£c cháº¥m láº¡i:",
         result["rescored_predictions"],
     )
 
