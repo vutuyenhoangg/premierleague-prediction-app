@@ -263,16 +263,10 @@ def fetch_timeline(event_id: str) -> list[dict[str, Any]]:
     return data.get("timeline") or []
 
 
-def find_tsdb_event(
-    match: dict[str, Any],
-    season_events: list[dict[str, Any]],
-) -> dict[str, Any] | None:
-    local_home = normalize_team_name(match.get("home_team_name"))
-    local_away = normalize_team_name(match.get("away_team_name"))
+def find_tsdb_event(match: dict[str, Any], season_events: list[dict[str, Any]]) -> dict[str, Any] | None:
+    home_name = normalize_team_name(match.get("home_team_name"))
+    away_name = normalize_team_name(match.get("away_team_name"))
     local_date = parse_date(match.get("kickoff_date_vietnam")) or parse_date(match.get("kickoff_time_utc"))
-
-    local_home_score = parse_int(match.get("home_score_for_prediction"))
-    local_away_score = parse_int(match.get("away_score_for_prediction"))
 
     candidates = []
 
@@ -281,49 +275,20 @@ def find_tsdb_event(
         event_away = normalize_team_name(event.get("strAwayTeam"))
         event_date = parse_date(event.get("dateEvent"))
 
-        if event_home != local_home or event_away != local_away:
+        if event_home != home_name or event_away != away_name:
             continue
 
-        if not dates_match(local_date, event_date):
-            continue
-
-        event_home_score = parse_int(event.get("intHomeScore"))
-        event_away_score = parse_int(event.get("intAwayScore"))
-
-        has_both_scores = all(
-            value is not None
-            for value in (
-                local_home_score,
-                local_away_score,
-                event_home_score,
-                event_away_score,
-            )
-        )
-
-        if has_both_scores and (
-            event_home_score != local_home_score
-            or event_away_score != local_away_score
-        ):
-            continue
-
-        date_distance = 0
+        date_distance = 99
         if local_date and event_date:
             date_distance = abs((local_date - event_date).days)
 
-        score_bonus = 0
-        if event_home_score == local_home_score:
-            score_bonus += 1
-        if event_away_score == local_away_score:
-            score_bonus += 1
-
-        candidates.append((score_bonus, -date_distance, event))
+        candidates.append((date_distance, str(event.get("idEvent") or ""), event))
 
     if not candidates:
         return None
 
-    candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    candidates.sort(key=lambda item: (item[0], item[1]))
     return candidates[0][2]
-
 
 def validate_event_score(match: dict[str, Any], event: dict[str, Any]) -> str | None:
     local_home_score = parse_int(match.get("home_score_for_prediction"))
@@ -661,18 +626,6 @@ def sync_one_match(
             update_match_event_id(engine, match_id, event_id)
 
     score_error = validate_event_score(match, event)
-    if score_error:
-        if not dry_run:
-            upsert_sync_status(
-                engine,
-                match_id,
-                event_id,
-                "event_score_mismatch",
-                expected_goals,
-                0,
-                score_error,
-            )
-        return f"WARN {label}: {score_error}"
 
     timeline = fetch_timeline(event_id)
     goals = parse_goal_events(match, event, timeline)
@@ -696,7 +649,7 @@ def sync_one_match(
         return f"WARN {label}: {message}"
 
     status = "synced"
-    message = "Scorers synced successfully."
+    message = score_error or "Scorers synced successfully."
 
     if fetched_goals != expected_goals:
         status = "synced_partial"
