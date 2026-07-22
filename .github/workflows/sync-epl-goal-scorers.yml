@@ -1,0 +1,58 @@
+name: Sync EPL goal scorers
+
+on:
+  workflow_dispatch:
+    inputs:
+      match_id:
+        description: "Optional Supabase matches.match_id to sync one match only"
+        required: false
+        type: string
+      dry_run:
+        description: "Fetch and validate without writing to Supabase"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+  schedule:
+    # Runs after common Premier League match windows. Times are UTC.
+    - cron: "20 0,3,6,15,18,21 * * *"
+
+jobs:
+  sync-goal-scorers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests SQLAlchemy psycopg2-binary
+
+      - name: Sync goal scorers
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          THESPORTSDB_API_KEY: ${{ secrets.THESPORTSDB_API_KEY }}
+          THESPORTSDB_LEAGUE_ID: "4328"
+          THESPORTSDB_SEASON: "2025-2026"
+          WRITE_PARTIAL_SCORERS: "false"
+          INPUT_MATCH_ID: ${{ github.event.inputs.match_id || '' }}
+          INPUT_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: |
+          ARGS=""
+          if [ -n "$INPUT_MATCH_ID" ]; then
+            ARGS="$ARGS --match-id $INPUT_MATCH_ID"
+          fi
+          if [ "$INPUT_DRY_RUN" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          python scripts/sync_epl_goal_scorers.py $ARGS
