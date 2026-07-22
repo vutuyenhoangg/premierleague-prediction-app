@@ -42,7 +42,7 @@ RUN_DB_MIGRATIONS = str(
 ).strip().lower() in ["true", "1", "yes", "y"]
 
 APP_NAME = "EPL Prediction Arena"
-APP_SHORT_NAME = "EPL"
+APP_SHORT_NAME = "EPL 2026/27"
 APP_SEASON_LABEL = "2025/26"
 APP_TAGLINE = "Dự đoán tỉ số Ngoại hạng Anh, tích điểm và tranh tài cùng bạn bè."
 COOKIE_NAME = "epl_session_token"
