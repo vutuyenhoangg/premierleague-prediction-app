@@ -122,13 +122,13 @@ STAR_CONFIG = {
 # TODO LINK AREA
 # ============================================================
 
-APP_LOGO_URL = ""
+APP_LOGO_URL = "data/static/epl-logo.png"
 
-HERO_BACKGROUND_URL = ""
+HERO_BACKGROUND_URL = "data/static/epl-banner.png"
 
-HERO_TROPHY_IMAGE_URL = ""
+HERO_TROPHY_IMAGE_URL = "data/static/epl-prediction-arena.png"
 
-SIDEBAR_DECORATION_URL = ""
+SIDEBAR_DECORATION_URL = "data/static/epl-sidebar.png"
 
 FINAL_POSTER_IMAGE_URL = ""
 
