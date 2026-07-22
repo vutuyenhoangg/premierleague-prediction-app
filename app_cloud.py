@@ -14275,6 +14275,156 @@ def build_leaderboard_df():
 
     return summary
 
+def build_epl_standings_df(matches: pd.DataFrame) -> pd.DataFrame:
+    if matches.empty:
+        return pd.DataFrame()
+
+    table = {}
+
+    def ensure_team(team_id, team_name):
+        key = str(team_id) if pd.notna(team_id) else str(team_name)
+
+        if key not in table:
+            table[key] = {
+                "Đội bóng": str(team_name),
+                "Trận": 0,
+                "Thắng": 0,
+                "Hòa": 0,
+                "Thua": 0,
+                "Bàn thắng": 0,
+                "Bàn thua": 0,
+                "Hiệu số": 0,
+                "Điểm": 0
+            }
+
+        return table[key]
+
+    for _, row in matches.iterrows():
+        if not bool(row.get("is_finished")):
+            continue
+
+        home_goals = to_optional_int(row.get("home_score_for_prediction"))
+        away_goals = to_optional_int(row.get("away_score_for_prediction"))
+
+        if home_goals is None or away_goals is None:
+            continue
+
+        home_team = ensure_team(
+            row.get("home_team_id"),
+            row.get("home_team_name")
+        )
+
+        away_team = ensure_team(
+            row.get("away_team_id"),
+            row.get("away_team_name")
+        )
+
+        home_team["Trận"] += 1
+        away_team["Trận"] += 1
+
+        home_team["Bàn thắng"] += home_goals
+        home_team["Bàn thua"] += away_goals
+
+        away_team["Bàn thắng"] += away_goals
+        away_team["Bàn thua"] += home_goals
+
+        if home_goals > away_goals:
+            home_team["Thắng"] += 1
+            away_team["Thua"] += 1
+            home_team["Điểm"] += 3
+
+        elif away_goals > home_goals:
+            away_team["Thắng"] += 1
+            home_team["Thua"] += 1
+            away_team["Điểm"] += 3
+
+        else:
+            home_team["Hòa"] += 1
+            away_team["Hòa"] += 1
+            home_team["Điểm"] += 1
+            away_team["Điểm"] += 1
+
+    standings = pd.DataFrame(table.values())
+
+    if standings.empty:
+        return standings
+
+    standings["Hiệu số"] = standings["Bàn thắng"] - standings["Bàn thua"]
+
+    standings = standings.sort_values(
+        ["Điểm", "Hiệu số", "Bàn thắng", "Đội bóng"],
+        ascending=[False, False, False, True]
+    ).reset_index(drop=True)
+
+    standings.insert(0, "Hạng", range(1, len(standings) + 1))
+
+    return standings
+
+
+def page_competition_stats():
+    render_page_title(
+        "Thông số giải đấu",
+        "Bảng xếp hạng EPL được tự động tính từ kết quả các trận đấu."
+    )
+
+    matches = load_matches()
+    standings = build_epl_standings_df(matches)
+
+    if standings.empty:
+        st.info("Chưa có đủ kết quả trận đấu để tính bảng xếp hạng.")
+        return
+
+    styled_standings = (
+        standings
+        .style
+        .set_properties(
+            subset=["Điểm"],
+            **{
+                "font-weight": "900 !important",
+                "color": "#07111F !important"
+            }
+        )
+        .set_table_styles(
+            [
+                {
+                    "selector": "thead th",
+                    "props": [
+                        ("background-color", "#07111F"),
+                        ("color", "#F8FAFC"),
+                        ("font-weight", "900"),
+                        ("text-align", "center"),
+                        ("padding", "11px 12px")
+                    ]
+                },
+                {
+                    "selector": "tbody td",
+                    "props": [
+                        ("border-bottom", "1px solid rgba(15,23,42,0.08)"),
+                        ("padding", "10px 12px"),
+                        ("text-align", "center")
+                    ]
+                },
+                {
+                    "selector": "tbody td:nth-child(2)",
+                    "props": [
+                        ("text-align", "left"),
+                        ("font-weight", "800")
+                    ]
+                },
+                {
+                    "selector": "table",
+                    "props": [
+                        ("width", "100%"),
+                        ("border-collapse", "collapse"),
+                        ("font-size", "14px")
+                    ]
+                }
+            ]
+        )
+    )
+
+    st.table(styled_standings)
+
 def page_leaderboard():
     render_page_title(
         "Bảng xếp hạng",
@@ -15188,6 +15338,7 @@ def main():
             "Lịch thi đấu & dự đoán",
             "Dự đoán của tôi",
             "Bảng xếp hạng",
+            "Thông số giải đấu",
             "Phân tích tổng quan"
         ]
 
@@ -15228,6 +15379,9 @@ def main():
 
         elif selected_page == "Bảng xếp hạng":
             page_leaderboard()
+
+        elif selected_page == "Thông số giải đấu":
+            page_competition_stats()
 
         elif selected_page == "Phân tích tổng quan":
             page_dashboard()
