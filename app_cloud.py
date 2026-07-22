@@ -14488,11 +14488,11 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
     }}
     .positive {{
         color: #047857;
-        font-weight: 850;
+        font-weight: 400;
     }}
     .negative {{
         color: #B91C1C;
-        font-weight: 850;
+        font-weight: 400;
     }}
     @media (max-width: 768px) {{
         .epl-standings-box {{
