@@ -14295,9 +14295,11 @@ def build_epl_standings_df(matches: pd.DataFrame) -> pd.DataFrame:
     table = {}
 
     def ensure_team(team_id, team_name, logo_path=None):
+        team_id_int = to_optional_int(team_id)
+        
         team_key = (
-            f"id:{int(team_id)}"
-            if to_optional_int(team_id) is not None
+            f"id:{team_id_int}"
+            if team_id_int is not None
             else f"name:{str(team_name).strip().lower()}"
         )
 
@@ -14463,8 +14465,7 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
             """
         )
 
-    st.markdown(
-        f"""
+    standings_html = f"""
         <style>
         .epl-standings-box {{
             margin-top: 18px;
@@ -14608,9 +14609,13 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
                 </table>
             </div>
         </div>
-        """,
-        unsafe_allow_html=True
-    )
+        """
+        
+        components.html(
+            standings_html,
+            height=820,
+            scrolling=True
+        )
 
 def page_competition_stats():
     render_page_title(
