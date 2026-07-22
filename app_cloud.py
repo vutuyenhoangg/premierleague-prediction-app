@@ -14353,10 +14353,18 @@ def build_epl_standings_df(matches: pd.DataFrame) -> pd.DataFrame:
 
     standings["Hiệu số"] = standings["Bàn thắng"] - standings["Bàn thua"]
 
-    standings = standings.sort_values(
-        ["Điểm", "Hiệu số", "Bàn thắng", "Đội bóng"],
-        ascending=[False, False, False, True]
-    ).reset_index(drop=True)
+    finished_count = int(matches["is_finished"].apply(to_bool).sum())
+    
+    if finished_count == 0:
+        standings = standings.sort_values(
+            ["Đội bóng"],
+            ascending=[True]
+        ).reset_index(drop=True)
+    else:
+        standings = standings.sort_values(
+            ["Điểm", "Hiệu số", "Bàn thắng", "Đội bóng"],
+            ascending=[False, False, False, True]
+        ).reset_index(drop=True)
 
     return standings[columns]
 
@@ -14553,9 +14561,6 @@ def page_competition_stats():
     if standings.empty:
         st.info("Chưa có đủ dữ liệu trận đấu để tính bảng xếp hạng.")
         return
-
-    finished_count = int(matches["is_finished"].apply(to_bool).sum())
-    st.caption(f"Đã tính từ {finished_count} trận đã có kết quả trong hệ thống.")
 
     render_epl_standings_table(standings)
 
