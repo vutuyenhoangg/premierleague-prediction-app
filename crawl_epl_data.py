@@ -196,7 +196,7 @@ def translate_round_name(value: Any) -> str | None:
     )
 
     if match:
-        return f"VÃ²ng {int(match.group(1))}"
+        return f"Vòng {int(match.group(1))}"
 
     return round_text
 
@@ -218,17 +218,17 @@ def to_optional_score(value: Any) -> int | None:
         return None
 
     if isinstance(value, bool):
-        raise TypeError(f"Tá»‰ sá»‘ khÃ´ng há»£p lá»‡: {value!r}")
+        raise TypeError(f"Tỉ số không hợp lệ: {value!r}")
 
     try:
         score = int(value)
     except (TypeError, ValueError) as exc:
         raise TypeError(
-            f"Tá»‰ sá»‘ khÃ´ng há»£p lá»‡: {value!r}"
+            f"Tỉ số không hợp lệ: {value!r}"
         ) from exc
 
     if score < 0:
-        raise ValueError(f"Tá»‰ sá»‘ khÃ´ng Ä‘Æ°á»£c Ã¢m: {score}")
+        raise ValueError(f"Tỉ số không được âm: {score}")
 
     return score
 
@@ -280,7 +280,7 @@ def parse_kickoff(
 
     if not date_text or not time_text:
         raise ValueError(
-            f"Thiáº¿u date/time: date={date_text!r}, time={time_text!r}"
+            f"Thiếu date/time: date={date_text!r}, time={time_text!r}"
         )
 
     try:
@@ -290,7 +290,7 @@ def parse_kickoff(
         )
     except ValueError as exc:
         raise ValueError(
-            f"KhÃ´ng parse Ä‘Æ°á»£c kickoff: {date_text} {time_text}"
+            f"Không parse được kickoff: {date_text} {time_text}"
         ) from exc
 
     london_datetime = naive_datetime.replace(
@@ -307,18 +307,18 @@ def parse_kickoff(
 
 def weekday_vietnamese(weekday_en: str) -> str:
     return {
-        "Monday": "Thá»© 2",
-        "Tuesday": "Thá»© 3",
-        "Wednesday": "Thá»© 4",
-        "Thursday": "Thá»© 5",
-        "Friday": "Thá»© 6",
-        "Saturday": "Thá»© 7",
-        "Sunday": "Chá»§ nháº­t",
+        "Monday": "Thứ 2",
+        "Tuesday": "Thứ 3",
+        "Wednesday": "Thứ 4",
+        "Thursday": "Thứ 5",
+        "Friday": "Thứ 6",
+        "Saturday": "Thứ 7",
+        "Sunday": "Chủ nhật",
     }.get(weekday_en, weekday_en)
 
 
 def download_source() -> dict[str, Any]:
-    print("Äang táº£i:", SOURCE_URL)
+    print("Đang tải:", SOURCE_URL)
 
     response = HTTP_SESSION.get(
         SOURCE_URL,
@@ -330,12 +330,12 @@ def download_source() -> dict[str, Any]:
         payload = response.json()
     except ValueError as exc:
         raise RuntimeError(
-            "Nguá»“n khÃ´ng tráº£ JSON há»£p lá»‡."
+            "Nguồn không trả JSON hợp lệ."
         ) from exc
 
     if not isinstance(payload, dict):
         raise TypeError(
-            "JSON top-level pháº£i lÃ  object."
+            "JSON top-level phải là object."
         )
 
     return payload
@@ -348,13 +348,13 @@ def extract_raw_matches(
 
     if not isinstance(matches, list):
         raise ValueError(
-            "JSON khÃ´ng cÃ³ key matches dáº¡ng list."
+            "JSON không có key matches dạng list."
         )
 
     for index, item in enumerate(matches):
         if not isinstance(item, dict):
             raise TypeError(
-                f"matches[{index}] khÃ´ng pháº£i object."
+                f"matches[{index}] không phải object."
             )
 
     return matches
@@ -362,7 +362,7 @@ def extract_raw_matches(
 def load_team_metadata() -> dict[str, dict[str, Any]]:
     if not TEAM_METADATA_PATH.exists():
         raise FileNotFoundError(
-            f"KhÃ´ng tÃ¬m tháº¥y metadata Ä‘á»™i bÃ³ng: "
+            f"Không tìm thấy metadata đội bóng: "
             f"{TEAM_METADATA_PATH}"
         )
 
@@ -374,7 +374,7 @@ def load_team_metadata() -> dict[str, dict[str, Any]]:
 
     if not isinstance(metadata, dict):
         raise TypeError(
-            "epl_team_metadata.json pháº£i lÃ  JSON object."
+            "epl_team_metadata.json phải là JSON object."
         )
 
     normalized_metadata = {}
@@ -387,8 +387,8 @@ def load_team_metadata() -> dict[str, dict[str, Any]]:
 
         if not isinstance(values, dict):
             raise TypeError(
-                f"Metadata cá»§a {clean_team_name} "
-                f"khÃ´ng pháº£i object."
+                f"Metadata của {clean_team_name} "
+                f"không phải object."
             )
 
         normalized_metadata[clean_team_name] = {
@@ -432,7 +432,7 @@ def build_teams(
 
     if missing_metadata:
         raise RuntimeError(
-            "CÃ¡c Ä‘á»™i chÆ°a cÃ³ metadata:\n- "
+            "Các đội chưa có metadata:\n- "
             + "\n- ".join(missing_metadata)
         )
 
@@ -473,7 +473,7 @@ def build_teams(
 
     if len(ids) != len(set(ids)):
         raise RuntimeError(
-            "PhÃ¡t hiá»‡n hash collision á»Ÿ team_id."
+            "Phát hiện hash collision ở team_id."
         )
 
     name_to_id = {
@@ -509,24 +509,24 @@ def normalize_matches(
         )
 
         if not round_name:
-            raise ValueError(f"Thiáº¿u round: {context}")
+            raise ValueError(f"Thiếu round: {context}")
 
         if not home_name or not away_name:
-            raise ValueError(f"Thiáº¿u tÃªn Ä‘á»™i: {context}")
+            raise ValueError(f"Thiếu tên đội: {context}")
 
         if home_name == away_name:
             raise ValueError(
-                f"Äá»™i nhÃ  vÃ  Ä‘á»™i khÃ¡ch trÃ¹ng nhau: {context}"
+                f"Đội nhà và đội khách trùng nhau: {context}"
             )
 
         if home_name not in team_name_to_id:
             raise KeyError(
-                f"KhÃ´ng tÃ¬m tháº¥y team_id cho {home_name}"
+                f"Không tìm thấy team_id cho {home_name}"
             )
 
         if away_name not in team_name_to_id:
             raise KeyError(
-                f"KhÃ´ng tÃ¬m tháº¥y team_id cho {away_name}"
+                f"Không tìm thấy team_id cho {away_name}"
             )
 
         kickoff_utc, kickoff_vietnam = parse_kickoff(
@@ -540,7 +540,7 @@ def normalize_matches(
 
         if (score_home is None) != (score_away is None):
             raise ValueError(
-                f"Tá»‰ sá»‘ chá»‰ cÃ³ má»™t phÃ­a: {context}"
+                f"Tỉ số chỉ có một phía: {context}"
             )
 
         is_finished = (
@@ -580,7 +580,7 @@ def normalize_matches(
 
         if matchday is None:
             raise ValueError(
-                f"KhÃ´ng Ä‘á»c Ä‘Æ°á»£c sá»‘ vÃ²ng: {round_name}"
+                f"Không đọc được số vòng: {round_name}"
             )
 
         matchdays.append(matchday)
@@ -725,11 +725,11 @@ def normalize_team_match_key(value: Any) -> str:
 
 def download_thesportsdb_season_events() -> list[dict[str, Any]]:
     if not THESPORTSDB_API_KEY:
-        print("Bá» qua TheSportsDB vÃ¬ chÆ°a cÃ³ API key.")
+        print("Bỏ qua TheSportsDB vì chưa có API key.")
         return []
 
     season = to_thesportsdb_season(SEASON_SLUG)
-    print("Äang táº£i TheSportsDB EPL season:", season)
+    print("Đang tải TheSportsDB EPL season:", season)
 
     response = HTTP_SESSION.get(
         f"{THESPORTSDB_BASE_URL}/eventsseason.php",
@@ -745,7 +745,7 @@ def download_thesportsdb_season_events() -> list[dict[str, Any]]:
         payload = response.json()
     except ValueError as exc:
         raise RuntimeError(
-            "TheSportsDB khÃ´ng tráº£ JSON há»£p lá»‡."
+            "TheSportsDB không trả JSON hợp lệ."
         ) from exc
 
     events = payload.get("events") or []
@@ -862,7 +862,7 @@ def parse_goal_detail_text(
         team_id = match["away_team_id"]
         team_name = match["away_team_name"]
     else:
-        raise ValueError(f"team_side khÃ´ng há»£p lá»‡: {team_side}")
+        raise ValueError(f"team_side không hợp lệ: {team_side}")
 
     records: list[dict[str, Any]] = []
 
@@ -882,7 +882,7 @@ def parse_goal_detail_text(
         )
 
         minute_match = re.search(
-            r"(\d{1,3}(?:\+\d{1,2})?)\s*['â€™]?",
+            r"(\d{1,3}(?:\+\d{1,2})?)\s*['’]?",
             raw_goal_text,
         )
         minute = (
@@ -893,7 +893,7 @@ def parse_goal_detail_text(
 
         player_name = raw_goal_text
         player_name = re.sub(
-            r"\d{1,3}(?:\+\d{1,2})?\s*['â€™]?",
+            r"\d{1,3}(?:\+\d{1,2})?\s*['’]?",
             " ",
             player_name,
         )
@@ -954,7 +954,7 @@ def build_match_goals_from_thesportsdb(
     events = download_thesportsdb_season_events()
 
     if not events:
-        print("KhÃ´ng cÃ³ event TheSportsDB Ä‘á»ƒ sync scorer.")
+        print("Không có event TheSportsDB để sync scorer.")
         return [], []
 
     event_index = build_thesportsdb_event_index(events)
@@ -983,7 +983,7 @@ def build_match_goals_from_thesportsdb(
         event = event_index.get(event_key)
 
         if not event:
-            print("KhÃ´ng map Ä‘Æ°á»£c TheSportsDB event:", event_key)
+            print("Không map được TheSportsDB event:", event_key)
             continue
 
         if not (
@@ -997,7 +997,7 @@ def build_match_goals_from_thesportsdb(
             )
         ):
             print(
-                "Bá» qua scorer vÃ¬ tá»‰ sá»‘ TheSportsDB lá»‡ch:",
+                "Bỏ qua scorer vì tỉ số TheSportsDB lệch:",
                 match["home_team_name"],
                 "vs",
                 match["away_team_name"],
@@ -1042,7 +1042,7 @@ def build_match_goals_from_thesportsdb(
 
         if len(records) != total_goals:
             print(
-                "Bá» qua scorer vÃ¬ sá»‘ bÃ n khÃ´ng khá»›p:",
+                "Bỏ qua scorer vì số bàn không khớp:",
                 match["home_team_name"],
                 "vs",
                 match["away_team_name"],
@@ -1056,8 +1056,8 @@ def build_match_goals_from_thesportsdb(
         clear_goal_match_ids.append(match["match_id"])
         goal_records.extend(records)
 
-    print("Sá»‘ tráº­n sáº½ cáº­p nháº­t scorer:", len(clear_goal_match_ids))
-    print("Sá»‘ dÃ²ng scorer parse Ä‘Æ°á»£c:", len(goal_records))
+    print("Số trận sẽ cập nhật scorer:", len(clear_goal_match_ids))
+    print("Số dòng scorer parse được:", len(goal_records))
 
     return goal_records, clear_goal_match_ids
 
@@ -1071,29 +1071,29 @@ def validate_dataset(
 
     if len(teams) != EXPECTED_TEAM_COUNT:
         errors.append(
-            f"Sá»‘ Ä‘á»™i={len(teams)}, ká»³ vá»ng={EXPECTED_TEAM_COUNT}."
+            f"Số đội={len(teams)}, kỳ vọng={EXPECTED_TEAM_COUNT}."
         )
 
     if len(matches) != EXPECTED_MATCH_COUNT:
         errors.append(
-            f"Sá»‘ tráº­n={len(matches)}, ká»³ vá»ng={EXPECTED_MATCH_COUNT}."
+            f"Số trận={len(matches)}, kỳ vọng={EXPECTED_MATCH_COUNT}."
         )
 
     match_ids = [row["match_id"] for row in matches]
     source_ids = [row["source_match_id"] for row in matches]
 
     if len(match_ids) != len(set(match_ids)):
-        errors.append("CÃ³ match_id bá»‹ trÃ¹ng.")
+        errors.append("Có match_id bị trùng.")
 
     if len(source_ids) != len(set(source_ids)):
-        errors.append("CÃ³ source_match_id bá»‹ trÃ¹ng.")
+        errors.append("Có source_match_id bị trùng.")
 
     observed_matchdays = set(matchdays)
 
     if observed_matchdays != EXPECTED_MATCHDAYS:
         errors.append(
-            "VÃ²ng Ä‘áº¥u khÃ´ng Ä‘á»§ 1 Ä‘áº¿n 38. "
-            f"Äang cÃ³: {sorted(observed_matchdays)}"
+            "Vòng đấu không đủ 1 đến 38. "
+            f"Đang có: {sorted(observed_matchdays)}"
         )
 
     matchday_counts = Counter(matchdays)
@@ -1106,7 +1106,7 @@ def validate_dataset(
 
     if invalid_round_counts:
         errors.append(
-            "Má»™t sá»‘ vÃ²ng khÃ´ng cÃ³ Ä‘Ãºng 10 tráº­n: "
+            "Một số vòng không có đúng 10 trận: "
             f"{invalid_round_counts}"
         )
 
@@ -1132,7 +1132,7 @@ def validate_dataset(
 
     if invalid_team_schedules:
         errors.append(
-            "Lá»‹ch sÃ¢n nhÃ /sÃ¢n khÃ¡ch khÃ´ng há»£p lá»‡: "
+            "Lịch sân nhà/sân khách không hợp lệ: "
             + json.dumps(
                 invalid_team_schedules,
                 ensure_ascii=False,
@@ -1146,7 +1146,7 @@ def validate_dataset(
             row["score_ft_away"] is None
         ):
             errors.append(
-                f"Tá»‰ sá»‘ thiáº¿u má»™t phÃ­a táº¡i match_id={row['match_id']}"
+                f"Tỉ số thiếu một phía tại match_id={row['match_id']}"
             )
 
     if errors:
@@ -1159,12 +1159,12 @@ def validate_dataset(
         1 for row in matches if row["is_finished"]
     )
 
-    print("Validation thÃ nh cÃ´ng")
-    print("Sá»‘ Ä‘á»™i:", len(teams))
-    print("Sá»‘ tráº­n:", len(matches))
-    print("Sá»‘ vÃ²ng:", len(observed_matchdays))
-    print("ÄÃ£ cÃ³ káº¿t quáº£:", finished_count)
-    print("ChÆ°a cÃ³ káº¿t quáº£:", len(matches) - finished_count)
+    print("Validation thành công")
+    print("Số đội:", len(teams))
+    print("Số trận:", len(matches))
+    print("Số vòng:", len(observed_matchdays))
+    print("Đã có kết quả:", finished_count)
+    print("Chưa có kết quả:", len(matches) - finished_count)
 
 
 def get_database_url() -> str:
@@ -1175,19 +1175,19 @@ def get_database_url() -> str:
 
     if not database_url:
         raise RuntimeError(
-            "Thiáº¿u environment variable DATABASE_URL."
+            "Thiếu environment variable DATABASE_URL."
         )
 
     parsed = make_url(database_url)
 
     if parsed.drivername != "postgresql+psycopg2":
         raise RuntimeError(
-            "DATABASE_URL pháº£i dÃ¹ng postgresql+psycopg2."
+            "DATABASE_URL phải dùng postgresql+psycopg2."
         )
 
     if parsed.port != 5432:
         raise RuntimeError(
-            "DATABASE_URL pháº£i dÃ¹ng Session Pooler port 5432."
+            "DATABASE_URL phải dùng Session Pooler port 5432."
         )
 
     return database_url
@@ -1212,7 +1212,7 @@ def ensure_database_schema(engine) -> None:
 
     if missing_tables:
         raise RuntimeError(
-            "Database cÃ²n thiáº¿u báº£ng: "
+            "Database còn thiếu bảng: "
             + ", ".join(missing_tables)
         )
 
@@ -1269,7 +1269,7 @@ def ensure_database_schema(engine) -> None:
 
         if missing_columns:
             raise RuntimeError(
-                f"Báº£ng {table_name} thiáº¿u cá»™t: "
+                f"Bảng {table_name} thiếu cột: "
                 + ", ".join(missing_columns)
             )
 
@@ -1650,12 +1650,12 @@ def sync_database(
 
 def main() -> None:
     print("=" * 72)
-    print("EPL OPENFOOTBALL â†’ SUPABASE")
+    print("EPL OPENFOOTBALL → SUPABASE")
     print("=" * 72)
     print("Season:", SEASON_SLUG)
 
     payload = download_source()
-    print("TÃªn giáº£i:", payload.get("name"))
+    print("Tên giải:", payload.get("name"))
 
     raw_matches = extract_raw_matches(payload)
 
@@ -1691,30 +1691,30 @@ def main() -> None:
     )
 
     print("\n" + "=" * 72)
-    print("SYNC THÃ€NH CÃ”NG")
+    print("SYNC THÀNH CÔNG")
     print("=" * 72)
     print(
-        "Sá»‘ Ä‘á»™i trong database:",
+        "Số đội trong database:",
         result["teams"],
     )
     print(
-        "Sá»‘ tráº­n trong database:",
+        "Số trận trong database:",
         result["matches"],
     )
     print(
-        "Sá»‘ dÃ²ng scorer trong database:",
+        "Số dòng scorer trong database:",
         result["match_goals"],
     )
     print(
-        "Sá»‘ prediction hiá»‡n cÃ³:",
+        "Số prediction hiện có:",
         result["predictions"],
     )
     print(
-        "Sá»‘ tráº­n cÃ³ dá»¯ liá»‡u thay Ä‘á»•i:",
+        "Số trận có dữ liệu thay đổi:",
         result["changed_matches"],
     )
     print(
-        "Sá»‘ prediction Ä‘Æ°á»£c cháº¥m láº¡i:",
+        "Số prediction được chấm lại:",
         result["rescored_predictions"],
     )
 
