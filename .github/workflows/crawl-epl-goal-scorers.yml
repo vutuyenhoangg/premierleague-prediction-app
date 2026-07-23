@@ -1,0 +1,78 @@
+name: Crawl EPL Goal Scorers
+
+on:
+  workflow_dispatch:
+    inputs:
+      season:
+        description: "Season slug, for example 2025-26 or 2026-27"
+        required: false
+        default: "2025-26"
+      start:
+        description: "Season start date, YYYY-MM-DD"
+        required: false
+        default: "2025-08-15"
+      end:
+        description: "Season end date, YYYY-MM-DD"
+        required: false
+        default: "2026-05-24"
+      dry_run_limit:
+        description: "Optional number of ESPN events to process for testing. Use 0 for full run."
+        required: false
+        default: "0"
+  schedule:
+    # GitHub Actions uses UTC. During the season this checks for newly finished matches.
+    - cron: "25 */3 * * *"
+
+concurrency:
+  group: crawl-epl-goal-scorers
+  cancel-in-progress: false
+
+jobs:
+  crawl-goal-scorers:
+    name: Crawl ESPN scorers into match_goals
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install sqlalchemy psycopg2-binary
+
+      - name: Crawl and sync goal scorers
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          EPL_SEASON_SLUG: ${{ inputs.season || vars.EPL_SEASON_SLUG || '2025-26' }}
+          EPL_SEASON_START: ${{ inputs.start || vars.EPL_SEASON_START || '2025-08-15' }}
+          EPL_SEASON_END: ${{ inputs.end || vars.EPL_SEASON_END || '2026-05-24' }}
+          OUTPUT_DIR: artifacts
+          REQUEST_SLEEP_SECONDS: "0.2"
+        run: |
+          EXTRA_ARGS=""
+          if [ "${{ inputs.dry_run_limit || '0' }}" != "0" ]; then
+            EXTRA_ARGS="$EXTRA_ARGS --dry-run-limit ${{ inputs.dry_run_limit }}"
+          fi
+
+          python crawl_epl_espn_goal_scorers_full.py \
+            --season "$EPL_SEASON_SLUG" \
+            --start "$EPL_SEASON_START" \
+            --end "$EPL_SEASON_END" \
+            --sync-db \
+            $EXTRA_ARGS
+
+      - name: Upload crawler audit
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: epl-goal-scorers-audit
+          path: artifacts/*.csv
+          if-no-files-found: ignore
