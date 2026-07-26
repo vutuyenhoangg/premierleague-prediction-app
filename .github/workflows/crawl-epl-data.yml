@@ -2,6 +2,20 @@ name: Crawl EPL Data
 
 on:
   workflow_dispatch:
+    inputs:
+      recent_days:
+        description: "Only crawl recent N days for match goals"
+        required: false
+        default: "3"
+      force_refresh:
+        description: "Re-crawl matches that already have goal data"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
   schedule:
     # GitHub Actions uses UTC. This runs hourly at minute 10.
     - cron: "10 * * * *"
@@ -12,9 +26,19 @@ concurrency:
 
 jobs:
   crawl:
-    name: Crawl EPL scores and scorers
+    name: Crawl EPL scores and match goals
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      THESPORTSDB_API_KEY: ${{ secrets.THESPORTSDB_API_KEY || '123' }}
+      THESPORTSDB_LEAGUE_ID: "4328"
+      EPL_SEASON_SLUG: "2025-26"
+      EPL_SOURCE_URL: "https://raw.githubusercontent.com/openfootball/football.json/master/2025-26/en.1.json"
+      ESPN_SEASON_SEED_DATE: "20260524"
+      RECENT_DAYS: ${{ github.event.inputs.recent_days || '3' }}
+      FORCE_REFRESH: ${{ github.event.inputs.force_refresh || 'false' }}
 
     steps:
       - name: Checkout repository
@@ -29,13 +53,26 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install requests sqlalchemy psycopg2-binary
 
-      - name: Run EPL crawler
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          THESPORTSDB_API_KEY: ${{ secrets.THESPORTSDB_API_KEY || '123' }}
-          THESPORTSDB_LEAGUE_ID: "4328"
-          EPL_SEASON_SLUG: "2025-26"
-          EPL_SOURCE_URL: "https://raw.githubusercontent.com/openfootball/football.json/master/2025-26/en.1.json"
+      - name: Check required secrets
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL secret is missing."
+            exit 1
+          fi
+
+      - name: Task 1 - Crawl EPL scores and fixtures
         run: python crawl_epl_data.py
+
+      - name: Task 2 - Crawl EPL match goals
+        run: |
+          CMD="python sync_espn_match_goals.py --create-table --recent-days ${RECENT_DAYS} --allow-empty --write"
+
+          if [ "$FORCE_REFRESH" = "true" ]; then
+            CMD="$CMD --force-refresh"
+          fi
+
+          echo "$CMD"
+          $CMD
