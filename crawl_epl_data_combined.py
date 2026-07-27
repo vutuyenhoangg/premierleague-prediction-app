@@ -29,17 +29,8 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.pool import NullPool
 
 
-SOURCE_URL = os.getenv(
-    "EPL_SOURCE_URL",
-    (
-        "https://raw.githubusercontent.com/"
-        "openfootball/football.json/"
-        "master/2025-26/en.1.json"
-    ),
-).strip()
-
 COMPETITION_KEY = "epl"
-SEASON_SLUG = os.getenv("EPL_SEASON_SLUG", "2025-26").strip()
+SEASON_SLUG = os.getenv("EPL_SEASON_SLUG", "2026-27").strip()
 
 SOURCE_TIMEZONE = "Europe/London"
 TARGET_TIMEZONE = "Asia/Ho_Chi_Minh"
@@ -292,48 +283,6 @@ def weekday_vietnamese(weekday_en: str) -> str:
     }.get(weekday_en, weekday_en)
 
 
-def download_source() -> dict[str, Any]:
-    print("Đang tải:", SOURCE_URL)
-
-    response = HTTP_SESSION.get(
-        SOURCE_URL,
-        timeout=REQUEST_TIMEOUT_SECONDS,
-    )
-    response.raise_for_status()
-
-    try:
-        payload = response.json()
-    except ValueError as exc:
-        raise RuntimeError(
-            "Nguồn không trả JSON hợp lệ."
-        ) from exc
-
-    if not isinstance(payload, dict):
-        raise TypeError(
-            "JSON top-level phải là object."
-        )
-
-    return payload
-
-
-def extract_raw_matches(
-    payload: dict[str, Any],
-) -> list[dict[str, Any]]:
-    matches = payload.get("matches")
-
-    if not isinstance(matches, list):
-        raise ValueError(
-            "JSON không có key matches dạng list."
-        )
-
-    for index, item in enumerate(matches):
-        if not isinstance(item, dict):
-            raise TypeError(
-                f"matches[{index}] không phải object."
-            )
-
-    return matches
-
 def load_team_metadata() -> dict[str, dict[str, Any]]:
     if not TEAM_METADATA_PATH.exists():
         raise FileNotFoundError(
@@ -383,21 +332,170 @@ def load_team_metadata() -> dict[str, dict[str, Any]]:
 
     return normalized_metadata
 
+def get_espn_team_display_name(
+    competitor: dict[str, Any],
+) -> str | None:
+    team = competitor.get("team") or {}
+    return normalize_text(
+        team.get("displayName")
+        or team.get("name")
+        or team.get("shortDisplayName")
+        or team.get("abbreviation")
+    )
+
+
+def build_team_name_lookup(
+    team_names: list[str] | set[str],
+) -> dict[str, str]:
+    return {
+        clean_espn_text(team_name): team_name
+        for team_name in team_names
+    }
+
+
+def resolve_team_name_from_metadata(
+    source_name: str | None,
+    metadata_lookup: dict[str, str],
+) -> str:
+    clean_name = normalize_text(source_name)
+
+    if not clean_name:
+        raise ValueError("ESPN event thiếu tên đội.")
+
+    key = clean_espn_text(clean_name)
+    resolved_name = metadata_lookup.get(key)
+
+    if not resolved_name:
+        raise KeyError(
+            f"Đội ESPN chưa map được metadata: {clean_name}"
+        )
+
+    return resolved_name
+
+
+def parse_espn_event_datetime(
+    event: dict[str, Any],
+) -> tuple[datetime, datetime, datetime]:
+    event_date = normalize_text(event.get("date"))
+
+    if not event_date:
+        raise ValueError(
+            f"ESPN event {event.get('id')} thiếu date."
+        )
+
+    kickoff_utc = datetime.fromisoformat(
+        event_date.replace("Z", "+00:00")
+    )
+
+    if kickoff_utc.tzinfo is None:
+        kickoff_utc = kickoff_utc.replace(tzinfo=timezone.utc)
+
+    kickoff_utc = kickoff_utc.astimezone(timezone.utc)
+    kickoff_source = kickoff_utc.astimezone(
+        ZoneInfo(SOURCE_TIMEZONE)
+    )
+    kickoff_vietnam = kickoff_utc.astimezone(
+        ZoneInfo(TARGET_TIMEZONE)
+    )
+
+    return kickoff_utc, kickoff_source, kickoff_vietnam
+
+
+def get_espn_matchday_number(
+    event: dict[str, Any],
+    fallback_order: int,
+) -> int:
+    week = event.get("week") or {}
+
+    for key in ("number", "weekNumber"):
+        value = week.get(key)
+
+        if value not in (None, ""):
+            return int(value)
+
+    season = event.get("season") or {}
+    value = season.get("type")
+
+    if isinstance(value, dict):
+        week_value = value.get("week")
+        if week_value not in (None, ""):
+            return int(week_value)
+
+    return ((fallback_order - 1) // 10) + 1
+
+
+def get_espn_event_status_completed(
+    event: dict[str, Any],
+) -> bool:
+    status_type = ((event.get("status") or {}).get("type") or {})
+
+    if bool(status_type.get("completed")):
+        return True
+
+    competitions = event.get("competitions") or []
+
+    if competitions:
+        competition_status = (
+            (competitions[0].get("status") or {}).get("type") or {}
+        )
+        return bool(competition_status.get("completed"))
+
+    return False
+
+
+def parse_espn_competitor_score(
+    competitor: dict[str, Any],
+) -> int | None:
+    value = competitor.get("score")
+
+    if value in (None, ""):
+        return None
+
+    return to_optional_score(value)
+
+
+def extract_espn_venue(
+    event: dict[str, Any],
+) -> tuple[str | None, str | None]:
+    competitions = event.get("competitions") or []
+
+    if not competitions:
+        return None, None
+
+    venue = competitions[0].get("venue") or {}
+    venue_name = normalize_text(
+        venue.get("fullName")
+        or venue.get("name")
+    )
+    address = venue.get("address") or {}
+    city = normalize_text(address.get("city"))
+
+    return venue_name, city
+
+
 def build_teams(
     raw_matches: list[dict[str, Any]],
     team_metadata: dict[str, dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    metadata_lookup = build_team_name_lookup(
+        set(team_metadata)
+    )
     team_names: set[str] = set()
 
-    for item in raw_matches:
-        home_name = normalize_text(item.get("team1"))
-        away_name = normalize_text(item.get("team2"))
-
-        if home_name:
-            team_names.add(home_name)
-
-        if away_name:
-            team_names.add(away_name)
+    for event in raw_matches:
+        home, away = get_espn_competitors(event)
+        team_names.add(
+            resolve_team_name_from_metadata(
+                get_espn_team_display_name(home),
+                metadata_lookup,
+            )
+        )
+        team_names.add(
+            resolve_team_name_from_metadata(
+                get_espn_team_display_name(away),
+                metadata_lookup,
+            )
+        )
 
     missing_metadata = sorted(
         team_name
@@ -465,63 +563,76 @@ def normalize_matches(
 ) -> tuple[list[dict[str, Any]], list[int]]:
     records: list[dict[str, Any]] = []
     matchdays: list[int] = []
+    team_name_lookup = build_team_name_lookup(
+        set(team_name_to_id)
+    )
 
-    for source_order, item in enumerate(
+    sorted_events = sorted(
         raw_matches,
+        key=lambda event: (
+            str(event.get("date") or ""),
+            str(event.get("id") or ""),
+        ),
+    )
+
+    for source_order, event in enumerate(
+        sorted_events,
         start=1,
     ):
-        round_name = translate_round_name(
-            item.get("round")
+        espn_event_id = normalize_text(event.get("id"))
+
+        if not espn_event_id:
+            raise ValueError("ESPN event thiếu id.")
+
+        home, away = get_espn_competitors(event)
+        home_name = resolve_team_name_from_metadata(
+            get_espn_team_display_name(home),
+            team_name_lookup,
         )
-        date_source = normalize_text(item.get("date"))
-        time_source = normalize_text(item.get("time"))
-        home_name = normalize_text(item.get("team1"))
-        away_name = normalize_text(item.get("team2"))
+        away_name = resolve_team_name_from_metadata(
+            get_espn_team_display_name(away),
+            team_name_lookup,
+        )
+
+        matchday = get_espn_matchday_number(
+            event,
+            source_order,
+        )
+        round_name = f"Vòng {matchday}"
 
         context = (
-            f"order={source_order}, round={round_name!r}, "
+            f"espn_event_id={espn_event_id}, "
+            f"round={round_name!r}, "
             f"home={home_name!r}, away={away_name!r}"
         )
-
-        if not round_name:
-            raise ValueError(f"Thiếu round: {context}")
-
-        if not home_name or not away_name:
-            raise ValueError(f"Thiếu tên đội: {context}")
 
         if home_name == away_name:
             raise ValueError(
                 f"Đội nhà và đội khách trùng nhau: {context}"
             )
 
-        if home_name not in team_name_to_id:
-            raise KeyError(
-                f"Không tìm thấy team_id cho {home_name}"
-            )
-
-        if away_name not in team_name_to_id:
-            raise KeyError(
-                f"Không tìm thấy team_id cho {away_name}"
-            )
-
-        kickoff_utc, kickoff_vietnam = parse_kickoff(
-            date_source,
-            time_source,
+        kickoff_utc, kickoff_source, kickoff_vietnam = (
+            parse_espn_event_datetime(event)
         )
 
-        score_home, score_away = parse_score_pair(
-            item.get("score")
+        is_finished = get_espn_event_status_completed(event)
+        score_home = (
+            parse_espn_competitor_score(home)
+            if is_finished
+            else None
+        )
+        score_away = (
+            parse_espn_competitor_score(away)
+            if is_finished
+            else None
         )
 
-        if (score_home is None) != (score_away is None):
+        if is_finished and (
+            score_home is None or score_away is None
+        ):
             raise ValueError(
-                f"Tỉ số chỉ có một phía: {context}"
+                f"Trận đã kết thúc nhưng thiếu tỉ số: {context}"
             )
-
-        is_finished = (
-            score_home is not None
-            and score_away is not None
-        )
 
         winner_name = None
 
@@ -537,26 +648,19 @@ def normalize_matches(
             else None
         )
 
-        source_match_id = "|".join(
-            [
-                COMPETITION_KEY,
-                SEASON_SLUG,
-                canonical_key_text(home_name),
-                canonical_key_text(away_name),
-            ]
-        )
+        venue_name, city = extract_espn_venue(event)
 
+        source_match_id = espn_event_id
         match_id = stable_postgres_integer(
             "epl-match-v1",
-            source_match_id,
+            "|".join(
+                [
+                    COMPETITION_KEY,
+                    SEASON_SLUG,
+                    source_match_id,
+                ]
+            ),
         )
-
-        matchday = parse_matchday(round_name)
-
-        if matchday is None:
-            raise ValueError(
-                f"Không đọc được số vòng: {round_name}"
-            )
 
         matchdays.append(matchday)
 
@@ -567,8 +671,8 @@ def normalize_matches(
                 "round_name": round_name,
                 "stage_type": "league",
                 "is_knockout": False,
-                "date_source": date_source,
-                "time_source": time_source,
+                "date_source": kickoff_source.strftime("%Y-%m-%d"),
+                "time_source": kickoff_source.strftime("%H:%M"),
                 "kickoff_time_utc": kickoff_utc.isoformat(),
                 "kickoff_datetime_vietnam": (
                     kickoff_vietnam.isoformat()
@@ -596,8 +700,8 @@ def normalize_matches(
                 "home_team_name": home_name,
                 "away_team_id": team_name_to_id[away_name],
                 "away_team_name": away_name,
-                "venue": None,
-                "city": None,
+                "venue": venue_name,
+                "city": city,
                 "score_ft_home": score_home,
                 "score_ft_away": score_away,
                 "score_et_home": None,
@@ -1183,7 +1287,15 @@ ESPN_SUMMARY_URL = (
 )
 ESPN_SEASON_SEED_DATE = os.getenv(
     "ESPN_SEASON_SEED_DATE",
-    "20260524",
+    "20260815",
+).strip()
+ESPN_SEASON_START_DATE = os.getenv(
+    "ESPN_SEASON_START_DATE",
+    "20260801",
+).strip()
+ESPN_SEASON_END_DATE = os.getenv(
+    "ESPN_SEASON_END_DATE",
+    "20270531",
 ).strip()
 ESPN_RECENT_DAYS = int(
     os.getenv(
@@ -1229,6 +1341,107 @@ def fetch_espn_scoreboard(date_yyyymmdd: str) -> dict[str, Any]:
         raise TypeError("ESPN scoreboard top-level phải là object.")
 
     return payload
+
+
+def normalize_espn_date_param(value: str) -> str:
+    clean_value = value.strip()
+
+    if re.fullmatch(r"\d{8}", clean_value):
+        return clean_value
+
+    return dt.date.fromisoformat(clean_value).strftime("%Y%m%d")
+
+
+def resolve_espn_season_dates() -> list[str]:
+    explicit_dates = os.getenv(
+        "ESPN_TASK1_DATES",
+        "",
+    ).strip()
+
+    if explicit_dates:
+        return sorted(
+            {
+                normalize_espn_date_param(part)
+                for part in explicit_dates.split(",")
+                if part.strip()
+            }
+        )
+
+    scoreboard = fetch_espn_scoreboard(ESPN_SEASON_SEED_DATE)
+    leagues = scoreboard.get("leagues") or []
+
+    if not leagues:
+        raise RuntimeError("ESPN response không có league calendar.")
+
+    calendar = leagues[0].get("calendar") or []
+    dates = sorted(
+        {
+            str(item)[:10].replace("-", "")
+            for item in calendar
+            if item
+        }
+    )
+
+    if not dates:
+        raise RuntimeError("ESPN calendar rỗng.")
+
+    start_date = yyyymmdd_to_date(
+        normalize_espn_date_param(ESPN_SEASON_START_DATE)
+    )
+    end_date = yyyymmdd_to_date(
+        normalize_espn_date_param(ESPN_SEASON_END_DATE)
+    )
+
+    season_dates = [
+        value
+        for value in dates
+        if start_date <= yyyymmdd_to_date(value) <= end_date
+    ]
+
+    if not season_dates:
+        raise RuntimeError(
+            "Không tìm thấy ngày thi đấu EPL trong khoảng mùa "
+            f"{ESPN_SEASON_START_DATE} đến {ESPN_SEASON_END_DATE}."
+        )
+
+    return season_dates
+
+
+def download_espn_season_events() -> list[dict[str, Any]]:
+    dates = resolve_espn_season_dates()
+    events_by_id: dict[str, dict[str, Any]] = {}
+
+    print("Số ngày ESPN của cả mùa cần tải:", len(dates))
+
+    for index, date_yyyymmdd in enumerate(dates, start=1):
+        print(
+            "Đang tải ESPN fixture/score",
+            f"{index}/{len(dates)}:",
+            date_yyyymmdd,
+        )
+        scoreboard = fetch_espn_scoreboard(date_yyyymmdd)
+
+        for event in scoreboard.get("events") or []:
+            event_id = normalize_text(event.get("id"))
+
+            if not event_id:
+                continue
+
+            events_by_id[event_id] = event
+
+    events = sorted(
+        events_by_id.values(),
+        key=lambda event: (
+            str(event.get("date") or ""),
+            str(event.get("id") or ""),
+        ),
+    )
+
+    if not events:
+        raise RuntimeError("Không tải được trận nào từ ESPN.")
+
+    print("Số trận ESPN tải được:", len(events))
+    return events
 
 
 def fetch_espn_summary(event_id: str) -> dict[str, Any]:
@@ -1965,14 +2178,14 @@ def sync_espn_match_goals() -> dict[str, int]:
 
 def main() -> None:
     print("=" * 72)
-    print("TASK 1 - EPL OPENFOOTBALL → SUPABASE")
+    print("TASK 1 - EPL ESPN FIXTURE/SCORE → SUPABASE")
     print("=" * 72)
     print("Season:", SEASON_SLUG)
+    print("ESPN season seed date:", ESPN_SEASON_SEED_DATE)
+    print("ESPN season start date:", ESPN_SEASON_START_DATE)
+    print("ESPN season end date:", ESPN_SEASON_END_DATE)
 
-    payload = download_source()
-    print("Tên giải:", payload.get("name"))
-
-    raw_matches = extract_raw_matches(payload)
+    raw_matches = download_espn_season_events()
 
     team_metadata = load_team_metadata()
 
