@@ -303,7 +303,7 @@ def render_season_selector():
 
         div[class*="st-key-season_switch_"] button {
             width: 100% !important;
-            min-height: 34px !important;
+            min-height: 30px !important;
             padding: 0 14px !important;
             border-radius: 999px !important;
             border: 1px solid rgba(15,23,42,0.10) !important;
@@ -386,7 +386,8 @@ def render_season_selector():
             border: 1px solid rgba(15,23,42,0.08);
             border-radius: 999px;
             padding: 8px 10px 8px 14px;
-            margin: 6px 0 14px 0;
+            max-width: 680px;
+            margin: 8px auto 18px auto;
             box-shadow: 0 8px 22px rgba(15,23,42,0.07);
         }
 
@@ -399,7 +400,7 @@ def render_season_selector():
         }
         """
     ):
-        label_col, picker_col = st.columns([0.42, 1.58], gap="small")
+        label_col, picker_col = st.columns([0.32, 1.68], gap="small")
 
         with label_col:
             st.markdown(
