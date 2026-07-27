@@ -265,168 +265,187 @@ def set_selected_season(season_slug: str):
 
 def render_season_selector():
     selected_slug = get_selected_season_slug()
-
     season_options = sorted(
         SEASON_OPTIONS,
         key=lambda season: season["slug"],
         reverse=True
     )
-    season_slugs = [season["slug"] for season in season_options]
+    active_key = selected_slug.replace("-", "_")
 
-    st.markdown(
-        """
+    season_selector_css = """
         <style>
-        .epl-season-compact {
+        .epl-season-mini-copy {
             display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 14px;
-            margin: 8px 0 18px 0;
-            padding: 12px 14px;
-            border-radius: 16px;
-            background:
-                linear-gradient(
-                    135deg,
-                    rgba(255,255,255,0.96) 0%,
-                    rgba(248,250,252,0.94) 70%,
-                    rgba(245,197,66,0.12) 100%
-                );
-            border: 1px solid rgba(15,23,42,0.08);
-            box-shadow: 0 10px 26px rgba(15,23,42,0.08);
+            flex-direction: column;
+            justify-content: center;
+            min-height: 42px;
         }
 
-        .epl-season-copy {
-            min-width: 0;
-        }
-
-        .epl-season-kicker {
+        .epl-season-mini-kicker {
             color: #64748B;
             font-size: 11px;
-            font-weight: 850;
+            font-weight: 900;
             letter-spacing: 0.08em;
-            text-transform: uppercase;
             line-height: 1.1;
+            text-transform: uppercase;
         }
 
-        .epl-season-main {
+        .epl-season-mini-title {
             color: #07111F;
             font-size: 15px;
             font-weight: 950;
-            line-height: 1.25;
-            margin-top: 3px;
+            line-height: 1.22;
+            margin-top: 4px;
         }
 
-        .epl-season-main span {
+        .epl-season-mini-title span {
             color: #B45309;
         }
 
-        .epl-season-control {
-            min-width: 260px;
-        }
-
-        div[data-testid="stSegmentedControl"] {
-            background: rgba(15,23,42,0.06);
-            border: 1px solid rgba(15,23,42,0.08);
-            border-radius: 999px;
-            padding: 4px;
-        }
-
-        div[data-testid="stSegmentedControl"] button {
+        div[class*="st-key-season_switch_"] button {
+            width: 100% !important;
+            min-height: 38px !important;
             border-radius: 999px !important;
+            border: 1px solid rgba(15,23,42,0.10) !important;
+            background: rgba(255,255,255,0.86) !important;
+            color: #07111F !important;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.75) !important;
+            font-size: 13px !important;
             font-weight: 900 !important;
-            min-height: 34px !important;
+            transition:
+                border-color 0.16s ease,
+                background 0.16s ease,
+                box-shadow 0.16s ease !important;
         }
 
-        div[data-testid="stSegmentedControl"] button[aria-pressed="true"] {
+        div[class*="st-key-season_switch_"] button:hover {
+            background: #FFFFFF !important;
+            border-color: rgba(245,197,66,0.72) !important;
+            box-shadow: 0 7px 16px rgba(15,23,42,0.10) !important;
+        }
+
+        div[class*="st-key-season_switch___ACTIVE_KEY__"] button,
+        div[class*="st-key-season_switch___ACTIVE_KEY__"] button:disabled {
             background:
-                linear-gradient(
-                    135deg,
-                    #07111F 0%,
-                    #111827 100%
-                ) !important;
+                linear-gradient(135deg, #07111F 0%, #111827 100%) !important;
+            border-color: rgba(245,197,66,0.80) !important;
             color: #F8FAFC !important;
-            box-shadow: 0 8px 18px rgba(15,23,42,0.22) !important;
-            border-color: rgba(245,197,66,0.75) !important;
+            opacity: 1 !important;
+            box-shadow: 0 8px 18px rgba(15,23,42,0.20) !important;
+            cursor: default !important;
+        }
+
+        div[class*="st-key-season_switch___ACTIVE_KEY__"] button *,
+        div[class*="st-key-season_switch___ACTIVE_KEY__"] button:disabled * {
+            color: #F8FAFC !important;
         }
 
         @media (max-width: 768px) {
-            .epl-season-compact {
-                align-items: stretch;
-                flex-direction: column;
-                gap: 10px;
-                padding: 12px;
-                margin: 6px 0 14px 0;
+            .epl-season-mini-copy {
+                min-height: auto;
+                margin-bottom: 2px;
             }
 
-            .epl-season-control {
-                min-width: 0;
-                width: 100%;
-            }
-
-            .epl-season-main {
+            .epl-season-mini-title {
                 font-size: 14px;
+            }
+
+            div[class*="st-key-season_switch_"] button {
+                min-height: 36px !important;
+                font-size: 12.5px !important;
             }
         }
         </style>
-        """,
+        """
+
+    st.markdown(
+        season_selector_css.replace("__ACTIVE_KEY__", active_key),
         unsafe_allow_html=True
     )
-
-    picker_key = "season_segmented_picker"
-    st.session_state[picker_key] = selected_slug
 
     with stylable_container(
         key="season_selector_compact_panel",
         css_styles="""
         {
-            margin: 0;
+            background:
+                linear-gradient(
+                    135deg,
+                    rgba(255,255,255,0.97) 0%,
+                    rgba(248,250,252,0.96) 70%,
+                    rgba(245,197,66,0.10) 100%
+                );
+            border: 1px solid rgba(15,23,42,0.08);
+            border-left: 4px solid #F5C542;
+            border-radius: 18px;
+            padding: 12px 14px;
+            margin: 8px 0 18px 0;
+            box-shadow: 0 10px 26px rgba(15,23,42,0.08);
+        }
+
+        @media (max-width: 768px) {
+            {
+                padding: 12px;
+                margin: 6px 0 14px 0;
+            }
         }
         """
     ):
-        st.markdown(
-            f"""
-            <div class="epl-season-compact">
-                <div class="epl-season-copy">
-                    <div class="epl-season-kicker">Mùa giải</div>
-                    <div class="epl-season-main">
+        info_col, picker_col = st.columns([1.45, 1], gap="medium")
+
+        with info_col:
+            st.markdown(
+                f"""
+                <div class="epl-season-mini-copy">
+                    <div class="epl-season-mini-kicker">Mùa giải</div>
+                    <div class="epl-season-mini-title">
                         Đang xem <span>{html.escape(get_selected_season_label())}</span>
                     </div>
                 </div>
-                <div class="epl-season-control">
-            """,
-            unsafe_allow_html=True
-        )
-
-        if hasattr(st, "segmented_control"):
-            chosen_slug = st.segmented_control(
-                "Chọn mùa giải",
-                options=season_slugs,
-                key=picker_key,
-                format_func=lambda slug: SEASON_LABEL_BY_SLUG.get(slug, slug),
-                label_visibility="collapsed",
-                width="stretch"
-            )
-        else:
-            chosen_slug = st.radio(
-                "Chọn mùa giải",
-                options=season_slugs,
-                key=picker_key,
-                format_func=lambda slug: SEASON_LABEL_BY_SLUG.get(slug, slug),
-                horizontal=True,
-                label_visibility="collapsed"
+                """,
+                unsafe_allow_html=True
             )
 
-        st.markdown(
-            """
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        with picker_col:
+            season_columns = st.columns(
+                len(season_options),
+                gap="small"
+            )
 
-    if chosen_slug and chosen_slug != selected_slug:
-        set_selected_season(chosen_slug)
-        st.rerun()
+            for col, season in zip(season_columns, season_options):
+                is_active = season["slug"] == selected_slug
+                button_label = season["label"]
+                button_key = f"season_switch_{season['slug'].replace('-', '_')}"
+
+                with col:
+                    if st.button(
+                        button_label,
+                        key=button_key,
+                        use_container_width=True,
+                        disabled=is_active
+                    ):
+                        set_selected_season(season["slug"])
+                        st.rerun()
+
+
+def get_default_filter_date_for_season(available_dates: list[date]) -> date:
+    if not available_dates:
+        return today_vietnam_date()
+
+    today_vn = today_vietnam_date()
+
+    if today_vn in available_dates:
+        return today_vn
+
+    future_dates = [
+        match_date
+        for match_date in available_dates
+        if match_date >= today_vn
+    ]
+
+    if future_dates:
+        return future_dates[0]
+
+    return available_dates[-1]
 
 
 st.set_page_config(
@@ -13747,9 +13766,12 @@ def page_matches():
     date_options_set.add(tomorrow_vn)
 
     date_options = sorted(date_options_set)
+    default_filter_date = get_default_filter_date_for_season(
+        available_dates
+    )
 
     if "filter_date" not in st.session_state:
-        st.session_state["filter_date"] = today_vn
+        st.session_state["filter_date"] = default_filter_date
     
     if "filter_status" not in st.session_state:
         st.session_state["filter_status"] = "Tất cả"
@@ -13779,7 +13801,7 @@ def page_matches():
         current_filter_date < min_filter_date
         or current_filter_date > max_filter_date
     ):
-        st.session_state["filter_date"] = today_vn
+        st.session_state["filter_date"] = default_filter_date
     
     if st.session_state["filter_status"] not in status_options:
         st.session_state["filter_status"] = "Tất cả"
