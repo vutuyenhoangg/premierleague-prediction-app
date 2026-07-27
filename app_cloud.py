@@ -399,7 +399,7 @@ def render_season_selector():
 
     with label_col:
         st.markdown(
-            """
+            f"""
             <div class="epl-season-inline-label">
                 Mùa giải: <strong>{selected_label}</strong>
             </div>
