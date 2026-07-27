@@ -118,5 +118,23 @@
     "logo_path": "data/static/team-logos/wolves.png",
     "stadium_name": "Molineux Stadium",
     "stadium_city": "Wolverhampton"
+  },
+  "Coventry City": {
+  "short_name": "Coventry City",
+  "logo_path": "data/static/team-logos/coventry-city.png",
+  "stadium_name": "Coventry Building Society Arena",
+  "stadium_city": "Coventry"
+  },
+  "Ipswich Town": {
+    "short_name": "Ipswich Town",
+    "logo_path": "data/static/team-logos/ipswich.png",
+    "stadium_name": "Portman Road",
+    "stadium_city": "Ipswich"
+  },
+  "Hull City": {
+    "short_name": "Hull City",
+    "logo_path": "data/static/team-logos/hull-city.png",
+    "stadium_name": "MKM Stadium",
+    "stadium_city": "Hull"
   }
 }
