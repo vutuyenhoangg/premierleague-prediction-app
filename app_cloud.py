@@ -274,26 +274,13 @@ def render_season_selector():
 
     season_selector_css = """
         <style>
-        .epl-season-filter-head {
+        .epl-season-filter-label {
             display: flex;
             align-items: center;
             gap: 8px;
-            height: 100%;
-            min-height: 38px;
-        }
-
-        .epl-season-filter-dot {
-            width: 7px;
-            height: 7px;
-            border-radius: 999px;
-            background: #F5C542;
-            box-shadow: 0 0 0 4px rgba(245,197,66,0.14);
-            flex: 0 0 auto;
-        }
-
-        .epl-season-filter-label {
+            height: 34px;
             color: #07111F;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 950;
             letter-spacing: 0.08em;
             line-height: 1;
@@ -301,45 +288,58 @@ def render_season_selector():
             white-space: nowrap;
         }
 
+        .epl-season-filter-label::before {
+            content: "";
+            width: 7px;
+            height: 7px;
+            border-radius: 999px;
+            background: #F5C542;
+            box-shadow: 0 0 0 4px rgba(245,197,66,0.15);
+            flex: 0 0 auto;
+        }
+
+        div[class*="st-key-season_switch_"] {
+            margin: 0 !important;
+        }
+
         div[class*="st-key-season_switch_"] button {
             width: 100% !important;
-            min-height: 30px !important;
-            padding: 0 14px !important;
+            min-height: 32px !important;
+            padding: 0 18px !important;
             border-radius: 999px !important;
             border: 1px solid rgba(15,23,42,0.10) !important;
-            background: rgba(255,255,255,0.76) !important;
+            background: rgba(255,255,255,0.82) !important;
             color: #334155 !important;
-            box-shadow: inset 0 1px 0 rgba(255,255,255,0.75) !important;
+            box-shadow:
+                inset 0 1px 0 rgba(255,255,255,0.85),
+                0 1px 2px rgba(15,23,42,0.04) !important;
             font-size: 12.5px !important;
-            font-weight: 900 !important;
+            font-weight: 850 !important;
             transition:
                 border-color 0.16s ease,
                 background 0.16s ease,
                 color 0.16s ease,
-                box-shadow 0.16s ease,
-                transform 0.16s ease !important;
+                box-shadow 0.16s ease !important;
         }
 
         div[class*="st-key-season_switch_"] button:hover {
             background: #FFFFFF !important;
-            border-color: rgba(245,197,66,0.78) !important;
+            border-color: rgba(245,197,66,0.70) !important;
             color: #07111F !important;
             box-shadow: 0 7px 16px rgba(15,23,42,0.10) !important;
-            transform: translateY(-1px);
         }
 
         div[class*="st-key-season_switch___ACTIVE_KEY__"] button,
         div[class*="st-key-season_switch___ACTIVE_KEY__"] button:disabled {
             background:
-                linear-gradient(135deg, #07111F 0%, #111827 100%) !important;
-            border-color: rgba(245,197,66,0.88) !important;
+                linear-gradient(135deg, #06101F 0%, #0B1B33 100%) !important;
+            border-color: rgba(245,197,66,0.92) !important;
             color: #F8FAFC !important;
             opacity: 1 !important;
             box-shadow:
-                0 8px 18px rgba(15,23,42,0.18),
+                0 8px 18px rgba(15,23,42,0.20),
                 inset 0 1px 0 rgba(255,255,255,0.12) !important;
             cursor: default !important;
-            transform: none !important;
         }
 
         div[class*="st-key-season_switch___ACTIVE_KEY__"] button *,
@@ -348,18 +348,14 @@ def render_season_selector():
         }
 
         @media (max-width: 768px) {
-            .epl-season-filter-head {
-                min-height: 28px;
-                margin-bottom: 4px;
-                justify-content: center;
-            }
-
             .epl-season-filter-label {
-                font-size: 11px;
+                justify-content: center;
+                height: 26px;
+                font-size: 10.5px;
             }
 
             div[class*="st-key-season_switch_"] button {
-                min-height: 32px !important;
+                min-height: 31px !important;
                 padding: 0 10px !important;
                 font-size: 12px !important;
             }
@@ -376,38 +372,40 @@ def render_season_selector():
         key="season_selector_compact_panel",
         css_styles="""
         {
+            max-width: 760px;
             background:
                 linear-gradient(
                     135deg,
                     rgba(255,255,255,0.94) 0%,
-                    rgba(248,250,252,0.92) 64%,
+                    rgba(248,250,252,0.92) 68%,
                     rgba(245,197,66,0.10) 100%
                 );
-            border: 1px solid rgba(15,23,42,0.08);
-            border-radius: 999px;
-            padding: 8px 10px 8px 14px;
-            max-width: 680px;
+            border: 1px solid rgba(15,23,42,0.10);
+            border-radius: 12px;
+            padding: 10px 12px 10px 14px;
             margin: 8px auto 18px auto;
-            box-shadow: 0 8px 22px rgba(15,23,42,0.07);
+            box-shadow:
+                0 10px 26px rgba(15,23,42,0.07),
+                inset 0 1px 0 rgba(255,255,255,0.78);
         }
 
         @media (max-width: 768px) {
             {
-                border-radius: 18px;
+                max-width: 100%;
+                border-radius: 14px;
                 padding: 9px 10px;
-                margin: 4px 0 12px 0;
+                margin: 6px 0 14px 0;
             }
         }
         """
     ):
-        label_col, picker_col = st.columns([0.32, 1.68], gap="small")
+        label_col, picker_col = st.columns([0.34, 1.66], gap="small")
 
         with label_col:
             st.markdown(
                 """
-                <div class="epl-season-filter-head">
-                    <span class="epl-season-filter-dot"></span>
-                    <span class="epl-season-filter-label">Mùa giải</span>
+                <div class="epl-season-filter-label">
+                    Mùa giải
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -421,19 +419,17 @@ def render_season_selector():
 
             for col, season in zip(season_columns, season_options):
                 is_active = season["slug"] == selected_slug
-                button_label = season["label"]
                 button_key = f"season_switch_{season['slug'].replace('-', '_')}"
 
                 with col:
                     if st.button(
-                        button_label,
+                        season["label"],
                         key=button_key,
                         use_container_width=True,
                         disabled=is_active
                     ):
                         set_selected_season(season["slug"])
                         st.rerun()
-
 
 def get_default_filter_date_for_season(available_dates: list[date]) -> date:
     if not available_dates:
