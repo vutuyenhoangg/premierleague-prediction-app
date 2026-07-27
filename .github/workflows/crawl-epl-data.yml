@@ -19,11 +19,18 @@ jobs:
 
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      EPL_SEASON_SLUG: "2025-26"
-      EPL_SOURCE_URL: "https://raw.githubusercontent.com/openfootball/football.json/master/2025-26/en.1.json"
-      ESPN_SEASON_SEED_DATE: "20260524"
-      RECENT_DAYS: "3"
-      FORCE_REFRESH: "false"
+
+      # EPL 2026/27
+      EPL_SEASON_SLUG: "2026-27"
+
+      # Task 1 now uses ESPN, not OpenFootball.
+      ESPN_SEASON_SEED_DATE: "20260815"
+      ESPN_SEASON_START_DATE: "20260801"
+      ESPN_SEASON_END_DATE: "20270531"
+
+      # Task 2 scorer settings
+      ESPN_RECENT_DAYS: "3"
+      ESPN_FORCE_REFRESH: "false"
 
     steps:
       - name: Checkout repository
