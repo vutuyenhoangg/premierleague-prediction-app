@@ -289,6 +289,13 @@ def render_season_selector():
             white-space: nowrap;
         }
 
+        .epl-season-inline-label strong {
+            color: #07111F;
+            font-size: 14px;
+            font-weight: 950;
+            letter-spacing: 0;
+        }
+
         .epl-season-inline-label::before {
             content: "";
             width: 7px;
@@ -321,10 +328,10 @@ def render_season_selector():
 
         div[class*="st-key-season_switch_"] button {
             width: auto !important;
-            min-width: 76px !important;
+            min-width: 74px !important;
             height: 30px !important;
             min-height: 30px !important;
-            padding: 0 12px !important;
+            padding: 0 11px !important;
             border-radius: 999px !important;
             border: 1px solid rgba(15,23,42,0.10) !important;
             background: rgba(255,255,255,0.90) !important;
@@ -388,13 +395,13 @@ def render_season_selector():
         unsafe_allow_html=True
     )
 
-    label_col, picker_col, spacer_col = st.columns([0.12, 0.22, 0.66], gap="small")
+    label_col, picker_col, spacer_col = st.columns([0.18, 0.16, 0.66], gap="small")
 
     with label_col:
         st.markdown(
             """
             <div class="epl-season-inline-label">
-                Mùa giải
+                Mùa giải: <strong>{selected_label}</strong>
             </div>
             """,
             unsafe_allow_html=True
@@ -416,15 +423,6 @@ def render_season_selector():
                 ):
                     set_selected_season(season["slug"])
                     st.rerun()
-
-    st.markdown(
-        f"""
-        <div class="epl-selected-season-text">
-            <strong>{selected_label}</strong>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
 
 def get_default_filter_date_for_season(available_dates: list[date]) -> date:
     if not available_dates:
