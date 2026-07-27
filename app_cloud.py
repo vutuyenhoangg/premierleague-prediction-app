@@ -44,6 +44,31 @@ RUN_DB_MIGRATIONS = str(
 APP_NAME = "EPL Prediction Arena"
 APP_SHORT_NAME = "EPL 2026/27"
 APP_SEASON_LABEL = "2026/27"
+DEFAULT_SEASON_SLUG = "2026-27"
+SEASON_OPTIONS = [
+    {
+        "slug": "2026-27",
+        "label": "2026/27",
+        "title": "Mùa giải 2026/27",
+        "subtitle": "Mùa giải hiện tại",
+        "badge": "Mặc định"
+    },
+    {
+        "slug": "2025-26",
+        "label": "2025/26",
+        "title": "Mùa giải 2025/26",
+        "subtitle": "Dữ liệu mùa trước",
+        "badge": "Lưu trữ"
+    }
+]
+SEASON_LABEL_BY_SLUG = {
+    season["slug"]: season["label"]
+    for season in SEASON_OPTIONS
+}
+SEASON_TITLE_BY_SLUG = {
+    season["slug"]: season["title"]
+    for season in SEASON_OPTIONS
+}
 APP_TAGLINE = "Dự đoán tỉ số Ngoại hạng Anh, tích điểm và tranh tài cùng bạn bè."
 COOKIE_NAME = "epl_session_token"
 SESSION_DAYS = 30
@@ -177,6 +202,262 @@ def resolve_asset_src(asset_path: str) -> str:
 
     # Fallback để dễ debug nếu file không tồn tại
     return asset_path
+
+
+def get_selected_season_slug() -> str:
+    selected = st.session_state.get(
+        "selected_season_slug",
+        DEFAULT_SEASON_SLUG
+    )
+
+    valid_slugs = {
+        season["slug"]
+        for season in SEASON_OPTIONS
+    }
+
+    if selected not in valid_slugs:
+        selected = DEFAULT_SEASON_SLUG
+        st.session_state["selected_season_slug"] = selected
+
+    return selected
+
+
+def get_selected_season_label() -> str:
+    return SEASON_LABEL_BY_SLUG.get(
+        get_selected_season_slug(),
+        APP_SEASON_LABEL
+    )
+
+
+def get_selected_season_title() -> str:
+    return SEASON_TITLE_BY_SLUG.get(
+        get_selected_season_slug(),
+        f"Mùa giải {get_selected_season_label()}"
+    )
+
+
+def set_selected_season(season_slug: str):
+    if st.session_state.get("selected_season_slug") == season_slug:
+        return
+
+    st.session_state["selected_season_slug"] = season_slug
+
+    for key in [
+        "filter_date",
+        "filter_status",
+        "filter_prediction_status",
+        "pending_star_transfer",
+        "ai_summary_match_id",
+        "ai_suggestion_match_id"
+    ]:
+        st.session_state.pop(key, None)
+
+    for cached_function in [
+        load_matches,
+        load_predictions,
+        build_leaderboard_df
+    ]:
+        try:
+            cached_function.clear()
+        except Exception:
+            pass
+
+
+def render_season_selector():
+    selected_slug = get_selected_season_slug()
+
+    st.markdown(
+        """
+        <style>
+        .epl-season-selector {
+            background:
+                linear-gradient(
+                    135deg,
+                    rgba(255,255,255,0.98) 0%,
+                    rgba(248,250,252,0.96) 58%,
+                    rgba(245,197,66,0.13) 100%
+                );
+            border: 1px solid rgba(15,23,42,0.08);
+            border-left: 5px solid #F5C542;
+            border-radius: 22px;
+            padding: 18px 22px;
+            margin: 10px 0 24px 0;
+            box-shadow: 0 16px 42px rgba(15,23,42,0.10);
+        }
+
+        .epl-season-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .epl-season-title {
+            color: #07111F;
+            font-size: 17px;
+            font-weight: 950;
+            line-height: 1.2;
+        }
+
+        .epl-season-caption {
+            color: #64748B;
+            font-size: 13px;
+            font-weight: 600;
+            margin-top: 4px;
+        }
+
+        .epl-season-current {
+            color: #78350F;
+            background: rgba(245,197,66,0.22);
+            border: 1px solid rgba(245,197,66,0.48);
+            border-radius: 999px;
+            padding: 7px 12px;
+            font-size: 12px;
+            font-weight: 900;
+            white-space: nowrap;
+        }
+
+        .epl-season-card {
+            min-height: 96px;
+            border-radius: 18px;
+            border: 1px solid rgba(15,23,42,0.10);
+            background: rgba(255,255,255,0.72);
+            padding: 14px 15px;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.85);
+            transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+        }
+
+        .epl-season-card.is-active {
+            border-color: rgba(245,197,66,0.85);
+            background:
+                linear-gradient(
+                    135deg,
+                    rgba(7,17,31,0.96) 0%,
+                    rgba(15,23,42,0.94) 100%
+                );
+            box-shadow: 0 12px 28px rgba(15,23,42,0.18);
+        }
+
+        .epl-season-card-title {
+            color: #07111F;
+            font-size: 16px;
+            font-weight: 950;
+            line-height: 1.2;
+        }
+
+        .epl-season-card-subtitle {
+            color: #64748B;
+            font-size: 13px;
+            font-weight: 650;
+            margin-top: 6px;
+        }
+
+        .epl-season-card-badge {
+            display: inline-flex;
+            margin-top: 12px;
+            padding: 5px 9px;
+            border-radius: 999px;
+            color: #78350F;
+            background: rgba(245,197,66,0.22);
+            border: 1px solid rgba(245,197,66,0.38);
+            font-size: 11px;
+            font-weight: 900;
+        }
+
+        .epl-season-card.is-active .epl-season-card-title {
+            color: #F8FAFC;
+        }
+
+        .epl-season-card.is-active .epl-season-card-subtitle {
+            color: #CBD5E1;
+        }
+
+        div[class*="st-key-season_switcher_"] button {
+            width: 100% !important;
+            min-height: 40px !important;
+            border-radius: 13px !important;
+            font-weight: 900 !important;
+        }
+
+        @media (max-width: 768px) {
+            .epl-season-heading {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .epl-season-selector {
+                padding: 16px;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    with stylable_container(
+        key="season_selector_panel",
+        css_styles="""
+        {
+            margin: 0 0 6px 0;
+        }
+        """
+    ):
+        st.markdown(
+            f"""
+            <div class="epl-season-selector">
+                <div class="epl-season-heading">
+                    <div>
+                        <div class="epl-season-title">Chọn mùa giải</div>
+                        <div class="epl-season-caption">
+                            Lịch thi đấu, dự đoán, bảng xếp hạng và thống kê sẽ tách riêng theo mùa.
+                        </div>
+                    </div>
+                    <div class="epl-season-current">
+                        Đang xem: {html.escape(get_selected_season_label())}
+                    </div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        season_columns = st.columns(
+            len(SEASON_OPTIONS),
+            gap="medium"
+        )
+
+        for col, season in zip(season_columns, SEASON_OPTIONS):
+            is_active = season["slug"] == selected_slug
+            card_class = "epl-season-card is-active" if is_active else "epl-season-card"
+            button_label = "Đang chọn" if is_active else "Xem mùa này"
+
+            with col:
+                st.markdown(
+                    f"""
+                    <div class="{card_class}">
+                        <div class="epl-season-card-title">
+                            {html.escape(season["title"])}
+                        </div>
+                        <div class="epl-season-card-subtitle">
+                            {html.escape(season["subtitle"])}
+                        </div>
+                        <div class="epl-season-card-badge">
+                            {html.escape(season["badge"])}
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+                st.button(
+                    button_label,
+                    key=f"season_switcher_{season['slug'].replace('-', '_')}",
+                    use_container_width=True,
+                    disabled=is_active,
+                    on_click=set_selected_season,
+                    args=(season["slug"],)
+                )
 
 
 st.set_page_config(
@@ -4771,7 +5052,7 @@ def render_sidebar_brand():
             <div class="wc-logo-row">
                 {logo_html}
                 <div>
-                    <div class="wc-brand-title">{APP_SHORT_NAME}</div>
+                    <div class="wc-brand-title">EPL {get_selected_season_label()}</div>
                     <div class="wc-brand-subtitle">Prediction Arena</div>
                 </div>
             </div>
@@ -4841,7 +5122,7 @@ def render_app_hero():
 
                     '<div class="wc-hero-title">'
                         'Premier League '
-                        f'<span class="wc-gold">{APP_SEASON_LABEL}</span>'
+                        f'<span class="wc-gold">{get_selected_season_label()}</span>'
                         '<br>'
                         'Prediction Arena'
                     '</div>'
@@ -6339,8 +6620,8 @@ def get_user_star_usage(user_id: int, exclude_match_id: int | None = None) -> di
     - left: số sao còn lại theo kho chính thức, chỉ trừ locked_used.
     - free_left: số sao còn trống để gắn ngay, đã trừ cả reserved_used.
     """
-    predictions = load_predictions()
-    matches = load_matches()
+    predictions = load_predictions(get_selected_season_slug())
+    matches = load_matches(get_selected_season_slug())
 
     if predictions.empty or matches.empty:
         hope_locked_used = 0
@@ -7968,7 +8249,64 @@ def check_required_app_tables():
         )
         st.stop()
 
+    match_columns = read_sql(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'matches'
+        """
+    )
+
+    actual_match_columns = set(
+        match_columns["column_name"].tolist()
+    )
+
+    required_match_columns = {
+        "season_slug"
+    }
+
+    missing_match_columns = sorted(
+        required_match_columns
+        - actual_match_columns
+    )
+
+    if missing_match_columns:
+        st.error(
+            "Bảng `matches` đang thiếu cột phân mùa: "
+            + ", ".join(missing_match_columns)
+            + ". Hãy thêm cột này trước khi mở app."
+        )
+        st.stop()
+
 def init_app_tables():
+    execute_sql(
+        """
+        ALTER TABLE matches
+        ADD COLUMN IF NOT EXISTS season_slug TEXT
+        """
+    )
+
+    execute_sql(
+        """
+        UPDATE matches
+        SET season_slug = CASE
+            WHEN kickoff_time_utc::timestamptz >= TIMESTAMPTZ '2026-08-01 00:00:00+00'
+                THEN '2026-27'
+            ELSE '2025-26'
+        END
+        WHERE season_slug IS NULL
+           OR TRIM(season_slug) = ''
+        """
+    )
+
+    execute_sql(
+        """
+        CREATE INDEX IF NOT EXISTS idx_matches_season_slug
+        ON matches(season_slug)
+        """
+    )
+
     execute_sql(
         """
         CREATE TABLE IF NOT EXISTS users (
@@ -8747,7 +9085,9 @@ def logout_user():
     ttl=30,
     show_spinner=False
 )
-def load_matches() -> pd.DataFrame:
+def load_matches(season_slug: str | None = None) -> pd.DataFrame:
+    season_slug = season_slug or DEFAULT_SEASON_SLUG
+
     df = read_sql(
         """
         SELECT
@@ -8812,8 +9152,13 @@ def load_matches() -> pd.DataFrame:
         LEFT JOIN teams AS away_team
           ON away_team.team_id = m.away_team_id
 
+        WHERE m.season_slug = :season_slug
+
         ORDER BY m.kickoff_time_utc
-        """
+        """,
+        {
+            "season_slug": season_slug
+        }
     )
 
     if df.empty:
@@ -8862,12 +9207,20 @@ def load_users() -> pd.DataFrame:
 
 
 @st.cache_data(ttl=10, show_spinner=False)
-def load_predictions() -> pd.DataFrame:
+def load_predictions(season_slug: str | None = None) -> pd.DataFrame:
+    season_slug = season_slug or DEFAULT_SEASON_SLUG
+
     return read_sql(
         """
-        SELECT *
-        FROM predictions
-        """
+        SELECT p.*
+        FROM predictions AS p
+        JOIN matches AS m
+          ON m.match_id = p.match_id
+        WHERE m.season_slug = :season_slug
+        """,
+        {
+            "season_slug": season_slug
+        }
     )
 
 
@@ -9147,7 +9500,8 @@ def _get_prediction_for_update(conn, user_id: int, match_id: int):
 def _get_user_star_usage_in_transaction(
     conn,
     user_id: int,
-    exclude_match_id: int | None = None
+    exclude_match_id: int | None = None,
+    season_slug: str | None = None
 ) -> dict:
     """
     Đọc quota sao bằng chính transaction đang lưu prediction.
@@ -9165,7 +9519,14 @@ def _get_user_star_usage_in_transaction(
         WHERE p.user_id = :user_id
     """
 
-    params = {"user_id": int(user_id)}
+    season_slug = season_slug or get_selected_season_slug()
+
+    query += " AND m.season_slug = :season_slug"
+
+    params = {
+        "user_id": int(user_id),
+        "season_slug": season_slug
+    }
 
     if exclude_match_id is not None:
         query += " AND p.match_id <> :exclude_match_id"
@@ -9522,7 +9883,11 @@ def get_user_prediction_from_db(user_id: int, match_id: int):
     )
 
 
-def get_user_star_usage_from_db(user_id: int, exclude_match_id: int | None = None) -> dict:
+def get_user_star_usage_from_db(
+    user_id: int,
+    exclude_match_id: int | None = None,
+    season_slug: str | None = None
+) -> dict:
     """
     Dùng cho validate khi lưu dự đoán.
 
@@ -9542,8 +9907,13 @@ def get_user_star_usage_from_db(user_id: int, exclude_match_id: int | None = Non
         WHERE p.user_id = :user_id
     """
 
+    season_slug = season_slug or get_selected_season_slug()
+
+    query += " AND m.season_slug = :season_slug"
+
     params = {
-        "user_id": user_id
+        "user_id": user_id,
+        "season_slug": season_slug
     }
 
     if exclude_match_id is not None:
@@ -9639,7 +10009,7 @@ def get_user_prediction(user_id: int, match_id: int):
     Dùng cho UI.
     Lấy từ load_predictions() đã cache để tránh query database lặp lại cho từng card.
     """
-    predictions = load_predictions()
+    predictions = load_predictions(get_selected_season_slug())
 
     if predictions.empty:
         return None
@@ -10113,7 +10483,8 @@ def generate_ai_match_suggestion(match_row: dict) -> str:
 def get_star_transfer_candidates(
     user_id: int,
     target_match_id: int,
-    star_type: str
+    star_type: str,
+    season_slug: str | None = None
 ) -> list[dict]:
     """
     Lấy các trận đang giữ tạm loại sao này và còn mở dự đoán,
@@ -10123,6 +10494,8 @@ def get_star_transfer_candidates(
 
     if star_type == STAR_TYPE_NONE:
         return []
+
+    season_slug = season_slug or get_selected_season_slug()
 
     df = read_sql(
         """
@@ -10144,12 +10517,14 @@ def get_star_transfer_candidates(
         WHERE p.user_id = :user_id
           AND p.match_id <> :target_match_id
           AND p.star_type = :star_type
+          AND m.season_slug = :season_slug
         ORDER BY m.kickoff_time_utc
         """,
         {
             "user_id": int(user_id),
             "target_match_id": int(target_match_id),
-            "star_type": star_type
+            "star_type": star_type,
+            "season_slug": season_slug
         }
     )
 
@@ -10338,7 +10713,8 @@ def save_prediction(
             usage = _get_user_star_usage_in_transaction(
                 conn=conn,
                 user_id=user_id,
-                exclude_match_id=match_id
+                exclude_match_id=match_id,
+                season_slug=match.get("season_slug")
             )
 
             validate_star_quota(
@@ -10422,6 +10798,11 @@ def transfer_star_and_save_prediction(
 
         if target_match is None:
             raise ValueError("Không tìm thấy trận đích.")
+
+        if source_match.get("season_slug") != target_match.get("season_slug"):
+            raise ValueError(
+                "Không thể chuyển bổ trợ giữa hai mùa giải khác nhau."
+            )
 
         predicted_winner_team_id = _normalize_prediction_for_match(
             match=target_match,
@@ -10597,7 +10978,7 @@ def delete_prediction(user_id: int, match_id: int) -> dict:
         "prediction_id": prediction_id
     }
 
-def score_all_predictions():
+def score_all_predictions(season_slug: str | None = None):
     """
     Chấm điểm lại toàn bộ dự đoán đã có kết quả.
 
@@ -10607,8 +10988,9 @@ def score_all_predictions():
     - Chỉ UPDATE database khi điểm mới khác điểm đang lưu.
     - Nếu không có gì thay đổi thì KHÔNG clear cache, giúp Bảng xếp hạng load nhanh hơn nhiều.
     """
-    matches = load_matches()
-    predictions = load_predictions()
+    season_slug = season_slug or get_selected_season_slug()
+    matches = load_matches(season_slug)
+    predictions = load_predictions(season_slug)
 
     if predictions.empty:
         return
@@ -10771,7 +11153,7 @@ def update_match_result(
     )
 
     clear_data_cache()
-    score_all_predictions()
+    score_all_predictions(get_selected_season_slug())
 
 
 # ============================================================
@@ -12553,12 +12935,14 @@ def render_match_card(
                 WHERE p.user_id = :user_id
                   AND p.match_id <> :target_match_id
                   AND p.star_type = :star_type
+                  AND m.season_slug = :season_slug
                 ORDER BY m.kickoff_time_utc
                 """,
                 {
                     "user_id": int(user_id),
                     "target_match_id": int(match_id),
-                    "star_type": star_type
+                    "star_type": star_type,
+                    "season_slug": get_selected_season_slug()
                 }
             )
         except Exception:
@@ -13338,15 +13722,16 @@ def render_filter_dropdown(
 
 def page_matches():
     render_app_hero()
+    render_season_selector()
 
     render_page_title(
         "Lịch thi đấu & dự đoán",
-        "Cuộn xuống dưới để xem lịch thi đấu và nhập dự đoán cho từng trận."
+        f"Đang xem {get_selected_season_title()}. Cuộn xuống dưới để xem lịch thi đấu và nhập dự đoán cho từng trận."
     )
 
     render_prediction_feedback_popup()
 
-    matches = load_matches()
+    matches = load_matches(get_selected_season_slug())
 
     if matches.empty:
         st.warning("Chưa có dữ liệu trận đấu.")
@@ -13894,7 +14279,7 @@ def page_matches():
             filtered["is_finished"].apply(to_bool)
         ]
 
-    user_predictions = load_predictions()
+    user_predictions = load_predictions(get_selected_season_slug())
     user_prediction_map = build_user_prediction_map(
         predictions=user_predictions,
         user_id=user_id
@@ -13937,12 +14322,12 @@ def page_my_predictions():
         "Theo dõi toàn bộ dự đoán đã lưu và điểm số từng trận."
     )
 
-    score_all_predictions()
+    score_all_predictions(get_selected_season_slug())
 
     user_id = st.session_state["user"]["user_id"]
 
-    matches = load_matches()
-    predictions = load_predictions()
+    matches = load_matches(get_selected_season_slug())
+    predictions = load_predictions(get_selected_season_slug())
 
     if predictions.empty:
         st.info("Bạn chưa có dự đoán nào.")
@@ -13993,7 +14378,7 @@ def page_my_predictions():
         )
     })
 
-    leaderboard = build_leaderboard_df()
+    leaderboard = build_leaderboard_df(get_selected_season_slug())
 
     current_user_summary = leaderboard[
         leaderboard["user_id"].astype(int) == int(user_id)
@@ -14084,10 +14469,11 @@ def page_my_predictions():
         st.markdown("<div style='height: 24px;'></div>", unsafe_allow_html=True)
 
 @st.cache_data(ttl=10, show_spinner=False)
-def build_leaderboard_df():
+def build_leaderboard_df(season_slug: str | None = None):
     users = load_users()
-    predictions = load_predictions()
-    matches = load_matches()
+    season_slug = season_slug or get_selected_season_slug()
+    predictions = load_predictions(season_slug)
+    matches = load_matches(season_slug)
 
     if users.empty:
         return pd.DataFrame()
@@ -14564,10 +14950,10 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
 def page_competition_stats():
     render_page_title(
         "Thông số giải đấu",
-        f"Bảng xếp hạng EPL {APP_SEASON_LABEL}"
+        f"Bảng xếp hạng EPL {get_selected_season_label()}"
     )
 
-    matches = load_matches()
+    matches = load_matches(get_selected_season_slug())
     standings = build_epl_standings_df(matches)
 
     if standings.empty:
@@ -14582,9 +14968,9 @@ def page_leaderboard():
         "Xem ai đang dẫn đầu cuộc đua dự đoán."
     )
 
-    score_all_predictions()
+    score_all_predictions(get_selected_season_slug())
 
-    leaderboard = build_leaderboard_df()
+    leaderboard = build_leaderboard_df(get_selected_season_slug())
 
     if leaderboard.empty:
         st.info("Chưa có dữ liệu người chơi.")
@@ -14855,11 +15241,11 @@ def page_dashboard():
         "Phân tích tổng quan hiệu suất dự đoán, điểm số và độ chính xác của tất cả người chơi."
     )
 
-    score_all_predictions()
+    score_all_predictions(get_selected_season_slug())
 
-    leaderboard = build_leaderboard_df()
-    predictions = load_predictions()
-    matches = load_matches()
+    leaderboard = build_leaderboard_df(get_selected_season_slug())
+    predictions = load_predictions(get_selected_season_slug())
+    matches = load_matches(get_selected_season_slug())
 
     if leaderboard.empty:
         st.info("Chưa đủ dữ liệu để vẽ dashboard.")
@@ -15194,9 +15580,9 @@ def page_admin():
         st.error("Bạn không có quyền truy cập trang này.")
         return
 
-    matches = load_matches()
+    matches = load_matches(get_selected_season_slug())
     users = load_users()
-    predictions = load_predictions()
+    predictions = load_predictions(get_selected_season_slug())
 
     col1, col2, col3 = st.columns(3)
 
@@ -15408,7 +15794,7 @@ def page_admin():
     st.markdown("---")
 
     if st.button("Chấm điểm lại toàn bộ dự đoán", use_container_width=True):
-        score_all_predictions()
+        score_all_predictions(get_selected_season_slug())
         st.success("Đã chấm điểm lại toàn bộ dự đoán.")
 
 
