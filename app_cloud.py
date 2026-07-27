@@ -413,7 +413,7 @@ def render_season_selector():
                 );
             border: 1px solid rgba(15,23,42,0.10);
             border-radius: 10px;
-            padding: 8px 10px 8px 12px;
+            padding: 14px 12px 14px 14px;
             margin: 8px 0 18px 0;
             box-shadow:
                 0 8px 22px rgba(15,23,42,0.07),
