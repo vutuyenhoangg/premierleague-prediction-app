@@ -279,9 +279,9 @@ def render_season_selector():
             display: flex;
             align-items: center;
             gap: 8px;
-            height: 30px;
+            height: 32px;
             color: #07111F;
-            font-size: 11px;
+            font-size: 14px;
             font-weight: 950;
             letter-spacing: 0.08em;
             line-height: 1;
@@ -301,9 +301,9 @@ def render_season_selector():
 
         .epl-selected-season-text {
             margin-top: 6px;
-            color: #64748B;
-            font-size: 13px;
-            font-weight: 600;
+            color: #07111F;
+            font-size: 13.5px;
+            font-weight: 900;
             line-height: 1.35;
         }
 
@@ -311,7 +311,9 @@ def render_season_selector():
             color: #07111F;
             font-weight: 900;
         }
-
+        div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-season_switch_"]) {
+            gap: 4px !important;
+        }
         div[class*="st-key-season_switch_"] {
             margin: 0 !important;
             width: auto !important;
@@ -319,10 +321,10 @@ def render_season_selector():
 
         div[class*="st-key-season_switch_"] button {
             width: auto !important;
-            min-width: 82px !important;
+            min-width: 76px !important;
             height: 30px !important;
             min-height: 30px !important;
-            padding: 0 16px !important;
+            padding: 0 12px !important;
             border-radius: 999px !important;
             border: 1px solid rgba(15,23,42,0.10) !important;
             background: rgba(255,255,255,0.90) !important;
@@ -418,7 +420,7 @@ def render_season_selector():
     st.markdown(
         f"""
         <div class="epl-selected-season-text">
-            Mùa đang chọn: <strong>{selected_label}</strong>
+            <strong>{selected_label}</strong>
         </div>
         """,
         unsafe_allow_html=True
