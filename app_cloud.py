@@ -43,7 +43,7 @@ RUN_DB_MIGRATIONS = str(
 
 APP_NAME = "EPL Prediction Arena"
 APP_SHORT_NAME = "EPL 2026/27"
-APP_SEASON_LABEL = "2025/26"
+APP_SEASON_LABEL = "2026/27"
 APP_TAGLINE = "Dự đoán tỉ số Ngoại hạng Anh, tích điểm và tranh tài cùng bạn bè."
 COOKIE_NAME = "epl_session_token"
 SESSION_DAYS = 30
@@ -10867,13 +10867,24 @@ def get_mobile_team_display_name(team_name) -> str:
 
     mobile_name_overrides = {
         "afc bournemouth": "Bournemouth",
+        "brighton & hove albion": "Brighton",
         "brighton & hove albion fc": "Brighton",
+        "coventry city": "Coventry",
+        "hull city": "Hull City",
+        "ipswich town": "Ipswich Town",
+        "manchester city": "Man City",
         "manchester city fc": "Man City",
+        "manchester united": "Man United",
         "manchester united fc": "Man United",
+        "newcastle united": "Newcastle",
         "newcastle united fc": "Newcastle",
+        "nottingham forest": "Nottingham Forest",
         "nottingham forest fc": "Nottingham Forest",
+        "tottenham hotspur": "Tottenham",
         "tottenham hotspur fc": "Tottenham",
+        "west ham united": "West Ham",
         "west ham united fc": "West Ham",
+        "wolverhampton wanderers": "Wolves",
         "wolverhampton wanderers fc": "Wolves",
     }
 
@@ -14553,7 +14564,7 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
 def page_competition_stats():
     render_page_title(
         "Thông số giải đấu",
-        "Bảng xếp hạng EPL 2025/26"
+        f"Bảng xếp hạng EPL {APP_SEASON_LABEL}"
     )
 
     matches = load_matches()
