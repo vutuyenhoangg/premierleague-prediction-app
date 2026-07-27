@@ -274,11 +274,31 @@ def render_season_selector():
 
     season_selector_css = """
         <style>
+        div[data-testid="stVerticalBlock"]:has(div.st-key-season_selector_compact_panel) {
+            align-items: flex-start !important;
+        }
+
+        div.st-key-season_selector_compact_panel {
+            width: fit-content !important;
+            max-width: 100% !important;
+        }
+
+        div.st-key-season_selector_compact_panel div[data-testid="stHorizontalBlock"] {
+            gap: 8px !important;
+            align-items: center !important;
+        }
+
+        div.st-key-season_selector_compact_panel div[data-testid="column"] {
+            width: auto !important;
+            flex: 0 0 auto !important;
+            min-width: 0 !important;
+        }
+
         .epl-season-filter-label {
             display: flex;
             align-items: center;
             gap: 8px;
-            height: 34px;
+            height: 28px;
             color: #07111F;
             font-size: 11px;
             font-weight: 950;
@@ -300,44 +320,42 @@ def render_season_selector():
 
         div[class*="st-key-season_switch_"] {
             margin: 0 !important;
+            width: auto !important;
         }
 
         div[class*="st-key-season_switch_"] button {
-            width: 100% !important;
-            min-height: 32px !important;
-            padding: 0 18px !important;
+            width: auto !important;
+            min-width: 82px !important;
+            height: 28px !important;
+            min-height: 28px !important;
+            padding: 0 15px !important;
             border-radius: 999px !important;
             border: 1px solid rgba(15,23,42,0.10) !important;
-            background: rgba(255,255,255,0.82) !important;
+            background: rgba(255,255,255,0.88) !important;
             color: #334155 !important;
             box-shadow:
                 inset 0 1px 0 rgba(255,255,255,0.85),
                 0 1px 2px rgba(15,23,42,0.04) !important;
-            font-size: 12.5px !important;
+            font-size: 12px !important;
             font-weight: 850 !important;
-            transition:
-                border-color 0.16s ease,
-                background 0.16s ease,
-                color 0.16s ease,
-                box-shadow 0.16s ease !important;
+            line-height: 1 !important;
         }
 
         div[class*="st-key-season_switch_"] button:hover {
             background: #FFFFFF !important;
             border-color: rgba(245,197,66,0.70) !important;
             color: #07111F !important;
-            box-shadow: 0 7px 16px rgba(15,23,42,0.10) !important;
+            box-shadow: 0 6px 14px rgba(15,23,42,0.10) !important;
         }
 
         div[class*="st-key-season_switch___ACTIVE_KEY__"] button,
         div[class*="st-key-season_switch___ACTIVE_KEY__"] button:disabled {
-            background:
-                linear-gradient(135deg, #06101F 0%, #0B1B33 100%) !important;
+            background: linear-gradient(135deg, #06101F 0%, #0B1B33 100%) !important;
             border-color: rgba(245,197,66,0.92) !important;
             color: #F8FAFC !important;
             opacity: 1 !important;
             box-shadow:
-                0 8px 18px rgba(15,23,42,0.20),
+                0 7px 16px rgba(15,23,42,0.18),
                 inset 0 1px 0 rgba(255,255,255,0.12) !important;
             cursor: default !important;
         }
@@ -348,15 +366,26 @@ def render_season_selector():
         }
 
         @media (max-width: 768px) {
+            div.st-key-season_selector_compact_panel {
+                width: 100% !important;
+            }
+
+            div.st-key-season_selector_compact_panel div[data-testid="stHorizontalBlock"] {
+                gap: 6px !important;
+                flex-wrap: wrap !important;
+            }
+
             .epl-season-filter-label {
-                justify-content: center;
-                height: 26px;
+                width: 100%;
+                height: 24px;
                 font-size: 10.5px;
             }
 
             div[class*="st-key-season_switch_"] button {
-                min-height: 31px !important;
-                padding: 0 10px !important;
+                min-width: 78px !important;
+                height: 28px !important;
+                min-height: 28px !important;
+                padding: 0 12px !important;
                 font-size: 12px !important;
             }
         }
@@ -372,26 +401,29 @@ def render_season_selector():
         key="season_selector_compact_panel",
         css_styles="""
         {
-            max-width: 760px;
+            display: inline-block;
+            width: fit-content;
+            max-width: 100%;
             background:
                 linear-gradient(
                     135deg,
-                    rgba(255,255,255,0.94) 0%,
-                    rgba(248,250,252,0.92) 68%,
+                    rgba(255,255,255,0.96) 0%,
+                    rgba(248,250,252,0.94) 72%,
                     rgba(245,197,66,0.10) 100%
                 );
             border: 1px solid rgba(15,23,42,0.10);
-            border-radius: 12px;
-            padding: 10px 12px 10px 14px;
-            margin: 8px auto 18px auto;
+            border-radius: 10px;
+            padding: 8px 10px 8px 12px;
+            margin: 8px 0 18px 0;
             box-shadow:
-                0 10px 26px rgba(15,23,42,0.07),
-                inset 0 1px 0 rgba(255,255,255,0.78);
+                0 8px 22px rgba(15,23,42,0.07),
+                inset 0 1px 0 rgba(255,255,255,0.82);
         }
 
         @media (max-width: 768px) {
             {
-                max-width: 100%;
+                display: block;
+                width: 100%;
                 border-radius: 14px;
                 padding: 9px 10px;
                 margin: 6px 0 14px 0;
@@ -399,7 +431,7 @@ def render_season_selector():
         }
         """
     ):
-        label_col, picker_col = st.columns([0.34, 1.66], gap="small")
+        label_col, picker_col = st.columns([1, 2], gap="small")
 
         with label_col:
             st.markdown(
@@ -425,7 +457,7 @@ def render_season_selector():
                     if st.button(
                         season["label"],
                         key=button_key,
-                        use_container_width=True,
+                        use_container_width=False,
                         disabled=is_active
                     ):
                         set_selected_season(season["slug"])
