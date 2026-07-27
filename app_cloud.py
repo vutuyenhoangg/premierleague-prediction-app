@@ -266,128 +266,105 @@ def set_selected_season(season_slug: str):
 def render_season_selector():
     selected_slug = get_selected_season_slug()
 
+    season_options = sorted(
+        SEASON_OPTIONS,
+        key=lambda season: season["slug"],
+        reverse=True
+    )
+    season_slugs = [season["slug"] for season in season_options]
+
     st.markdown(
         """
         <style>
-        .epl-season-selector {
-            background:
-                linear-gradient(
-                    135deg,
-                    rgba(255,255,255,0.98) 0%,
-                    rgba(248,250,252,0.96) 58%,
-                    rgba(245,197,66,0.13) 100%
-                );
-            border: 1px solid rgba(15,23,42,0.08);
-            border-left: 5px solid #F5C542;
-            border-radius: 22px;
-            padding: 18px 22px;
-            margin: 10px 0 24px 0;
-            box-shadow: 0 16px 42px rgba(15,23,42,0.10);
-        }
-
-        .epl-season-heading {
+        .epl-season-compact {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 12px;
-            margin-bottom: 14px;
-        }
-
-        .epl-season-title {
-            color: #07111F;
-            font-size: 17px;
-            font-weight: 950;
-            line-height: 1.2;
-        }
-
-        .epl-season-caption {
-            color: #64748B;
-            font-size: 13px;
-            font-weight: 600;
-            margin-top: 4px;
-        }
-
-        .epl-season-current {
-            color: #78350F;
-            background: rgba(245,197,66,0.22);
-            border: 1px solid rgba(245,197,66,0.48);
-            border-radius: 999px;
-            padding: 7px 12px;
-            font-size: 12px;
-            font-weight: 900;
-            white-space: nowrap;
-        }
-
-        .epl-season-card {
-            min-height: 96px;
-            border-radius: 18px;
-            border: 1px solid rgba(15,23,42,0.10);
-            background: rgba(255,255,255,0.72);
-            padding: 14px 15px;
-            box-shadow: inset 0 1px 0 rgba(255,255,255,0.85);
-            transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
-        }
-
-        .epl-season-card.is-active {
-            border-color: rgba(245,197,66,0.85);
+            gap: 14px;
+            margin: 8px 0 18px 0;
+            padding: 12px 14px;
+            border-radius: 16px;
             background:
                 linear-gradient(
                     135deg,
-                    rgba(7,17,31,0.96) 0%,
-                    rgba(15,23,42,0.94) 100%
+                    rgba(255,255,255,0.96) 0%,
+                    rgba(248,250,252,0.94) 70%,
+                    rgba(245,197,66,0.12) 100%
                 );
-            box-shadow: 0 12px 28px rgba(15,23,42,0.18);
+            border: 1px solid rgba(15,23,42,0.08);
+            box-shadow: 0 10px 26px rgba(15,23,42,0.08);
         }
 
-        .epl-season-card-title {
-            color: #07111F;
-            font-size: 16px;
-            font-weight: 950;
-            line-height: 1.2;
+        .epl-season-copy {
+            min-width: 0;
         }
 
-        .epl-season-card-subtitle {
+        .epl-season-kicker {
             color: #64748B;
-            font-size: 13px;
-            font-weight: 650;
-            margin-top: 6px;
-        }
-
-        .epl-season-card-badge {
-            display: inline-flex;
-            margin-top: 12px;
-            padding: 5px 9px;
-            border-radius: 999px;
-            color: #78350F;
-            background: rgba(245,197,66,0.22);
-            border: 1px solid rgba(245,197,66,0.38);
             font-size: 11px;
-            font-weight: 900;
+            font-weight: 850;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            line-height: 1.1;
         }
 
-        .epl-season-card.is-active .epl-season-card-title {
-            color: #F8FAFC;
+        .epl-season-main {
+            color: #07111F;
+            font-size: 15px;
+            font-weight: 950;
+            line-height: 1.25;
+            margin-top: 3px;
         }
 
-        .epl-season-card.is-active .epl-season-card-subtitle {
-            color: #CBD5E1;
+        .epl-season-main span {
+            color: #B45309;
         }
 
-        div[class*="st-key-season_switcher_"] button {
-            width: 100% !important;
-            min-height: 40px !important;
-            border-radius: 13px !important;
+        .epl-season-control {
+            min-width: 260px;
+        }
+
+        div[data-testid="stSegmentedControl"] {
+            background: rgba(15,23,42,0.06);
+            border: 1px solid rgba(15,23,42,0.08);
+            border-radius: 999px;
+            padding: 4px;
+        }
+
+        div[data-testid="stSegmentedControl"] button {
+            border-radius: 999px !important;
             font-weight: 900 !important;
+            min-height: 34px !important;
+        }
+
+        div[data-testid="stSegmentedControl"] button[aria-pressed="true"] {
+            background:
+                linear-gradient(
+                    135deg,
+                    #07111F 0%,
+                    #111827 100%
+                ) !important;
+            color: #F8FAFC !important;
+            box-shadow: 0 8px 18px rgba(15,23,42,0.22) !important;
+            border-color: rgba(245,197,66,0.75) !important;
         }
 
         @media (max-width: 768px) {
-            .epl-season-heading {
-                align-items: flex-start;
+            .epl-season-compact {
+                align-items: stretch;
                 flex-direction: column;
+                gap: 10px;
+                padding: 12px;
+                margin: 6px 0 14px 0;
             }
 
-            .epl-season-selector {
-                padding: 16px;
+            .epl-season-control {
+                min-width: 0;
+                width: 100%;
+            }
+
+            .epl-season-main {
+                font-size: 14px;
             }
         }
         </style>
@@ -395,69 +372,61 @@ def render_season_selector():
         unsafe_allow_html=True
     )
 
+    picker_key = "season_segmented_picker"
+    st.session_state[picker_key] = selected_slug
+
     with stylable_container(
-        key="season_selector_panel",
+        key="season_selector_compact_panel",
         css_styles="""
         {
-            margin: 0 0 6px 0;
+            margin: 0;
         }
         """
     ):
         st.markdown(
             f"""
-            <div class="epl-season-selector">
-                <div class="epl-season-heading">
-                    <div>
-                        <div class="epl-season-title">Chọn mùa giải</div>
-                        <div class="epl-season-caption">
-                            Lịch thi đấu, dự đoán, bảng xếp hạng và thống kê sẽ tách riêng theo mùa.
-                        </div>
+            <div class="epl-season-compact">
+                <div class="epl-season-copy">
+                    <div class="epl-season-kicker">Mùa giải</div>
+                    <div class="epl-season-main">
+                        Đang xem <span>{html.escape(get_selected_season_label())}</span>
                     </div>
-                    <div class="epl-season-current">
-                        Đang xem: {html.escape(get_selected_season_label())}
-                    </div>
+                </div>
+                <div class="epl-season-control">
+            """,
+            unsafe_allow_html=True
+        )
+
+        if hasattr(st, "segmented_control"):
+            chosen_slug = st.segmented_control(
+                "Chọn mùa giải",
+                options=season_slugs,
+                key=picker_key,
+                format_func=lambda slug: SEASON_LABEL_BY_SLUG.get(slug, slug),
+                label_visibility="collapsed",
+                width="stretch"
+            )
+        else:
+            chosen_slug = st.radio(
+                "Chọn mùa giải",
+                options=season_slugs,
+                key=picker_key,
+                format_func=lambda slug: SEASON_LABEL_BY_SLUG.get(slug, slug),
+                horizontal=True,
+                label_visibility="collapsed"
+            )
+
+        st.markdown(
+            """
                 </div>
             </div>
             """,
             unsafe_allow_html=True
         )
 
-        season_columns = st.columns(
-            len(SEASON_OPTIONS),
-            gap="medium"
-        )
-
-        for col, season in zip(season_columns, SEASON_OPTIONS):
-            is_active = season["slug"] == selected_slug
-            card_class = "epl-season-card is-active" if is_active else "epl-season-card"
-            button_label = "Đang chọn" if is_active else "Xem mùa này"
-
-            with col:
-                st.markdown(
-                    f"""
-                    <div class="{card_class}">
-                        <div class="epl-season-card-title">
-                            {html.escape(season["title"])}
-                        </div>
-                        <div class="epl-season-card-subtitle">
-                            {html.escape(season["subtitle"])}
-                        </div>
-                        <div class="epl-season-card-badge">
-                            {html.escape(season["badge"])}
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-
-                st.button(
-                    button_label,
-                    key=f"season_switcher_{season['slug'].replace('-', '_')}",
-                    use_container_width=True,
-                    disabled=is_active,
-                    on_click=set_selected_season,
-                    args=(season["slug"],)
-                )
+    if chosen_slug and chosen_slug != selected_slug:
+        set_selected_season(chosen_slug)
+        st.rerun()
 
 
 st.set_page_config(
