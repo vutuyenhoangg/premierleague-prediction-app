@@ -4174,9 +4174,482 @@ def inject_prediction_score_stepper_css():
                 max-width: 56px !important;
             }
         }
+
+        /* =====================================================
+           HIỆU CHỈNH CUỐI: CĂN GIỮA + SCORE TILE MỚI
+           ===================================================== */
+        
+        /* Tên đội chiếm toàn bộ chiều rộng cột */
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInput"] {
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+        
+            margin: 0 !important;
+        }
+        
+        /* Căn tên đội chính giữa */
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInput"] > label {
+            display: flex !important;
+            justify-content: center !important;
+        
+            width: 100% !important;
+        
+            margin: 0 0 6px !important;
+            padding: 0 6px !important;
+        
+            text-align: center !important;
+        }
+        
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInput"] > label p {
+            width: 100% !important;
+            margin: 0 !important;
+        
+            color: #37003C !important;
+        
+            font-size: 13px !important;
+            font-weight: 800 !important;
+            line-height: 1.25 !important;
+            text-align: center !important;
+        
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+        }
+        
+        /*
+         * Quan trọng nhất:
+         * Căn chính giữa cả wrapper cũ và container mới của Streamlit.
+         */
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInput"]
+        div[data-baseweb="input"],
+        
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInputContainer"] {
+            position: relative !important;
+            display: block !important;
+        
+            width: 88px !important;
+            min-width: 88px !important;
+            max-width: 88px !important;
+        
+            height: 136px !important;
+            min-height: 136px !important;
+        
+            margin: 0 auto !important;
+            padding: 0 !important;
+        
+            overflow: visible !important;
+            box-sizing: border-box !important;
+        
+            background: transparent !important;
+        
+            border: 0 !important;
+            border-radius: 0 !important;
+            outline: 0 !important;
+        
+            box-shadow: none !important;
+            filter: none !important;
+        }
+        
+        /* Score tile lớn, dạng bảng tỉ số EPL */
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInput"] input {
+            position: absolute !important;
+        
+            top: 37px !important;
+            left: 50% !important;
+            right: auto !important;
+        
+            width: 88px !important;
+            min-width: 88px !important;
+            max-width: 88px !important;
+        
+            height: 62px !important;
+            min-height: 62px !important;
+        
+            margin: 0 !important;
+            padding: 0 8px !important;
+        
+            box-sizing: border-box !important;
+        
+            background: #37003C !important;
+            color: #FFFFFF !important;
+            -webkit-text-fill-color: #FFFFFF !important;
+        
+            border: 2px solid #FF2882 !important;
+            border-radius: 0 !important;
+            outline: 0 !important;
+        
+            clip-path: polygon(
+                9px 0,
+                calc(100% - 9px) 0,
+                100% 9px,
+                100% calc(100% - 9px),
+                calc(100% - 9px) 100%,
+                9px 100%,
+                0 calc(100% - 9px),
+                0 9px
+            ) !important;
+        
+            box-shadow: none !important;
+            filter: none !important;
+        
+            transform: translateX(-50%) !important;
+        
+            font-family:
+                system-ui,
+                -apple-system,
+                BlinkMacSystemFont,
+                "Segoe UI",
+                sans-serif !important;
+        
+            font-size: 34px !important;
+            font-weight: 950 !important;
+            line-height: 58px !important;
+            letter-spacing: -0.055em !important;
+            text-align: center !important;
+            font-variant-numeric: tabular-nums !important;
+        
+            caret-color: transparent !important;
+        
+            user-select: none !important;
+            -webkit-user-select: none !important;
+        
+            pointer-events: none !important;
+        
+            z-index: 1 !important;
+        }
+        
+        /* Không cho các rule hover/focus cũ đổi score tile sang màu trắng */
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInput"] input:hover,
+        
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInput"] input:focus {
+            background: #37003C !important;
+            color: #FFFFFF !important;
+            -webkit-text-fill-color: #FFFFFF !important;
+        
+            border-color: #FF2882 !important;
+            outline: 0 !important;
+        
+            box-shadow: none !important;
+        }
+        
+        /* Kích thước hai nút mũi tên */
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        :is(
+            button[data-testid="stNumberInputStepUp"],
+            button[data-testid="stNumberInputStepDown"]
+        ) {
+            left: 50% !important;
+            right: auto !important;
+        
+            width: 68px !important;
+            min-width: 68px !important;
+            max-width: 68px !important;
+        
+            height: 30px !important;
+            min-height: 30px !important;
+            max-height: 30px !important;
+        
+            transform: translateX(-50%) !important;
+        
+            box-shadow: none !important;
+        }
+        
+        /* Nút tăng */
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        button[data-testid="stNumberInputStepUp"] {
+            top: 0 !important;
+            bottom: auto !important;
+        }
+        
+        /* Nút giảm */
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        button[data-testid="stNumberInputStepDown"] {
+            top: auto !important;
+            bottom: 0 !important;
+        }
+        
+        /* Dấu : phải ngang chính giữa hai score tile */
+        div[class*="st-key-prediction_score_row_"]
+        div[data-testid="stHorizontalBlock"]:has(
+            div[class*="st-key-home_score_shell_"]
+        ):has(
+            div[class*="st-key-away_score_shell_"]
+        )::after {
+            top: 103px !important;
+        
+            color: #37003C !important;
+        
+            font-size: 30px !important;
+            font-weight: 950 !important;
+        }
+        
+        /* Mobile */
+        @media (max-width: 768px) {
+            div[class*="st-key-prediction_score_row_"]
+            :is(
+                div[class*="st-key-home_score_shell_"],
+                div[class*="st-key-away_score_shell_"]
+            )
+            div[data-testid="stNumberInput"] > label p {
+                font-size: 12px !important;
+            }
+        
+            div[class*="st-key-prediction_score_row_"]
+            :is(
+                div[class*="st-key-home_score_shell_"],
+                div[class*="st-key-away_score_shell_"]
+            )
+            div[data-testid="stNumberInput"]
+            div[data-baseweb="input"],
+        
+            div[class*="st-key-prediction_score_row_"]
+            :is(
+                div[class*="st-key-home_score_shell_"],
+                div[class*="st-key-away_score_shell_"]
+            )
+            div[data-testid="stNumberInputContainer"] {
+                width: 82px !important;
+                min-width: 82px !important;
+                max-width: 82px !important;
+        
+                height: 130px !important;
+                min-height: 130px !important;
+        
+                margin-left: auto !important;
+                margin-right: auto !important;
+            }
+        
+            div[class*="st-key-prediction_score_row_"]
+            :is(
+                div[class*="st-key-home_score_shell_"],
+                div[class*="st-key-away_score_shell_"]
+            )
+            div[data-testid="stNumberInput"] input {
+                top: 36px !important;
+        
+                width: 82px !important;
+                min-width: 82px !important;
+                max-width: 82px !important;
+        
+                height: 58px !important;
+                min-height: 58px !important;
+        
+                font-size: 32px !important;
+                line-height: 54px !important;
+            }
+        
+            div[class*="st-key-prediction_score_row_"]
+            div[data-testid="stHorizontalBlock"]:has(
+                div[class*="st-key-home_score_shell_"]
+            ):has(
+                div[class*="st-key-away_score_shell_"]
+            )::after {
+                top: 99px !important;
+                font-size: 27px !important;
+            }
+        }
         </style>
         """,
         unsafe_allow_html=True
+    )
+
+def inject_prediction_score_readonly_script():
+    """
+    Khóa thao tác nhập trực tiếp vào hai ô tỉ số dự đoán.
+
+    Nút tăng/giảm native của Streamlit vẫn hoạt động bình thường.
+    Không tác động đến number_input ở trang Admin.
+    """
+    components.html(
+        """
+        <script>
+        (() => {
+            const parentWindow = window.parent;
+            const parentDocument = parentWindow.document;
+
+            const inputSelector = [
+                'div[class*="st-key-prediction_score_row_"]',
+                ':is(',
+                'div[class*="st-key-home_score_shell_"],',
+                'div[class*="st-key-away_score_shell_"]',
+                ') input'
+            ].join(" ");
+
+            const lockScoreInput = (input) => {
+                if (
+                    !input
+                    || !(input instanceof parentWindow.HTMLInputElement)
+                ) {
+                    return;
+                }
+
+                input.readOnly = true;
+
+                input.setAttribute("readonly", "");
+                input.setAttribute("aria-readonly", "true");
+                input.setAttribute("inputmode", "none");
+                input.setAttribute("autocomplete", "off");
+                input.setAttribute("spellcheck", "false");
+
+                if (
+                    input.dataset.eplScoreReadonlyBound === "1"
+                ) {
+                    return;
+                }
+
+                const preventEditing = (event) => {
+                    event.preventDefault();
+                };
+
+                input.addEventListener(
+                    "beforeinput",
+                    preventEditing
+                );
+
+                input.addEventListener(
+                    "paste",
+                    preventEditing
+                );
+
+                input.addEventListener(
+                    "drop",
+                    preventEditing
+                );
+
+                input.addEventListener(
+                    "wheel",
+                    preventEditing,
+                    { passive: false }
+                );
+
+                input.addEventListener(
+                    "keydown",
+                    (event) => {
+                        const blockedKeys = new Set([
+                            "Backspace",
+                            "Delete",
+                            "ArrowUp",
+                            "ArrowDown",
+                            "PageUp",
+                            "PageDown",
+                            "Home",
+                            "End"
+                        ]);
+
+                        if (
+                            event.key.length === 1
+                            || blockedKeys.has(event.key)
+                        ) {
+                            event.preventDefault();
+                        }
+                    }
+                );
+
+                input.dataset.eplScoreReadonlyBound = "1";
+            };
+
+            const applyReadonly = () => {
+                parentDocument
+                    .querySelectorAll(inputSelector)
+                    .forEach(lockScoreInput);
+            };
+
+            let updateScheduled = false;
+
+            const scheduleUpdate = () => {
+                if (updateScheduled) {
+                    return;
+                }
+
+                updateScheduled = true;
+
+                parentWindow.requestAnimationFrame(() => {
+                    updateScheduled = false;
+                    applyReadonly();
+                });
+            };
+
+            const observerKey =
+                "__eplPredictionScoreReadonlyObserver";
+
+            if (parentWindow[observerKey]) {
+                parentWindow[observerKey].disconnect();
+            }
+
+            applyReadonly();
+
+            const observer =
+                new parentWindow.MutationObserver(
+                    scheduleUpdate
+                );
+
+            observer.observe(
+                parentDocument.body,
+                {
+                    childList: true,
+                    subtree: true
+                }
+            );
+
+            parentWindow[observerKey] = observer;
+        })();
+        </script>
+        """,
+        height=0,
+        scrolling=False
     )
 
 inject_epl_theme()
@@ -4186,6 +4659,7 @@ inject_epl_match_card_background_css()
 inject_epl_big_match_card_css()
 inject_mobile_prediction_score_row_css()
 inject_prediction_score_stepper_css()
+inject_prediction_score_readonly_script()
 inject_hide_streamlit_embed_footer_css()
 inject_main_page_lift_css()
 
