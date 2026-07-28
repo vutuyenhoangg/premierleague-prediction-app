@@ -726,53 +726,43 @@ def render_season_selector():
         season_columns = selector_columns[2:]
 
         with info_col:
+            season_info_html = (
+                '<div class="epl-season-info">'
+                    '<span class="epl-season-icon" aria-hidden="true">'
+                        '<svg viewBox="0 0 24 24">'
+                            '<rect x="3.5" y="5.5" width="17" height="15" rx="2.5"></rect>'
+                            '<path d="M8 3.5V7.5"></path>'
+                            '<path d="M16 3.5V7.5"></path>'
+                            '<path d="M3.5 9.5H20.5"></path>'
+                            '<path d="M8 13H8.01"></path>'
+                            '<path d="M12 13H12.01"></path>'
+                            '<path d="M16 13H16.01"></path>'
+                            '<path d="M8 17H8.01"></path>'
+                            '<path d="M12 17H12.01"></path>'
+                        '</svg>'
+                    '</span>'
+                    '<span class="epl-season-copy">'
+                        '<span class="epl-season-heading">Mùa giải</span>'
+                        '<span class="epl-season-subtitle">'
+                            'Chọn mùa giải để xem lịch đấu'
+                        '</span>'
+                    '</span>'
+                '</div>'
+            )
+        
             st.markdown(
-                """
-                <div class="epl-season-info">
-                    <span class="epl-season-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24">
-                            <rect
-                                x="3.5"
-                                y="5.5"
-                                width="17"
-                                height="15"
-                                rx="2.5"
-                            ></rect>
-                            <path d="M8 3.5V7.5"></path>
-                            <path d="M16 3.5V7.5"></path>
-                            <path d="M3.5 9.5H20.5"></path>
-                            <path d="M8 13H8.01"></path>
-                            <path d="M12 13H12.01"></path>
-                            <path d="M16 13H16.01"></path>
-                            <path d="M8 17H8.01"></path>
-                            <path d="M12 17H12.01"></path>
-                        </svg>
-                    </span>
-
-                    <span class="epl-season-copy">
-                        <span class="epl-season-heading">
-                            Mùa giải
-                        </span>
-
-                        <span class="epl-season-subtitle">
-                            Chọn mùa giải để xem lịch đấu
-                        </span>
-                    </span>
-                </div>
-                """,
+                season_info_html,
                 unsafe_allow_html=True
             )
 
         with chevron_col:
             st.markdown(
-                """
-                <div class="epl-season-chevron-wrap">
-                    <span
-                        class="epl-season-chevron"
-                        aria-hidden="true"
-                    ></span>
-                </div>
-                """,
+                (
+                    '<div class="epl-season-chevron-wrap">'
+                        '<span class="epl-season-chevron" '
+                        'aria-hidden="true"></span>'
+                    '</div>'
+                ),
                 unsafe_allow_html=True
             )
 
