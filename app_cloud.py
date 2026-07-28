@@ -24,7 +24,6 @@ import secrets
 from streamlit_cookies_controller import CookieController
 import re
 import textwrap
-import inspect
 
 # ============================================================
 # 1. CONFIG
@@ -6401,7 +6400,6 @@ def render_star_balance(user_id: int):
     )
 
     col_hope, col_super = st.columns([1, 1], gap="large")
-    col_hope, col_super = st.columns([1, 1], gap="large")
 
     with col_hope:
         with stylable_container(
@@ -6811,20 +6809,6 @@ def render_avatar_popover(user: dict):
         avatar_keys=avatar_keys
     )
 
-    try:
-        supports_lazy_avatar_popover = (
-            "on_change"
-            in inspect.signature(st.popover).parameters
-        )
-    except (TypeError, ValueError):
-        supports_lazy_avatar_popover = False
-
-    avatar_popover_state_key = "avatar_picker_popover_open"
-    should_render_avatar_grid = (
-        not supports_lazy_avatar_popover
-        or bool(st.session_state.get(avatar_popover_state_key, False))
-    )
-
     def make_safe_key(text: str) -> str:
         return (
             str(text)
@@ -6837,22 +6821,21 @@ def render_avatar_popover(user: dict):
 
     avatar_items = []
 
-    if should_render_avatar_grid:
-        for avatar_key in avatar_keys:
-            safe_avatar_key = make_safe_key(avatar_key)
-            avatar_button_key = f"avatar_pick_{safe_avatar_key}"
+    for avatar_key in avatar_keys:
+        safe_avatar_key = make_safe_key(avatar_key)
+        avatar_button_key = f"avatar_pick_{safe_avatar_key}"
 
-            avatar_items.append(
-                {
-                    "avatar_key": avatar_key,
-                    "avatar_src": get_avatar_src(
-                        avatar_key,
-                        avatar_keys=avatar_keys
-                    ),
-                    "button_key": avatar_button_key,
-                    "is_selected": avatar_key == current_avatar_key
-                }
-            )
+        avatar_items.append(
+            {
+                "avatar_key": avatar_key,
+                "avatar_src": get_avatar_src(
+                    avatar_key,
+                    avatar_keys=avatar_keys
+                ),
+                "button_key": avatar_button_key,
+                "is_selected": avatar_key == current_avatar_key
+            }
+        )
 
     avatar_specific_css = []
 
@@ -7350,29 +7333,7 @@ def render_avatar_popover(user: dict):
         }}
         """
     ):
-        avatar_popover_kwargs = {
-            "use_container_width": False
-        }
-
-        if supports_lazy_avatar_popover:
-            avatar_popover_kwargs.update(
-                {
-                    "key": avatar_popover_state_key,
-                    "on_change": "rerun"
-                }
-            )
-
-        avatar_popover = st.popover(
-            "Đổi avatar",
-            **avatar_popover_kwargs
-        )
-
-        with avatar_popover:
-            if (
-                supports_lazy_avatar_popover
-                and not avatar_popover.open
-            ):
-                return
+        with st.popover("Đổi avatar", use_container_width=False):
 
             st.markdown(
                 """
@@ -7404,12 +7365,10 @@ def render_avatar_popover(user: dict):
                 }
 
                 @media (max-width: 768px) {
-                    div[class*="st-key-avatar_grid_desktop_shell"] {
+                    {
                         display: block !important;
                     }
-                    
-                    /* Chỉ chỉnh hàng avatar bên trong popup */
-                    div[class*="st-key-avatar_grid_desktop_shell"]
+
                     div[data-testid="stHorizontalBlock"] {
                         display: grid !important;
                         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -7417,11 +7376,8 @@ def render_avatar_popover(user: dict):
                         align-items: stretch !important;
                         width: 100% !important;
                     }
-                    
-                    /* Chỉ chỉnh các cột nằm trong popup avatar */
-                    div[class*="st-key-avatar_grid_desktop_shell"]
+
                     div[data-testid="stColumn"],
-                    div[class*="st-key-avatar_grid_desktop_shell"]
                     div[data-testid="column"] {
                         width: 100% !important;
                         min-width: 0 !important;
@@ -7429,9 +7385,7 @@ def render_avatar_popover(user: dict):
                         padding-left: 0 !important;
                         padding-right: 0 !important;
                     }
-                    
-                    /* Chỉ chỉnh nút chọn avatar */
-                    div[class*="st-key-avatar_grid_desktop_shell"]
+
                     div[data-testid="stButton"] {
                         width: 100% !important;
                     }
