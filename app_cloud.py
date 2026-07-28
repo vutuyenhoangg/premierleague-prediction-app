@@ -2306,6 +2306,52 @@ def inject_epl_premium_match_card_css():
                 font-size: 7px !important;
             }
         }
+        /* Ngày giờ thi đấu trên tất cả card. */
+        div[class*="st-key-match_card_"]
+        .epl-match-kickoff {
+            display: block;
+        
+            width: fit-content;
+            max-width: 100%;
+        
+            margin:
+                8px 0 13px 0;
+        
+            color:
+                #493653;
+        
+            font-size:
+                15px;
+        
+            font-weight:
+                850;
+        
+            line-height:
+                1.25;
+        
+            letter-spacing:
+                0.005em;
+        
+            font-variant-numeric:
+                tabular-nums;
+        
+            text-shadow:
+                0 1px 0 rgba(255, 255, 255, 0.82);
+        }
+        
+        @media (max-width: 768px) {
+            div[class*="st-key-match_card_"]
+            .epl-match-kickoff {
+                margin:
+                    7px 0 12px 0;
+        
+                font-size:
+                    14px;
+        
+                font-weight:
+                    850;
+            }
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -2386,208 +2432,187 @@ def inject_epl_match_card_background_css():
 
 def inject_epl_big_match_card_css():
     """
-    Thiết kế riêng cho các trận Big 6 gặp nhau.
+    Giao diện riêng cho Big Match.
 
-    Chỉ thay đổi:
-    - Màu viền và bóng đổ
-    - Cường độ ảnh nền
-    - Màu tiêu đề và chữ VS
-    - Thiết kế ribbon Big Match
+    Chỉ thay đổi phong cách hiển thị:
+    - Viền tím–vàng
+    - Ánh sáng chạy quanh card
+    - Tiêu đề và chữ VS
+    - Ribbon Big Match
 
-    Không thay đổi padding, margin, columns hoặc widget.
+    Ảnh nền kế thừa hoàn toàn CSS của card thường.
     """
-    big_match_background_src = resolve_asset_src(
-        EPL_MATCH_BACKGROUND_IMAGE_URL
-    )
-
-    safe_big_match_background_src = (
-        html.escape(
-            big_match_background_src,
-            quote=True
-        )
-        if big_match_background_src
-        else ""
-    )
-
-    asset_background_layer = (
-        f', url("{safe_big_match_background_src}")'
-        if safe_big_match_background_src
-        else ""
-    )
-
     st.markdown(
-        f"""
+        """
         <style>
+        @keyframes eplBigMatchRibbonSweep {
+            0%,
+            52% {
+                background-position: 190% 0;
+            }
+
+            100% {
+                background-position: -90% 0;
+            }
+        }
+
         /* =====================================================
-           KHUNG CARD BIG MATCH
-           Không thay đổi kích thước hoặc bố cục card.
+           KHUNG BIG MATCH
+           Không thay padding, margin hoặc kích thước card.
            ===================================================== */
 
-        div[class*="st-key-match_card_big_"] {{
+        div[class*="st-key-match_card_big_"] {
+            --wc-match-card-shimmer-color:
+                #FFE28A;
+
+            --wc-match-card-shimmer-soft:
+                rgba(255, 226, 138, 0.68);
+
+            --wc-match-card-shimmer-speed:
+                3.2s;
+
             border-color:
-                #DDBB5B !important;
+                #2A002F !important;
 
             box-shadow:
-                0 0 0 2px rgba(246, 216, 122, 0.98),
-                0 0 0 5px rgba(55, 0, 60, 0.98),
-                0 0 0 7px rgba(221, 187, 91, 0.40),
-                0 24px 64px rgba(55, 0, 60, 0.24),
+                0 0 0 2px rgba(255, 226, 138, 0.98),
+                0 0 0 5px rgba(55, 0, 60, 0.99),
+                0 0 0 7px rgba(183, 122, 22, 0.46),
+                0 26px 70px rgba(55, 0, 60, 0.28),
                 0 10px 30px var(--epl-card-status-glow),
-                inset 0 0 0 1px rgba(255, 255, 255, 0.92),
-                inset 0 0 34px rgba(232, 201, 106, 0.08)
+                inset 0 0 0 1px rgba(255, 250, 230, 0.92),
+                inset 0 0 48px rgba(232, 201, 106, 0.10)
                 !important;
-        }}
+        }
 
         /*
-         * Dùng lại ảnh nền hiện tại nhưng tăng độ sâu,
-         * tạo cảm giác ánh đèn sân vận động cho Big Match.
+         * Không viết selector ::after cho Big Match.
+         *
+         * Vì vậy ảnh nền tự động kế thừa chính xác:
+         * - Desktop: opacity 0.18
+         * - Mobile: opacity 0.14
+         *
+         * giống tất cả card bình thường.
          */
-        div[class*="st-key-match_card_big_"]::after {{
-            background-image:
-                radial-gradient(
-                    circle at 12% 9%,
-                    rgba(255, 40, 130, 0.25),
-                    transparent 29%
-                ),
-
-                radial-gradient(
-                    circle at 88% 8%,
-                    rgba(232, 201, 106, 0.26),
-                    transparent 30%
-                ),
-
-                linear-gradient(
-                    135deg,
-                    rgba(55, 0, 60, 0.20),
-                    rgba(255, 255, 255, 0.24) 48%,
-                    rgba(0, 255, 133, 0.10)
-                )
-
-                {asset_background_layer}
-                !important;
-
-            opacity:
-                0.32 !important;
-
-            filter:
-                saturate(1.12)
-                contrast(1.08)
-                !important;
-
-            transform:
-                scale(1.025) !important;
-        }}
 
         /* =====================================================
-           TIÊU ĐỀ BIG MATCH
+           TIÊU ĐỀ
            ===================================================== */
 
         div[class*="st-key-match_card_big_"]
         div[class*="st-key-match_title_desktop_"]
-        h3 {{
+        h3 {
             color:
-                #27002D !important;
+                #230027 !important;
 
             text-shadow:
-                0 1px 0 rgba(255, 255, 255, 0.94),
-                0 5px 18px rgba(55, 0, 60, 0.14)
+                0 1px 0 rgba(255, 255, 255, 0.96),
+                0 4px 16px rgba(55, 0, 60, 0.18),
+                0 0 22px rgba(232, 201, 106, 0.10)
                 !important;
-        }}
+        }
 
         div[class*="st-key-match_card_big_"]
         div[class*="st-key-match_title_desktop_"]
         h3
-        .epl-desktop-vs-only {{
+        .epl-desktop-vs-only {
             color:
                 #B77A16 !important;
 
             text-shadow:
-                0 0 10px rgba(232, 201, 106, 0.36)
+                0 0 8px rgba(232, 201, 106, 0.48),
+                0 1px 0 rgba(255, 255, 255, 0.85)
                 !important;
-        }}
-
-        div[class*="st-key-match_card_big_"]
-        .wc-match-title-mobile
-        .wc-match-team {{
-            color:
-                #27002D !important;
-
-            text-shadow:
-                0 1px 0 rgba(255, 255, 255, 0.94),
-                0 4px 14px rgba(55, 0, 60, 0.12)
-                !important;
-        }}
-
-        div[class*="st-key-match_card_big_"]
-        .wc-match-title-mobile
-        .wc-match-vs {{
-            color:
-                #B77A16 !important;
-
-            text-shadow:
-                0 0 9px rgba(232, 201, 106, 0.34)
-                !important;
-        }}
+        }
 
         /* =====================================================
            RIBBON BIG MATCH
-           Vẫn sử dụng đúng vị trí của ribbon hiện tại.
+           Giữ nguyên vị trí ribbon hiện tại.
            ===================================================== */
 
         div[class*="st-key-match_card_big_"]
-        .epl-premier-league-ribbon {{
+        .epl-big-match-ribbon {
             background:
                 linear-gradient(
+                    115deg,
+                    rgba(255, 255, 255, 0.10) 0%,
+                    transparent 23%,
+                    rgba(255, 255, 255, 0.05) 48%,
+                    transparent 67%
+                ),
+                linear-gradient(
                     135deg,
-                    #160019 0%,
-                    #37003C 43%,
-                    #68144F 100%
+                    #140017 0%,
+                    #37003C 48%,
+                    #701550 100%
                 ) !important;
 
             border-color:
-                rgba(246, 216, 122, 0.96) !important;
+                rgba(255, 226, 138, 0.98) !important;
 
             box-shadow:
-                0 10px 24px rgba(55, 0, 60, 0.28),
-                0 0 16px rgba(232, 201, 106, 0.14),
-                inset 0 1px 0 rgba(255, 255, 255, 0.17)
+                0 10px 26px rgba(55, 0, 60, 0.32),
+                0 0 0 1px rgba(183, 122, 22, 0.18),
+                0 0 18px rgba(232, 201, 106, 0.16),
+                inset 0 1px 0 rgba(255, 255, 255, 0.18)
                 !important;
-        }}
+        }
 
         div[class*="st-key-match_card_big_"]
-        .epl-premier-league-ribbon::before {{
+        .epl-big-match-ribbon::before {
+            height:
+                2px !important;
+
             background:
                 linear-gradient(
                     90deg,
-                    transparent,
-                    #E8C96A 20%,
-                    #FFF1AE 50%,
-                    #E8C96A 80%,
-                    transparent
+                    transparent 0%,
+                    #D6A63B 28%,
+                    #FFF3B6 50%,
+                    #D6A63B 72%,
+                    transparent 100%
                 ) !important;
-        }}
+
+            background-size:
+                220% 100% !important;
+
+            animation:
+                eplBigMatchRibbonSweep
+                3.8s
+                ease-in-out
+                infinite !important;
+        }
 
         div[class*="st-key-match_card_big_"]
-        .epl-premier-league-ribbon::after {{
+        .epl-big-match-ribbon::after {
             background:
                 #2B002F !important;
-        }}
+
+            border-color:
+                rgba(255, 226, 138, 0.72) !important;
+        }
 
         div[class*="st-key-match_card_big_"]
-        .epl-premier-league-ribbon-separator {{
+        .epl-premier-league-ribbon-text,
+
+        div[class*="st-key-match_card_big_"]
+        .epl-premier-league-ribbon-round {
             color:
-                #E8C96A !important;
+                #FFF9E8 !important;
+        }
+
+        div[class*="st-key-match_card_big_"]
+        .epl-premier-league-ribbon-separator {
+            color:
+                #F2D477 !important;
 
             text-shadow:
-                0 0 8px rgba(232, 201, 106, 0.56)
+                0 0 8px rgba(242, 212, 119, 0.60)
                 !important;
-        }}
+        }
 
-        /*
-         * Nhãn BIG MATCH nằm ngay trong ribbon,
-         * không tạo thêm hàng hoặc làm thay đổi bố cục card.
-         */
-        .epl-big-match-label {{
+        /* Nhãn vàng nằm ngay trong ribbon cũ. */
+        .epl-big-match-label {
             display:
                 inline-flex;
 
@@ -2597,25 +2622,34 @@ def inject_epl_big_match_card_css():
             justify-content:
                 center;
 
+            gap:
+                5px;
+
+            min-height:
+                20px;
+
             padding:
-                3px 7px 4px 7px;
+                4px 8px 5px 8px;
+
+            margin:
+                -1px 1px -1px -7px;
 
             border:
-                1px solid rgba(255, 247, 210, 0.72);
+                1px solid rgba(255, 250, 224, 0.84);
 
             border-radius:
-                4px;
+                5px;
 
             background:
                 linear-gradient(
                     135deg,
-                    #FFF1AE 0%,
-                    #E8C96A 55%,
-                    #C7962E 100%
+                    #FFF3B6 0%,
+                    #E8C96A 54%,
+                    #BF8724 100%
                 );
 
             color:
-                #2B0A30;
+                #2B082F;
 
             font-size:
                 8.5px;
@@ -2636,49 +2670,115 @@ def inject_epl_big_match_card_css():
                 uppercase;
 
             box-shadow:
-                0 4px 10px rgba(0, 0, 0, 0.18),
-                inset 0 1px 0 rgba(255, 255, 255, 0.62);
-        }}
+                0 5px 12px rgba(0, 0, 0, 0.22),
+                inset 0 1px 0 rgba(255, 255, 255, 0.70);
+        }
+
+        .epl-big-match-label::before,
+        .epl-big-match-label::after {
+            content:
+                "";
+
+            width:
+                4px;
+
+            height:
+                4px;
+
+            flex:
+                0 0 4px;
+
+            background:
+                #5B174E;
+
+            transform:
+                rotate(45deg);
+
+            box-shadow:
+                0 0 5px rgba(91, 23, 78, 0.22);
+        }
 
         /* =====================================================
            MOBILE
-           Chỉ giảm cường độ, không thay padding hoặc bố cục.
+           Không thay đổi bố cục hoặc độ mờ ảnh nền.
            ===================================================== */
 
-        @media (max-width: 768px) {{
-            div[class*="st-key-match_card_big_"] {{
+        @media (max-width: 768px) {
+            div[class*="st-key-match_card_big_"] {
                 box-shadow:
-                    0 0 0 2px rgba(246, 216, 122, 0.96),
-                    0 0 0 4px rgba(55, 0, 60, 0.98),
-                    0 0 0 6px rgba(221, 187, 91, 0.34),
-                    0 17px 38px rgba(55, 0, 60, 0.20),
-                    0 7px 21px var(--epl-card-status-glow),
-                    inset 0 0 0 1px rgba(255, 255, 255, 0.90)
+                    0 0 0 2px rgba(255, 226, 138, 0.96),
+                    0 0 0 4px rgba(55, 0, 60, 0.99),
+                    0 0 0 6px rgba(183, 122, 22, 0.40),
+                    0 18px 42px rgba(55, 0, 60, 0.23),
+                    0 7px 22px var(--epl-card-status-glow),
+                    inset 0 0 0 1px rgba(255, 250, 230, 0.90),
+                    inset 0 0 32px rgba(232, 201, 106, 0.08)
                     !important;
-            }}
+            }
 
-            div[class*="st-key-match_card_big_"]::after {{
-                opacity:
-                    0.25 !important;
+            div[class*="st-key-match_card_big_"]
+            .wc-match-title-mobile
+            .wc-match-team {
+                color:
+                    #230027 !important;
 
-                background-position:
-                    center center !important;
-            }}
+                text-shadow:
+                    0 1px 0 rgba(255, 255, 255, 0.94),
+                    0 4px 13px rgba(55, 0, 60, 0.15)
+                    !important;
+            }
 
-            .epl-big-match-label {{
+            div[class*="st-key-match_card_big_"]
+            .wc-match-title-mobile
+            .wc-match-vs {
+                color:
+                    #B77A16 !important;
+
+                text-shadow:
+                    0 0 8px rgba(232, 201, 106, 0.46)
+                    !important;
+            }
+
+            .epl-big-match-label {
+                min-height:
+                    17px;
+
                 padding:
-                    2px 5px 3px 5px;
+                    3px 5px 4px 5px;
 
-                border-radius:
-                    3px;
+                margin-left:
+                    -3px;
+
+                gap:
+                    4px;
 
                 font-size:
                     6.8px;
 
                 letter-spacing:
-                    0.05em;
-            }}
-        }}
+                    0.045em;
+            }
+
+            .epl-big-match-label::before,
+            .epl-big-match-label::after {
+                width:
+                    3px;
+
+                height:
+                    3px;
+
+                flex-basis:
+                    3px;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            div[class*="st-key-match_card_big_"]
+            .epl-big-match-ribbon::before {
+                animation:
+                    none !important;
+            }
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -13891,9 +13991,24 @@ def render_match_card(
                 if value
             ]
             
-            st.caption(
-                " • ".join(schedule_parts)
+            schedule_text = " • ".join(
+                schedule_parts
             )
+            
+            if schedule_text:
+                safe_schedule_text = html.escape(
+                    schedule_text,
+                    quote=True
+                )
+            
+                st.markdown(
+                    (
+                        '<div class="epl-match-kickoff">'
+                        f'{safe_schedule_text}'
+                        '</div>'
+                    ),
+                    unsafe_allow_html=True
+                )
 
             if is_finished:
                 actual_home_for_goal_button = to_optional_int(
