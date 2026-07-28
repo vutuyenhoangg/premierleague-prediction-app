@@ -1007,9 +1007,6 @@ def enforce_embed_url():
         height=0,
     )
 
-
-enforce_embed_url()
-
 cookie_controller = CookieController()
 
 def get_avatar_dir() -> Path:
@@ -1270,9 +1267,15 @@ def inject_epl_theme():
         }}
 
         .block-container {{
-            padding-top: 0rem;
+            padding-top: 4.25rem !important;
             padding-bottom: 2.4rem;
             max-width: 1440px;
+        }}
+        
+        @media (max-width: 768px) {{
+            .block-container {{
+                padding-top: 4rem !important;
+            }}
         }}
 
         section[data-testid="stSidebar"] {{
@@ -3262,57 +3265,86 @@ def inject_epl_big_match_card_css():
 
 def inject_main_page_lift_css():
     """
-    Đẩy riêng nội dung trang chính lên cao hơn.
-
-    - Desktop và mobile có mức dịch chuyển riêng.
-    - Không tác động tới sidebar.
-    - Không tác động tới avatar.
-    - Không tác động tới nút điểm danh.
-    - Không thay đổi kích thước hoặc bố cục bên trong nội dung.
+    Loại bỏ diện tích rỗng do các phần tử chèn CSS/JavaScript
+    và giữ nội dung tất cả các trang sát phía dưới header.
     """
     st.markdown(
         """
         <style>
         /*
-         * Desktop
+         * Container này chỉ chứa CSS và JavaScript.
+         * Đưa nó ra khỏi luồng bố cục để không tạo khoảng trống.
          */
-        @media (min-width: 769px) {
-            div[class*="st-key-main_page_content_shell"] {
-                position: relative !important;
-                margin-top: -118px !important;
-            }
+        div[class*="st-key-global_ui_bootstrap"] {
+            position: absolute !important;
+
+            top: 0 !important;
+            left: 0 !important;
+
+            width: 1px !important;
+            min-width: 0 !important;
+            max-width: 1px !important;
+
+            height: 1px !important;
+            min-height: 0 !important;
+            max-height: 1px !important;
+
+            margin: 0 !important;
+            padding: 0 !important;
+
+            overflow: hidden !important;
         }
 
         /*
-         * Điện thoại và tablet dọc.
-         *
-         * Khoảng trống hiện tại trên mobile khoảng hơn 150px.
-         * Kéo nội dung lên 92px để hero tiến gần khu vực avatar,
-         * nhưng vẫn giữ một khoảng an toàn phía dưới header.
+         * Xóa diện tích của wrapper Streamlit bên ngoài.
          */
-        @media (max-width: 768px) {
-            div[class*="st-key-main_page_content_shell"] {
-                position: relative !important;
-                margin-top: -92px !important;
-            }
+        div[data-testid="stElementContainer"]:has(
+            div[class*="st-key-global_ui_bootstrap"]
+        ) {
+            position: absolute !important;
+
+            top: 0 !important;
+            left: 0 !important;
+
+            width: 1px !important;
+            min-width: 0 !important;
+
+            height: 1px !important;
+            min-height: 0 !important;
+
+            margin: 0 !important;
+            padding: 0 !important;
+
+            overflow: hidden !important;
         }
 
         /*
-         * Màn hình rất nhỏ cần dịch nhẹ hơn một chút,
-         * tránh hero tiến quá sát thanh Menu.
+         * Không để khoảng cách giữa các phần tử CSS/JavaScript
+         * bên trong container tiếp tục cộng dồn.
          */
-        @media (max-width: 390px) {
-            div[class*="st-key-main_page_content_shell"] {
-                margin-top: -84px !important;
-            }
+        div[class*="st-key-global_ui_bootstrap"]
+        div[data-testid="stVerticalBlock"] {
+            min-height: 0 !important;
+
+            gap: 0 !important;
+
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        /*
+         * Bỏ hoàn toàn cách kéo nội dung bằng số âm.
+         */
+        div[class*="st-key-main_page_content_shell"] {
+            position: relative !important;
+
+            margin-top: 0 !important;
+            padding-top: 0 !important;
         }
         </style>
         """,
         unsafe_allow_html=True
     )
-
-
-
 
 def inject_mobile_prediction_score_row_css():
     """
@@ -5138,18 +5170,6 @@ def inject_mobile_team_name_display_script():
         scrolling=False
     )
 
-inject_epl_theme()
-inject_match_card_border_animation_css()
-inject_epl_premium_match_card_css()
-inject_epl_match_card_background_css()
-inject_epl_big_match_card_css()
-inject_mobile_prediction_score_row_css()
-inject_prediction_score_stepper_css()
-inject_prediction_score_readonly_script()
-inject_mobile_team_name_display_script()
-inject_hide_streamlit_embed_footer_css()
-inject_main_page_lift_css()
-
 def inject_match_datepicker_calendar_theme(match_dates):
     today = today_vietnam_date()
 
@@ -6380,9 +6400,6 @@ def inject_desktop_match_vs_style():
         height=0,
         scrolling=False
     )
-
-inject_mobile_match_title_css()
-inject_desktop_match_vs_style()
 
 @st.dialog(" ")
 def render_daily_checkin_dialog(user_id: int):
@@ -22712,12 +22729,44 @@ def render_footer():
 # ============================================================
 
 def main():
+    with st.container(
+        key="global_ui_bootstrap"
+    ):
+        enforce_embed_url()
+
+        inject_epl_theme()
+        inject_match_card_border_animation_css()
+        inject_epl_premium_match_card_css()
+        inject_epl_match_card_background_css()
+        inject_epl_big_match_card_css()
+
+        inject_mobile_prediction_score_row_css()
+        inject_prediction_score_stepper_css()
+        inject_prediction_score_readonly_script()
+        inject_mobile_team_name_display_script()
+
+        inject_hide_streamlit_embed_footer_css()
+        inject_mobile_match_title_css()
+        inject_desktop_match_vs_style()
+
+        inject_mobile_goal_scorer_button_css()
+        inject_mobile_goal_scorer_panel_css()
+        inject_ai_summary_button_css()
+        inject_sidebar_menu_radio_css()
+
+        # Đặt cuối cùng để ưu tiên CSS bố cục tổng.
+        inject_main_page_lift_css()
+
     try:
         initialize_app_once()
     except Exception as e:
-        st.error("App không khởi động được ở bước kết nối/khởi tạo database.")
+        st.error(
+            "App không khởi động được ở bước "
+            "kết nối/khởi tạo database."
+        )
         st.caption(
-            "Hãy kiểm tra DATABASE_URL, trạng thái Supabase và log trong Streamlit Cloud."
+            "Hãy kiểm tra DATABASE_URL, trạng thái "
+            "Supabase và log trong Streamlit Cloud."
         )
         st.exception(e)
         st.stop()
