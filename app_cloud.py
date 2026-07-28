@@ -2445,14 +2445,37 @@ def inject_epl_big_match_card_css():
     st.markdown(
         """
         <style>
-        @keyframes eplBigMatchRibbonSweep {
+        /*
+         * Các mảng sáng di chuyển lệch nhau,
+         * mô phỏng bề mặt lá vàng không hoàn toàn phẳng.
+         */
+        @keyframes eplGoldLeafTextureDrift {
             0%,
-            52% {
-                background-position: 190% 0;
-            }
-
             100% {
-                background-position: -90% 0;
+                background-position:
+                    0 0,
+                    0 0,
+                    0% 50%;
+            }
+        
+            50% {
+                background-position:
+                    31px 13px,
+                    -23px 9px,
+                    100% 50%;
+            }
+        }
+        
+        @keyframes eplGoldLeafEdgeSweep {
+            0%,
+            38% {
+                background-position:
+                    180% 0;
+            }
+        
+            100% {
+                background-position:
+                    -80% 0;
             }
         }
 
@@ -2461,30 +2484,94 @@ def inject_epl_big_match_card_css():
            Không thay padding, margin hoặc kích thước card.
            ===================================================== */
 
+        /* =====================================================
+           KHUNG DÁT VÀNG BIG MATCH
+           ===================================================== */
+        
         div[class*="st-key-match_card_big_"] {
-            --wc-match-card-shimmer-color:
-                #FFE28A;
-
-            --wc-match-card-shimmer-soft:
-                rgba(255, 226, 138, 0.68);
-
-            --wc-match-card-shimmer-speed:
-                3.2s;
-
             border-color:
-                #2A002F !important;
-
+                #6E430C !important;
+        
             box-shadow:
-                0 0 0 2px rgba(255, 226, 138, 0.98),
-                0 0 0 5px rgba(55, 0, 60, 0.99),
-                0 0 0 7px rgba(183, 122, 22, 0.46),
-                0 26px 70px rgba(55, 0, 60, 0.28),
-                0 10px 30px var(--epl-card-status-glow),
-                inset 0 0 0 1px rgba(255, 250, 230, 0.92),
-                inset 0 0 48px rgba(232, 201, 106, 0.10)
+                0 0 0 1px rgba(47, 16, 0, 0.96),
+                0 0 0 2px rgba(126, 76, 11, 0.98),
+                0 0 0 3px rgba(255, 239, 176, 0.98),
+                0 0 0 5px rgba(175, 112, 18, 0.98),
+                0 0 0 7px rgba(55, 0, 60, 0.99),
+                0 0 0 9px rgba(214, 168, 53, 0.38),
+        
+                0 28px 72px rgba(55, 0, 60, 0.28),
+                0 11px 32px var(--epl-card-status-glow),
+        
+                inset 0 0 0 1px rgba(255, 245, 201, 0.90),
+                inset 0 0 0 3px rgba(126, 76, 11, 0.17),
+                inset 0 0 42px rgba(218, 166, 51, 0.10)
                 !important;
         }
-
+        
+        /*
+         * Ghi đè lớp viền động dùng chung.
+         * Lớp mask cũ vẫn được giữ nên vàng chỉ xuất hiện ở viền,
+         * không phủ lên nội dung hoặc ảnh background.
+         */
+        div[class*="st-key-match_card_big_"]::before {
+            background:
+                repeating-linear-gradient(
+                    127deg,
+                    rgba(255, 249, 207, 0.96) 0 1px,
+                    rgba(189, 125, 24, 0.72) 1px 4px,
+                    transparent 4px 11px
+                )
+                0 0 / 47px 31px,
+        
+                repeating-linear-gradient(
+                    39deg,
+                    transparent 0 7px,
+                    rgba(255, 225, 125, 0.66) 7px 9px,
+                    transparent 9px 18px
+                )
+                0 0 / 59px 37px,
+        
+                linear-gradient(
+                    112deg,
+                    #4F2A04 0%,
+                    #9C6210 9%,
+                    #D8A83D 17%,
+                    #FFF2AE 24%,
+                    #B87919 31%,
+                    #E9C966 40%,
+                    #FFF8CF 48%,
+                    #A86A12 57%,
+                    #DDB34E 68%,
+                    #704006 78%,
+                    #F0D57A 89%,
+                    #8E570C 100%
+                )
+                0 0 / 260% 100%
+                !important;
+        
+            border-radius:
+                inherit !important;
+        
+            opacity:
+                0.98 !important;
+        
+            filter:
+                drop-shadow(
+                    0 0 5px rgba(232, 194, 91, 0.42)
+                )
+                !important;
+        
+            animation:
+                eplGoldLeafTextureDrift
+                7.5s
+                ease-in-out
+                infinite
+                !important;
+        
+            will-change:
+                background-position;
+        }
         /*
          * Không viết selector ::after cho Big Match.
          *
@@ -2533,28 +2620,31 @@ def inject_epl_big_match_card_css():
         div[class*="st-key-match_card_big_"]
         .epl-big-match-ribbon {
             background:
+                radial-gradient(
+                    circle at 30% 35%,
+                    rgba(255, 226, 126, 0.17) 0 1px,
+                    transparent 1.5px
+                )
+                0 0 / 19px 19px,
+        
                 linear-gradient(
-                    115deg,
-                    rgba(255, 255, 255, 0.10) 0%,
-                    transparent 23%,
-                    rgba(255, 255, 255, 0.05) 48%,
-                    transparent 67%
-                ),
-                linear-gradient(
-                    135deg,
-                    #140017 0%,
-                    #37003C 48%,
-                    #701550 100%
-                ) !important;
-
+                    132deg,
+                    #120014 0%,
+                    #310035 32%,
+                    #5B0F49 68%,
+                    #27002D 100%
+                )
+                !important;
+        
             border-color:
-                rgba(255, 226, 138, 0.98) !important;
-
+                #D6A83F !important;
+        
             box-shadow:
-                0 10px 26px rgba(55, 0, 60, 0.32),
-                0 0 0 1px rgba(183, 122, 22, 0.18),
-                0 0 18px rgba(232, 201, 106, 0.16),
-                inset 0 1px 0 rgba(255, 255, 255, 0.18)
+                0 0 0 1px rgba(255, 240, 175, 0.74),
+                0 0 0 2px rgba(113, 65, 7, 0.82),
+                0 9px 24px rgba(55, 0, 60, 0.34),
+                0 0 18px rgba(222, 177, 67, 0.22),
+                inset 0 1px 0 rgba(255, 255, 255, 0.17)
                 !important;
         }
 
@@ -2562,25 +2652,29 @@ def inject_epl_big_match_card_css():
         .epl-big-match-ribbon::before {
             height:
                 2px !important;
-
+        
             background:
                 linear-gradient(
                     90deg,
                     transparent 0%,
-                    #D6A63B 28%,
-                    #FFF3B6 50%,
-                    #D6A63B 72%,
+                    #724306 15%,
+                    #D8A83D 31%,
+                    #FFF5BD 48%,
+                    #C48921 64%,
+                    #FFF0A2 75%,
                     transparent 100%
-                ) !important;
-
+                )
+                !important;
+        
             background-size:
-                220% 100% !important;
-
+                240% 100% !important;
+        
             animation:
-                eplBigMatchRibbonSweep
-                3.8s
+                eplGoldLeafEdgeSweep
+                4.8s
                 ease-in-out
-                infinite !important;
+                infinite
+                !important;
         }
 
         div[class*="st-key-match_card_big_"]
@@ -2641,12 +2735,35 @@ def inject_epl_big_match_card_css():
                 5px;
 
             background:
+                radial-gradient(
+                    circle at 20% 28%,
+                    rgba(255, 255, 255, 0.80) 0 1px,
+                    transparent 1.7px
+                )
+                0 0 / 17px 15px,
+            
+                repeating-linear-gradient(
+                    128deg,
+                    rgba(102, 57, 5, 0.13) 0 2px,
+                    transparent 2px 7px,
+                    rgba(255, 250, 210, 0.25) 7px 9px,
+                    transparent 9px 15px
+                )
+                0 0 / 31px 27px,
+            
                 linear-gradient(
-                    135deg,
-                    #FFF3B6 0%,
-                    #E8C96A 54%,
-                    #BF8724 100%
-                );
+                    112deg,
+                    #7D4B08 0%,
+                    #D9A93E 14%,
+                    #FFF5BA 26%,
+                    #B87818 38%,
+                    #F0D675 50%,
+                    #FFF9D6 61%,
+                    #A96810 74%,
+                    #E2B74E 87%,
+                    #845009 100%
+                )
+                0 0 / 260% 100%;
 
             color:
                 #2B082F;
@@ -2672,6 +2789,12 @@ def inject_epl_big_match_card_css():
             box-shadow:
                 0 5px 12px rgba(0, 0, 0, 0.22),
                 inset 0 1px 0 rgba(255, 255, 255, 0.70);
+
+            animation:
+                eplGoldLeafTextureDrift
+                8.5s
+                ease-in-out
+                infinite;
         }
 
         .epl-big-match-label::before,
@@ -2689,13 +2812,18 @@ def inject_epl_big_match_card_css():
                 0 0 4px;
 
             background:
-                #5B174E;
+                linear-gradient(
+                    135deg,
+                    #6E4107 0%,
+                    #FFF2A9 47%,
+                    #A56810 100%
+                );
 
             transform:
                 rotate(45deg);
 
             box-shadow:
-                0 0 5px rgba(91, 23, 78, 0.22);
+                0 0 5px rgba(255, 224, 121, 0.46);
         }
 
         /* =====================================================
@@ -2706,14 +2834,23 @@ def inject_epl_big_match_card_css():
         @media (max-width: 768px) {
             div[class*="st-key-match_card_big_"] {
                 box-shadow:
-                    0 0 0 2px rgba(255, 226, 138, 0.96),
-                    0 0 0 4px rgba(55, 0, 60, 0.99),
-                    0 0 0 6px rgba(183, 122, 22, 0.40),
-                    0 18px 42px rgba(55, 0, 60, 0.23),
+                    0 0 0 1px rgba(47, 16, 0, 0.96),
+                    0 0 0 2px rgba(255, 235, 160, 0.97),
+                    0 0 0 4px rgba(166, 103, 15, 0.98),
+                    0 0 0 6px rgba(55, 0, 60, 0.99),
+                    0 0 0 8px rgba(214, 168, 53, 0.32),
+            
+                    0 19px 44px rgba(55, 0, 60, 0.23),
                     0 7px 22px var(--epl-card-status-glow),
-                    inset 0 0 0 1px rgba(255, 250, 230, 0.90),
-                    inset 0 0 32px rgba(232, 201, 106, 0.08)
+            
+                    inset 0 0 0 1px rgba(255, 245, 201, 0.88),
+                    inset 0 0 28px rgba(218, 166, 51, 0.08)
                     !important;
+            }
+            
+            div[class*="st-key-match_card_big_"]::before {
+                animation-duration:
+                    9s !important;
             }
 
             div[class*="st-key-match_card_big_"]
@@ -2773,8 +2910,12 @@ def inject_epl_big_match_card_css():
         }
 
         @media (prefers-reduced-motion: reduce) {
+            div[class*="st-key-match_card_big_"]::before,
+        
             div[class*="st-key-match_card_big_"]
-            .epl-big-match-ribbon::before {
+            .epl-big-match-ribbon::before,
+        
+            .epl-big-match-label {
                 animation:
                     none !important;
             }
