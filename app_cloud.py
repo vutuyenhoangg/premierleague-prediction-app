@@ -24,6 +24,7 @@ import secrets
 from streamlit_cookies_controller import CookieController
 import re
 import textwrap
+import inspect
 
 # ============================================================
 # 1. CONFIG
@@ -83,6 +84,7 @@ AI_SUGGESTION_MAX_DAYS = 3
 AVATAR_FOLDER = "data/static/avatars"
 DEFAULT_AVATAR_KEY = "avatar_01.png"
 AVATAR_EXTENSIONS = {".png"}
+AVATAR_RENDER_SIZE_PX = 192
 AVATAR_ORDER = [
     "avatar_01.png",
     "avatar_02.png",
@@ -1018,8 +1020,12 @@ def load_avatar_keys() -> list[str]:
     return _load_avatar_keys_cached(str(avatar_dir))
 
 
-def normalize_avatar_key(avatar_key) -> str:
-    avatar_keys = load_avatar_keys()
+def normalize_avatar_key(
+    avatar_key,
+    avatar_keys: list[str] | None = None
+) -> str:
+    if avatar_keys is None:
+        avatar_keys = load_avatar_keys()
 
     if not avatar_keys:
         return ""
@@ -1038,33 +1044,80 @@ def normalize_avatar_key(avatar_key) -> str:
     return avatar_keys[0]
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(
+    show_spinner=False,
+    max_entries=256
+)
 def _read_avatar_src_cached(
     avatar_path_str: str,
     modified_time_ns: int,
-    file_size: int
+    file_size: int,
+    render_size_px: int
 ) -> str:
     """
     modified_time_ns và file_size là cache version.
     Khi nội dung ảnh thay đổi, Streamlit tự đọc lại ảnh.
+
+    Chỉ giữ bản ảnh đã thu nhỏ đúng nhu cầu hiển thị trong RAM/cache.
+    Avatar lớn vẫn giữ nguyên trên ổ đĩa, nhưng không còn bị nhúng nguyên
+    kích thước vào UI ở mỗi card chọn avatar.
     """
     avatar_path = Path(avatar_path_str)
 
     if not avatar_path.exists() or not avatar_path.is_file():
         return ""
 
-    mime_type, _ = mimetypes.guess_type(str(avatar_path))
-    mime_type = mime_type or "image/png"
+    try:
+        from io import BytesIO
+        from PIL import Image, ImageOps
 
-    encoded = base64.b64encode(
-        avatar_path.read_bytes()
-    ).decode("utf-8")
+        with Image.open(avatar_path) as source_image:
+            avatar_image = ImageOps.exif_transpose(source_image)
+            avatar_image.thumbnail(
+                (render_size_px, render_size_px),
+                Image.Resampling.LANCZOS,
+                reducing_gap=3.0
+            )
 
-    return f"data:{mime_type};base64,{encoded}"
+            if avatar_image.mode not in {"RGB", "RGBA"}:
+                avatar_image = avatar_image.convert(
+                    "RGBA" if "transparency" in avatar_image.info else "RGB"
+                )
+
+            output_buffer = BytesIO()
+            avatar_image.save(
+                output_buffer,
+                format="WEBP",
+                lossless=True,
+                method=4
+            )
+
+        encoded = base64.b64encode(
+            output_buffer.getvalue()
+        ).decode("ascii")
+
+        return f"data:image/webp;base64,{encoded}"
+
+    except Exception:
+        # Fallback tương thích nếu môi trường thiếu codec WebP/Pillow.
+        mime_type, _ = mimetypes.guess_type(str(avatar_path))
+        mime_type = mime_type or "image/png"
+
+        encoded = base64.b64encode(
+            avatar_path.read_bytes()
+        ).decode("ascii")
+
+        return f"data:{mime_type};base64,{encoded}"
 
 
-def get_avatar_src(avatar_key: str) -> str:
-    avatar_key = normalize_avatar_key(avatar_key)
+def get_avatar_src(
+    avatar_key: str,
+    avatar_keys: list[str] | None = None
+) -> str:
+    avatar_key = normalize_avatar_key(
+        avatar_key,
+        avatar_keys=avatar_keys
+    )
 
     if not avatar_key:
         return ""
@@ -1079,7 +1132,8 @@ def get_avatar_src(avatar_key: str) -> str:
     return _read_avatar_src_cached(
         str(avatar_path),
         file_stat.st_mtime_ns,
-        file_stat.st_size
+        file_stat.st_size,
+        AVATAR_RENDER_SIZE_PX
     )
 
 # ============================================================
@@ -6692,8 +6746,28 @@ def render_avatar_popover(user: dict):
     if not avatar_keys:
         return
 
-    current_avatar_key = normalize_avatar_key(user.get("avatar_key"))
-    current_avatar_src = get_avatar_src(current_avatar_key)
+    current_avatar_key = normalize_avatar_key(
+        user.get("avatar_key"),
+        avatar_keys=avatar_keys
+    )
+    current_avatar_src = get_avatar_src(
+        current_avatar_key,
+        avatar_keys=avatar_keys
+    )
+
+    try:
+        supports_lazy_avatar_popover = (
+            "on_change"
+            in inspect.signature(st.popover).parameters
+        )
+    except (TypeError, ValueError):
+        supports_lazy_avatar_popover = False
+
+    avatar_popover_state_key = "avatar_picker_popover_open"
+    should_render_avatar_grid = (
+        not supports_lazy_avatar_popover
+        or bool(st.session_state.get(avatar_popover_state_key, False))
+    )
 
     def make_safe_key(text: str) -> str:
         return (
@@ -6705,167 +6779,212 @@ def render_avatar_popover(user: dict):
             .replace("\\", "_")
         )
 
-    def render_avatar_grid(avatars_per_row: int, key_prefix: str):
-        for start_idx in range(0, len(avatar_keys), avatars_per_row):
-            row_avatar_keys = avatar_keys[start_idx:start_idx + avatars_per_row]
+    avatar_items = []
+
+    if should_render_avatar_grid:
+        for avatar_key in avatar_keys:
+            safe_avatar_key = make_safe_key(avatar_key)
+            avatar_button_key = f"avatar_pick_{safe_avatar_key}"
+
+            avatar_items.append(
+                {
+                    "avatar_key": avatar_key,
+                    "avatar_src": get_avatar_src(
+                        avatar_key,
+                        avatar_keys=avatar_keys
+                    ),
+                    "button_key": avatar_button_key,
+                    "is_selected": avatar_key == current_avatar_key
+                }
+            )
+
+    avatar_specific_css = []
+
+    for item in avatar_items:
+        avatar_button_key = item["button_key"]
+        avatar_src = item["avatar_src"]
+
+        avatar_specific_css.append(
+            f"""
+            .st-key-{avatar_button_key} button::before {{
+                background-image: url("{avatar_src}");
+            }}
+            """
+        )
+
+        if item["is_selected"]:
+            avatar_specific_css.append(
+                f"""
+                .st-key-{avatar_button_key} button {{
+                    border-color: #F5C542 !important;
+                    background: #FFF7ED !important;
+                    box-shadow:
+                        0 0 0 4px rgba(245,197,66,0.20),
+                        0 10px 24px rgba(15,23,42,0.10) !important;
+                }}
+
+                .st-key-{avatar_button_key} button::after {{
+                    content: "✓";
+                    display: flex;
+                }}
+                """
+            )
+
+    avatar_grid_css = (
+        """
+        <style>
+        div[class*="st-key-avatar_pick_"] button {
+            position: relative !important;
+            width: 100% !important;
+            height: 88px !important;
+            min-height: 88px !important;
+            padding: 0 !important;
+            margin: 0 0 8px 0 !important;
+            border-radius: 18px !important;
+            border: 2px solid rgba(15,23,42,0.10) !important;
+            background: #FFFFFF !important;
+            box-shadow: 0 8px 20px rgba(15,23,42,0.06) !important;
+            overflow: hidden !important;
+            cursor: pointer !important;
+            color: transparent !important;
+            font-size: 0 !important;
+            line-height: 0 !important;
+            transition:
+                transform 0.18s ease,
+                box-shadow 0.18s ease,
+                border-color 0.18s ease,
+                background 0.18s ease !important;
+        }
+
+        div[class*="st-key-avatar_pick_"] button:hover {
+            border-color: #F5C542 !important;
+            background: #FFF7ED !important;
+            transform: translateY(-1px) !important;
+            box-shadow:
+                0 0 0 4px rgba(245,197,66,0.18),
+                0 12px 28px rgba(15,23,42,0.13) !important;
+        }
+
+        div[class*="st-key-avatar_pick_"] button:active {
+            transform: translateY(0) scale(0.98) !important;
+        }
+
+        div[class*="st-key-avatar_pick_"] button::before {
+            content: "";
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 64px;
+            height: 64px;
+            transform: translate(-50%, -50%);
+            border-radius: 999px;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            border: 3px solid #FFFFFF;
+            box-shadow: 0 7px 18px rgba(15,23,42,0.16);
+        }
+
+        div[class*="st-key-avatar_pick_"] button::after {
+            content: "";
+            position: absolute;
+            right: 13px;
+            bottom: 13px;
+            width: 22px;
+            height: 22px;
+            border-radius: 999px;
+            background: #F5C542;
+            color: #07111F;
+            border: 2px solid #FFFFFF;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 950;
+            line-height: 1;
+            box-shadow: 0 5px 12px rgba(15,23,42,0.18);
+            pointer-events: none;
+        }
+
+        div[class*="st-key-avatar_pick_"] button * {
+            display: none !important;
+            visibility: hidden !important;
+            color: transparent !important;
+            font-size: 0 !important;
+            line-height: 0 !important;
+        }
+
+        @media (max-width: 768px) {
+            div[class*="st-key-avatar_pick_"] button {
+                height: 112px !important;
+                min-height: 112px !important;
+                border-radius: 18px !important;
+                margin-bottom: 10px !important;
+            }
+
+            div[class*="st-key-avatar_pick_"] button::before {
+                width: 82px;
+                height: 82px;
+                border-width: 3px;
+                box-shadow: 0 8px 20px rgba(15,23,42,0.18);
+            }
+
+            div[class*="st-key-avatar_pick_"] button::after {
+                right: 12px;
+                bottom: 12px;
+                width: 22px;
+                height: 22px;
+                font-size: 12px;
+            }
+        }
+
+        @media (max-width: 390px) {
+            div[class*="st-key-avatar_pick_"] button {
+                height: 104px !important;
+                min-height: 104px !important;
+                border-radius: 16px !important;
+            }
+
+            div[class*="st-key-avatar_pick_"] button::before {
+                width: 76px;
+                height: 76px;
+            }
+        }
+        """
+        + "\n".join(avatar_specific_css)
+        + "\n</style>"
+    )
+
+    def render_avatar_grid(avatars_per_row: int = 4):
+        st.markdown(
+            avatar_grid_css,
+            unsafe_allow_html=True
+        )
+
+        for start_idx in range(0, len(avatar_items), avatars_per_row):
+            row_avatar_items = avatar_items[
+                start_idx:start_idx + avatars_per_row
+            ]
             cols = st.columns(avatars_per_row, gap="small")
 
-            for col, avatar_key in zip(cols, row_avatar_keys):
+            for col, item in zip(cols, row_avatar_items):
                 with col:
-                    avatar_src = get_avatar_src(avatar_key)
-                    is_selected = avatar_key == current_avatar_key
-
-                    border_color = "#F5C542" if is_selected else "rgba(15,23,42,0.10)"
-                    bg_color = "#FFF7ED" if is_selected else "#FFFFFF"
-                    selected_shadow = (
-                        "0 0 0 4px rgba(245,197,66,0.20), 0 10px 24px rgba(15,23,42,0.10)"
-                        if is_selected
-                        else "0 8px 20px rgba(15,23,42,0.06)"
-                    )
-
-                    safe_avatar_key = make_safe_key(avatar_key)
-                    avatar_button_key = f"{key_prefix}_avatar_pick_{safe_avatar_key}"
-
-                    st.markdown(
-                        f"""
-                        <style>
-                        .st-key-{avatar_button_key} button {{
-                            position: relative !important;
-                            width: 100% !important;
-                            height: 88px !important;
-                            min-height: 88px !important;
-                            padding: 0 !important;
-                            margin: 0 0 8px 0 !important;
-                            border-radius: 18px !important;
-                            border: 2px solid {border_color} !important;
-                            background: {bg_color} !important;
-                            box-shadow: {selected_shadow} !important;
-                            overflow: hidden !important;
-                            cursor: pointer !important;
-                            color: transparent !important;
-                            font-size: 0 !important;
-                            line-height: 0 !important;
-                            transition:
-                                transform 0.18s ease,
-                                box-shadow 0.18s ease,
-                                border-color 0.18s ease,
-                                background 0.18s ease !important;
-                        }}
-
-                        .st-key-{avatar_button_key} button:hover {{
-                            border-color: #F5C542 !important;
-                            background: #FFF7ED !important;
-                            transform: translateY(-1px) !important;
-                            box-shadow: 0 0 0 4px rgba(245,197,66,0.18), 0 12px 28px rgba(15,23,42,0.13) !important;
-                        }}
-
-                        .st-key-{avatar_button_key} button:active {{
-                            transform: translateY(0) scale(0.98) !important;
-                        }}
-
-                        .st-key-{avatar_button_key} button::before {{
-                            content: "";
-                            position: absolute;
-                            left: 50%;
-                            top: 50%;
-                            width: 64px;
-                            height: 64px;
-                            transform: translate(-50%, -50%);
-                            border-radius: 999px;
-                            background-image: url("{avatar_src}");
-                            background-size: cover;
-                            background-position: center;
-                            background-repeat: no-repeat;
-                            border: 3px solid #FFFFFF;
-                            box-shadow: 0 7px 18px rgba(15,23,42,0.16);
-                        }}
-
-                        .st-key-{avatar_button_key} button::after {{
-                            content: {"'✓'" if is_selected else "''"};
-                            position: absolute;
-                            right: 13px;
-                            bottom: 13px;
-                            width: 22px;
-                            height: 22px;
-                            border-radius: 999px;
-                            background: #F5C542;
-                            color: #07111F;
-                            border: 2px solid #FFFFFF;
-                            display: {"flex" if is_selected else "none"};
-                            align-items: center;
-                            justify-content: center;
-                            font-size: 13px;
-                            font-weight: 950;
-                            line-height: 1;
-                            box-shadow: 0 5px 12px rgba(15,23,42,0.18);
-                            pointer-events: none;
-                        }}
-
-                        .st-key-{avatar_button_key} button * {{
-                            display: none !important;
-                            visibility: hidden !important;
-                            color: transparent !important;
-                            font-size: 0 !important;
-                            line-height: 0 !important;
-                        }}
-
-                        @media (max-width: 768px) {{
-                            .st-key-{avatar_button_key} button {{
-                                height: 112px !important;
-                                min-height: 112px !important;
-                                border-radius: 18px !important;
-                                margin-bottom: 10px !important;
-                            }}
-
-                            .st-key-{avatar_button_key} button::before {{
-                                width: 82px;
-                                height: 82px;
-                                border-width: 3px;
-                                box-shadow: 0 8px 20px rgba(15,23,42,0.18);
-                            }}
-
-                            .st-key-{avatar_button_key} button::after {{
-                                right: 12px;
-                                bottom: 12px;
-                                width: 22px;
-                                height: 22px;
-                                font-size: 12px;
-                            }}
-                        }}
-
-                        @media (max-width: 390px) {{
-                            .st-key-{avatar_button_key} button {{
-                                height: 104px !important;
-                                min-height: 104px !important;
-                                border-radius: 16px !important;
-                            }}
-
-                            .st-key-{avatar_button_key} button::before {{
-                                width: 76px;
-                                height: 76px;
-                            }}
-                        }}
-                        </style>
-                        """,
-                        unsafe_allow_html=True
-                    )
-
                     avatar_clicked = st.button(
                         "Chọn avatar",
-                        key=avatar_button_key,
+                        key=item["button_key"],
                         use_container_width=True,
                         help="Bấm để chọn avatar này."
                     )
 
-                    if avatar_clicked and not is_selected:
+                    if avatar_clicked and not item["is_selected"]:
                         try:
                             update_user_avatar(
                                 user_id=int(user["user_id"]),
-                                avatar_key=avatar_key
+                                avatar_key=item["avatar_key"]
                             )
                     
                             updated_user = dict(st.session_state.get("user", user))
-                            updated_user["avatar_key"] = avatar_key
+                            updated_user["avatar_key"] = item["avatar_key"]
                             st.session_state["user"] = updated_user
                     
                             rerun_current_fragment()
@@ -7146,11 +7265,11 @@ def render_avatar_popover(user: dict):
             }}
 
             .wc-avatar-grid-desktop-shell {{
-                display: none !important;
+                display: block !important;
             }}
 
             .wc-avatar-grid-mobile-shell {{
-                display: block !important;
+                display: none !important;
             }}
 
             div[data-testid="stPopoverBody"]:has(.wc-avatar-grid-desktop-shell)
@@ -7175,7 +7294,30 @@ def render_avatar_popover(user: dict):
         }}
         """
     ):
-        with st.popover("Đổi avatar", use_container_width=False):
+        avatar_popover_kwargs = {
+            "use_container_width": False
+        }
+
+        if supports_lazy_avatar_popover:
+            avatar_popover_kwargs.update(
+                {
+                    "key": avatar_popover_state_key,
+                    "on_change": "rerun"
+                }
+            )
+
+        avatar_popover = st.popover(
+            "Đổi avatar",
+            **avatar_popover_kwargs
+        )
+
+        with avatar_popover:
+            if (
+                supports_lazy_avatar_popover
+                and not avatar_popover.open
+            ):
+                return
+
             st.markdown(
                 """
                 <div style="
@@ -7207,27 +7349,6 @@ def render_avatar_popover(user: dict):
 
                 @media (max-width: 768px) {
                     {
-                        display: none !important;
-                    }
-                }
-                """
-            ):
-                st.markdown(
-                    '<div class="wc-avatar-grid-desktop-shell">',
-                    unsafe_allow_html=True
-                )
-                render_avatar_grid(avatars_per_row=4, key_prefix="desktop")
-                st.markdown("</div>", unsafe_allow_html=True)
-
-            with stylable_container(
-                key="avatar_grid_mobile_shell",
-                css_styles="""
-                {
-                    display: none;
-                }
-
-                @media (max-width: 768px) {
-                    {
                         display: block !important;
                     }
 
@@ -7254,10 +7375,10 @@ def render_avatar_popover(user: dict):
                 """
             ):
                 st.markdown(
-                    '<div class="wc-avatar-grid-mobile-shell">',
+                    '<div class="wc-avatar-grid-desktop-shell">',
                     unsafe_allow_html=True
                 )
-                render_avatar_grid(avatars_per_row=2, key_prefix="mobile")
+                render_avatar_grid(avatars_per_row=4)
                 st.markdown("</div>", unsafe_allow_html=True)
 # ============================================================
 # 3. BASIC UTILITIES
@@ -9401,11 +9522,25 @@ def check_base_database():
 
 def check_required_app_tables():
     try:
-        tables = read_sql(
+        schema_columns = read_sql(
             """
-            SELECT table_name AS name
-            FROM information_schema.tables
+            SELECT
+                table_name AS name,
+                column_name
+            FROM information_schema.columns
             WHERE table_schema = 'public'
+              AND table_name IN (
+                  'teams',
+                  'matches',
+                  'users',
+                  'predictions',
+                  'prediction_history',
+                  'login_sessions',
+                  'daily_checkins',
+                  'daily_checkin_rewards',
+                  'final_poster_popup_views',
+                  'match_goals'
+              )
             """
         )
     except Exception as e:
@@ -9413,7 +9548,7 @@ def check_required_app_tables():
         st.exception(e)
         st.stop()
 
-    table_names = set(tables["name"].tolist())
+    table_names = set(schema_columns["name"].tolist())
 
     required_tables = {
         "teams",
@@ -9440,17 +9575,11 @@ def check_required_app_tables():
         )
         st.stop()
 
-    team_columns = read_sql(
-        """
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_schema = 'public'
-          AND table_name = 'teams'
-        """
-    )
-
     actual_team_columns = set(
-        team_columns["column_name"].tolist()
+        schema_columns.loc[
+            schema_columns["name"] == "teams",
+            "column_name"
+        ].tolist()
     )
 
     required_team_columns = {
@@ -9474,17 +9603,11 @@ def check_required_app_tables():
         )
         st.stop()
 
-    match_columns = read_sql(
-        """
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_schema = 'public'
-          AND table_name = 'matches'
-        """
-    )
-
     actual_match_columns = set(
-        match_columns["column_name"].tolist()
+        schema_columns.loc[
+            schema_columns["name"] == "matches",
+            "column_name"
+        ].tolist()
     )
 
     required_match_columns = {
@@ -9710,9 +9833,8 @@ def initialize_app_once():
     - Chỉ chạy migration khi RUN_DB_MIGRATIONS=true.
     - App chính nên để RUN_DB_MIGRATIONS=false sau khi schema đã ổn định.
     """
-    check_base_database()
-
     if RUN_DB_MIGRATIONS:
+        check_base_database()
         init_app_tables()
     else:
         check_required_app_tables()
@@ -18328,9 +18450,13 @@ def page_leaderboard():
         display_df[col] = display_df[col].apply(lambda x: f"{x * 100:.1f}%")
 
     avatar_row_styles = []
+    available_avatar_keys = load_avatar_keys()
 
     for row_position, avatar_key in enumerate(leaderboard["avatar_key"].tolist(), start=1):
-        avatar_src = get_avatar_src(avatar_key)
+        avatar_src = get_avatar_src(
+            avatar_key,
+            avatar_keys=available_avatar_keys
+        )
 
         if not avatar_src:
             continue
