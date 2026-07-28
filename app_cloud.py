@@ -7404,10 +7404,12 @@ def render_avatar_popover(user: dict):
                 }
 
                 @media (max-width: 768px) {
-                    {
+                    div[class*="st-key-avatar_grid_desktop_shell"] {
                         display: block !important;
                     }
-
+                    
+                    /* Chỉ chỉnh hàng avatar bên trong popup */
+                    div[class*="st-key-avatar_grid_desktop_shell"]
                     div[data-testid="stHorizontalBlock"] {
                         display: grid !important;
                         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -7415,7 +7417,11 @@ def render_avatar_popover(user: dict):
                         align-items: stretch !important;
                         width: 100% !important;
                     }
-
+                    
+                    /* Chỉ chỉnh các cột nằm trong popup avatar */
+                    div[class*="st-key-avatar_grid_desktop_shell"]
+                    div[data-testid="stColumn"],
+                    div[class*="st-key-avatar_grid_desktop_shell"]
                     div[data-testid="column"] {
                         width: 100% !important;
                         min-width: 0 !important;
@@ -7423,7 +7429,9 @@ def render_avatar_popover(user: dict):
                         padding-left: 0 !important;
                         padding-right: 0 !important;
                     }
-
+                    
+                    /* Chỉ chỉnh nút chọn avatar */
+                    div[class*="st-key-avatar_grid_desktop_shell"]
                     div[data-testid="stButton"] {
                         width: 100% !important;
                     }
