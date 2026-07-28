@@ -622,6 +622,14 @@ def render_season_selector():
         outline-offset: 2px !important;
     }
 
+    /* Nâng riêng phần thông tin và mũi tên để căn giữa box trên desktop. */
+    @media (min-width: 769px) {
+        div[class*="st-key-season_selector_shell"] .epl-season-info,
+        div[class*="st-key-season_selector_shell"] .epl-season-chevron-wrap {
+            transform: translateY(-8px) !important;
+        }
+    }
+
     /* =========================================================
        GIAO DIỆN ĐIỆN THOẠI
        ========================================================= */
