@@ -16756,21 +16756,12 @@ def render_epl_top_scorers_club_filter(
         div[data-testid="stHorizontalBlock"] {
             align-items: center !important;
             gap: 7px !important;
-            min-height: 42px !important;
         }
 
         div[class*="st-key-epl_scorers_club_filter_"]
         div[data-testid="stColumn"] {
             padding: 0 !important;
             min-width: 0 !important;
-        }
-
-        div[class*="st-key-epl_scorers_club_filter_"]
-        div[data-testid="stHorizontalBlock"]
-        > div[data-testid="stColumn"]
-        > div[data-testid="stVerticalBlock"] {
-            height: 100% !important;
-            justify-content: center !important;
         }
 
         div[class*="st-key-epl_scorers_club_filter_"]
@@ -16787,7 +16778,7 @@ def render_epl_top_scorers_club_filter(
             min-height: 42px !important;
 
             justify-content:
-                flex-start !important;
+                space-between !important;
 
             padding:
                 0 12px !important;
@@ -16821,44 +16812,6 @@ def render_epl_top_scorers_club_filter(
 
             text-overflow:
                 ellipsis !important;
-
-            text-align:
-                left !important;
-        }
-
-        div[class*="st-key-epl_scorers_club_filter_"]
-        div[data-testid="stPopover"] > button
-        [data-testid="stMarkdownContainer"],
-
-        div[class*="st-key-epl_scorers_club_filter_"]
-        div[data-testid="stPopover"] > div > button
-        [data-testid="stMarkdownContainer"] {
-            width: 100% !important;
-            min-width: 0 !important;
-            text-align: left !important;
-        }
-
-        div[class*="st-key-epl_scorers_club_filter_"]
-        div[data-testid="stPopover"] > button p,
-
-        div[class*="st-key-epl_scorers_club_filter_"]
-        div[data-testid="stPopover"] > div > button p {
-            width: 100% !important;
-            margin: 0 !important;
-            overflow: hidden !important;
-            text-align: left !important;
-            text-overflow: ellipsis !important;
-            white-space: nowrap !important;
-        }
-
-        div[class*="st-key-epl_scorers_club_filter_"]
-        div[data-testid="stPopover"] > button svg:last-child,
-
-        div[class*="st-key-epl_scorers_club_filter_"]
-        div[data-testid="stPopover"] > div > button
-        svg:last-child {
-            flex: 0 0 auto !important;
-            margin-left: auto !important;
         }
 
         div[class*="st-key-epl_scorers_club_filter_"]
@@ -16878,10 +16831,10 @@ def render_epl_top_scorers_club_filter(
             align-items: center;
             justify-content: center;
 
-            overflow: visible;
-            background: transparent;
-            border: 0;
-            border-radius: 0;
+            overflow: hidden;
+
+            background:
+                rgba(72, 24, 120, 0.055);
 
             color:
                 #3A0F70;
@@ -16892,8 +16845,10 @@ def render_epl_top_scorers_club_filter(
 
         .epl-club-filter-current-logo {
             width: 40px;
-            height: 42px;
-            margin: 0 auto;
+            height: 40px;
+
+            border-radius:
+                11px;
 
             font-size:
                 9px;
@@ -16901,10 +16856,13 @@ def render_epl_top_scorers_club_filter(
 
         .epl-club-filter-option-logo {
             width: 31px;
-            height: 39px;
+            height: 31px;
 
             margin:
-                0 auto;
+                5px auto;
+
+            border-radius:
+                9px;
 
             font-size:
                 8px;
@@ -16912,19 +16870,13 @@ def render_epl_top_scorers_club_filter(
 
         .epl-club-filter-current-logo img,
         .epl-club-filter-option-logo img {
+            width: 78%;
+            height: 78%;
+
             display: block;
+
             object-fit:
                 contain;
-        }
-
-        .epl-club-filter-current-logo img {
-            width: 34px;
-            height: 34px;
-        }
-
-        .epl-club-filter-option-logo img {
-            width: 29px;
-            height: 29px;
         }
 
         div[class*="st-key-epl_scorer_club_option_"]
