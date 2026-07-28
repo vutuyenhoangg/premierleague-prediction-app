@@ -16204,9 +16204,8 @@ def render_prediction_team_logo(
 ):
     """
     Hiển thị logo phía trên bộ chọn tỉ số.
-
-    Nếu logo bị thiếu hoặc đường dẫn không hợp lệ,
-    tên đội sẽ được dùng làm phương án dự phòng.
+    Render trực tiếp bằng st.html để chuỗi Base64
+    không bị Markdown biến thành văn bản.
     """
     team_label = str(
         team_name or "Đội bóng"
@@ -16228,14 +16227,11 @@ def render_prediction_team_logo(
         ).strip()
 
     logo_src = (
-        resolve_asset_src(
-            normalized_logo_path
-        )
+        resolve_asset_src(normalized_logo_path)
         if normalized_logo_path
         else ""
     )
 
-    # Không hiển thị biểu tượng ảnh lỗi nếu đường dẫn local bị sai.
     logo_is_valid = bool(
         logo_src
         and logo_src.startswith(
@@ -16254,35 +16250,44 @@ def render_prediction_team_logo(
             quote=True
         )
 
-        logo_content = f"""
-            <img
-                src="{safe_logo_src}"
-                alt=""
-                aria-hidden="true"
-                loading="lazy"
-                decoding="async"
-            >
-        """
+        # Giữ HTML trên một khối liền mạch.
+        logo_content = (
+            f'<img src="{safe_logo_src}" '
+            f'alt="" '
+            f'aria-hidden="true" '
+            f'loading="lazy" '
+            f'decoding="async">'
+        )
     else:
-        logo_content = f"""
-            <span class="epl-prediction-team-logo-fallback">
-                {safe_team_name}
-            </span>
-        """
+        logo_content = (
+            '<span class="epl-prediction-team-logo-fallback">'
+            f'{safe_team_name}'
+            '</span>'
+        )
 
-    st.markdown(
-        f"""
-        <div
-            class="epl-prediction-team-logo"
-            role="img"
-            aria-label="Logo {safe_team_name}"
-            title="{safe_team_name}"
-        >
-            {logo_content}
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    logo_html = f"""
+    <div
+        class="epl-prediction-team-logo"
+        role="img"
+        aria-label="Logo {safe_team_name}"
+        title="{safe_team_name}"
+    >
+        {logo_content}
+    </div>
+    """
+
+    logo_html = textwrap.dedent(
+        logo_html
+    ).strip()
+
+    # st.html render HTML trực tiếp, không qua Markdown parser.
+    if hasattr(st, "html"):
+        st.html(logo_html)
+    else:
+        st.markdown(
+            logo_html,
+            unsafe_allow_html=True
+        )
 
 def render_match_card(
     row,
