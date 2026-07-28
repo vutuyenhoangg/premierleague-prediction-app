@@ -18256,8 +18256,7 @@ def page_competition_stats():
                         )
 
                         page_subtitle = (
-                            "Top 20 cầu thủ có số "
-                            "bàn thắng cao nhất giải."
+                            "Top 20 chân sút hàng đầu giải"
                         )
 
                     else:
@@ -18269,7 +18268,7 @@ def page_competition_stats():
 
                         page_subtitle = (
                             "Danh sách cầu thủ "
-                            "ghi bàn cho câu lạc bộ."
+                            "ghi bàn cho câu lạc bộ"
                         )
 
                     render_page_title(
