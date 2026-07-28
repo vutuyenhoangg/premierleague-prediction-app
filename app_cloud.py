@@ -265,160 +265,533 @@ def set_selected_season(season_slug: str):
 
 def render_season_selector():
     selected_slug = get_selected_season_slug()
-    selected_label = SEASON_LABEL_BY_SLUG.get(selected_slug, selected_slug)
+
+    # Luôn xếp mùa mới nhất lên trước.
     season_options = sorted(
         SEASON_OPTIONS,
         key=lambda season: season["slug"],
         reverse=True
     )
+
     active_key = selected_slug.replace("-", "_")
+    first_key = season_options[0]["slug"].replace("-", "_")
+    last_key = season_options[-1]["slug"].replace("-", "_")
 
     season_selector_css = """
-        <style>
-        .epl-season-inline-label {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            height: 32px;
-            color: #07111F;
-            font-size: 14px;
-            font-weight: 950;
-            letter-spacing: 0.08em;
-            line-height: 1;
-            text-transform: uppercase;
-            white-space: nowrap;
+    <style>
+    /* =========================================================
+       KHUNG CHỌN MÙA GIẢI
+       Toàn bộ CSS được giới hạn trong season_selector_shell.
+       ========================================================= */
+
+    div[class*="st-key-season_selector_shell"] {
+        width: min(600px, 100%) !important;
+        max-width: 600px !important;
+        min-height: 82px !important;
+
+        margin: 0 0 14px 0 !important;
+        padding: 16px 18px 16px 16px !important;
+
+        box-sizing: border-box !important;
+
+        background:
+            linear-gradient(
+                135deg,
+                rgba(255, 255, 255, 0.98) 0%,
+                rgba(252, 250, 255, 0.96) 100%
+            ) !important;
+
+        border: 1px solid rgba(79, 38, 133, 0.24) !important;
+        border-left: 4px solid #A100FF !important;
+        border-radius: 14px !important;
+
+        box-shadow:
+            0 10px 28px rgba(35, 14, 65, 0.08),
+            inset 0 1px 0 rgba(255, 255, 255, 0.92) !important;
+    }
+
+    div[class*="st-key-season_selector_shell"]
+    > div[data-testid="stVerticalBlock"] {
+        gap: 0 !important;
+    }
+
+    div[class*="st-key-season_selector_shell"]
+    div[data-testid="stHorizontalBlock"] {
+        width: 100% !important;
+        align-items: center !important;
+        gap: 0 !important;
+    }
+
+    div[class*="st-key-season_selector_shell"]
+    div[data-testid="stColumn"],
+    div[class*="st-key-season_selector_shell"]
+    div[data-testid="column"] {
+        min-width: 0 !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+
+    div[class*="st-key-season_selector_shell"]
+    [data-testid="stMarkdownContainer"] p {
+        margin: 0 !important;
+    }
+
+    /* =========================================================
+       PHẦN BIỂU TƯỢNG VÀ THÔNG TIN
+       ========================================================= */
+
+    .epl-season-info {
+        height: 44px;
+
+        display: flex;
+        align-items: center;
+        gap: 13px;
+
+        min-width: 0;
+    }
+
+    .epl-season-icon {
+        width: 44px;
+        height: 44px;
+        min-width: 44px;
+
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+
+        border-radius: 50%;
+
+        background:
+            linear-gradient(
+                145deg,
+                #5A1A96 0%,
+                #321066 100%
+            );
+
+        border: 1px solid rgba(255, 255, 255, 0.18);
+
+        box-shadow:
+            0 7px 16px rgba(64, 18, 112, 0.22),
+            inset 0 1px 0 rgba(255, 255, 255, 0.18);
+
+        color: #FFFFFF;
+        flex: 0 0 auto;
+    }
+
+    .epl-season-icon svg {
+        width: 22px;
+        height: 22px;
+
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
+    .epl-season-copy {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 5px;
+
+        min-width: 0;
+    }
+
+    .epl-season-heading {
+        color: #23132F;
+        font-size: 13px;
+        font-weight: 950;
+        letter-spacing: 0.08em;
+        line-height: 1;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+
+    .epl-season-subtitle {
+        color: #70647D;
+        font-size: 13.5px;
+        font-weight: 500;
+        line-height: 1.2;
+        white-space: nowrap;
+    }
+
+    /* =========================================================
+       DẤU MŨI TÊN
+       ========================================================= */
+
+    .epl-season-chevron-wrap {
+        height: 44px;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .epl-season-chevron {
+        width: 8px;
+        height: 8px;
+
+        border-top: 1.7px solid #8B8096;
+        border-right: 1.7px solid #8B8096;
+
+        transform: rotate(45deg);
+    }
+
+    /* =========================================================
+       SEGMENTED CONTROL
+       ========================================================= */
+
+    div[class*="st-key-season_selector_shell"]
+    div[class*="st-key-season_switch_"] {
+        width: 100% !important;
+        min-width: 0 !important;
+        margin: 0 !important;
+    }
+
+    div[class*="st-key-season_selector_shell"]
+    div[class*="st-key-season_switch_"]
+    div[data-testid="stButton"] {
+        width: 100% !important;
+    }
+
+    div[class*="st-key-season_selector_shell"]
+    div[class*="st-key-season_switch_"] button {
+        position: relative !important;
+
+        width: 100% !important;
+        min-width: 0 !important;
+        height: 44px !important;
+        min-height: 44px !important;
+
+        margin: 0 !important;
+        padding: 0 12px !important;
+
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+
+        border: 1px solid #D9CFE3 !important;
+        border-radius: 0 !important;
+
+        background: rgba(255, 255, 255, 0.96) !important;
+        color: #4A2B60 !important;
+
+        box-shadow: none !important;
+
+        font-size: 13px !important;
+        font-weight: 800 !important;
+        line-height: 1 !important;
+
+        opacity: 1 !important;
+        overflow: hidden !important;
+        transform: none !important;
+
+        transition:
+            background 0.16s ease,
+            border-color 0.16s ease,
+            color 0.16s ease,
+            box-shadow 0.16s ease !important;
+    }
+
+    div[class*="st-key-season_selector_shell"]
+    div[class*="st-key-season_switch_"] button * {
+        color: inherit !important;
+        font-size: inherit !important;
+        font-weight: inherit !important;
+        line-height: inherit !important;
+        opacity: 1 !important;
+    }
+
+    /* Bo góc đầu và cuối của segmented control. */
+    div[class*="st-key-season_switch___FIRST_KEY__"] button {
+        border-radius: 8px 0 0 8px !important;
+    }
+
+    div[class*="st-key-season_switch___LAST_KEY__"] button {
+        width: calc(100% + 1px) !important;
+        margin-left: -1px !important;
+        border-radius: 0 8px 8px 0 !important;
+    }
+
+    /* Trạng thái chưa được chọn. */
+    div[class*="st-key-season_selector_shell"]
+    div[class*="st-key-season_switch_"] button:not(:disabled):hover {
+        z-index: 2 !important;
+
+        background: #FAF7FF !important;
+        border-color: #8B5CF6 !important;
+        color: #32105F !important;
+
+        box-shadow: 0 5px 14px rgba(72, 24, 120, 0.10) !important;
+        transform: none !important;
+    }
+
+    /* Trạng thái mùa đang được chọn. */
+    div[class*="st-key-season_selector_shell"]
+    div[class*="st-key-season_switch___ACTIVE_KEY__"] button,
+    div[class*="st-key-season_selector_shell"]
+    div[class*="st-key-season_switch___ACTIVE_KEY__"] button:disabled {
+        z-index: 3 !important;
+
+        background:
+            linear-gradient(
+                135deg,
+                #301060 0%,
+                #4B148C 100%
+            ) !important;
+
+        border-color: #3A0F70 !important;
+        color: #FFFFFF !important;
+
+        opacity: 1 !important;
+        cursor: default !important;
+
+        box-shadow:
+            0 7px 16px rgba(56, 15, 105, 0.20),
+            inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
+    }
+
+    div[class*="st-key-season_selector_shell"]
+    div[class*="st-key-season_switch___ACTIVE_KEY__"] button *,
+    div[class*="st-key-season_selector_shell"]
+    div[class*="st-key-season_switch___ACTIVE_KEY__"] button:disabled * {
+        color: #FFFFFF !important;
+        opacity: 1 !important;
+    }
+
+    /* Vạch vàng dưới mùa đang chọn giống mockup. */
+    div[class*="st-key-season_selector_shell"]
+    div[class*="st-key-season_switch___ACTIVE_KEY__"] button::after {
+        content: "";
+
+        position: absolute;
+        left: 29%;
+        right: 29%;
+        bottom: 0;
+
+        height: 3px;
+
+        border-radius: 3px 3px 0 0;
+        background: #F5C542;
+
+        box-shadow: 0 -1px 5px rgba(245, 197, 66, 0.30);
+    }
+
+    div[class*="st-key-season_selector_shell"]
+    div[class*="st-key-season_switch_"] button:focus-visible {
+        z-index: 4 !important;
+
+        outline: 3px solid rgba(161, 0, 255, 0.20) !important;
+        outline-offset: 2px !important;
+    }
+
+    /* =========================================================
+       GIAO DIỆN ĐIỆN THOẠI
+       ========================================================= */
+
+    @media (max-width: 768px) {
+        div[class*="st-key-season_selector_shell"] {
+            width: 100% !important;
+            max-width: none !important;
+            min-height: 0 !important;
+
+            margin-bottom: 14px !important;
+            padding: 13px 14px !important;
+
+            border-radius: 13px !important;
         }
 
-        .epl-season-inline-label strong {
-            color: #07111F;
-            font-size: 14px;
-            font-weight: 950;
-            letter-spacing: 0;
+        /*
+         * Hàng đầu: biểu tượng và mô tả.
+         * Hàng thứ hai: hai nút mùa giải.
+         */
+        div[class*="st-key-season_selector_shell"]
+        div[data-testid="stHorizontalBlock"] {
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            column-gap: 0 !important;
+            row-gap: 11px !important;
         }
 
-        .epl-season-inline-label::before {
-            content: "";
-            width: 7px;
-            height: 7px;
-            border-radius: 999px;
-            background: #F5C542;
-            box-shadow: 0 0 0 4px rgba(245,197,66,0.15);
-            flex: 0 0 auto;
+        div[class*="st-key-season_selector_shell"]
+        div[data-testid="stHorizontalBlock"]
+        > :is(
+            div[data-testid="stColumn"],
+            div[data-testid="column"]
+        ) {
+            width: 100% !important;
+            min-width: 0 !important;
+            flex: unset !important;
         }
 
-        .epl-selected-season-text {
-            margin-top: 6px;
-            color: #07111F;
-            font-size: 13.5px;
-            font-weight: 900;
-            line-height: 1.35;
+        div[class*="st-key-season_selector_shell"]
+        div[data-testid="stHorizontalBlock"]
+        > :is(
+            div[data-testid="stColumn"],
+            div[data-testid="column"]
+        ):nth-child(1) {
+            grid-column: 1 / -1;
         }
 
-        .epl-selected-season-text strong {
-            color: #07111F;
-            font-weight: 900;
-        }
-        div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-season_switch_"]) {
-            gap: 4px !important;
-        }
-        div[class*="st-key-season_switch_"] {
-            margin: 0 !important;
-            width: auto !important;
+        /* Ẩn mũi tên ở mobile để tránh chiếm diện tích. */
+        div[class*="st-key-season_selector_shell"]
+        div[data-testid="stHorizontalBlock"]
+        > :is(
+            div[data-testid="stColumn"],
+            div[data-testid="column"]
+        ):nth-child(2) {
+            display: none !important;
         }
 
+        div[class*="st-key-season_selector_shell"]
+        div[data-testid="stHorizontalBlock"]
+        > :is(
+            div[data-testid="stColumn"],
+            div[data-testid="column"]
+        ):nth-child(3) {
+            grid-column: 1;
+        }
+
+        div[class*="st-key-season_selector_shell"]
+        div[data-testid="stHorizontalBlock"]
+        > :is(
+            div[data-testid="stColumn"],
+            div[data-testid="column"]
+        ):nth-child(4) {
+            grid-column: 2;
+        }
+
+        .epl-season-info {
+            height: 42px;
+            gap: 11px;
+        }
+
+        .epl-season-icon {
+            width: 42px;
+            height: 42px;
+            min-width: 42px;
+        }
+
+        .epl-season-icon svg {
+            width: 21px;
+            height: 21px;
+        }
+
+        .epl-season-heading {
+            font-size: 12.5px;
+        }
+
+        .epl-season-subtitle {
+            font-size: 12.5px;
+            white-space: normal;
+        }
+
+        div[class*="st-key-season_selector_shell"]
         div[class*="st-key-season_switch_"] button {
-            width: auto !important;
-            min-width: 74px !important;
-            height: 30px !important;
-            min-height: 30px !important;
-            padding: 0 11px !important;
-            border-radius: 999px !important;
-            border: 1px solid rgba(15,23,42,0.10) !important;
-            background: rgba(255,255,255,0.90) !important;
-            color: #334155 !important;
-            box-shadow:
-                inset 0 1px 0 rgba(255,255,255,0.90),
-                0 1px 2px rgba(15,23,42,0.05) !important;
-            font-size: 12px !important;
-            font-weight: 850 !important;
-            line-height: 1 !important;
+            height: 40px !important;
+            min-height: 40px !important;
+            font-size: 12.5px !important;
         }
+    }
+    </style>
+    """
 
-        div[class*="st-key-season_switch_"] button:hover {
-            background: #FFFFFF !important;
-            border-color: rgba(245,197,66,0.70) !important;
-            color: #07111F !important;
-            box-shadow: 0 6px 14px rgba(15,23,42,0.10) !important;
-        }
-
-        div[class*="st-key-season_switch___ACTIVE_KEY__"] button,
-        div[class*="st-key-season_switch___ACTIVE_KEY__"] button:disabled {
-            background: linear-gradient(135deg, #06101F 0%, #0B1B33 100%) !important;
-            border-color: rgba(245,197,66,0.92) !important;
-            color: #F8FAFC !important;
-            opacity: 1 !important;
-            box-shadow:
-                0 7px 16px rgba(15,23,42,0.18),
-                inset 0 1px 0 rgba(255,255,255,0.12) !important;
-            cursor: default !important;
-        }
-
-        div[class*="st-key-season_switch___ACTIVE_KEY__"] button *,
-        div[class*="st-key-season_switch___ACTIVE_KEY__"] button:disabled * {
-            color: #F8FAFC !important;
-        }
-
-        @media (max-width: 768px) {
-            .epl-season-inline-label {
-                height: 26px;
-                font-size: 10.5px;
-            }
-
-            .epl-selected-season-text {
-                font-size: 12.5px;
-                margin-top: 5px;
-            }
-
-            div[class*="st-key-season_switch_"] button {
-                min-width: 78px !important;
-                height: 29px !important;
-                min-height: 29px !important;
-                padding: 0 12px !important;
-                font-size: 12px !important;
-            }
-        }
-        </style>
-        """
+    season_selector_css = (
+        season_selector_css
+        .replace("__ACTIVE_KEY__", active_key)
+        .replace("__FIRST_KEY__", first_key)
+        .replace("__LAST_KEY__", last_key)
+    )
 
     st.markdown(
-        season_selector_css.replace("__ACTIVE_KEY__", active_key),
+        season_selector_css,
         unsafe_allow_html=True
     )
 
-    label_col, picker_col, spacer_col = st.columns([0.18, 0.16, 0.66], gap="small")
-
-    with label_col:
-        st.markdown(
-            f"""
-            <div class="epl-season-inline-label">
-                Mùa giải: <strong>{selected_label}</strong>
-            </div>
-            """,
-            unsafe_allow_html=True
+    # Container riêng giúp CSS không tác động đến các nút khác trong app.
+    with st.container(key="season_selector_shell"):
+        column_spec = (
+            [0.50, 0.06]
+            + [0.22] * len(season_options)
         )
 
-    with picker_col:
-        season_columns = st.columns(len(season_options), gap="small")
+        selector_columns = st.columns(
+            column_spec,
+            gap=None
+        )
 
-        for col, season in zip(season_columns, season_options):
+        info_col = selector_columns[0]
+        chevron_col = selector_columns[1]
+        season_columns = selector_columns[2:]
+
+        with info_col:
+            st.markdown(
+                """
+                <div class="epl-season-info">
+                    <span class="epl-season-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24">
+                            <rect
+                                x="3.5"
+                                y="5.5"
+                                width="17"
+                                height="15"
+                                rx="2.5"
+                            ></rect>
+                            <path d="M8 3.5V7.5"></path>
+                            <path d="M16 3.5V7.5"></path>
+                            <path d="M3.5 9.5H20.5"></path>
+                            <path d="M8 13H8.01"></path>
+                            <path d="M12 13H12.01"></path>
+                            <path d="M16 13H16.01"></path>
+                            <path d="M8 17H8.01"></path>
+                            <path d="M12 17H12.01"></path>
+                        </svg>
+                    </span>
+
+                    <span class="epl-season-copy">
+                        <span class="epl-season-heading">
+                            Mùa giải
+                        </span>
+
+                        <span class="epl-season-subtitle">
+                            Chọn mùa giải để xem lịch đấu
+                        </span>
+                    </span>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        with chevron_col:
+            st.markdown(
+                """
+                <div class="epl-season-chevron-wrap">
+                    <span
+                        class="epl-season-chevron"
+                        aria-hidden="true"
+                    ></span>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        for col, season in zip(
+            season_columns,
+            season_options
+        ):
             is_active = season["slug"] == selected_slug
-            button_key = f"season_switch_{season['slug'].replace('-', '_')}"
+
+            button_key = (
+                "season_switch_"
+                + season["slug"].replace("-", "_")
+            )
 
             with col:
                 if st.button(
                     season["label"],
                     key=button_key,
-                    use_container_width=False,
+                    use_container_width=True,
                     disabled=is_active
                 ):
                     set_selected_season(season["slug"])
