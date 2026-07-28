@@ -19570,9 +19570,101 @@ def render_epl_top_scorers_club_filter(
             div[class*="st-key-epl_scorers_club_filter_"] {
                 width:
                     100% !important;
-
+        
                 max-width:
                     none !important;
+        
+                padding:
+                    5px 8px !important;
+        
+                border-radius:
+                    12px !important;
+        
+                box-shadow:
+                    0 7px 20px rgba(37, 15, 62, 0.07)
+                    !important;
+            }
+        
+            div[class*="st-key-epl_scorers_club_filter_"]
+            div[data-testid="stHorizontalBlock"]:has(
+                .epl-club-filter-current-logo
+            ):has(
+                div[data-testid="stPopover"]
+            ) {
+                min-height:
+                    38px !important;
+        
+                gap:
+                    4px !important;
+            }
+        
+            div[class*="st-key-epl_scorers_club_filter_"]
+            div[data-testid="stHorizontalBlock"]:has(
+                .epl-club-filter-current-logo
+            )
+            > div[data-testid="stColumn"]:first-child {
+                width:
+                    42px !important;
+        
+                min-width:
+                    42px !important;
+        
+                max-width:
+                    42px !important;
+        
+                flex:
+                    0 0 42px !important;
+            }
+        
+            div[class*="st-key-epl_scorers_club_filter_"]
+            div[data-testid="stHorizontalBlock"]:has(
+                .epl-club-filter-current-logo
+            )
+            > div[data-testid="stColumn"]:last-child {
+                width:
+                    auto !important;
+        
+                min-width:
+                    0 !important;
+        
+                flex:
+                    1 1 auto !important;
+            }
+        
+            div[class*="st-key-epl_scorers_club_filter_"]
+            div[data-testid="stPopover"] > button,
+        
+            div[class*="st-key-epl_scorers_club_filter_"]
+            div[data-testid="stPopover"] > div > button {
+                min-height:
+                    38px !important;
+        
+                padding:
+                    0 8px !important;
+        
+                font-size:
+                    12.5px !important;
+            }
+        
+            div[class*="st-key-epl_scorers_club_filter_"]
+            .epl-club-filter-current-logo {
+                width:
+                    34px;
+        
+                height:
+                    36px;
+            }
+        
+            div[class*="st-key-epl_scorers_club_filter_"]
+            .epl-club-filter-current-logo img {
+                width:
+                    28px;
+        
+                height:
+                    28px;
+        
+                transform:
+                    none;
             }
         }
         </style>
@@ -19801,7 +19893,9 @@ def render_epl_top_scorers_table(
                 </td>
 
                 <td class="epl-scorer-player-cell">
-                    {player_name}
+                    <span class="epl-scorer-player-name">
+                        {player_name}
+                    </span>
                 </td>
 
                 <td class="epl-scorer-club-cell">
@@ -19817,7 +19911,9 @@ def render_epl_top_scorers_table(
                 </td>
 
                 <td class="epl-scorer-goals-cell">
-                    {goals}
+                    <span class="epl-scorer-goals-badge">
+                        {goals}
+                    </span>
                 </td>
             </tr>
             """
@@ -20135,69 +20231,405 @@ def render_epl_top_scorers_table(
         text-align:
             center;
     }
-
+    .epl-scorers-head-mobile {
+        display:
+            none;
+    }
     @media (max-width: 768px) {
         .epl-scorers-box {
+            margin-top:
+                12px;
+
             border-radius:
                 14px;
+
+            box-shadow:
+                0 10px 26px
+                rgba(15, 23, 42, 0.08);
         }
 
+        /*
+         * Không còn cuộn ngang.
+         * Chỉ giữ cuộn dọc khi danh sách dài.
+         */
+        .epl-scorers-scroll {
+            width:
+                100%;
+
+            overflow-x:
+                hidden;
+
+            overflow-y:
+                auto;
+
+            -webkit-overflow-scrolling:
+                touch;
+        }
+
+        /*
+         * Quyết định quan trọng:
+         * bỏ min-width 560px và ép bảng vừa màn hình.
+         */
         .epl-scorers-table {
+            width:
+                100%;
+
             min-width:
-                560px;
+                0;
+
+            table-layout:
+                fixed;
 
             font-size:
-                12.5px;
+                12px;
+        }
+
+        .epl-scorers-head-desktop {
+            display:
+                none;
+        }
+
+        .epl-scorers-head-mobile {
+            display:
+                inline;
         }
 
         .epl-scorers-table th {
+            height:
+                38px;
+
             padding:
-                12px 10px;
+                8px 4px;
 
             font-size:
-                11px;
+                9.5px;
+
+            line-height:
+                1.1;
+
+            letter-spacing:
+                0;
+
+            text-align:
+                center;
+        }
+
+        .epl-scorers-table th:nth-child(2) {
+            text-align:
+                left;
         }
 
         .epl-scorers-table td {
             height:
-                54px;
+                56px;
 
             padding:
-                9px 10px;
+                7px 4px;
+
+            vertical-align:
+                middle;
+        }
+
+        /*
+         * Phân bổ chiều rộng:
+         * Hạng 44px
+         * Cầu thủ nhận toàn bộ phần còn lại
+         * CLB 88px
+         * Bàn 48px
+         */
+        .epl-scorers-table th:nth-child(1),
+        .epl-scorers-table td:nth-child(1) {
+            width:
+                44px;
+        }
+
+        .epl-scorers-table th:nth-child(2),
+        .epl-scorers-table td:nth-child(2) {
+            width:
+                auto;
+        }
+
+        .epl-scorers-table th:nth-child(3),
+        .epl-scorers-table td:nth-child(3) {
+            width:
+                88px;
+        }
+
+        .epl-scorers-table th:nth-child(4),
+        .epl-scorers-table td:nth-child(4) {
+            width:
+                48px;
         }
 
         .epl-scorer-rank-cell {
             width:
-                58px;
+                44px;
+
+            padding-left:
+                3px !important;
+
+            padding-right:
+                3px !important;
+        }
+
+        .epl-scorer-rank {
+            width:
+                28px;
+
+            height:
+                28px;
+
+            font-size:
+                12px;
         }
 
         .epl-scorer-player-cell {
             min-width:
-                160px;
+                0;
+
+            padding-left:
+                7px !important;
+
+            padding-right:
+                6px !important;
+
+            font-size:
+                11.5px;
+
+            line-height:
+                1.22;
+        }
+
+        /*
+         * Tên dài được xuống tối đa hai dòng.
+         * Không còn đẩy rộng toàn bộ bảng.
+         */
+        .epl-scorer-player-name {
+            display:
+                -webkit-box;
+
+            overflow:
+                hidden;
+
+            -webkit-box-orient:
+                vertical;
+
+            -webkit-line-clamp:
+                2;
+
+            line-clamp:
+                2;
+
+            overflow-wrap:
+                break-word;
         }
 
         .epl-scorer-club-cell {
             min-width:
-                210px;
-        }
+                0;
 
-        .epl-scorer-goals-cell {
-            width:
-                78px;
+            padding-left:
+                3px !important;
+
+            padding-right:
+                3px !important;
 
             font-size:
-                14px;
+                10.5px;
+        }
+
+        .epl-scorer-club-wrap {
+            width:
+                100%;
+
+            min-width:
+                0;
+
+            gap:
+                4px;
+        }
+
+        /*
+         * Bảng mobile dùng tên CLB ngắn đã được tạo sẵn
+         * bằng get_mobile_team_display_name().
+         */
+        .epl-scorer-club-wrap
+        .epl-team-name-desktop {
+            display:
+                none;
+        }
+
+        .epl-scorer-club-wrap
+        .epl-team-name-mobile {
+            display:
+                block;
+
+            min-width:
+                0;
+
+            overflow:
+                hidden;
+
+            color:
+                #475569;
+
+            font-size:
+                10.5px;
+
+            font-weight:
+                780;
+
+            line-height:
+                1.15;
+
+            text-overflow:
+                ellipsis;
+
+            white-space:
+                nowrap;
         }
 
         .epl-scorer-club-logo {
             width:
-                26px;
+                22px;
 
             height:
-                26px;
+                22px;
+
+            flex:
+                0 0 22px;
+        }
+
+        /*
+         * Bỏ nền vàng phủ cả ô trên mobile.
+         * Số bàn thắng được đưa vào badge riêng.
+         */
+        .epl-scorer-goals-cell {
+            width:
+                48px;
+
+            padding:
+                5px 4px !important;
+
+            background:
+                #FFFFFF !important;
+
+            text-align:
+                center;
+        }
+
+        .epl-scorer-goals-badge {
+            display:
+                inline-flex;
+
+            width:
+                30px;
+
+            height:
+                30px;
+
+            align-items:
+                center;
+
+            justify-content:
+                center;
+
+            border:
+                1px solid
+                rgba(55, 0, 60, 0.14);
+
+            border-radius:
+                9px;
+
+            background:
+                #F5C542;
+
+            color:
+                #07111F;
+
+            font-size:
+                14px;
+
+            font-weight:
+                950;
+
+            line-height:
+                1;
+        }
+
+        /* Phân tách hàng nhẹ, dễ theo dõi trên điện thoại */
+        .epl-scorers-table
+        tbody
+        tr:nth-child(odd)
+        td {
+            background:
+                #FFFFFF;
+        }
+
+        .epl-scorers-table
+        tbody
+        tr:nth-child(even)
+        td {
+            background:
+                #F8FAFC;
+        }
+
+        .epl-scorers-table
+        tbody
+        tr:nth-child(odd)
+        td.epl-scorer-goals-cell {
+            background:
+                #FFFFFF !important;
+        }
+
+        .epl-scorers-table
+        tbody
+        tr:nth-child(even)
+        td.epl-scorer-goals-cell {
+            background:
+                #F8FAFC !important;
+        }
+    }
+
+    @media (max-width: 390px) {
+        .epl-scorers-table th:nth-child(1),
+        .epl-scorers-table td:nth-child(1) {
+            width:
+                42px;
+        }
+
+        .epl-scorers-table th:nth-child(3),
+        .epl-scorers-table td:nth-child(3) {
+            width:
+                78px;
+        }
+
+        .epl-scorers-table th:nth-child(4),
+        .epl-scorers-table td:nth-child(4) {
+            width:
+                46px;
+        }
+
+        .epl-scorer-player-cell {
+            font-size:
+                11px;
+        }
+
+        .epl-scorer-club-wrap
+        .epl-team-name-mobile {
+            font-size:
+                10px;
+        }
+
+        .epl-scorer-club-logo {
+            width:
+                21px;
+
+            height:
+                21px;
 
             flex-basis:
-                26px;
+                21px;
         }
     }
     </style>
@@ -20208,9 +20640,28 @@ def render_epl_top_scorers_table(
                 <thead>
                     <tr>
                         <th>Hạng</th>
+                
                         <th>Cầu thủ</th>
-                        <th>Câu lạc bộ</th>
-                        <th>Bàn thắng</th>
+                
+                        <th>
+                            <span class="epl-scorers-head-desktop">
+                                Câu lạc bộ
+                            </span>
+                
+                            <span class="epl-scorers-head-mobile">
+                                CLB
+                            </span>
+                        </th>
+                
+                        <th>
+                            <span class="epl-scorers-head-desktop">
+                                Bàn thắng
+                            </span>
+                
+                            <span class="epl-scorers-head-mobile">
+                                Bàn
+                            </span>
+                        </th>
                     </tr>
                 </thead>
 
@@ -20301,6 +20752,7 @@ def page_competition_stats():
         st.markdown(
             """
             <style>
+            /* Desktop giữ nguyên */
             div[class*="st-key-epl_top_scorers_header_"]
             div[data-testid="stHorizontalBlock"] {
                 align-items:
@@ -20313,33 +20765,140 @@ def page_competition_stats():
                     0 !important;
             }
 
+            /* Nội dung dành riêng cho mobile mặc định bị ẩn */
+            div[class*="st-key-epl_top_scorers_title_"]
+            .epl-scorers-title-mobile,
+
+            div[class*="st-key-epl_top_scorers_title_"]
+            .epl-scorers-subtitle-mobile {
+                display:
+                    none;
+            }
+
             @media (max-width: 768px) {
+                /*
+                 * Chỉ bắt hàng ngoài cùng có cả tiêu đề và filter.
+                 * Không ảnh hưởng các stHorizontalBlock nằm bên trong filter.
+                 */
                 div[class*="st-key-epl_top_scorers_header_"]
-                div[data-testid="stHorizontalBlock"] {
-                    flex-wrap:
-                        wrap !important;
-                }
-
-                div[data-testid="stColumn"]:has(
+                div[data-testid="stHorizontalBlock"]:has(
                     div[class*="st-key-epl_top_scorers_title_"]
-                ),
-
-                div[data-testid="stColumn"]:has(
+                ):has(
                     div[class*="st-key-epl_top_scorers_filter_slot_"]
                 ) {
+                    display:
+                        flex !important;
+
+                    flex-direction:
+                        column !important;
+
+                    align-items:
+                        stretch !important;
+
+                    gap:
+                        10px !important;
+                }
+
+                div[class*="st-key-epl_top_scorers_header_"]
+                div[data-testid="stHorizontalBlock"]:has(
+                    div[class*="st-key-epl_top_scorers_title_"]
+                ):has(
+                    div[class*="st-key-epl_top_scorers_filter_slot_"]
+                )
+                > div[data-testid="stColumn"] {
                     width:
                         100% !important;
 
                     min-width:
                         100% !important;
 
+                    max-width:
+                        100% !important;
+
                     flex:
-                        1 1 100% !important;
+                        0 0 100% !important;
+                }
+
+                /* Tiêu đề luôn nằm trước */
+                div[data-testid="stColumn"]:has(
+                    div[class*="st-key-epl_top_scorers_title_"]
+                ) {
+                    order:
+                        1 !important;
+                }
+
+                /* Filter luôn nằm dưới tiêu đề */
+                div[data-testid="stColumn"]:has(
+                    div[class*="st-key-epl_top_scorers_filter_slot_"]
+                ) {
+                    order:
+                        2 !important;
+                }
+
+                div[class*="st-key-epl_top_scorers_title_"]
+                .wc-page-title {
+                    margin:
+                        0 !important;
+                }
+
+                div[class*="st-key-epl_top_scorers_title_"]
+                .wc-page-title h2 {
+                    margin:
+                        0 0 5px !important;
+
+                    color:
+                        #07111F !important;
+
+                    font-size:
+                        clamp(21px, 6vw, 24px) !important;
+
+                    font-weight:
+                        950 !important;
+
+                    line-height:
+                        1.08 !important;
+
+                    letter-spacing:
+                        -0.035em !important;
+                }
+
+                div[class*="st-key-epl_top_scorers_title_"]
+                .wc-page-title p {
+                    margin:
+                        0 !important;
+
+                    font-size:
+                        12.5px !important;
+
+                    line-height:
+                        1.35 !important;
+                }
+
+                /* Đổi nội dung tiêu đề riêng trên mobile */
+                div[class*="st-key-epl_top_scorers_title_"]
+                .epl-scorers-title-desktop,
+
+                div[class*="st-key-epl_top_scorers_title_"]
+                .epl-scorers-subtitle-desktop {
+                    display:
+                        none !important;
+                }
+
+                div[class*="st-key-epl_top_scorers_title_"]
+                .epl-scorers-title-mobile,
+
+                div[class*="st-key-epl_top_scorers_title_"]
+                .epl-scorers-subtitle-mobile {
+                    display:
+                        inline !important;
                 }
 
                 div[class*="st-key-epl_top_scorers_filter_slot_"] {
-                    margin-top:
-                        8px !important;
+                    width:
+                        100% !important;
+
+                    margin:
+                        0 !important;
                 }
             }
             </style>
@@ -20394,31 +20953,79 @@ def page_competition_stats():
                     )
                 ):
                     if selected_team_id is None:
-                        page_title = (
+                        desktop_page_title = (
                             "VUA PHÁ LƯỚI "
                             "PREMIER LEAGUE "
                             f"{season_label}"
                         )
 
-                        page_subtitle = (
+                        desktop_page_subtitle = (
                             "Top 20 chân sút hàng đầu giải"
                         )
 
+                        mobile_page_title = (
+                            "VUA PHÁ LƯỚI"
+                        )
+
+                        mobile_page_subtitle = (
+                            "Premier League "
+                            f"{season_label} · Top 20"
+                        )
+
                     else:
-                        page_title = (
+                        desktop_page_title = (
                             "DANH SÁCH GHI BÀN "
                             f"{selected_club_name} "
                             f"{season_label}"
                         ).upper()
 
-                        page_subtitle = (
+                        desktop_page_subtitle = (
                             "Danh sách cầu thủ "
                             "ghi bàn cho câu lạc bộ"
                         )
 
+                        mobile_club_name = (
+                            get_mobile_team_display_name(
+                                selected_club_name
+                            )
+                        )
+
+                        mobile_page_title = (
+                            "DANH SÁCH GHI BÀN"
+                        )
+
+                        mobile_page_subtitle = (
+                            f"{mobile_club_name} "
+                            f"· {season_label}"
+                        )
+
+                    page_title_html = (
+                        '<span '
+                        'class="epl-scorers-title-desktop">'
+                        f'{html.escape(desktop_page_title)}'
+                        '</span>'
+
+                        '<span '
+                        'class="epl-scorers-title-mobile">'
+                        f'{html.escape(mobile_page_title)}'
+                        '</span>'
+                    )
+
+                    page_subtitle_html = (
+                        '<span '
+                        'class="epl-scorers-subtitle-desktop">'
+                        f'{html.escape(desktop_page_subtitle)}'
+                        '</span>'
+
+                        '<span '
+                        'class="epl-scorers-subtitle-mobile">'
+                        f'{html.escape(mobile_page_subtitle)}'
+                        '</span>'
+                    )
+
                     render_page_title(
-                        html.escape(page_title),
-                        page_subtitle
+                        page_title_html,
+                        page_subtitle_html
                     )
 
         top_scorers = (
