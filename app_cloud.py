@@ -3438,12 +3438,357 @@ def inject_mobile_prediction_score_row_css():
         unsafe_allow_html=True
     )
 
+def inject_prediction_score_stepper_css():
+    """
+    Thiết kế riêng bộ nhập tỉ số trong card dự đoán.
+
+    - Chỉ áp dụng cho home_score_shell_* và away_score_shell_*.
+    - Không tác động number_input ở trang quản trị.
+    - Không thay đổi giá trị, key hoặc logic tăng giảm tỉ số.
+    """
+    st.markdown(
+        """
+        <style>
+        /*
+         * Giới hạn tuyệt đối trong hàng nhập tỉ số dự đoán.
+         */
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInput"] {
+            width: 100% !important;
+        }
+
+        /*
+         * Loại bỏ hiệu ứng focus cũ đang áp dụng lên toàn widget.
+         */
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInput"]:focus-within {
+            box-shadow: none !important;
+        }
+
+        /*
+         * Khung chung bao gồm số, nút trừ và nút cộng.
+         */
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInput"]
+        div[data-baseweb="input"] {
+            display: flex !important;
+            align-items: stretch !important;
+
+            width: 100% !important;
+            min-width: 0 !important;
+
+            height: 44px !important;
+            min-height: 44px !important;
+
+            padding: 0 !important;
+
+            overflow: hidden !important;
+
+            background: rgba(255, 255, 255, 0.94) !important;
+
+            border:
+                1px solid rgba(55, 0, 60, 0.20) !important;
+
+            border-radius: 12px !important;
+
+            box-shadow:
+                0 4px 12px rgba(55, 0, 60, 0.06) !important;
+
+            transition:
+                border-color 160ms ease,
+                box-shadow 160ms ease,
+                background 160ms ease !important;
+        }
+
+        /*
+         * Focus thống nhất cho toàn bộ control.
+         */
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInput"]
+        div[data-baseweb="input"]:focus-within {
+            background: #FFFFFF !important;
+
+            border-color: #FF2882 !important;
+
+            box-shadow:
+                0 0 0 3px rgba(255, 40, 130, 0.12),
+                0 6px 16px rgba(55, 0, 60, 0.08) !important;
+        }
+
+        /*
+         * Phần hiển thị và nhập số.
+         */
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInput"] input {
+            flex: 1 1 auto !important;
+
+            width: 100% !important;
+            min-width: 0 !important;
+
+            height: 42px !important;
+            min-height: 42px !important;
+
+            margin: 0 !important;
+            padding: 0 12px !important;
+
+            background: transparent !important;
+
+            border: 0 !important;
+            border-radius: 0 !important;
+            outline: 0 !important;
+            box-shadow: none !important;
+
+            color: #190021 !important;
+
+            font-size: 16px !important;
+            font-weight: 850 !important;
+            line-height: 42px !important;
+
+            text-align: center !important;
+        }
+
+        /*
+         * Hai nút có cùng kích thước và cùng phong cách.
+         */
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInput"] button {
+            position: relative !important;
+
+            flex: 0 0 42px !important;
+
+            width: 42px !important;
+            min-width: 42px !important;
+            max-width: 42px !important;
+
+            height: 42px !important;
+            min-height: 42px !important;
+
+            margin: 0 !important;
+            padding: 0 !important;
+
+            overflow: hidden !important;
+
+            background:
+                linear-gradient(
+                    180deg,
+                    rgba(255, 255, 255, 0.96),
+                    rgba(55, 0, 60, 0.055)
+                ) !important;
+
+            color: #37003C !important;
+
+            border: 0 !important;
+            border-left:
+                1px solid rgba(55, 0, 60, 0.13) !important;
+
+            border-radius: 0 !important;
+            outline: 0 !important;
+            box-shadow: none !important;
+
+            transform: none !important;
+
+            transition:
+                background 150ms ease,
+                color 150ms ease !important;
+        }
+
+        /*
+         * Ẩn icon mặc định để dấu + và − có cùng kiểu nét.
+         * Nội dung gốc vẫn còn trong DOM.
+         */
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInput"] button > * {
+            opacity: 0 !important;
+        }
+
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInput"] button::after {
+            position: absolute !important;
+            inset: 0 !important;
+
+            display: grid !important;
+            place-items: center !important;
+
+            color: #37003C !important;
+
+            font-size: 19px !important;
+            font-weight: 800 !important;
+            line-height: 1 !important;
+        }
+
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInput"] button:first-of-type::after {
+            content: "−";
+            padding-bottom: 2px;
+        }
+
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInput"] button:last-of-type::after {
+            content: "+";
+        }
+
+        /*
+         * Trạng thái hover chỉ áp dụng trên thiết bị có chuột.
+         */
+        @media (hover: hover) {
+            div[class*="st-key-prediction_score_row_"]
+            :is(
+                div[class*="st-key-home_score_shell_"],
+                div[class*="st-key-away_score_shell_"]
+            )
+            div[data-testid="stNumberInput"]
+            button:not(:disabled):hover {
+                background: #37003C !important;
+                color: #FFFFFF !important;
+            }
+
+            div[class*="st-key-prediction_score_row_"]
+            :is(
+                div[class*="st-key-home_score_shell_"],
+                div[class*="st-key-away_score_shell_"]
+            )
+            div[data-testid="stNumberInput"]
+            button:not(:disabled):hover::after {
+                color: #FFFFFF !important;
+            }
+        }
+
+        /*
+         * Phản hồi khi người dùng bấm nút.
+         */
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInput"]
+        button:not(:disabled):active {
+            background: #FF2882 !important;
+            transform: none !important;
+        }
+
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInput"]
+        button:not(:disabled):active::after {
+            color: #FFFFFF !important;
+        }
+
+        /*
+         * Khi tỉ số đang bằng 0, nút trừ bị vô hiệu hóa.
+         */
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInput"] button:disabled {
+            background: rgba(55, 0, 60, 0.035) !important;
+            cursor: not-allowed !important;
+            opacity: 1 !important;
+        }
+
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInput"] button:disabled::after {
+            color: rgba(55, 0, 60, 0.28) !important;
+        }
+
+        /*
+         * Hiển thị focus bàn phím rõ ràng.
+         */
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInput"] button:focus-visible {
+            box-shadow:
+                inset 0 0 0 2px #FF2882 !important;
+        }
+
+        /*
+         * Mobile giữ nguyên thiết kế, chỉ giảm nhẹ bo góc.
+         */
+        @media (max-width: 768px) {
+            div[class*="st-key-prediction_score_row_"]
+            :is(
+                div[class*="st-key-home_score_shell_"],
+                div[class*="st-key-away_score_shell_"]
+            )
+            div[data-testid="stNumberInput"]
+            div[data-baseweb="input"] {
+                border-radius: 10px !important;
+            }
+
+            div[class*="st-key-prediction_score_row_"]
+            :is(
+                div[class*="st-key-home_score_shell_"],
+                div[class*="st-key-away_score_shell_"]
+            )
+            div[data-testid="stNumberInput"] input {
+                padding-left: 6px !important;
+                padding-right: 6px !important;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
 inject_epl_theme()
 inject_match_card_border_animation_css()
 inject_epl_premium_match_card_css()
 inject_epl_match_card_background_css()
 inject_epl_big_match_card_css()
 inject_mobile_prediction_score_row_css()
+inject_prediction_score_stepper_css()
 inject_hide_streamlit_embed_footer_css()
 inject_main_page_lift_css()
 
