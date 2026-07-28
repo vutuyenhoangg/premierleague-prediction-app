@@ -4501,6 +4501,160 @@ def inject_prediction_score_stepper_css():
                 font-size: 27px !important;
             }
         }
+
+        /* =====================================================
+           LOGO CLB PHÍA TRÊN BỘ CHỌN TỈ SỐ
+           ===================================================== */
+        
+        /* Loại bỏ khoảng cách mặc định giữa logo và number_input */
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stVerticalBlock"] {
+            gap: 0 !important;
+        }
+        
+        div[class*="st-key-prediction_score_row_"]
+        div[data-testid="stElementContainer"]:has(
+            .epl-prediction-team-logo
+        ) {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        
+        /* Khung căn chỉnh; không tạo box hiển thị */
+        div[class*="st-key-prediction_score_row_"]
+        .epl-prediction-team-logo {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        
+            width: 100% !important;
+            height: 52px !important;
+        
+            margin: 0 0 8px !important;
+            padding: 0 !important;
+        
+            background: transparent !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+        
+            box-shadow: none !important;
+            filter: none !important;
+        
+            overflow: visible !important;
+        }
+        
+        /* Chỉ hiển thị logo, không có nền hoặc box bao quanh */
+        div[class*="st-key-prediction_score_row_"]
+        .epl-prediction-team-logo img {
+            display: block !important;
+        
+            width: auto !important;
+            height: auto !important;
+        
+            max-width: 54px !important;
+            max-height: 52px !important;
+        
+            margin: 0 auto !important;
+            padding: 0 !important;
+        
+            object-fit: contain !important;
+            object-position: center !important;
+        
+            background: transparent !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+        
+            box-shadow: none !important;
+            filter: none !important;
+        
+            user-select: none !important;
+            pointer-events: none !important;
+        }
+        
+        /*
+         * Tên đội vẫn tồn tại làm label của number_input,
+         * nhưng được ẩn khỏi giao diện và không chiếm diện tích.
+         */
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInput"] > label {
+            position: absolute !important;
+        
+            width: 1px !important;
+            min-width: 1px !important;
+            max-width: 1px !important;
+        
+            height: 1px !important;
+            min-height: 1px !important;
+            max-height: 1px !important;
+        
+            margin: -1px !important;
+            padding: 0 !important;
+        
+            overflow: hidden !important;
+        
+            clip: rect(0, 0, 0, 0) !important;
+            clip-path: inset(50%) !important;
+        
+            white-space: nowrap !important;
+        
+            border: 0 !important;
+        }
+        
+        /* Chỉ xuất hiện nếu metadata logo bị thiếu */
+        div[class*="st-key-prediction_score_row_"]
+        .epl-prediction-team-logo-fallback {
+            color: #37003C !important;
+        
+            font-size: 12px !important;
+            font-weight: 800 !important;
+            line-height: 1.2 !important;
+            text-align: center !important;
+        }
+        
+        /*
+         * Logo làm hàng cao hơn tên đội cũ.
+         * Căn lại dấu : ngang chính giữa hai score tile.
+         */
+        div[class*="st-key-prediction_score_row_"]
+        div[data-testid="stHorizontalBlock"]:has(
+            div[class*="st-key-home_score_shell_"]
+        ):has(
+            div[class*="st-key-away_score_shell_"]
+        )::after {
+            top: 128px !important;
+        }
+        
+        /* Mobile */
+        @media (max-width: 768px) {
+            div[class*="st-key-prediction_score_row_"]
+            .epl-prediction-team-logo {
+                height: 46px !important;
+                margin-bottom: 7px !important;
+            }
+        
+            div[class*="st-key-prediction_score_row_"]
+            .epl-prediction-team-logo img {
+                max-width: 48px !important;
+                max-height: 46px !important;
+            }
+        
+            div[class*="st-key-prediction_score_row_"]
+            div[data-testid="stHorizontalBlock"]:has(
+                div[class*="st-key-home_score_shell_"]
+            ):has(
+                div[class*="st-key-away_score_shell_"]
+            )::after {
+                top: 118px !important;
+            }
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -16044,6 +16198,92 @@ def handle_delete_prediction_form_submit(
             tone="danger"
         )
 
+def render_prediction_team_logo(
+    team_name: str,
+    logo_path
+):
+    """
+    Hiển thị logo phía trên bộ chọn tỉ số.
+
+    Nếu logo bị thiếu hoặc đường dẫn không hợp lệ,
+    tên đội sẽ được dùng làm phương án dự phòng.
+    """
+    team_label = str(
+        team_name or "Đội bóng"
+    ).strip()
+
+    safe_team_name = html.escape(
+        team_label,
+        quote=True
+    )
+
+    if (
+        logo_path is None
+        or pd.isna(logo_path)
+    ):
+        normalized_logo_path = ""
+    else:
+        normalized_logo_path = str(
+            logo_path
+        ).strip()
+
+    logo_src = (
+        resolve_asset_src(
+            normalized_logo_path
+        )
+        if normalized_logo_path
+        else ""
+    )
+
+    # Không hiển thị biểu tượng ảnh lỗi nếu đường dẫn local bị sai.
+    logo_is_valid = bool(
+        logo_src
+        and logo_src.startswith(
+            (
+                "data:image/",
+                "http://",
+                "https://",
+                "/app/static/"
+            )
+        )
+    )
+
+    if logo_is_valid:
+        safe_logo_src = html.escape(
+            logo_src,
+            quote=True
+        )
+
+        logo_content = f"""
+            <img
+                src="{safe_logo_src}"
+                alt=""
+                aria-hidden="true"
+                loading="lazy"
+                decoding="async"
+            >
+        """
+    else:
+        logo_content = f"""
+            <span class="epl-prediction-team-logo-fallback">
+                {safe_team_name}
+            </span>
+        """
+
+    st.markdown(
+        f"""
+        <div
+            class="epl-prediction-team-logo"
+            role="img"
+            aria-label="Logo {safe_team_name}"
+            title="{safe_team_name}"
+        >
+            {logo_content}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
 def render_match_card(
     row,
     user_id: int,
@@ -16427,6 +16667,13 @@ def render_match_card(
                     with st.container(
                         key=f"home_score_shell_{match_id}"
                     ):
+                        render_prediction_team_logo(
+                            team_name=home_name,
+                            logo_path=row.get(
+                                "home_team_logo_path"
+                            )
+                        )
+                
                         input_home = st.number_input(
                             home_name,
                             min_value=0,
@@ -16440,6 +16687,13 @@ def render_match_card(
                     with st.container(
                         key=f"away_score_shell_{match_id}"
                     ):
+                        render_prediction_team_logo(
+                            team_name=away_name,
+                            logo_path=row.get(
+                                "away_team_logo_path"
+                            )
+                        )
+                
                         input_away = st.number_input(
                             away_name,
                             min_value=0,
