@@ -639,8 +639,8 @@ def render_season_selector():
             width: 100% !important;
             max-width: none !important;
         
-            height: auto !important;
-            min-height: 0 !important;
+            height: 126px !important;
+            min-height: 126px !important;
         
             margin-bottom: 14px !important;
             padding: 13px 14px !important;
@@ -651,17 +651,29 @@ def render_season_selector():
         }
 
         /*
-         * Hàng đầu: biểu tượng và mô tả.
-         * Hàng thứ hai: hai nút mùa giải.
+         * Mobile:
+         * - Hàng 1: biểu tượng và thông tin
+         * - Hàng 2: hai nút mùa giải
          */
         div[class*="st-key-season_selector_shell"]
         div[data-testid="stHorizontalBlock"] {
             display: grid !important;
-            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        
+            grid-template-columns:
+                repeat(2, minmax(0, 1fr)) !important;
+            grid-template-rows: 42px 40px !important;
+        
+            width: 100% !important;
+            height: 98px !important;
+            min-height: 98px !important;
+        
             column-gap: 0 !important;
-            row-gap: 11px !important;
+            row-gap: 16px !important;
+        
+            margin: 0 !important;
+            align-items: start !important;
         }
-
+        
         div[class*="st-key-season_selector_shell"]
         div[data-testid="stHorizontalBlock"]
         > :is(
@@ -670,19 +682,26 @@ def render_season_selector():
         ) {
             width: 100% !important;
             min-width: 0 !important;
+        
+            margin: 0 !important;
+            padding: 0 !important;
+        
             flex: unset !important;
+            align-self: start !important;
         }
-
+        
+        /* Thông tin mùa giải nằm ở hàng đầu tiên. */
         div[class*="st-key-season_selector_shell"]
         div[data-testid="stHorizontalBlock"]
         > :is(
             div[data-testid="stColumn"],
             div[data-testid="column"]
         ):nth-child(1) {
-            grid-column: 1 / -1;
+            grid-column: 1 / -1 !important;
+            grid-row: 1 !important;
         }
-
-        /* Ẩn mũi tên ở mobile để tránh chiếm diện tích. */
+        
+        /* Ẩn mũi tên trên điện thoại. */
         div[class*="st-key-season_selector_shell"]
         div[data-testid="stHorizontalBlock"]
         > :is(
@@ -691,23 +710,27 @@ def render_season_selector():
         ):nth-child(2) {
             display: none !important;
         }
-
+        
+        /* Nút mùa giải mới nằm bên trái hàng thứ hai. */
         div[class*="st-key-season_selector_shell"]
         div[data-testid="stHorizontalBlock"]
         > :is(
             div[data-testid="stColumn"],
             div[data-testid="column"]
         ):nth-child(3) {
-            grid-column: 1;
+            grid-column: 1 !important;
+            grid-row: 2 !important;
         }
-
+        
+        /* Nút mùa giải cũ nằm bên phải hàng thứ hai. */
         div[class*="st-key-season_selector_shell"]
         div[data-testid="stHorizontalBlock"]
         > :is(
             div[data-testid="stColumn"],
             div[data-testid="column"]
         ):nth-child(4) {
-            grid-column: 2;
+            grid-column: 2 !important;
+            grid-row: 2 !important;
         }
 
         .epl-season-info {
