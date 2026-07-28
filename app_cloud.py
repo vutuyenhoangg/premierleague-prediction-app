@@ -9229,7 +9229,6 @@ def render_avatar_popover(user: dict):
                     margin-bottom: 14px;
                     line-height: 1.4;
                 ">
-                    Chọn ảnh đại diện của bạn để hiển thị.
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -21427,7 +21426,7 @@ def main():
             "Lịch thi đấu & dự đoán",
             "Dự đoán của tôi",
             "Bảng xếp hạng",
-            "Thông số giải đấu",
+            "Thống kê giải đấu",
             "Phân tích tổng quan"
         ]
 
@@ -21469,7 +21468,7 @@ def main():
         elif selected_page == "Bảng xếp hạng":
             page_leaderboard()
 
-        elif selected_page == "Thông số giải đấu":
+        elif selected_page == "Thống kê giải đấu":
             page_competition_stats()
 
         elif selected_page == "Phân tích tổng quan":
