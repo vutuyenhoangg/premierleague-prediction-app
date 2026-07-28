@@ -6785,13 +6785,17 @@ def render_avatar_popover(user: dict):
             overflow: visible !important;
         }}
 
+        div[class*="st-key-top_right_avatar_popover_shell"]
         div[data-testid="stPopover"] {{
             width: 72px !important;
             height: 72px !important;
             overflow: visible !important;
         }}
 
+        div[class*="st-key-top_right_avatar_popover_shell"]
         div[data-testid="stPopover"] > button,
+
+        div[class*="st-key-top_right_avatar_popover_shell"]
         div[data-testid="stPopover"] > div > button {{
             position: relative !important;
             width: 58px !important;
@@ -6823,7 +6827,10 @@ def render_avatar_popover(user: dict):
         }}
 
         /* Badge bút chì nhỏ, nằm chính giữa mép dưới avatar */
+        div[class*="st-key-top_right_avatar_popover_shell"]
         div[data-testid="stPopover"] > button::after,
+
+        div[class*="st-key-top_right_avatar_popover_shell"]
         div[data-testid="stPopover"] > div > button::after {{
             content: "✎";
             position: absolute;
@@ -6849,7 +6856,10 @@ def render_avatar_popover(user: dict):
             transition: transform 0.18s ease, background 0.18s ease;
         }}
 
+        div[class*="st-key-top_right_avatar_popover_shell"]
         div[data-testid="stPopover"] > button::before,
+
+        div[class*="st-key-top_right_avatar_popover_shell"]
         div[data-testid="stPopover"] > div > button::before {{
             content: "Đổi avatar";
             position: absolute;
@@ -6870,7 +6880,10 @@ def render_avatar_popover(user: dict):
             transition: opacity 0.18s ease, transform 0.18s ease;
         }}
 
+        div[class*="st-key-top_right_avatar_popover_shell"]
         div[data-testid="stPopover"] > button:hover,
+
+        div[class*="st-key-top_right_avatar_popover_shell"]
         div[data-testid="stPopover"] > div > button:hover {{
             transform: translateY(-1px) scale(1.045) !important;
             border-color: #F5C542 !important;
@@ -6880,25 +6893,37 @@ def render_avatar_popover(user: dict):
                 0 0 0 7px rgba(245, 197, 66, 0.12) !important;
         }}
 
+        div[class*="st-key-top_right_avatar_popover_shell"]
         div[data-testid="stPopover"] > button:hover::before,
+
+        div[class*="st-key-top_right_avatar_popover_shell"]
         div[data-testid="stPopover"] > div > button:hover::before {{
             opacity: 1;
             transform: translateY(-50%) translateX(0);
         }}
 
+        div[class*="st-key-top_right_avatar_popover_shell"]
         div[data-testid="stPopover"] > button:hover::after,
+
+        div[class*="st-key-top_right_avatar_popover_shell"]
         div[data-testid="stPopover"] > div > button:hover::after {{
             transform: translateX(-50%) scale(1.08);
             background: #FFD761;
         }}
 
+        div[class*="st-key-top_right_avatar_popover_shell"]
         div[data-testid="stPopover"] > button:focus-visible,
+
+        div[class*="st-key-top_right_avatar_popover_shell"]
         div[data-testid="stPopover"] > div > button:focus-visible {{
             outline: 3px solid rgba(37, 99, 235, 0.72) !important;
             outline-offset: 4px !important;
         }}
 
+        div[class*="st-key-top_right_avatar_popover_shell"]
         div[data-testid="stPopover"] > button[aria-expanded="true"],
+
+        div[class*="st-key-top_right_avatar_popover_shell"]
         div[data-testid="stPopover"] > div > button[aria-expanded="true"] {{
             border-color: #F5C542 !important;
             outline-color: rgba(245, 197, 66, 1) !important;
@@ -6907,7 +6932,10 @@ def render_avatar_popover(user: dict):
                 0 0 0 7px rgba(245, 197, 66, 0.14) !important;
         }}
 
+        div[class*="st-key-top_right_avatar_popover_shell"]
         div[data-testid="stPopover"] > button *,
+
+        div[class*="st-key-top_right_avatar_popover_shell"]
         div[data-testid="stPopover"] > div > button * {{
             display: none !important;
             visibility: hidden !important;
@@ -6916,8 +6944,8 @@ def render_avatar_popover(user: dict):
             color: transparent !important;
         }}
 
-        div[data-testid="stPopoverBody"],
-        div[data-testid="stPopoverContent"] {{
+        div[data-testid="stPopoverBody"]:has(.wc-avatar-grid-desktop-shell),
+        div[data-testid="stPopoverContent"]:has(.wc-avatar-grid-desktop-shell) {{
             min-width: 520px !important;
             max-width: 560px !important;
             max-height: calc(100vh - 110px) !important;
@@ -6944,12 +6972,16 @@ def render_avatar_popover(user: dict):
                 height: 56px !important;
             }}
 
+            div[class*="st-key-top_right_avatar_popover_shell"]
             div[data-testid="stPopover"] {{
                 width: 56px !important;
                 height: 56px !important;
             }}
 
+            div[class*="st-key-top_right_avatar_popover_shell"]
             div[data-testid="stPopover"] > button,
+
+            div[class*="st-key-top_right_avatar_popover_shell"]
             div[data-testid="stPopover"] > div > button {{
                 width: 48px !important;
                 height: 48px !important;
@@ -6964,12 +6996,18 @@ def render_avatar_popover(user: dict):
                     0 0 0 4px rgba(245, 197, 66, 0.10) !important;
             }}
 
+            div[class*="st-key-top_right_avatar_popover_shell"]
             div[data-testid="stPopover"] > button::before,
+
+            div[class*="st-key-top_right_avatar_popover_shell"]
             div[data-testid="stPopover"] > div > button::before {{
                 display: none !important;
             }}
 
+            div[class*="st-key-top_right_avatar_popover_shell"]
             div[data-testid="stPopover"] > button::after,
+
+            div[class*="st-key-top_right_avatar_popover_shell"]
             div[data-testid="stPopover"] > div > button::after {{
                 left: 50%;
                 bottom: -8px;
@@ -6982,13 +7020,16 @@ def render_avatar_popover(user: dict):
                 transform: translateX(-50%);
             }}
 
+            div[class*="st-key-top_right_avatar_popover_shell"]
             div[data-testid="stPopover"] > button:hover::after,
+
+            div[class*="st-key-top_right_avatar_popover_shell"]
             div[data-testid="stPopover"] > div > button:hover::after {{
                 transform: translateX(-50%) scale(1.08);
             }}
 
-            div[data-testid="stPopoverBody"],
-            div[data-testid="stPopoverContent"] {{
+            div[data-testid="stPopoverBody"]:has(.wc-avatar-grid-desktop-shell),
+            div[data-testid="stPopoverContent"]:has(.wc-avatar-grid-desktop-shell) {{
                 position: fixed !important;
                 top: 82px !important;
                 left: 50% !important;
@@ -7012,16 +7053,19 @@ def render_avatar_popover(user: dict):
                 display: block !important;
             }}
 
-            div[data-testid="stPopoverBody"] [data-testid="column"],
-            div[data-testid="stPopoverContent"] [data-testid="column"] {{
+            div[data-testid="stPopoverBody"]:has(.wc-avatar-grid-desktop-shell)
+            [data-testid="column"],
+
+            div[data-testid="stPopoverContent"]:has(.wc-avatar-grid-desktop-shell)
+            [data-testid="column"] {{
                 padding-left: 0 !important;
                 padding-right: 0 !important;
             }}
         }}
 
         @media (max-width: 390px) {{
-            div[data-testid="stPopoverBody"],
-            div[data-testid="stPopoverContent"] {{
+            div[data-testid="stPopoverBody"]:has(.wc-avatar-grid-desktop-shell),
+            div[data-testid="stPopoverContent"]:has(.wc-avatar-grid-desktop-shell) {{
                 top: 78px !important;
                 width: min(340px, calc(100vw - 28px)) !important;
                 max-width: 340px !important;
