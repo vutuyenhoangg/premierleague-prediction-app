@@ -2384,6 +2384,306 @@ def inject_epl_match_card_background_css():
         unsafe_allow_html=True
     )
 
+def inject_epl_big_match_card_css():
+    """
+    Thiết kế riêng cho các trận Big 6 gặp nhau.
+
+    Chỉ thay đổi:
+    - Màu viền và bóng đổ
+    - Cường độ ảnh nền
+    - Màu tiêu đề và chữ VS
+    - Thiết kế ribbon Big Match
+
+    Không thay đổi padding, margin, columns hoặc widget.
+    """
+    big_match_background_src = resolve_asset_src(
+        EPL_MATCH_BACKGROUND_IMAGE_URL
+    )
+
+    safe_big_match_background_src = (
+        html.escape(
+            big_match_background_src,
+            quote=True
+        )
+        if big_match_background_src
+        else ""
+    )
+
+    asset_background_layer = (
+        f', url("{safe_big_match_background_src}")'
+        if safe_big_match_background_src
+        else ""
+    )
+
+    st.markdown(
+        f"""
+        <style>
+        /* =====================================================
+           KHUNG CARD BIG MATCH
+           Không thay đổi kích thước hoặc bố cục card.
+           ===================================================== */
+
+        div[class*="st-key-match_card_big_"] {{
+            border-color:
+                #DDBB5B !important;
+
+            box-shadow:
+                0 0 0 2px rgba(246, 216, 122, 0.98),
+                0 0 0 5px rgba(55, 0, 60, 0.98),
+                0 0 0 7px rgba(221, 187, 91, 0.40),
+                0 24px 64px rgba(55, 0, 60, 0.24),
+                0 10px 30px var(--epl-card-status-glow),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.92),
+                inset 0 0 34px rgba(232, 201, 106, 0.08)
+                !important;
+        }}
+
+        /*
+         * Dùng lại ảnh nền hiện tại nhưng tăng độ sâu,
+         * tạo cảm giác ánh đèn sân vận động cho Big Match.
+         */
+        div[class*="st-key-match_card_big_"]::after {{
+            background-image:
+                radial-gradient(
+                    circle at 12% 9%,
+                    rgba(255, 40, 130, 0.25),
+                    transparent 29%
+                ),
+
+                radial-gradient(
+                    circle at 88% 8%,
+                    rgba(232, 201, 106, 0.26),
+                    transparent 30%
+                ),
+
+                linear-gradient(
+                    135deg,
+                    rgba(55, 0, 60, 0.20),
+                    rgba(255, 255, 255, 0.24) 48%,
+                    rgba(0, 255, 133, 0.10)
+                )
+
+                {asset_background_layer}
+                !important;
+
+            opacity:
+                0.32 !important;
+
+            filter:
+                saturate(1.12)
+                contrast(1.08)
+                !important;
+
+            transform:
+                scale(1.025) !important;
+        }}
+
+        /* =====================================================
+           TIÊU ĐỀ BIG MATCH
+           ===================================================== */
+
+        div[class*="st-key-match_card_big_"]
+        div[class*="st-key-match_title_desktop_"]
+        h3 {{
+            color:
+                #27002D !important;
+
+            text-shadow:
+                0 1px 0 rgba(255, 255, 255, 0.94),
+                0 5px 18px rgba(55, 0, 60, 0.14)
+                !important;
+        }}
+
+        div[class*="st-key-match_card_big_"]
+        div[class*="st-key-match_title_desktop_"]
+        h3
+        .epl-desktop-vs-only {{
+            color:
+                #B77A16 !important;
+
+            text-shadow:
+                0 0 10px rgba(232, 201, 106, 0.36)
+                !important;
+        }}
+
+        div[class*="st-key-match_card_big_"]
+        .wc-match-title-mobile
+        .wc-match-team {{
+            color:
+                #27002D !important;
+
+            text-shadow:
+                0 1px 0 rgba(255, 255, 255, 0.94),
+                0 4px 14px rgba(55, 0, 60, 0.12)
+                !important;
+        }}
+
+        div[class*="st-key-match_card_big_"]
+        .wc-match-title-mobile
+        .wc-match-vs {{
+            color:
+                #B77A16 !important;
+
+            text-shadow:
+                0 0 9px rgba(232, 201, 106, 0.34)
+                !important;
+        }}
+
+        /* =====================================================
+           RIBBON BIG MATCH
+           Vẫn sử dụng đúng vị trí của ribbon hiện tại.
+           ===================================================== */
+
+        div[class*="st-key-match_card_big_"]
+        .epl-premier-league-ribbon {{
+            background:
+                linear-gradient(
+                    135deg,
+                    #160019 0%,
+                    #37003C 43%,
+                    #68144F 100%
+                ) !important;
+
+            border-color:
+                rgba(246, 216, 122, 0.96) !important;
+
+            box-shadow:
+                0 10px 24px rgba(55, 0, 60, 0.28),
+                0 0 16px rgba(232, 201, 106, 0.14),
+                inset 0 1px 0 rgba(255, 255, 255, 0.17)
+                !important;
+        }}
+
+        div[class*="st-key-match_card_big_"]
+        .epl-premier-league-ribbon::before {{
+            background:
+                linear-gradient(
+                    90deg,
+                    transparent,
+                    #E8C96A 20%,
+                    #FFF1AE 50%,
+                    #E8C96A 80%,
+                    transparent
+                ) !important;
+        }}
+
+        div[class*="st-key-match_card_big_"]
+        .epl-premier-league-ribbon::after {{
+            background:
+                #2B002F !important;
+        }}
+
+        div[class*="st-key-match_card_big_"]
+        .epl-premier-league-ribbon-separator {{
+            color:
+                #E8C96A !important;
+
+            text-shadow:
+                0 0 8px rgba(232, 201, 106, 0.56)
+                !important;
+        }}
+
+        /*
+         * Nhãn BIG MATCH nằm ngay trong ribbon,
+         * không tạo thêm hàng hoặc làm thay đổi bố cục card.
+         */
+        .epl-big-match-label {{
+            display:
+                inline-flex;
+
+            align-items:
+                center;
+
+            justify-content:
+                center;
+
+            padding:
+                3px 7px 4px 7px;
+
+            border:
+                1px solid rgba(255, 247, 210, 0.72);
+
+            border-radius:
+                4px;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #FFF1AE 0%,
+                    #E8C96A 55%,
+                    #C7962E 100%
+                );
+
+            color:
+                #2B0A30;
+
+            font-size:
+                8.5px;
+
+            font-weight:
+                950;
+
+            line-height:
+                1;
+
+            letter-spacing:
+                0.085em;
+
+            white-space:
+                nowrap;
+
+            text-transform:
+                uppercase;
+
+            box-shadow:
+                0 4px 10px rgba(0, 0, 0, 0.18),
+                inset 0 1px 0 rgba(255, 255, 255, 0.62);
+        }}
+
+        /* =====================================================
+           MOBILE
+           Chỉ giảm cường độ, không thay padding hoặc bố cục.
+           ===================================================== */
+
+        @media (max-width: 768px) {{
+            div[class*="st-key-match_card_big_"] {{
+                box-shadow:
+                    0 0 0 2px rgba(246, 216, 122, 0.96),
+                    0 0 0 4px rgba(55, 0, 60, 0.98),
+                    0 0 0 6px rgba(221, 187, 91, 0.34),
+                    0 17px 38px rgba(55, 0, 60, 0.20),
+                    0 7px 21px var(--epl-card-status-glow),
+                    inset 0 0 0 1px rgba(255, 255, 255, 0.90)
+                    !important;
+            }}
+
+            div[class*="st-key-match_card_big_"]::after {{
+                opacity:
+                    0.25 !important;
+
+                background-position:
+                    center center !important;
+            }}
+
+            .epl-big-match-label {{
+                padding:
+                    2px 5px 3px 5px;
+
+                border-radius:
+                    3px;
+
+                font-size:
+                    6.8px;
+
+                letter-spacing:
+                    0.05em;
+            }}
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
 def inject_main_page_lift_css():
     """
     Đẩy riêng nội dung trang chính lên cao hơn.
@@ -2620,6 +2920,7 @@ inject_epl_theme()
 inject_match_card_border_animation_css()
 inject_epl_premium_match_card_css()
 inject_epl_match_card_background_css()
+inject_epl_big_match_card_css()
 inject_mobile_prediction_score_row_css()
 inject_hide_streamlit_embed_footer_css()
 inject_main_page_lift_css()
@@ -7592,9 +7893,104 @@ def get_match_status_info(row):
         "badge_text": "#92400E"
     }
 
+BIG_SIX_CANONICAL_TEAMS = frozenset({
+    "arsenal",
+    "chelsea",
+    "liverpool",
+    "manchester_city",
+    "manchester_united",
+    "tottenham"
+})
+
+BIG_SIX_TEAM_ALIASES = {
+    "arsenal": "arsenal",
+    "chelsea": "chelsea",
+    "liverpool": "liverpool",
+
+    "manchester city": "manchester_city",
+    "man city": "manchester_city",
+
+    "manchester united": "manchester_united",
+    "man united": "manchester_united",
+    "man utd": "manchester_united",
+
+    "tottenham hotspur": "tottenham",
+    "tottenham": "tottenham",
+    "spurs": "tottenham"
+}
 
 
+def canonicalize_big_six_team_name(team_name) -> str:
+    """
+    Chuẩn hóa tên đội để nhận diện Big 6.
 
+    Hỗ trợ các dạng như:
+    - Arsenal FC
+    - Manchester United FC
+    - Man United
+    - Manchester City FC
+    - Man City
+    - Tottenham Hotspur FC
+    """
+    if team_name is None:
+        return ""
+
+    try:
+        if pd.isna(team_name):
+            return ""
+    except (TypeError, ValueError):
+        pass
+
+    normalized_name = str(
+        team_name
+    ).casefold().strip()
+
+    # Xóa dấu câu và chuẩn hóa khoảng trắng.
+    normalized_name = re.sub(
+        r"[^a-z0-9]+",
+        " ",
+        normalized_name
+    )
+
+    # Xóa FC, AFC hoặc Football Club.
+    normalized_name = re.sub(
+        r"\b(?:football club|afc|fc)\b",
+        " ",
+        normalized_name
+    )
+
+    normalized_name = re.sub(
+        r"\s+",
+        " ",
+        normalized_name
+    ).strip()
+
+    return BIG_SIX_TEAM_ALIASES.get(
+        normalized_name,
+        normalized_name.replace(" ", "_")
+    )
+
+
+def is_big_six_match(
+    home_team_name,
+    away_team_name
+) -> bool:
+    """
+    Chỉ trả về True khi cả hai đội đều thuộc Big 6.
+    """
+    home_team_key = canonicalize_big_six_team_name(
+        home_team_name
+    )
+
+    away_team_key = canonicalize_big_six_team_name(
+        away_team_name
+    )
+
+    return (
+        home_team_key != away_team_key
+        and home_team_key in BIG_SIX_CANONICAL_TEAMS
+        and away_team_key in BIG_SIX_CANONICAL_TEAMS
+    )
 
 def get_match_card_css(status_info, row=None):
     """
@@ -11718,7 +12114,8 @@ def render_match_title(
     home_name,
     away_name,
     match_id: int,
-    row=None
+    row=None,
+    is_big_match: bool = False
 ):
     """
     Hiển thị tiêu đề trận đấu và băng rôn Premier League.
@@ -11804,9 +12201,31 @@ def render_match_title(
         quote=True
     )
 
+    ribbon_class_name = (
+        "epl-premier-league-ribbon "
+        "epl-big-match-ribbon"
+        if is_big_match
+        else "epl-premier-league-ribbon"
+    )
+
+    big_match_prefix_html = ""
+
+    if is_big_match:
+        big_match_prefix_html = (
+            '<span class="epl-big-match-label">'
+            'Big Match'
+            '</span>'
+
+            '<span class="epl-premier-league-ribbon-separator">'
+            '&bull;'
+            '</span>'
+        )
+
     if safe_round:
         ribbon_html = (
-            '<div class="epl-premier-league-ribbon">'
+            f'<div class="{ribbon_class_name}">'
+
+            f'{big_match_prefix_html}'
 
             '<span class="epl-premier-league-ribbon-text">'
             'Premier League'
@@ -11825,7 +12244,9 @@ def render_match_title(
 
     else:
         ribbon_html = (
-            '<div class="epl-premier-league-ribbon">'
+            f'<div class="{ribbon_class_name}">'
+
+            f'{big_match_prefix_html}'
 
             '<span class="epl-premier-league-ribbon-text">'
             'Premier League'
@@ -13306,7 +13727,18 @@ def render_match_card(
 
     home_name = row.get("home_team_name")
     away_name = row.get("away_team_name")
-
+    
+    is_big_match = is_big_six_match(
+        home_name,
+        away_name
+    )
+    
+    card_container_key = (
+        f"match_card_big_{match_id}"
+        if is_big_match
+        else f"match_card_{match_id}"
+    )
+    
     is_knockout = to_bool(row.get("is_knockout"))
     is_finished = to_bool(row.get("is_finished"))
 
@@ -13403,7 +13835,7 @@ def render_match_card(
         return candidates
 
     with stylable_container(
-        key=f"match_card_{match_id}",
+        key=card_container_key,
         css_styles=card_css
     ):
         render_status_badge(status_info, row=row)
@@ -13415,7 +13847,8 @@ def render_match_card(
                 home_name,
                 away_name,
                 match_id,
-                row=row
+                row=row,
+                is_big_match=is_big_match
             )
 
             date_value = row.get(
