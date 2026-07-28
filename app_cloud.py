@@ -287,37 +287,73 @@ def render_season_selector():
     div[class*="st-key-season_selector_shell"] {
         width: min(600px, 100%) !important;
         max-width: 600px !important;
+    
+        height: 82px !important;
         min-height: 82px !important;
-
+    
         margin: 0 0 14px 0 !important;
-        padding: 16px 18px 16px 16px !important;
-
+        padding: 0 18px 0 16px !important;
+    
         box-sizing: border-box !important;
-
+    
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+    
         background:
             linear-gradient(
                 135deg,
                 rgba(255, 255, 255, 0.98) 0%,
                 rgba(252, 250, 255, 0.96) 100%
             ) !important;
-
+    
         border: 1px solid rgba(79, 38, 133, 0.24) !important;
         border-left: 4px solid #A100FF !important;
         border-radius: 14px !important;
-
+    
         box-shadow:
             0 10px 28px rgba(35, 14, 65, 0.08),
             inset 0 1px 0 rgba(255, 255, 255, 0.92) !important;
     }
 
+    /*
+     * Hỗ trợ cả cấu trúc DOM Streamlit cũ và mới.
+     * Wrapper của container phải chiếm đủ chiều ngang.
+     */
     div[class*="st-key-season_selector_shell"]
+    > :is(
+        div[data-testid="stVerticalBlock"],
+        div[data-testid="stVerticalBlockBorderWrapper"]
+    ) {
+        width: 100% !important;
+        margin: 0 !important;
+    }
+    
+    div[class*="st-key-season_selector_shell"]
+    > div[data-testid="stVerticalBlock"],
+    div[class*="st-key-season_selector_shell"]
+    > div[data-testid="stVerticalBlockBorderWrapper"]
     > div[data-testid="stVerticalBlock"] {
+        width: 100% !important;
+        margin: 0 !important;
         gap: 0 !important;
     }
-
+    
+    /* Loại bỏ khoảng lệch do wrapper của từng Streamlit element. */
+    div[class*="st-key-season_selector_shell"]
+    div[data-testid="stElementContainer"] {
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+    }
+    
+    /* Căn icon, chữ, mũi tên và các nút trên cùng một trục giữa. */
     div[class*="st-key-season_selector_shell"]
     div[data-testid="stHorizontalBlock"] {
         width: 100% !important;
+        min-height: 44px !important;
+    
+        margin: 0 !important;
+    
         align-items: center !important;
         gap: 0 !important;
     }
@@ -594,11 +630,15 @@ def render_season_selector():
         div[class*="st-key-season_selector_shell"] {
             width: 100% !important;
             max-width: none !important;
+        
+            height: auto !important;
             min-height: 0 !important;
-
+        
             margin-bottom: 14px !important;
             padding: 13px 14px !important;
-
+        
+            justify-content: flex-start !important;
+        
             border-radius: 13px !important;
         }
 
