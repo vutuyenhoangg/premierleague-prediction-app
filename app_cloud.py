@@ -3440,21 +3440,30 @@ def inject_mobile_prediction_score_row_css():
 
 def inject_prediction_score_stepper_css():
     """
-    Bộ chọn tỉ số dạng 2D, liền khối:
+    Thiết kế bộ chọn tỉ số dạng dọc:
 
-    - Dấu trừ bên trái.
-    - Tỉ số ở chính giữa.
-    - Dấu cộng bên phải.
-    - Không gradient, không shadow.
-    - Chỉ áp dụng cho ô dự đoán trận đấu.
+        mũi tên tăng
+             số
+        mũi tên giảm
+
+    Chỉ áp dụng cho hai ô dự đoán trong card trận đấu.
     """
     st.markdown(
         """
         <style>
         /* =====================================================
-           PHẠM VI: CHỈ HAI Ô DỰ ĐOÁN TỈ SỐ
+           SCORE STEPPER DỌC — CHỈ TRONG CARD DỰ ĐOÁN
            ===================================================== */
 
+        div[class*="st-key-prediction_score_row_"] {
+            --epl-score-purple: #37003C;
+            --epl-score-pink: #FF2882;
+            --epl-score-pink-soft: rgba(255, 40, 130, 0.075);
+            --epl-score-border: rgba(55, 0, 60, 0.24);
+            --epl-score-disabled: rgba(55, 0, 60, 0.25);
+        }
+
+        /* Chỉ chọn hai ô tỉ số đội nhà và đội khách */
         div[class*="st-key-prediction_score_row_"]
         :is(
             div[class*="st-key-home_score_shell_"],
@@ -3462,38 +3471,96 @@ def inject_prediction_score_stepper_css():
         )
         div[data-testid="stNumberInput"] {
             width: 100% !important;
-            max-width: 220px !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+
+            margin: 0 !important;
+
+            box-shadow: none !important;
         }
 
-        /* Đưa hai control về gần khu vực giữa card trên desktop */
-        div[class*="st-key-prediction_score_row_"]
-        div[class*="st-key-home_score_shell_"]
-        div[data-testid="stNumberInput"] {
-            margin-left: auto !important;
-            margin-right: 0 !important;
-        }
-
-        div[class*="st-key-prediction_score_row_"]
-        div[class*="st-key-away_score_shell_"]
-        div[data-testid="stNumberInput"] {
-            margin-left: 0 !important;
-            margin-right: auto !important;
-        }
-
-        /* Xóa focus shadow cũ của theme */
+        /* Tên đội được căn giữa phía trên */
         div[class*="st-key-prediction_score_row_"]
         :is(
             div[class*="st-key-home_score_shell_"],
             div[class*="st-key-away_score_shell_"]
         )
-        div[data-testid="stNumberInput"]:focus-within {
-            box-shadow: none !important;
+        div[data-testid="stNumberInput"] > label {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+
+            width: 100% !important;
+            min-width: 0 !important;
+            min-height: 24px !important;
+
+            margin: 0 0 5px 0 !important;
+            padding: 0 6px !important;
+
+            box-sizing: border-box !important;
+
+            text-align: center !important;
         }
 
-        /* =====================================================
-           KHUNG LIỀN KHỐI
-           ===================================================== */
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInput"] > label p {
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
 
+            margin: 0 !important;
+
+            color: var(--epl-score-purple) !important;
+
+            font-size: 13px !important;
+            font-weight: 750 !important;
+            line-height: 1.2 !important;
+            text-align: center !important;
+
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+        }
+
+        /* Vùng chứa ba phần: tăng – số – giảm */
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInput"]
+        div[data-baseweb="input"] {
+            position: relative !important;
+            display: block !important;
+
+            width: 82px !important;
+            min-width: 82px !important;
+            max-width: 82px !important;
+
+            height: 122px !important;
+            min-height: 122px !important;
+
+            margin: 0 auto !important;
+            padding: 0 !important;
+
+            overflow: visible !important;
+            box-sizing: border-box !important;
+
+            background: transparent !important;
+
+            border: 0 !important;
+            border-radius: 0 !important;
+            outline: 0 !important;
+
+            box-shadow: none !important;
+            filter: none !important;
+        }
+
+        /* Hỗ trợ cấu trúc Streamlit mới */
         div[class*="st-key-prediction_score_row_"]
         :is(
             div[class*="st-key-home_score_shell_"],
@@ -3503,49 +3570,50 @@ def inject_prediction_score_stepper_css():
             position: relative !important;
             display: block !important;
 
-            width: 100% !important;
-            height: 38px !important;
-            min-height: 38px !important;
+            width: 82px !important;
+            min-width: 82px !important;
+            max-width: 82px !important;
+
+            height: 122px !important;
+            min-height: 122px !important;
 
             margin: 0 !important;
             padding: 0 !important;
 
-            overflow: hidden !important;
+            overflow: visible !important;
             box-sizing: border-box !important;
 
-            background: #FFFFFF !important;
+            background: transparent !important;
 
-            border:
-                1px solid rgba(55, 0, 60, 0.20) !important;
-
-            border-radius: 9px !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+            outline: 0 !important;
 
             box-shadow: none !important;
             filter: none !important;
-
-            transition:
-                border-color 140ms ease,
-                outline-color 140ms ease !important;
         }
 
-        /* Focus tinh tế, không dùng shadow */
+        /*
+         * Bỏ bố cục ngang mặc định của wrapper hai nút.
+         * Hai button gốc của Streamlit vẫn được giữ nguyên.
+         */
         div[class*="st-key-prediction_score_row_"]
         :is(
             div[class*="st-key-home_score_shell_"],
             div[class*="st-key-away_score_shell_"]
         )
-        div[data-testid="stNumberInputContainer"]:focus-within {
-            border-color: #FF2882 !important;
-
-            outline:
-                2px solid rgba(255, 40, 130, 0.14) !important;
-
-            outline-offset: 1px !important;
-            box-shadow: none !important;
+        div[data-testid="stNumberInputContainer"]
+        div:has(
+            > button[data-testid="stNumberInputStepDown"]
+        ):has(
+            > button[data-testid="stNumberInputStepUp"]
+        ) {
+            position: static !important;
+            display: contents !important;
         }
 
         /* =====================================================
-           SỐ Ở CHÍNH GIỮA
+           Ô HIỂN THỊ TỈ SỐ
            ===================================================== */
 
         div[class*="st-key-prediction_score_row_"]
@@ -3553,43 +3621,80 @@ def inject_prediction_score_stepper_css():
             div[class*="st-key-home_score_shell_"],
             div[class*="st-key-away_score_shell_"]
         )
-        div[data-testid="stNumberInputContainer"] input {
+        div[data-testid="stNumberInput"] input {
             position: absolute !important;
 
-            top: 0 !important;
-            bottom: 0 !important;
-            left: 40px !important;
-            right: 40px !important;
+            top: 35px !important;
+            left: 0 !important;
+            right: auto !important;
 
-            width: auto !important;
-            min-width: 0 !important;
+            width: 82px !important;
+            min-width: 82px !important;
+            max-width: 82px !important;
 
-            height: 36px !important;
-            min-height: 36px !important;
+            height: 52px !important;
+            min-height: 52px !important;
 
             margin: 0 !important;
             padding: 0 8px !important;
 
             box-sizing: border-box !important;
 
-            background: transparent !important;
+            background: rgba(255, 255, 255, 0.94) !important;
+            color: #17001C !important;
 
-            color: #190021 !important;
+            border:
+                1px solid var(--epl-score-border) !important;
 
-            border: 0 !important;
-            border-radius: 0 !important;
+            border-radius: 9px !important;
             outline: 0 !important;
-            box-shadow: none !important;
 
-            font-size: 16px !important;
+            box-shadow: none !important;
+            filter: none !important;
+
+            font-family: inherit !important;
+            font-size: 23px !important;
             font-weight: 850 !important;
-            line-height: 36px !important;
+            line-height: 50px !important;
             text-align: center !important;
 
             appearance: textfield !important;
             -moz-appearance: textfield !important;
 
             z-index: 1 !important;
+
+            transition:
+                border-color 130ms ease,
+                background-color 130ms ease !important;
+        }
+
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInput"] input:hover {
+            border-color:
+                rgba(55, 0, 60, 0.42) !important;
+        }
+
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        div[data-testid="stNumberInput"] input:focus {
+            background: #FFFFFF !important;
+
+            border-color:
+                var(--epl-score-pink) !important;
+
+            outline:
+                2px solid rgba(255, 40, 130, 0.14) !important;
+
+            outline-offset: 1px !important;
+
+            box-shadow: none !important;
         }
 
         /* Ẩn spinner mặc định của trình duyệt */
@@ -3598,7 +3703,7 @@ def inject_prediction_score_stepper_css():
             div[class*="st-key-home_score_shell_"],
             div[class*="st-key-away_score_shell_"]
         )
-        div[data-testid="stNumberInputContainer"]
+        div[data-testid="stNumberInput"]
         input::-webkit-inner-spin-button,
 
         div[class*="st-key-prediction_score_row_"]
@@ -3606,14 +3711,14 @@ def inject_prediction_score_stepper_css():
             div[class*="st-key-home_score_shell_"],
             div[class*="st-key-away_score_shell_"]
         )
-        div[data-testid="stNumberInputContainer"]
+        div[data-testid="stNumberInput"]
         input::-webkit-outer-spin-button {
             margin: 0 !important;
             -webkit-appearance: none !important;
         }
 
         /* =====================================================
-           HAI NÚT 2D
+           HAI NÚT MŨI TÊN 2D
            ===================================================== */
 
         div[class*="st-key-prediction_score_row_"]
@@ -3621,128 +3726,132 @@ def inject_prediction_score_stepper_css():
             div[class*="st-key-home_score_shell_"],
             div[class*="st-key-away_score_shell_"]
         )
-        button[data-testid="stNumberInputStepDown"],
-
-        div[class*="st-key-prediction_score_row_"]
         :is(
-            div[class*="st-key-home_score_shell_"],
-            div[class*="st-key-away_score_shell_"]
-        )
-        button[data-testid="stNumberInputStepUp"] {
+            button[data-testid="stNumberInputStepUp"],
+            button[data-testid="stNumberInputStepDown"]
+        ) {
             position: absolute !important;
 
-            top: 0 !important;
-            bottom: 0 !important;
+            left: 50% !important;
+            right: auto !important;
 
-            width: 40px !important;
-            min-width: 40px !important;
-            max-width: 40px !important;
+            width: 64px !important;
+            min-width: 64px !important;
+            max-width: 64px !important;
 
-            height: 36px !important;
-            min-height: 36px !important;
+            height: 30px !important;
+            min-height: 30px !important;
+            max-height: 30px !important;
 
             margin: 0 !important;
             padding: 0 !important;
 
             box-sizing: border-box !important;
+            overflow: hidden !important;
 
-            background: #F7F4F8 !important;
+            background:
+                var(--epl-score-pink-soft) !important;
 
-            color: #37003C !important;
+            color:
+                var(--epl-score-pink) !important;
 
-            border: 0 !important;
-            border-radius: 0 !important;
+            border:
+                1px solid rgba(255, 40, 130, 0.60) !important;
+
+            border-radius: 8px !important;
             outline: 0 !important;
 
             box-shadow: none !important;
             filter: none !important;
-            transform: none !important;
+
+            transform:
+                translateX(-50%) !important;
 
             cursor: pointer !important;
 
             z-index: 2 !important;
 
             transition:
-                background-color 130ms ease,
-                color 130ms ease !important;
+                background-color 120ms ease,
+                border-color 120ms ease !important;
         }
 
-        /* Nút trừ nằm ở bên trái */
-        div[class*="st-key-prediction_score_row_"]
-        :is(
-            div[class*="st-key-home_score_shell_"],
-            div[class*="st-key-away_score_shell_"]
-        )
-        button[data-testid="stNumberInputStepDown"] {
-            left: 0 !important;
-            right: auto !important;
-
-            border-right:
-                1px solid rgba(55, 0, 60, 0.14) !important;
-        }
-
-        /* Nút cộng nằm ở bên phải */
+        /* Mũi tên lên: tăng tỉ số */
         div[class*="st-key-prediction_score_row_"]
         :is(
             div[class*="st-key-home_score_shell_"],
             div[class*="st-key-away_score_shell_"]
         )
         button[data-testid="stNumberInputStepUp"] {
-            right: 0 !important;
-            left: auto !important;
-
-            border-left:
-                1px solid rgba(55, 0, 60, 0.14) !important;
+            top: 0 !important;
+            bottom: auto !important;
         }
 
-        /* Ẩn icon mặc định */
+        /* Mũi tên xuống: giảm tỉ số */
+        div[class*="st-key-prediction_score_row_"]
+        :is(
+            div[class*="st-key-home_score_shell_"],
+            div[class*="st-key-away_score_shell_"]
+        )
+        button[data-testid="stNumberInputStepDown"] {
+            top: auto !important;
+            bottom: 0 !important;
+        }
+
+        /* Ẩn dấu cộng và trừ mặc định */
         div[class*="st-key-prediction_score_row_"]
         :is(
             div[class*="st-key-home_score_shell_"],
             div[class*="st-key-away_score_shell_"]
         )
         :is(
-            button[data-testid="stNumberInputStepDown"],
-            button[data-testid="stNumberInputStepUp"]
+            button[data-testid="stNumberInputStepUp"],
+            button[data-testid="stNumberInputStepDown"]
         ) > * {
             opacity: 0 !important;
         }
 
-        /* Tạo dấu bằng typography thống nhất */
+        /* Tự vẽ chevron để hai mũi tên đồng nhất */
         div[class*="st-key-prediction_score_row_"]
         :is(
             div[class*="st-key-home_score_shell_"],
             div[class*="st-key-away_score_shell_"]
         )
         :is(
-            button[data-testid="stNumberInputStepDown"],
-            button[data-testid="stNumberInputStepUp"]
+            button[data-testid="stNumberInputStepUp"],
+            button[data-testid="stNumberInputStepDown"]
         )::after {
+            content: "";
+
             position: absolute !important;
-            inset: 0 !important;
 
-            display: grid !important;
-            place-items: center !important;
+            top: 50% !important;
+            left: 50% !important;
 
-            color: #37003C !important;
+            width: 9px !important;
+            height: 9px !important;
 
-            font-family: inherit !important;
-            font-size: 18px !important;
-            font-weight: 750 !important;
-            line-height: 1 !important;
+            border-right:
+                3px solid var(--epl-score-pink) !important;
+
+            border-bottom:
+                3px solid var(--epl-score-pink) !important;
 
             pointer-events: none !important;
         }
 
         div[class*="st-key-prediction_score_row_"]
-        button[data-testid="stNumberInputStepDown"]::after {
-            content: "−";
-            padding-bottom: 2px;
+        button[data-testid="stNumberInputStepUp"]::after {
+            transform:
+                translate(-50%, -32%)
+                rotate(-135deg) !important;
         }
 
         div[class*="st-key-prediction_score_row_"]
-        button[data-testid="stNumberInputStepUp"]::after {
-            content: "+";
+        button[data-testid="stNumberInputStepDown"]::after {
+            transform:
+                translate(-50%, -68%)
+                rotate(45deg) !important;
         }
 
         /* =====================================================
@@ -3756,13 +3865,20 @@ def inject_prediction_score_stepper_css():
                 div[class*="st-key-away_score_shell_"]
             )
             :is(
-                button[data-testid="stNumberInputStepDown"],
-                button[data-testid="stNumberInputStepUp"]
+                button[data-testid="stNumberInputStepUp"],
+                button[data-testid="stNumberInputStepDown"]
             ):not(:disabled):hover {
-                background: #EEE7EF !important;
+                background:
+                    var(--epl-score-pink) !important;
+
+                border-color:
+                    var(--epl-score-pink) !important;
 
                 box-shadow: none !important;
-                transform: none !important;
+                filter: none !important;
+
+                transform:
+                    translateX(-50%) !important;
             }
 
             div[class*="st-key-prediction_score_row_"]
@@ -3771,10 +3887,10 @@ def inject_prediction_score_stepper_css():
                 div[class*="st-key-away_score_shell_"]
             )
             :is(
-                button[data-testid="stNumberInputStepDown"],
-                button[data-testid="stNumberInputStepUp"]
+                button[data-testid="stNumberInputStepUp"],
+                button[data-testid="stNumberInputStepDown"]
             ):not(:disabled):hover::after {
-                color: #FF2882 !important;
+                border-color: #FFFFFF !important;
             }
         }
 
@@ -3785,13 +3901,20 @@ def inject_prediction_score_stepper_css():
             div[class*="st-key-away_score_shell_"]
         )
         :is(
-            button[data-testid="stNumberInputStepDown"],
-            button[data-testid="stNumberInputStepUp"]
+            button[data-testid="stNumberInputStepUp"],
+            button[data-testid="stNumberInputStepDown"]
         ):not(:disabled):active {
-            background: #37003C !important;
+            background:
+                var(--epl-score-purple) !important;
+
+            border-color:
+                var(--epl-score-purple) !important;
 
             box-shadow: none !important;
-            transform: none !important;
+            filter: none !important;
+
+            transform:
+                translateX(-50%) !important;
         }
 
         div[class*="st-key-prediction_score_row_"]
@@ -3800,28 +3923,39 @@ def inject_prediction_score_stepper_css():
             div[class*="st-key-away_score_shell_"]
         )
         :is(
-            button[data-testid="stNumberInputStepDown"],
-            button[data-testid="stNumberInputStepUp"]
+            button[data-testid="stNumberInputStepUp"],
+            button[data-testid="stNumberInputStepDown"]
         ):not(:disabled):active::after {
-            color: #FFFFFF !important;
+            border-color: #FFFFFF !important;
         }
 
-        /* Khi đạt giá trị nhỏ nhất hoặc lớn nhất */
+        /*
+         * Khi tỉ số bằng 0, nút giảm tự bị vô hiệu hóa.
+         * Khi tỉ số bằng 20, nút tăng dùng cùng trạng thái.
+         */
         div[class*="st-key-prediction_score_row_"]
         :is(
             div[class*="st-key-home_score_shell_"],
             div[class*="st-key-away_score_shell_"]
         )
         :is(
-            button[data-testid="stNumberInputStepDown"],
-            button[data-testid="stNumberInputStepUp"]
+            button[data-testid="stNumberInputStepUp"],
+            button[data-testid="stNumberInputStepDown"]
         ):disabled {
-            background: #FBFAFB !important;
+            background:
+                rgba(55, 0, 60, 0.025) !important;
+
+            border-color:
+                rgba(55, 0, 60, 0.18) !important;
 
             cursor: not-allowed !important;
             opacity: 1 !important;
 
             box-shadow: none !important;
+            filter: none !important;
+
+            transform:
+                translateX(-50%) !important;
         }
 
         div[class*="st-key-prediction_score_row_"]
@@ -3830,30 +3964,71 @@ def inject_prediction_score_stepper_css():
             div[class*="st-key-away_score_shell_"]
         )
         :is(
-            button[data-testid="stNumberInputStepDown"],
-            button[data-testid="stNumberInputStepUp"]
+            button[data-testid="stNumberInputStepUp"],
+            button[data-testid="stNumberInputStepDown"]
         ):disabled::after {
-            color: rgba(55, 0, 60, 0.25) !important;
+            border-color:
+                var(--epl-score-disabled) !important;
         }
 
-        /* Focus bàn phím */
+        /* Focus bằng bàn phím */
         div[class*="st-key-prediction_score_row_"]
         :is(
             div[class*="st-key-home_score_shell_"],
             div[class*="st-key-away_score_shell_"]
         )
         :is(
-            button[data-testid="stNumberInputStepDown"],
-            button[data-testid="stNumberInputStepUp"]
+            button[data-testid="stNumberInputStepUp"],
+            button[data-testid="stNumberInputStepDown"]
         ):focus-visible {
             outline:
-                2px solid #FF2882 !important;
+                2px solid var(--epl-score-purple) !important;
 
-            outline-offset:
-                -3px !important;
+            outline-offset: 2px !important;
 
-            box-shadow:
-                none !important;
+            box-shadow: none !important;
+        }
+
+        /* =====================================================
+           DẤU : GIỮA HAI TỈ SỐ
+           ===================================================== */
+
+        div[class*="st-key-prediction_score_row_"]
+        div[data-testid="stHorizontalBlock"]:has(
+            div[class*="st-key-home_score_shell_"]
+        ):has(
+            div[class*="st-key-away_score_shell_"]
+        ) {
+            position: relative !important;
+        }
+
+        div[class*="st-key-prediction_score_row_"]
+        div[data-testid="stHorizontalBlock"]:has(
+            div[class*="st-key-home_score_shell_"]
+        ):has(
+            div[class*="st-key-away_score_shell_"]
+        )::after {
+            content: ":";
+
+            position: absolute !important;
+
+            top: 90px !important;
+            left: 50% !important;
+
+            color:
+                var(--epl-score-purple) !important;
+
+            font-family: inherit !important;
+            font-size: 25px !important;
+            font-weight: 850 !important;
+            line-height: 1 !important;
+
+            transform:
+                translate(-50%, -50%) !important;
+
+            pointer-events: none !important;
+
+            z-index: 3 !important;
         }
 
         /* =====================================================
@@ -3866,13 +4041,31 @@ def inject_prediction_score_stepper_css():
                 div[class*="st-key-home_score_shell_"],
                 div[class*="st-key-away_score_shell_"]
             )
-            div[data-testid="stNumberInput"] {
-                width: 100% !important;
-                max-width: 100% !important;
+            div[data-testid="stNumberInput"] > label {
+                min-height: 22px !important;
 
-                margin-left: 0 !important;
-                margin-right: 0 !important;
+                margin-bottom: 4px !important;
+
+                padding-left: 3px !important;
+                padding-right: 3px !important;
             }
+
+            div[class*="st-key-prediction_score_row_"]
+            :is(
+                div[class*="st-key-home_score_shell_"],
+                div[class*="st-key-away_score_shell_"]
+            )
+            div[data-testid="stNumberInput"] > label p {
+                font-size: 12px !important;
+            }
+
+            div[class*="st-key-prediction_score_row_"]
+            :is(
+                div[class*="st-key-home_score_shell_"],
+                div[class*="st-key-away_score_shell_"]
+            )
+            div[data-testid="stNumberInput"]
+            div[data-baseweb="input"],
 
             div[class*="st-key-prediction_score_row_"]
             :is(
@@ -3880,28 +4073,33 @@ def inject_prediction_score_stepper_css():
                 div[class*="st-key-away_score_shell_"]
             )
             div[data-testid="stNumberInputContainer"] {
-                height: 40px !important;
-                min-height: 40px !important;
+                width: 74px !important;
+                min-width: 74px !important;
+                max-width: 74px !important;
+
+                height: 116px !important;
+                min-height: 116px !important;
+            }
+
+            div[class*="st-key-prediction_score_row_"]
+            :is(
+                div[class*="st-key-home_score_shell_"],
+                div[class*="st-key-away_score_shell_"]
+            )
+            div[data-testid="stNumberInput"] input {
+                top: 34px !important;
+
+                width: 74px !important;
+                min-width: 74px !important;
+                max-width: 74px !important;
+
+                height: 48px !important;
+                min-height: 48px !important;
 
                 border-radius: 8px !important;
-            }
 
-            div[class*="st-key-prediction_score_row_"]
-            :is(
-                div[class*="st-key-home_score_shell_"],
-                div[class*="st-key-away_score_shell_"]
-            )
-            div[data-testid="stNumberInputContainer"] input {
-                left: 38px !important;
-                right: 38px !important;
-
-                height: 38px !important;
-                min-height: 38px !important;
-
-                padding-left: 4px !important;
-                padding-right: 4px !important;
-
-                line-height: 38px !important;
+                font-size: 21px !important;
+                line-height: 46px !important;
             }
 
             div[class*="st-key-prediction_score_row_"]
@@ -3910,15 +4108,70 @@ def inject_prediction_score_stepper_css():
                 div[class*="st-key-away_score_shell_"]
             )
             :is(
-                button[data-testid="stNumberInputStepDown"],
-                button[data-testid="stNumberInputStepUp"]
+                button[data-testid="stNumberInputStepUp"],
+                button[data-testid="stNumberInputStepDown"]
             ) {
-                width: 38px !important;
-                min-width: 38px !important;
-                max-width: 38px !important;
+                width: 60px !important;
+                min-width: 60px !important;
+                max-width: 60px !important;
 
-                height: 38px !important;
-                min-height: 38px !important;
+                height: 28px !important;
+                min-height: 28px !important;
+                max-height: 28px !important;
+
+                border-radius: 7px !important;
+            }
+
+            div[class*="st-key-prediction_score_row_"]
+            div[data-testid="stHorizontalBlock"]:has(
+                div[class*="st-key-home_score_shell_"]
+            ):has(
+                div[class*="st-key-away_score_shell_"]
+            )::after {
+                top: 83px !important;
+                font-size: 23px !important;
+            }
+        }
+
+        @media (max-width: 390px) {
+            div[class*="st-key-prediction_score_row_"]
+            :is(
+                div[class*="st-key-home_score_shell_"],
+                div[class*="st-key-away_score_shell_"]
+            )
+            div[data-testid="stNumberInput"]
+            div[data-baseweb="input"],
+
+            div[class*="st-key-prediction_score_row_"]
+            :is(
+                div[class*="st-key-home_score_shell_"],
+                div[class*="st-key-away_score_shell_"]
+            )
+            div[data-testid="stNumberInputContainer"],
+
+            div[class*="st-key-prediction_score_row_"]
+            :is(
+                div[class*="st-key-home_score_shell_"],
+                div[class*="st-key-away_score_shell_"]
+            )
+            div[data-testid="stNumberInput"] input {
+                width: 70px !important;
+                min-width: 70px !important;
+                max-width: 70px !important;
+            }
+
+            div[class*="st-key-prediction_score_row_"]
+            :is(
+                div[class*="st-key-home_score_shell_"],
+                div[class*="st-key-away_score_shell_"]
+            )
+            :is(
+                button[data-testid="stNumberInputStepUp"],
+                button[data-testid="stNumberInputStepDown"]
+            ) {
+                width: 56px !important;
+                min-width: 56px !important;
+                max-width: 56px !important;
             }
         }
         </style>
