@@ -255,7 +255,8 @@ def set_selected_season(season_slug: str):
     for cached_function in [
         load_matches,
         load_predictions,
-        build_leaderboard_df
+        build_leaderboard_df,
+        load_epl_top_scorers
     ]:
         try:
             cached_function.clear()
@@ -10263,6 +10264,146 @@ def load_goal_scorers_for_match(match_id: int) -> pd.DataFrame:
     except Exception:
         return pd.DataFrame()
 
+@st.cache_data(ttl=300, show_spinner=False)
+def load_epl_top_scorers(
+    season_slug: str | None = None
+) -> pd.DataFrame:
+    """
+    Tính bảng Vua phá lưới từ match_goals của đúng mùa đang chọn.
+
+    - Mỗi dòng bàn thắng hợp lệ được tính là 1 bàn.
+    - Không tính phản lưới nhà.
+    - Penalty vẫn được tính bình thường.
+    - Chuẩn hóa tên bằng LOWER(TRIM(...)).
+    - Nếu cầu thủ xuất hiện ở nhiều CLB, hiển thị CLB của
+      lần ghi bàn gần nhất có trong dữ liệu.
+    """
+    season_slug = season_slug or DEFAULT_SEASON_SLUG
+
+    scorers = read_sql(
+        """
+        WITH valid_goals AS (
+            SELECT
+                LOWER(TRIM(mg.player_name)) AS player_key,
+                TRIM(mg.player_name) AS player_name,
+                mg.team_id,
+
+                COALESCE(
+                    NULLIF(TRIM(t.team_name), ''),
+                    NULLIF(TRIM(mg.team_name), ''),
+                    'Chưa xác định'
+                ) AS club_name,
+
+                COALESCE(
+                    t.logo_path,
+                    ''
+                ) AS club_logo,
+
+                m.kickoff_time_utc,
+                mg.goal_key
+
+            FROM match_goals AS mg
+
+            INNER JOIN matches AS m
+                ON m.match_id = mg.match_id
+
+            LEFT JOIN teams AS t
+                ON t.team_id = mg.team_id
+
+            WHERE m.season_slug = :season_slug
+
+              AND COALESCE(
+                    mg.is_own_goal,
+                    FALSE
+                  ) = FALSE
+
+              AND NULLIF(
+                    TRIM(mg.player_name),
+                    ''
+                  ) IS NOT NULL
+        ),
+
+        player_totals AS (
+            SELECT
+                player_key,
+                COUNT(*)::INTEGER AS goals
+
+            FROM valid_goals
+
+            GROUP BY player_key
+        ),
+
+        latest_player_info AS (
+            SELECT DISTINCT ON (player_key)
+                player_key,
+                player_name,
+                club_name,
+                club_logo
+
+            FROM valid_goals
+
+            ORDER BY
+                player_key,
+                kickoff_time_utc DESC NULLS LAST,
+                goal_key DESC NULLS LAST
+        )
+
+        SELECT
+            info.player_name,
+            info.club_name,
+            info.club_logo,
+            totals.goals
+
+        FROM player_totals AS totals
+
+        INNER JOIN latest_player_info AS info
+            ON info.player_key = totals.player_key
+
+        ORDER BY
+            totals.goals DESC,
+            info.player_name ASC
+        """,
+        {
+            "season_slug": season_slug
+        }
+    )
+
+    if scorers.empty:
+        return pd.DataFrame(
+            columns=[
+                "rank",
+                "player_name",
+                "club_name",
+                "club_logo",
+                "goals"
+            ]
+        )
+
+    scorers["goals"] = pd.to_numeric(
+        scorers["goals"],
+        errors="coerce"
+    ).fillna(0).astype(int)
+
+    # Các cầu thủ bằng số bàn thắng sẽ có cùng thứ hạng.
+    # Ví dụ: 1, 2, 2, 4.
+    scorers["rank"] = (
+        scorers["goals"]
+        .rank(
+            method="min",
+            ascending=False
+        )
+        .astype(int)
+    )
+
+    return scorers[
+        [
+            "rank",
+            "player_name",
+            "club_name",
+            "club_logo",
+            "goals"
+        ]
+    ]
 
 def format_goal_text(row) -> str:
     """
@@ -10430,6 +10571,10 @@ def clear_data_cache():
     except NameError:
         pass
 
+    try:
+        load_epl_top_scorers.clear()
+    except (NameError, AttributeError):
+        pass
 
 def clear_prediction_write_cache():
     """
@@ -16009,21 +16154,850 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
         scrolling=True
     )
 
+def render_competition_stats_view_switcher() -> str:
+    """
+    Nút chuyển giữa:
+    - Bảng xếp hạng câu lạc bộ
+    - Bảng Vua phá lưới
+    """
+    valid_views = {
+        "standings",
+        "top_scorers"
+    }
 
-def page_competition_stats():
-    render_page_title(
-        "Thông số giải đấu",
-        f"Bảng xếp hạng EPL {get_selected_season_label()}"
+    active_view = st.session_state.get(
+        "competition_stats_view",
+        "standings"
     )
 
-    matches = load_matches(get_selected_season_slug())
-    standings = build_epl_standings_df(matches)
+    if active_view not in valid_views:
+        active_view = "standings"
+        st.session_state[
+            "competition_stats_view"
+        ] = active_view
 
-    if standings.empty:
-        st.info("Chưa có đủ dữ liệu trận đấu để tính bảng xếp hạng.")
+    st.markdown(
+        """
+        <style>
+        div[class*="st-key-competition_stats_tabs"] {
+            width: min(450px, 100%) !important;
+            margin: 0 0 20px 0 !important;
+            padding: 5px !important;
+
+            border:
+                1px solid rgba(72, 24, 120, 0.16)
+                !important;
+
+            border-radius: 14px !important;
+
+            background:
+                rgba(255, 255, 255, 0.88)
+                !important;
+
+            box-shadow:
+                0 10px 28px rgba(37, 15, 62, 0.07),
+                inset 0 1px 0 rgba(255, 255, 255, 0.92)
+                !important;
+
+            backdrop-filter: blur(10px);
+        }
+
+        div[class*="st-key-competition_stats_tabs"]
+        div[data-testid="stHorizontalBlock"] {
+            gap: 5px !important;
+        }
+
+        div[class*="st-key-competition_stats_tabs"]
+        div[data-testid="stColumn"] {
+            min-width: 0 !important;
+            padding: 0 !important;
+        }
+
+        div[class*="st-key-competition_stats_tabs"]
+        div[class*="st-key-competition_stats_tab_"] {
+            width: 100% !important;
+            margin: 0 !important;
+        }
+
+        div[class*="st-key-competition_stats_tabs"]
+        div[class*="st-key-competition_stats_tab_"]
+        button {
+            position: relative !important;
+
+            width: 100% !important;
+            min-height: 42px !important;
+
+            padding:
+                0 15px !important;
+
+            border:
+                1px solid transparent !important;
+
+            border-radius:
+                10px !important;
+
+            background:
+                transparent !important;
+
+            color:
+                #5D5268 !important;
+
+            box-shadow:
+                none !important;
+
+            font-size:
+                13.5px !important;
+
+            font-weight:
+                850 !important;
+
+            line-height:
+                1 !important;
+
+            opacity:
+                1 !important;
+
+            transform:
+                none !important;
+
+            transition:
+                background 0.16s ease,
+                color 0.16s ease,
+                box-shadow 0.16s ease
+                !important;
+        }
+
+        /* Nút chưa được chọn */
+        div[class*="st-key-competition_stats_tabs"]
+        div[class*="st-key-competition_stats_tab_"]
+        button:not(:disabled):hover {
+            border-color:
+                rgba(72, 24, 120, 0.12)
+                !important;
+
+            background:
+                rgba(72, 24, 120, 0.055)
+                !important;
+
+            color:
+                #301060 !important;
+
+            transform:
+                none !important;
+        }
+
+        /* Nút đang được chọn */
+        div[class*="st-key-competition_stats_tabs"]
+        div[class*="st-key-competition_stats_tab_"]
+        button:disabled {
+            border-color:
+                #3A0F70 !important;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #301060 0%,
+                    #4B148C 100%
+                )
+                !important;
+
+            color:
+                #FFFFFF !important;
+
+            box-shadow:
+                0 7px 18px rgba(56, 15, 105, 0.20),
+                inset 0 1px 0 rgba(255, 255, 255, 0.14)
+                !important;
+
+            cursor:
+                default !important;
+
+            opacity:
+                1 !important;
+        }
+
+        div[class*="st-key-competition_stats_tabs"]
+        div[class*="st-key-competition_stats_tab_"]
+        button:disabled * {
+            color:
+                #FFFFFF !important;
+
+            opacity:
+                1 !important;
+        }
+
+        /* Vạch vàng tinh tế ở tab đang chọn */
+        div[class*="st-key-competition_stats_tabs"]
+        div[class*="st-key-competition_stats_tab_"]
+        button:disabled::after {
+            content: "";
+
+            position: absolute;
+            left: 34%;
+            right: 34%;
+            bottom: 0;
+
+            height: 2px;
+
+            border-radius:
+                2px 2px 0 0;
+
+            background:
+                #F5C542;
+
+            box-shadow:
+                0 -1px 5px
+                rgba(245, 197, 66, 0.28);
+        }
+
+        @media (max-width: 768px) {
+            div[class*="st-key-competition_stats_tabs"] {
+                width:
+                    100% !important;
+
+                margin-bottom:
+                    16px !important;
+
+                border-radius:
+                    13px !important;
+            }
+
+            div[class*="st-key-competition_stats_tabs"]
+            div[class*="st-key-competition_stats_tab_"]
+            button {
+                min-height:
+                    40px !important;
+
+                padding:
+                    0 10px !important;
+
+                font-size:
+                    12.5px !important;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    with st.container(
+        key="competition_stats_tabs"
+    ):
+        standings_col, scorers_col = st.columns(2)
+
+        with standings_col:
+            if st.button(
+                "Bảng xếp hạng",
+                key="competition_stats_tab_standings",
+                use_container_width=True,
+                disabled=active_view == "standings"
+            ):
+                st.session_state[
+                    "competition_stats_view"
+                ] = "standings"
+
+                st.rerun()
+
+        with scorers_col:
+            if st.button(
+                "Vua phá lưới",
+                key="competition_stats_tab_top_scorers",
+                use_container_width=True,
+                disabled=active_view == "top_scorers"
+            ):
+                st.session_state[
+                    "competition_stats_view"
+                ] = "top_scorers"
+
+                st.rerun()
+
+    return active_view
+
+def render_epl_top_scorers_table(
+    top_scorers_df: pd.DataFrame
+):
+    if top_scorers_df.empty:
         return
 
-    render_epl_standings_table(standings)
+    rows_html = []
+
+    for _, row in (
+        top_scorers_df
+        .reset_index(drop=True)
+        .iterrows()
+    ):
+        rank = (
+            to_optional_int(
+                row.get("rank")
+            )
+            or 0
+        )
+
+        goals = (
+            to_optional_int(
+                row.get("goals")
+            )
+            or 0
+        )
+
+        player_name = html.escape(
+            str(
+                row.get(
+                    "player_name",
+                    ""
+                )
+            ).strip()
+        )
+
+        club_name = html.escape(
+            str(
+                row.get(
+                    "club_name",
+                    ""
+                )
+            ).strip()
+        )
+
+        logo_path = str(
+            row.get(
+                "club_logo",
+                ""
+            )
+            or ""
+        ).strip()
+
+        logo_src = (
+            resolve_asset_src(logo_path)
+            if logo_path
+            else ""
+        )
+
+        if logo_src:
+            logo_html = (
+                '<img class="epl-scorer-club-logo" '
+                f'src="{html.escape(logo_src, quote=True)}" '
+                f'alt="{club_name}">'
+            )
+        else:
+            logo_html = ""
+
+        if rank == 1:
+            rank_class = "rank-gold"
+
+        elif rank == 2:
+            rank_class = "rank-silver"
+
+        elif rank == 3:
+            rank_class = "rank-bronze"
+
+        else:
+            rank_class = ""
+
+        rows_html.append(
+            f"""
+            <tr>
+                <td class="epl-scorer-rank-cell">
+                    <span class="
+                        epl-scorer-rank
+                        {rank_class}
+                    ">
+                        {rank}
+                    </span>
+                </td>
+
+                <td class="epl-scorer-player-cell">
+                    {player_name}
+                </td>
+
+                <td class="epl-scorer-club-cell">
+                    <div class="epl-scorer-club-wrap">
+                        {logo_html}
+                        <span>{club_name}</span>
+                    </div>
+                </td>
+
+                <td class="epl-scorer-goals-cell">
+                    {goals}
+                </td>
+            </tr>
+            """
+        )
+
+    scorers_html = """
+    <style>
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        margin: 0;
+        background: transparent;
+
+        font-family:
+            system-ui,
+            -apple-system,
+            BlinkMacSystemFont,
+            "Segoe UI",
+            sans-serif;
+    }
+
+    .epl-scorers-box {
+        margin-top: 18px;
+
+        overflow: hidden;
+
+        border:
+            1px solid rgba(15, 23, 42, 0.08);
+
+        border-radius:
+            18px;
+
+        background:
+            #FFFFFF;
+
+        box-shadow:
+            0 18px 45px
+            rgba(15, 23, 42, 0.10);
+    }
+
+    .epl-scorers-scroll {
+        width: 100%;
+        max-height: 748px;
+
+        overflow:
+            auto;
+    }
+
+    .epl-scorers-table {
+        width: 100%;
+        min-width: 620px;
+
+        border-collapse:
+            collapse;
+
+        color:
+            #0F172A;
+
+        font-size:
+            14px;
+    }
+
+    .epl-scorers-table th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+
+        padding:
+            14px 16px;
+
+        background:
+            linear-gradient(
+                135deg,
+                #07111F,
+                #14213A
+            );
+
+        color:
+            #F8FAFC;
+
+        font-size:
+            12px;
+
+        font-weight:
+            900;
+
+        text-align:
+            left;
+
+        white-space:
+            nowrap;
+    }
+
+    .epl-scorers-table th:first-child,
+    .epl-scorers-table th:last-child {
+        text-align:
+            center;
+    }
+
+    .epl-scorers-table td {
+        height:
+            58px;
+
+        padding:
+            11px 16px;
+
+        border-bottom:
+            1px solid rgba(15, 23, 42, 0.08);
+
+        background:
+            rgba(255, 255, 255, 0.96);
+
+        vertical-align:
+            middle;
+    }
+
+    .epl-scorers-table
+    tbody
+    tr:last-child
+    td {
+        border-bottom:
+            0;
+    }
+
+    .epl-scorers-table
+    tbody
+    tr:hover
+    td {
+        background:
+            #F5F0FA;
+    }
+
+    .epl-scorer-rank-cell {
+        width:
+            86px;
+
+        text-align:
+            center;
+    }
+
+    .epl-scorer-rank {
+        width:
+            31px;
+
+        height:
+            31px;
+
+        display:
+            inline-flex;
+
+        align-items:
+            center;
+
+        justify-content:
+            center;
+
+        border:
+            1px solid
+            rgba(100, 116, 139, 0.16);
+
+        border-radius:
+            50%;
+
+        background:
+            #F4F7FA;
+
+        color:
+            #334155;
+
+        font-size:
+            13px;
+
+        font-weight:
+            950;
+    }
+
+    .epl-scorer-rank.rank-gold {
+        border-color:
+            #D6A83F;
+
+        background:
+            linear-gradient(
+                145deg,
+                #FFF3B6,
+                #D9A93E
+            );
+
+        color:
+            #4B2B00;
+
+        box-shadow:
+            0 5px 12px
+            rgba(214, 168, 63, 0.24);
+    }
+
+    .epl-scorer-rank.rank-silver {
+        border-color:
+            #AEB7C2;
+
+        background:
+            linear-gradient(
+                145deg,
+                #F8FAFC,
+                #CBD5E1
+            );
+
+        color:
+            #334155;
+    }
+
+    .epl-scorer-rank.rank-bronze {
+        border-color:
+            #B97943;
+
+        background:
+            linear-gradient(
+                145deg,
+                #F1C19B,
+                #B8733D
+            );
+
+        color:
+            #4A2108;
+    }
+
+    .epl-scorer-player-cell {
+        min-width:
+            230px;
+
+        color:
+            #101828;
+
+        font-weight:
+            900;
+
+        letter-spacing:
+            -0.01em;
+    }
+
+    .epl-scorer-club-cell {
+        min-width:
+            260px;
+
+        color:
+            #475569;
+
+        font-weight:
+            750;
+    }
+
+    .epl-scorer-club-wrap {
+        display:
+            flex;
+
+        align-items:
+            center;
+
+        gap:
+            11px;
+    }
+
+    .epl-scorer-club-logo {
+        width:
+            29px;
+
+        height:
+            29px;
+
+        flex:
+            0 0 29px;
+
+        display:
+            block;
+
+        object-fit:
+            contain;
+    }
+
+    .epl-scorer-goals-cell {
+        width:
+            128px;
+
+        background:
+            rgba(245, 197, 66, 0.22)
+            !important;
+
+        color:
+            #07111F;
+
+        font-size:
+            16px;
+
+        font-weight:
+            950;
+
+        text-align:
+            center;
+    }
+
+    @media (max-width: 768px) {
+        .epl-scorers-box {
+            border-radius:
+                14px;
+        }
+
+        .epl-scorers-table {
+            min-width:
+                560px;
+
+            font-size:
+                12.5px;
+        }
+
+        .epl-scorers-table th {
+            padding:
+                12px 10px;
+
+            font-size:
+                11px;
+        }
+
+        .epl-scorers-table td {
+            height:
+                54px;
+
+            padding:
+                9px 10px;
+        }
+
+        .epl-scorer-rank-cell {
+            width:
+                58px;
+        }
+
+        .epl-scorer-player-cell {
+            min-width:
+                160px;
+        }
+
+        .epl-scorer-club-cell {
+            min-width:
+                210px;
+        }
+
+        .epl-scorer-goals-cell {
+            width:
+                78px;
+
+            font-size:
+                14px;
+        }
+
+        .epl-scorer-club-logo {
+            width:
+                26px;
+
+            height:
+                26px;
+
+            flex-basis:
+                26px;
+        }
+    }
+    </style>
+
+    <div class="epl-scorers-box">
+        <div class="epl-scorers-scroll">
+            <table class="epl-scorers-table">
+                <thead>
+                    <tr>
+                        <th>Hạng</th>
+                        <th>Cầu thủ</th>
+                        <th>Câu lạc bộ</th>
+                        <th>Bàn thắng</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+    """ + "".join(rows_html) + """
+                </tbody>
+            </table>
+        </div>
+    </div>
+    """
+
+    visible_rows = min(
+        len(top_scorers_df),
+        12
+    )
+
+    component_height = min(
+        125 + visible_rows * 58,
+        820
+    )
+
+    components.html(
+        scorers_html,
+        height=component_height,
+        scrolling=False
+    )
+
+def page_competition_stats():
+    # Hai nút được render đầu tiên, nằm trên tiêu đề trang.
+    active_view = (
+        render_competition_stats_view_switcher()
+    )
+
+    season_slug = (
+        get_selected_season_slug()
+    )
+
+    season_label = (
+        get_selected_season_label()
+    )
+
+    # =====================================================
+    # VUA PHÁ LƯỚI
+    # =====================================================
+    if active_view == "top_scorers":
+        render_page_title(
+            (
+                "VUA PHÁ LƯỚI "
+                f"PREMIER LEAGUE {season_label}"
+            ),
+            (
+                "Xếp hạng cầu thủ theo "
+                "số bàn thắng đã ghi."
+            )
+        )
+
+        top_scorers = load_epl_top_scorers(
+            season_slug
+        )
+
+        if top_scorers.empty:
+            st.info(
+                "Chưa có dữ liệu cầu thủ "
+                "ghi bàn cho mùa giải này."
+            )
+            return
+
+        render_epl_top_scorers_table(
+            top_scorers
+        )
+        return
+
+    # =====================================================
+    # BẢNG XẾP HẠNG CÂU LẠC BỘ
+    # =====================================================
+    render_page_title(
+        (
+            "BẢNG XẾP HẠNG "
+            f"PREMIER LEAGUE {season_label}"
+        ),
+        (
+            "Thứ hạng các câu lạc bộ "
+            "theo kết quả thi đấu."
+        )
+    )
+
+    matches = load_matches(
+        season_slug
+    )
+
+    standings = build_epl_standings_df(
+        matches
+    )
+
+    if standings.empty:
+        st.info(
+            "Chưa có đủ dữ liệu trận đấu "
+            "để tính bảng xếp hạng."
+        )
+        return
+
+    render_epl_standings_table(
+        standings
+    )
 
 def page_leaderboard():
     render_page_title(
