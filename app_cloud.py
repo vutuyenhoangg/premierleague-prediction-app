@@ -18556,6 +18556,16 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
         return
 
     stat_columns = ["Trận", "Thắng", "Hòa", "Thua", "Bàn thắng", "Bàn thua", "Hiệu số", "Điểm"]
+    column_keys = {
+        "Trận": "played",
+        "Thắng": "wins",
+        "Hòa": "draws",
+        "Thua": "losses",
+        "Bàn thắng": "gf",
+        "Bàn thua": "ga",
+        "Hiệu số": "gd",
+        "Điểm": "points"
+    }
     rows_html = []
 
     for index, row in standings_df.reset_index(drop=True).iterrows():
@@ -18592,13 +18602,21 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
             if col == "Điểm":
                 value_class = f"{value_class} points-cell".strip()
 
-            cells_html.append(f'<td class="{value_class}">{html.escape(display_value)}</td>')
+            cells_html.append(
+                f'<td data-col="{column_keys[col]}" '
+                f'class="{value_class}">'
+                f'{html.escape(display_value)}'
+                f'</td>'
+            )
 
         rows_html.append(
             f"""
             <tr>
-                <td class="rank-cell">{rank}</td>
-                <td class="team-cell">
+                <td data-col="rank" class="rank-cell">
+                    {rank}
+                </td>
+                
+                <td data-col="team" class="team-cell">
                     <div class="team-wrap">
                         {logo_html}
                         <span class="epl-team-name-desktop">
@@ -18617,7 +18635,7 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
     standings_html = f"""
     <style>
     .epl-standings-box {{
-        margin-top: 18px;
+        margin-top: 0;
         border-radius: 18px;
         overflow: hidden;
         border: 1px solid rgba(15, 23, 42, 0.08);
@@ -18646,7 +18664,7 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
         text-align: center;
         white-space: nowrap;
     }}
-    .epl-standings-table th:nth-child(2) {{
+    .epl-standings-table th[data-col="team"] {{
         text-align: left;
     }}
     .epl-standings-table td {{
@@ -18710,15 +18728,374 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
     }}
     @media (max-width: 768px) {{
         .epl-standings-box {{
-            border-radius: 14px;
+            margin-top:
+                0;
+    
+            border-radius:
+                13px;
         }}
+    
+        .epl-standings-scroll {{
+            width:
+                100%;
+    
+            overflow-x:
+                auto;
+    
+            overflow-y:
+                hidden;
+    
+            -webkit-overflow-scrolling:
+                touch;
+    
+            overscroll-behavior-x:
+                contain;
+    
+            touch-action:
+                pan-x pan-y;
+        }}
+    
+        /*
+         * Tổng chiều rộng bảng khoảng 482–496px.
+         *
+         * Năm cột đầu chiếm khoảng 274–288px,
+         * vừa phần hiển thị của màn hình mobile.
+         */
         .epl-standings-table {{
-            min-width: 820px;
-            font-size: 13px;
+            --rank-width:
+                36px;
+    
+            --team-width:
+                clamp(108px, 32vw, 122px);
+    
+            --points-width:
+                46px;
+    
+            --gd-width:
+                44px;
+    
+            --small-width:
+                40px;
+    
+            --goal-width:
+                44px;
+    
+            width:
+                calc(
+                    var(--team-width) + 374px
+                );
+    
+            min-width:
+                calc(
+                    var(--team-width) + 374px
+                );
+    
+            table-layout:
+                fixed;
+    
+            border-collapse:
+                separate;
+    
+            border-spacing:
+                0;
+    
+            font-size:
+                11.5px;
         }}
-        .epl-standings-table th,
+    
+        .epl-standings-table th {{
+            height:
+                38px;
+    
+            padding:
+                7px 3px;
+    
+            box-sizing:
+                border-box;
+    
+            font-size:
+                10px;
+    
+            line-height:
+                1;
+    
+            text-align:
+                center;
+        }}
+    
         .epl-standings-table td {{
-            padding: 11px 10px;
+            height:
+                52px;
+    
+            padding:
+                7px 3px;
+    
+            box-sizing:
+                border-box;
+    
+            font-size:
+                11.5px;
+    
+            vertical-align:
+                middle;
+        }}
+    
+        /* =========================
+           CHIỀU RỘNG TỪNG CỘT
+           ========================= */
+    
+        .epl-standings-table
+        [data-col="rank"] {{
+            width:
+                var(--rank-width) !important;
+    
+            min-width:
+                var(--rank-width) !important;
+    
+            max-width:
+                var(--rank-width) !important;
+        }}
+    
+        .epl-standings-table
+        [data-col="team"] {{
+            width:
+                var(--team-width) !important;
+    
+            min-width:
+                var(--team-width) !important;
+    
+            max-width:
+                var(--team-width) !important;
+        }}
+    
+        .epl-standings-table
+        [data-col="points"] {{
+            width:
+                var(--points-width) !important;
+    
+            min-width:
+                var(--points-width) !important;
+    
+            max-width:
+                var(--points-width) !important;
+        }}
+    
+        .epl-standings-table
+        [data-col="gd"] {{
+            width:
+                var(--gd-width) !important;
+    
+            min-width:
+                var(--gd-width) !important;
+    
+            max-width:
+                var(--gd-width) !important;
+        }}
+    
+        .epl-standings-table
+        [data-col="played"],
+    
+        .epl-standings-table
+        [data-col="wins"],
+    
+        .epl-standings-table
+        [data-col="draws"],
+    
+        .epl-standings-table
+        [data-col="losses"] {{
+            width:
+                var(--small-width) !important;
+    
+            min-width:
+                var(--small-width) !important;
+    
+            max-width:
+                var(--small-width) !important;
+        }}
+    
+        .epl-standings-table
+        [data-col="gf"],
+    
+        .epl-standings-table
+        [data-col="ga"] {{
+            width:
+                var(--goal-width) !important;
+    
+            min-width:
+                var(--goal-width) !important;
+    
+            max-width:
+                var(--goal-width) !important;
+        }}
+    
+        /* =========================
+           CỘT ĐỘI BÓNG
+           ========================= */
+    
+        .epl-standings-table
+        .team-cell {{
+            padding:
+                6px 5px !important;
+    
+            overflow:
+                hidden;
+    
+            text-align:
+                left !important;
+        }}
+    
+        .epl-standings-table
+        .team-wrap {{
+            display:
+                flex;
+    
+            width:
+                100%;
+    
+            min-width:
+                0;
+    
+            align-items:
+                center;
+    
+            gap:
+                6px;
+        }}
+    
+        .epl-standings-table
+        .team-wrap
+        .epl-team-name-mobile {{
+            display:
+                block;
+    
+            min-width:
+                0;
+    
+            flex:
+                1 1 auto;
+    
+            overflow:
+                hidden;
+    
+            text-overflow:
+                ellipsis;
+    
+            white-space:
+                nowrap;
+        }}
+    
+        .epl-standings-table
+        .epl-team-logo {{
+            width:
+                24px;
+    
+            height:
+                24px;
+    
+            flex:
+                0 0 24px;
+        }}
+    
+        /* =========================
+           FREEZE #, ĐỘI VÀ PTS
+           ========================= */
+    
+        .epl-standings-table
+        [data-col="rank"],
+    
+        .epl-standings-table
+        [data-col="team"],
+    
+        .epl-standings-table
+        [data-col="points"] {{
+            position:
+                sticky;
+        }}
+    
+        .epl-standings-table
+        [data-col="rank"] {{
+            left:
+                0;
+        }}
+    
+        .epl-standings-table
+        [data-col="team"] {{
+            left:
+                var(--rank-width);
+        }}
+    
+        .epl-standings-table
+        [data-col="points"] {{
+            left:
+                calc(
+                    var(--rank-width) +
+                    var(--team-width)
+                );
+        }}
+    
+        /* Header của ba cột được freeze */
+        .epl-standings-table th[data-col="rank"],
+        .epl-standings-table th[data-col="team"],
+        .epl-standings-table th[data-col="points"] {{
+            z-index:
+                5;
+    
+            background:
+                linear-gradient(
+                    135deg,
+                    #07111F,
+                    #14213A
+                );
+        }}
+    
+        /* Nội dung của ba cột được freeze */
+        .epl-standings-table td[data-col="rank"],
+        .epl-standings-table td[data-col="team"] {{
+            z-index:
+                3;
+    
+            background:
+                #FFFFFF;
+        }}
+    
+        .epl-standings-table td[data-col="points"] {{
+            z-index:
+                4;
+    
+            background:
+                #FFF8D9 !important;
+        }}
+    
+        /*
+         * Đường phân cách nhẹ sau PTS,
+         * giúp nhận biết vùng đang được freeze.
+         */
+        .epl-standings-table
+        [data-col="points"] {{
+            box-shadow:
+                7px 0 10px -9px
+                rgba(15, 23, 42, 0.65);
+        }}
+    
+        .epl-standings-table
+        .rank-cell {{
+            font-size:
+                11px;
+    
+            text-align:
+                center;
+        }}
+    
+        .epl-standings-table
+        .points-cell {{
+            color:
+                #07111F;
+    
+            font-size:
+                12.5px;
+    
+            font-weight:
+                950;
         }}
     }}
     </style>
@@ -18728,16 +19105,16 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
             <table class="epl-standings-table">
                 <thead>
                     <tr>
-                        <th>Hạng</th>
-                        <th>Đội bóng</th>
-                        <th>Trận</th>
-                        <th>Thắng</th>
-                        <th>Hòa</th>
-                        <th>Thua</th>
-                        <th>Bàn thắng</th>
-                        <th>Bàn thua</th>
-                        <th>Hiệu số</th>
-                        <th>Điểm</th>
+                        <th data-col="rank" title="Hạng">#</th>
+                        <th data-col="team" title="Đội bóng">Đội</th>
+                        <th data-col="played" title="Trận">P</th>
+                        <th data-col="wins" title="Thắng">W</th>
+                        <th data-col="draws" title="Hòa">D</th>
+                        <th data-col="losses" title="Thua">L</th>
+                        <th data-col="gf" title="Bàn thắng">GF</th>
+                        <th data-col="ga" title="Bàn thua">GA</th>
+                        <th data-col="gd" title="Hiệu số">GD</th>
+                        <th data-col="points" title="Điểm">PTS</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -18749,31 +19126,105 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
 
     <script>
     (() => {{
-        const parentWindow = window.parent;
-        const mobileQuery = parentWindow.matchMedia(
-            "(max-width: 768px)"
-        );
-
-        const applyTeamNameMode = () => {{
-            document.documentElement.classList.toggle(
-                "epl-mobile-team-names",
-                mobileQuery.matches
+        const parentWindow =
+            window.parent;
+    
+        const mobileQuery =
+            parentWindow.matchMedia(
+                "(max-width: 768px)"
+            );
+    
+        const desktopColumnOrder = [
+            "rank",
+            "team",
+            "played",
+            "wins",
+            "draws",
+            "losses",
+            "gf",
+            "ga",
+            "gd",
+            "points"
+        ];
+    
+        const mobileColumnOrder = [
+            "rank",
+            "team",
+            "points",
+            "gd",
+            "played",
+            "wins",
+            "draws",
+            "losses",
+            "gf",
+            "ga"
+        ];
+    
+        const reorderColumns = (
+            columnOrder
+        ) => {{
+            document
+                .querySelectorAll(
+                    ".epl-standings-table tr"
+                )
+                .forEach((row) => {{
+                    const cellsByColumn =
+                        new Map(
+                            Array.from(
+                                row.children
+                            ).map((cell) => [
+                                cell.dataset.col,
+                                cell
+                            ])
+                        );
+    
+                    columnOrder.forEach(
+                        (columnKey) => {{
+                            const cell =
+                                cellsByColumn.get(
+                                    columnKey
+                                );
+    
+                            if (cell) {{
+                                row.appendChild(
+                                    cell
+                                );
+                            }}
+                        }}
+                    );
+                }});
+        }};
+    
+        const applyStandingsMode = () => {{
+            const isMobile =
+                mobileQuery.matches;
+    
+            document.documentElement
+                .classList.toggle(
+                    "epl-mobile-team-names",
+                    isMobile
+                );
+    
+            reorderColumns(
+                isMobile
+                    ? mobileColumnOrder
+                    : desktopColumnOrder
             );
         }};
-
-        applyTeamNameMode();
-
+    
+        applyStandingsMode();
+    
         mobileQuery.addEventListener(
             "change",
-            applyTeamNameMode
+            applyStandingsMode
         );
-
+    
         window.addEventListener(
             "unload",
             () => {{
                 mobileQuery.removeEventListener(
                     "change",
-                    applyTeamNameMode
+                    applyStandingsMode
                 );
             }}
         );
@@ -21476,15 +21927,35 @@ def page_competition_stats():
     # =====================================================
     # BẢNG XẾP HẠNG CÂU LẠC BỘ
     # =====================================================
-    render_page_title(
-        (
-            "BẢNG XẾP HẠNG "
-            f"PREMIER LEAGUE {season_label}"
-        ),
-        (
-            "Thứ hạng các câu lạc bộ "
-            "theo kết quả thi đấu."
-        )
+    st.markdown(
+        f"""
+        <style>
+        .wc-page-title.epl-standings-page-title {{
+            margin:
+                6px 0 0 !important;
+        }}
+    
+        .wc-page-title.epl-standings-page-title h2 {{
+            margin:
+                0 !important;
+        }}
+    
+        @media (max-width: 768px) {{
+            .wc-page-title.epl-standings-page-title {{
+                margin:
+                    2px 0 0 !important;
+            }}
+        }}
+        </style>
+    
+        <div class="wc-page-title epl-standings-page-title">
+            <h2>
+                BẢNG XẾP HẠNG PREMIER LEAGUE
+                {html.escape(str(season_label))}
+            </h2>
+        </div>
+        """,
+        unsafe_allow_html=True
     )
 
     matches = load_matches(
