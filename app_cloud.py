@@ -2634,7 +2634,7 @@ def inject_epl_big_match_card_css():
         }
 
         /* =====================================================
-           ÁNH VÀNG TINH TẾ TRÊN BACKGROUND BIG MATCH
+           ÁNH VÀNG BACKGROUND BIG MATCH
         
            ::before tiếp tục kế thừa viền trạng thái của card thường.
            ::after tiếp tục sử dụng chính ảnh nền dùng chung,
@@ -2984,36 +2984,211 @@ def inject_epl_big_match_card_css():
                     !important;
             }
 
+            /* =====================================================
+               RIBBON BIG MATCH — CHỈ DÀNH CHO MOBILE
+               Hiển thị: BIG MATCH • EPL • VÒNG ...
+               ===================================================== */
+            
+            div[class*="st-key-match_card_big_"]
+            .wc-match-title-mobile
+            .epl-big-match-ribbon {
+                display: inline-flex !important;
+                align-items: center !important;
+                justify-content: flex-start !important;
+            
+                width: fit-content !important;
+                min-width: 0 !important;
+                max-width: 100% !important;
+                min-height: 24px !important;
+            
+                padding:
+                    4px 6px 5px 6px !important;
+            
+                margin:
+                    8px 0 6px 0 !important;
+            
+                gap:
+                    3px !important;
+            
+                white-space:
+                    nowrap !important;
+            
+                overflow:
+                    hidden !important;
+            
+                box-sizing:
+                    border-box !important;
+            }
+            
+            /* Không cho các thành phần bị ép hoặc chồng lên nhau */
+            div[class*="st-key-match_card_big_"]
+            .wc-match-title-mobile
+            .epl-big-match-ribbon > span {
+                flex:
+                    0 0 auto !important;
+            
+                min-width:
+                    0 !important;
+            
+                white-space:
+                    nowrap !important;
+            }
+            
+            /* Nhãn BIG MATCH vàng */
+            div[class*="st-key-match_card_big_"]
+            .wc-match-title-mobile
             .epl-big-match-label {
                 min-height:
-                    17px;
-
+                    16px !important;
+            
                 padding:
-                    3px 5px 4px 5px;
-
-                margin-left:
-                    -3px;
-
+                    3px 5px 4px 5px !important;
+            
+                margin:
+                    -1px 0 -1px -1px !important;
+            
                 gap:
-                    4px;
-
+                    3px !important;
+            
                 font-size:
-                    6.8px;
-
+                    6.4px !important;
+            
+                line-height:
+                    1 !important;
+            
                 letter-spacing:
-                    0.045em;
+                    0.035em !important;
             }
-
+            
+            /* Thu nhỏ hai họa tiết kim cương */
+            div[class*="st-key-match_card_big_"]
+            .wc-match-title-mobile
             .epl-big-match-label::before,
+            
+            div[class*="st-key-match_card_big_"]
+            .wc-match-title-mobile
             .epl-big-match-label::after {
                 width:
-                    3px;
-
+                    3px !important;
+            
                 height:
-                    3px;
+                    3px !important;
+            
+                flex:
+                    0 0 3px !important;
+            }
+            
+            /*
+             * Chỉ trên mobile Big Match:
+             * thay PREMIER LEAGUE bằng EPL mà không sửa HTML/Python.
+             */
+            div[class*="st-key-match_card_big_"]
+            .wc-match-title-mobile
+            .epl-premier-league-ribbon-text {
+                font-size:
+                    0 !important;
+            
+                letter-spacing:
+                    0 !important;
+            }
+            
+            div[class*="st-key-match_card_big_"]
+            .wc-match-title-mobile
+            .epl-premier-league-ribbon-text::after {
+                content:
+                    "EPL";
+            
+                display:
+                    inline-block;
+            
+                color:
+                    #FFF9E8;
+            
+                font-size:
+                    7.5px;
+            
+                font-weight:
+                    950;
+            
+                line-height:
+                    1;
+            
+                letter-spacing:
+                    0.06em;
+            }
+            
+            /* Hai dấu phân cách */
+            div[class*="st-key-match_card_big_"]
+            .wc-match-title-mobile
+            .epl-premier-league-ribbon-separator {
+                font-size:
+                    6.5px !important;
+            
+                line-height:
+                    1 !important;
+            }
+            
+            /* Phần VÒNG 3 */
+            div[class*="st-key-match_card_big_"]
+            .wc-match-title-mobile
+            .epl-premier-league-ribbon-round {
+                font-size:
+                    7.5px !important;
+            
+                line-height:
+                    1 !important;
+            
+                letter-spacing:
+                    0.045em !important;
+            }
+        }
 
-                flex-basis:
-                    3px;
+        @media (max-width: 390px) {
+            div[class*="st-key-match_card_big_"]
+            .wc-match-title-mobile
+            .epl-big-match-ribbon {
+                min-height:
+                    23px !important;
+        
+                padding:
+                    3px 5px 4px 5px !important;
+        
+                gap:
+                    2px !important;
+            }
+        
+            div[class*="st-key-match_card_big_"]
+            .wc-match-title-mobile
+            .epl-big-match-label {
+                min-height:
+                    15px !important;
+        
+                padding:
+                    2px 4px 3px 4px !important;
+        
+                gap:
+                    2px !important;
+        
+                font-size:
+                    6px !important;
+            }
+        
+            div[class*="st-key-match_card_big_"]
+            .wc-match-title-mobile
+            .epl-premier-league-ribbon-text::after,
+        
+            div[class*="st-key-match_card_big_"]
+            .wc-match-title-mobile
+            .epl-premier-league-ribbon-round {
+                font-size:
+                    7px !important;
+            }
+        
+            div[class*="st-key-match_card_big_"]
+            .wc-match-title-mobile
+            .epl-premier-league-ribbon-separator {
+                font-size:
+                    6px !important;
             }
         }
 
