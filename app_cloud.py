@@ -17149,8 +17149,8 @@ def render_epl_top_scorers_club_filter(
 
     selected_club = {
         "team_id": None,
-        "club_name": "Tất cả",
-        "club_logo": ""
+        "club_name": "Toàn giải",
+        "club_logo": "data/static/epl.png"
     }
 
     if selected_id is not None:
@@ -17549,8 +17549,8 @@ def render_epl_top_scorers_club_filter(
 
                 all_club = {
                     "team_id": None,
-                    "club_name": "Tất cả",
-                    "club_logo": ""
+                    "club_name": "Toàn giải",
+                    "club_logo": "data/static/epl.png"
                 }
 
                 option_logo_col, option_button_col = (
