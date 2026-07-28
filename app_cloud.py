@@ -958,25 +958,42 @@ enforce_embed_url()
 
 cookie_controller = CookieController()
 
-@st.cache_data(show_spinner=False)
-def load_avatar_keys() -> list[str]:
+def get_avatar_dir() -> Path:
     """
-    Load danh sách avatar có sẵn trong folder data/static/avatars.
-    Khai báo thứ tự avatar.
+    Xác định đúng thư mục avatar.
+    Ưu tiên data/static/avatars.
     """
-    avatar_dir = BASE_DIR / AVATAR_FOLDER
+    primary_dir = BASE_DIR / "data" / "static" / "avatars"
+    fallback_dir = BASE_DIR / "static" / "avatars"
+
+    if primary_dir.exists() and primary_dir.is_dir():
+        return primary_dir
+
+    if fallback_dir.exists() and fallback_dir.is_dir():
+        return fallback_dir
+
+    return primary_dir
+
+
+@st.cache_data(ttl=10, show_spinner=False)
+def _load_avatar_keys_cached(avatar_dir_str: str) -> list[str]:
+    """
+    Cache danh sách avatar trong thời gian ngắn.
+    Avatar mới sẽ được nhận sau tối đa 10 giây.
+    """
+    avatar_dir = Path(avatar_dir_str)
 
     if not avatar_dir.exists() or not avatar_dir.is_dir():
         return []
 
-    avatar_keys = []
-
-    for file_path in avatar_dir.iterdir():
+    avatar_keys = [
+        file_path.name
+        for file_path in avatar_dir.iterdir()
         if (
             file_path.is_file()
             and file_path.suffix.lower() in AVATAR_EXTENSIONS
-        ):
-            avatar_keys.append(file_path.name)
+        )
+    ]
 
     available_avatar_keys = set(avatar_keys)
 
@@ -986,23 +1003,23 @@ def load_avatar_keys() -> list[str]:
         if avatar_key in available_avatar_keys
     ]
 
+    ordered_avatar_set = set(ordered_avatar_keys)
+
     remaining_avatar_keys = sorted(
         avatar_key
         for avatar_key in avatar_keys
-        if avatar_key not in set(ordered_avatar_keys)
+        if avatar_key not in ordered_avatar_set
     )
 
     return ordered_avatar_keys + remaining_avatar_keys
 
 
+def load_avatar_keys() -> list[str]:
+    avatar_dir = get_avatar_dir()
+    return _load_avatar_keys_cached(str(avatar_dir))
+
+
 def normalize_avatar_key(avatar_key) -> str:
-    """
-    Chuẩn hóa avatar_key.
-    Mục tiêu:
-    - Nếu user chưa có avatar thì dùng avatar mặc định.
-    - Nếu avatar đang lưu trong DB không còn tồn tại thì fallback về avatar mặc định.
-    - Chỉ nhận tên file, không nhận path tùy ý.
-    """
     avatar_keys = load_avatar_keys()
 
     if not avatar_keys:
@@ -1023,13 +1040,49 @@ def normalize_avatar_key(avatar_key) -> str:
 
 
 @st.cache_data(show_spinner=False)
+def _read_avatar_src_cached(
+    avatar_path_str: str,
+    modified_time_ns: int,
+    file_size: int
+) -> str:
+    """
+    modified_time_ns và file_size là cache version.
+    Khi nội dung ảnh thay đổi, Streamlit tự đọc lại ảnh.
+    """
+    avatar_path = Path(avatar_path_str)
+
+    if not avatar_path.exists() or not avatar_path.is_file():
+        return ""
+
+    mime_type, _ = mimetypes.guess_type(str(avatar_path))
+    mime_type = mime_type or "image/png"
+
+    encoded = base64.b64encode(
+        avatar_path.read_bytes()
+    ).decode("utf-8")
+
+    return f"data:{mime_type};base64,{encoded}"
+
+
 def get_avatar_src(avatar_key: str) -> str:
     avatar_key = normalize_avatar_key(avatar_key)
 
     if not avatar_key:
         return ""
 
-    return resolve_asset_src(f"{AVATAR_FOLDER}/{avatar_key}")
+    avatar_path = get_avatar_dir() / avatar_key
+
+    if not avatar_path.exists() or not avatar_path.is_file():
+        return ""
+
+    file_stat = avatar_path.stat()
+
+    return _read_avatar_src_cached(
+        str(avatar_path),
+        file_stat.st_mtime_ns,
+        file_stat.st_size
+    )
+
 # ============================================================
 # 2. THEME + UI HELPERS
 # ============================================================
