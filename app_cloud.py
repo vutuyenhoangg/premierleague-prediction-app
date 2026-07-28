@@ -20017,279 +20017,13 @@ def render_epl_top_scorers_club_filter(
                 1 !important;
         }
 
-        @media (max-width: 768px) {
-            /* Khung filter gọn hơn */
-            div[class*="st-key-epl_scorers_club_filter_"] {
-                width:
-                    100% !important;
-        
-                max-width:
-                    none !important;
-        
-                padding:
-                    4px 6px !important;
-        
-                border:
-                    1px solid rgba(55, 0, 60, 0.13)
-                    !important;
-        
-                border-radius:
-                    12px !important;
-        
-                background:
-                    #FFFFFF !important;
-        
-                box-shadow:
-                    0 5px 16px rgba(15, 23, 42, 0.055)
-                    !important;
-        
-                transition:
-                    border-color 0.18s ease,
-                    box-shadow 0.18s ease !important;
-            }
-        
-            div[class*="st-key-epl_scorers_club_filter_"]:focus-within {
-                border-color:
-                    rgba(55, 0, 60, 0.35)
-                    !important;
-        
-                box-shadow:
-                    0 0 0 3px rgba(55, 0, 60, 0.07)
-                    !important;
-            }
-        
-            /*
-             * Chỉ bắt hàng ngoài cùng chứa:
-             * - logo đang chọn
-             * - nút popover
-             */
-            div[class*="st-key-epl_scorers_club_filter_"]
-            div[data-testid="stHorizontalBlock"]:has(
-                .epl-club-filter-current-logo
-            ):has(
-                div[data-testid="stPopover"]
-            ) {
-                height:
-                    40px !important;
-        
-                min-height:
-                    40px !important;
-        
-                align-items:
-                    center !important;
-        
-                gap:
-                    3px !important;
-            }
-        
-            /* Cột logo có chiều rộng cố định */
-            div[class*="st-key-epl_scorers_club_filter_"]
-            div[data-testid="stHorizontalBlock"]:has(
-                .epl-club-filter-current-logo
-            ):has(
-                div[data-testid="stPopover"]
-            )
-            > div[data-testid="stColumn"]:first-child {
-                width:
-                    42px !important;
-        
-                min-width:
-                    42px !important;
-        
-                max-width:
-                    42px !important;
-        
-                flex:
-                    0 0 42px !important;
-        
-                padding:
-                    0 !important;
-            }
-        
-            /* Nút chọn nhận toàn bộ phần còn lại */
-            div[class*="st-key-epl_scorers_club_filter_"]
-            div[data-testid="stHorizontalBlock"]:has(
-                .epl-club-filter-current-logo
-            ):has(
-                div[data-testid="stPopover"]
-            )
-            > div[data-testid="stColumn"]:last-child {
-                width:
-                    auto !important;
-        
-                min-width:
-                    0 !important;
-        
-                max-width:
-                    none !important;
-        
-                flex:
-                    1 1 auto !important;
-        
-                padding:
-                    0 !important;
-            }
-        
-            /*
-             * Căn giữa toàn bộ wrapper do Streamlit tạo ra.
-             * Đây là phần xử lý chính cho lỗi logo bị thấp.
-             */
-            div[class*="st-key-epl_scorers_club_filter_"]
-            div[data-testid="stElementContainer"]:has(
-                .epl-club-filter-current-logo
-            ) {
-                display:
-                    flex !important;
-        
-                width:
-                    100% !important;
-        
-                height:
-                    40px !important;
-        
-                align-items:
-                    center !important;
-        
-                justify-content:
-                    center !important;
-        
-                margin:
-                    0 !important;
-        
-                padding:
-                    0 !important;
-        
-                line-height:
-                    0 !important;
-            }
-        
-            div[class*="st-key-epl_scorers_club_filter_"]
-            div[data-testid="stMarkdownContainer"]:has(
-                .epl-club-filter-current-logo
-            ) {
-                display:
-                    flex !important;
-        
-                width:
-                    100% !important;
-        
-                height:
-                    40px !important;
-        
-                align-items:
-                    center !important;
-        
-                justify-content:
-                    center !important;
-        
-                margin:
-                    0 !important;
-        
-                padding:
-                    0 !important;
-        
-                line-height:
-                    0 !important;
-            }
-        
-            div[class*="st-key-epl_scorers_club_filter_"]
-            .epl-club-filter-current-logo {
-                display:
-                    flex !important;
-        
-                width:
-                    40px !important;
-        
-                height:
-                    40px !important;
-        
-                align-items:
-                    center !important;
-        
-                justify-content:
-                    center !important;
-        
-                margin:
-                    0 !important;
-        
-                padding:
-                    0 !important;
-        
-                line-height:
-                    0 !important;
-        
-                transform:
-                    none !important;
-            }
-        
-            div[class*="st-key-epl_scorers_club_filter_"]
-            .epl-club-filter-current-logo img {
-                display:
-                    block !important;
-        
-                width:
-                    29px !important;
-        
-                height:
-                    29px !important;
-        
-                margin:
-                    0 !important;
-        
-                padding:
-                    0 !important;
-        
-                object-fit:
-                    contain !important;
-        
-                object-position:
-                    center !important;
-        
-                transform:
-                    none !important;
-            }
-        
-            /* Nút chọn CLB */
-            div[class*="st-key-epl_scorers_club_filter_"]
-            div[data-testid="stPopover"] > button,
-        
-            div[class*="st-key-epl_scorers_club_filter_"]
-            div[data-testid="stPopover"] > div > button {
-                width:
-                    100% !important;
-        
-                height:
-                    40px !important;
-        
-                min-height:
-                    40px !important;
-        
-                padding:
-                    0 9px !important;
-        
-                border-radius:
-                    9px !important;
-        
-                color:
-                    #37105F !important;
-        
-                font-size:
-                    13px !important;
-        
-                font-weight:
-                    800 !important;
-        
-                line-height:
-                    1.2 !important;
-            }
-        }
         /* =====================================================
-           TINH CHỈNH FILTER VUA PHÁ LƯỚI TRÊN MOBILE
+           FILTER VUA PHÁ LƯỚI — CHỈ DÀNH CHO MOBILE
            ===================================================== */
         @media (max-width: 768px) {
             /*
-             * Filter không còn dài hết màn hình.
-             * max-width: 100% vẫn bảo đảm không tràn máy nhỏ.
+             * Giữ khung tổng rộng 258px.
+             * Nút chọn sẽ chiếm toàn bộ phần còn lại sau logo.
              */
             div[class*="st-key-epl_scorers_club_filter_"] {
                 width:
@@ -20306,15 +20040,45 @@ def render_epl_top_scorers_club_filter(
         
                 box-sizing:
                     border-box !important;
+        
+                border:
+                    1px solid rgba(55, 0, 60, 0.13)
+                    !important;
+        
+                border-radius:
+                    12px !important;
+        
+                background:
+                    #FFFFFF !important;
+        
+                box-shadow:
+                    0 5px 16px rgba(15, 23, 42, 0.055)
+                    !important;
             }
         
-            /* Hàng chứa logo và nút chọn */
+            div[class*="st-key-epl_scorers_club_filter_"]:focus-within {
+                border-color:
+                    rgba(55, 0, 60, 0.35)
+                    !important;
+        
+                box-shadow:
+                    0 0 0 3px rgba(55, 0, 60, 0.07)
+                    !important;
+            }
+        
+            /* Hàng chứa logo và nút filter */
             div[class*="st-key-epl_scorers_club_filter_"]
             div[data-testid="stHorizontalBlock"]:has(
                 .epl-club-filter-current-logo
             ):has(
                 div[data-testid="stPopover"]
             ) {
+                display:
+                    flex !important;
+        
+                width:
+                    100% !important;
+        
                 height:
                     36px !important;
         
@@ -20325,43 +20089,70 @@ def render_epl_top_scorers_club_filter(
                     center !important;
         
                 gap:
-                    0 !important;
+                    2px !important;
             }
         
-            /* Thu cột logo từ 42px xuống 36px */
+            /*
+             * Hỗ trợ cả hai tên selector cột của Streamlit:
+             * stColumn và column.
+             */
             div[class*="st-key-epl_scorers_club_filter_"]
             div[data-testid="stHorizontalBlock"]:has(
                 .epl-club-filter-current-logo
             ):has(
                 div[data-testid="stPopover"]
             )
-            > div[data-testid="stColumn"]:first-child {
-                width:
-                    36px !important;
-        
+            > :is(
+                div[data-testid="stColumn"],
+                div[data-testid="column"]
+            ) {
                 min-width:
-                    36px !important;
-        
-                max-width:
-                    36px !important;
-        
-                flex:
-                    0 0 36px !important;
+                    0 !important;
         
                 padding:
                     0 !important;
             }
         
-            /* Cột nút chọn nằm ngay sát cột logo */
+            /* Cột logo được thu hẹp để nút dịch sang trái */
             div[class*="st-key-epl_scorers_club_filter_"]
             div[data-testid="stHorizontalBlock"]:has(
                 .epl-club-filter-current-logo
             ):has(
                 div[data-testid="stPopover"]
             )
-            > div[data-testid="stColumn"]:last-child {
+            > :is(
+                div[data-testid="stColumn"],
+                div[data-testid="column"]
+            ):first-child {
                 width:
-                    auto !important;
+                    38px !important;
+        
+                min-width:
+                    38px !important;
+        
+                max-width:
+                    38px !important;
+        
+                flex:
+                    0 0 38px !important;
+            }
+        
+            /*
+             * Cột filter chiếm toàn bộ phần còn lại.
+             * Đây là phần giúp nút dài tương xứng với khung ngoài.
+             */
+            div[class*="st-key-epl_scorers_club_filter_"]
+            div[data-testid="stHorizontalBlock"]:has(
+                .epl-club-filter-current-logo
+            ):has(
+                div[data-testid="stPopover"]
+            )
+            > :is(
+                div[data-testid="stColumn"],
+                div[data-testid="column"]
+            ):last-child {
+                width:
+                    calc(100% - 40px) !important;
         
                 min-width:
                     0 !important;
@@ -20370,13 +20161,40 @@ def render_epl_top_scorers_club_filter(
                     none !important;
         
                 flex:
-                    1 1 auto !important;
+                    1 1 0 !important;
+            }
         
-                padding:
+            /* Cho các wrapper bên trong cột filter giãn đủ chiều rộng */
+            div[class*="st-key-epl_scorers_club_filter_"]
+            div[data-testid="stHorizontalBlock"]:has(
+                .epl-club-filter-current-logo
+            )
+            > :is(
+                div[data-testid="stColumn"],
+                div[data-testid="column"]
+            ):last-child
+            div[data-testid="stVerticalBlock"],
+        
+            div[class*="st-key-epl_scorers_club_filter_"]
+            div[data-testid="stHorizontalBlock"]:has(
+                .epl-club-filter-current-logo
+            )
+            > :is(
+                div[data-testid="stColumn"],
+                div[data-testid="column"]
+            ):last-child
+            div[data-testid="stElementContainer"],
+        
+            div[class*="st-key-epl_scorers_club_filter_"]
+            div[data-testid="stPopover"] {
+                width:
+                    100% !important;
+        
+                min-width:
                     0 !important;
             }
         
-            /* Căn logo vào chính giữa filter */
+            /* Căn logo chính giữa */
             div[class*="st-key-epl_scorers_club_filter_"]
             div[data-testid="stElementContainer"]:has(
                 .epl-club-filter-current-logo
@@ -20462,7 +20280,7 @@ def render_epl_top_scorers_club_filter(
                     none !important;
             }
         
-            /* Nút filter thấp và gọn hơn */
+            /* Nút chọn đội giãn hết cột */
             div[class*="st-key-epl_scorers_club_filter_"]
             div[data-testid="stPopover"] > button,
         
@@ -20474,11 +20292,17 @@ def render_epl_top_scorers_club_filter(
                 width:
                     100% !important;
         
+                min-width:
+                    0 !important;
+        
                 height:
                     36px !important;
         
                 min-height:
                     36px !important;
+        
+                box-sizing:
+                    border-box !important;
         
                 align-items:
                     center !important;
@@ -20487,16 +20311,29 @@ def render_epl_top_scorers_club_filter(
                     flex-start !important;
         
                 padding:
-                    0 6px 0 2px !important;
+                    0 8px 0 7px !important;
+        
+                border-radius:
+                    9px !important;
+        
+                background:
+                    rgba(72, 24, 120, 0.045)
+                    !important;
+        
+                color:
+                    #37105F !important;
+        
+                font-size:
+                    13px !important;
+        
+                font-weight:
+                    800 !important;
         
                 text-align:
                     left !important;
             }
         
-            /*
-             * Không để vùng chứa chữ kéo dài hết nút.
-             * Đây là phần đưa “Toàn giải” về sát logo.
-             */
+            /* Chữ nằm sát bên trái nút */
             div[class*="st-key-epl_scorers_club_filter_"]
             div[data-testid="stPopover"] > button
             [data-testid="stMarkdownContainer"],
@@ -20511,7 +20348,7 @@ def render_epl_top_scorers_club_filter(
                     0 !important;
         
                 flex:
-                    0 1 auto !important;
+                    1 1 auto !important;
         
                 margin:
                     0 !important;
@@ -20521,21 +20358,27 @@ def render_epl_top_scorers_club_filter(
             }
         
             div[class*="st-key-epl_scorers_club_filter_"]
-            div[data-testid="stPopover"] > button p,
-        
-            div[class*="st-key-epl_scorers_club_filter_"]
-            div[data-testid="stPopover"] > div > button p {
+            div[data-testid="stPopover"] button p {
                 width:
                     auto !important;
         
                 margin:
                     0 !important;
         
+                overflow:
+                    hidden !important;
+        
                 text-align:
                     left !important;
+        
+                text-overflow:
+                    ellipsis !important;
+        
+                white-space:
+                    nowrap !important;
             }
         
-            /* Mũi tên nằm ngay sau tên filter */
+            /* Đặt mũi tên ở cuối nút */
             div[class*="st-key-epl_scorers_club_filter_"]
             div[data-testid="stPopover"] > button svg:last-child,
         
@@ -20543,7 +20386,7 @@ def render_epl_top_scorers_club_filter(
             div[data-testid="stPopover"] > div > button
             svg:last-child {
                 margin-left:
-                    6px !important;
+                    auto !important;
         
                 margin-right:
                     0 !important;
