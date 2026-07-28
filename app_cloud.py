@@ -6344,7 +6344,63 @@ def render_star_balance(user_id: int):
         """,
         unsafe_allow_html=True
     )
+    # Chỉ giữ hai box bổ trợ trên cùng một hàng ở mobile.
+    st.markdown(
+        """
+        <style>
+        @media (max-width: 768px) {
+            /*
+             * Chỉ chọn đúng hàng chứa đồng thời hai card bổ trợ.
+             * Các st.columns khác trong app không bị ảnh hưởng.
+             */
+            div[data-testid="stHorizontalBlock"]:has(
+                div[class*="st-key-hope_star_balance_card"]
+            ):has(
+                div[class*="st-key-super_star_balance_card"]
+            ) {
+                display: grid !important;
+                grid-template-columns:
+                    repeat(2, minmax(0, 1fr)) !important;
 
+                width: 100% !important;
+                max-width: 100% !important;
+
+                column-gap: 10px !important;
+                row-gap: 0 !important;
+
+                align-items: stretch !important;
+            }
+
+            /*
+             * Hai cột luôn rộng bằng nhau và được phép co vừa màn hình.
+             * Hỗ trợ cả cấu trúc DOM Streamlit cũ và mới.
+             */
+            div[data-testid="stHorizontalBlock"]:has(
+                div[class*="st-key-hope_star_balance_card"]
+            ):has(
+                div[class*="st-key-super_star_balance_card"]
+            )
+            > :is(
+                div[data-testid="stColumn"],
+                div[data-testid="column"]
+            ) {
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: 100% !important;
+
+                flex: none !important;
+
+                margin: 0 !important;
+                padding-left: 0 !important;
+                padding-right: 0 !important;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    col_hope, col_super = st.columns([1, 1], gap="large")
     col_hope, col_super = st.columns([1, 1], gap="large")
 
     with col_hope:
