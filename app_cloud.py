@@ -7,6 +7,7 @@
 
 import streamlit.components.v1 as components
 import html
+import json
 import os
 import hmac
 import hashlib
@@ -79,6 +80,59 @@ GEMINI_MODEL_NAME = st.secrets.get("GEMINI_MODEL_NAME", "gemini-2.5-flash")
 ENABLE_FINAL_POSTER = False
 ENABLE_AI_FEATURES = True
 AI_SUGGESTION_MAX_DAYS = 3
+
+MOBILE_TEAM_NAME_OVERRIDES = {
+    "arsenal fc": "Arsenal",
+    "aston villa fc": "Aston Villa",
+    "afc bournemouth": "Bournemouth",
+    "bournemouth afc": "Bournemouth",
+    "brighton & hove albion": "Brighton",
+    "brighton & hove albion fc": "Brighton",
+    "brighton and hove albion": "Brighton",
+    "brighton and hove albion fc": "Brighton",
+    "brentford fc": "Brentford",
+    "burnley fc": "Burnley",
+    "chelsea fc": "Chelsea",
+    "coventry city": "Coventry",
+    "coventry city fc": "Coventry",
+    "crystal palace fc": "Crystal Palace",
+    "everton fc": "Everton",
+    "fulham fc": "Fulham",
+    "hull city": "Hull City",
+    "hull city afc": "Hull City",
+    "ipswich town": "Ipswich",
+    "ipswich town fc": "Ipswich",
+    "leeds united": "Leeds",
+    "leeds united fc": "Leeds",
+    "leicester city": "Leicester",
+    "leicester city fc": "Leicester",
+    "liverpool fc": "Liverpool",
+    "luton town": "Luton",
+    "luton town fc": "Luton",
+    "manchester city": "Man City",
+    "manchester city fc": "Man City",
+    "manchester united": "Man United",
+    "manchester united fc": "Man United",
+    "newcastle united": "Newcastle",
+    "newcastle united fc": "Newcastle",
+    "norwich city": "Norwich",
+    "norwich city fc": "Norwich",
+    "nottingham forest": "Nottingham Forest",
+    "nottingham forest fc": "Nottingham Forest",
+    "sheffield united": "Sheffield Utd",
+    "sheffield united fc": "Sheffield Utd",
+    "southampton fc": "Southampton",
+    "sunderland afc": "Sunderland",
+    "tottenham hotspur": "Tottenham",
+    "tottenham hotspur fc": "Tottenham",
+    "watford fc": "Watford",
+    "west bromwich albion": "West Brom",
+    "west bromwich albion fc": "West Brom",
+    "west ham united": "West Ham",
+    "west ham united fc": "West Ham",
+    "wolverhampton wanderers": "Wolves",
+    "wolverhampton wanderers fc": "Wolves",
+}
 
 AVATAR_FOLDER = "data/static/avatars"
 DEFAULT_AVATAR_KEY = "avatar_01.png"
@@ -4806,6 +4860,284 @@ def inject_prediction_score_readonly_script():
         scrolling=False
     )
 
+def inject_mobile_team_name_display_script():
+    """
+    Chỉ đổi phần chữ đang hiển thị sang tên CLB ngắn khi viewport <= 768px.
+
+    Giá trị Python, dữ liệu database và nội dung desktop luôn giữ tên đầy đủ.
+    """
+    aliases_json = json.dumps(
+        MOBILE_TEAM_NAME_OVERRIDES,
+        ensure_ascii=False
+    )
+
+    script_html = r"""
+    <script>
+    (() => {
+        const parentWindow = window.parent;
+        const parentDocument = parentWindow.document;
+        const stateKey = "__eplMobileTeamNameDisplayState";
+        const mobileQuery = parentWindow.matchMedia(
+            "(max-width: 768px)"
+        );
+        const previousState = parentWindow[stateKey];
+
+        const aliases = __EPL_MOBILE_TEAM_ALIASES__;
+
+        const escapeRegExp = (value) => {
+            return value.replace(
+                /[.*+?^${}()|[\]\\]/g,
+                "\\$&"
+            );
+        };
+
+        const replacementPairs = Object
+            .entries(aliases)
+            .filter(([fullName, shortName]) => {
+                return (
+                    String(fullName).trim()
+                    && String(fullName).toLocaleLowerCase()
+                        !== String(shortName).toLocaleLowerCase()
+                );
+            })
+            .sort((left, right) => {
+                return right[0].length - left[0].length;
+            })
+            .map(([fullName, shortName]) => {
+                return {
+                    pattern: new RegExp(
+                        escapeRegExp(fullName),
+                        "gi"
+                    ),
+                    replacement: shortName
+                };
+            });
+
+        const toMobileText = (value) => {
+            let result = String(value ?? "");
+
+            for (const pair of replacementPairs) {
+                result = result.replace(
+                    pair.pattern,
+                    pair.replacement
+                );
+            }
+
+            return result;
+        };
+
+        if (
+            previousState
+            && typeof previousState.restoreAll === "function"
+        ) {
+            previousState.restoreAll();
+        }
+
+        if (previousState?.observer) {
+            previousState.observer.disconnect();
+        }
+
+        if (
+            previousState?.mobileQuery
+            && previousState?.mediaHandler
+        ) {
+            previousState.mobileQuery.removeEventListener(
+                "change",
+                previousState.mediaHandler
+            );
+        }
+
+        const originalTextByNode = new WeakMap();
+
+        const shouldSkipTextNode = (node) => {
+            const parent = node.parentElement;
+
+            if (!parent) {
+                return true;
+            }
+
+            return Boolean(
+                parent.closest(
+                    "script, style, noscript, svg, code, pre"
+                )
+            );
+        };
+
+        const updateTextNode = (node, useMobileName) => {
+            if (
+                !node
+                || node.nodeType !== parentWindow.Node.TEXT_NODE
+                || shouldSkipTextNode(node)
+            ) {
+                return;
+            }
+
+            const currentText = node.nodeValue ?? "";
+
+            if (!currentText.trim()) {
+                return;
+            }
+
+            let originalText = originalTextByNode.get(node);
+
+            if (originalText === undefined) {
+                originalText = currentText;
+                originalTextByNode.set(node, originalText);
+            } else {
+                const expectedMobileText = toMobileText(
+                    originalText
+                );
+
+                if (
+                    currentText !== originalText
+                    && currentText !== expectedMobileText
+                ) {
+                    originalText = currentText;
+                    originalTextByNode.set(
+                        node,
+                        originalText
+                    );
+                }
+            }
+
+            const targetText = (
+                useMobileName
+                ? toMobileText(originalText)
+                : originalText
+            );
+
+            if (node.nodeValue !== targetText) {
+                node.nodeValue = targetText;
+            }
+        };
+
+        const updateSubtree = (
+            rootNode,
+            useMobileName
+        ) => {
+            if (!rootNode) {
+                return;
+            }
+
+            if (
+                rootNode.nodeType
+                === parentWindow.Node.TEXT_NODE
+            ) {
+                updateTextNode(
+                    rootNode,
+                    useMobileName
+                );
+                return;
+            }
+
+            if (
+                rootNode.nodeType
+                !== parentWindow.Node.ELEMENT_NODE
+                && rootNode.nodeType
+                !== parentWindow.Node.DOCUMENT_NODE
+                && rootNode.nodeType
+                !== parentWindow.Node.DOCUMENT_FRAGMENT_NODE
+            ) {
+                return;
+            }
+
+            const walker = parentDocument.createTreeWalker(
+                rootNode,
+                parentWindow.NodeFilter.SHOW_TEXT
+            );
+
+            let textNode = walker.nextNode();
+
+            while (textNode) {
+                updateTextNode(
+                    textNode,
+                    useMobileName
+                );
+                textNode = walker.nextNode();
+            }
+        };
+
+        const applyAll = () => {
+            updateSubtree(
+                parentDocument.body,
+                mobileQuery.matches
+            );
+        };
+
+        const observer = new parentWindow.MutationObserver(
+            (mutations) => {
+                if (!mobileQuery.matches) {
+                    return;
+                }
+
+                for (const mutation of mutations) {
+                    if (
+                        mutation.type === "characterData"
+                    ) {
+                        updateTextNode(
+                            mutation.target,
+                            true
+                        );
+                        continue;
+                    }
+
+                    for (
+                        const addedNode
+                        of mutation.addedNodes
+                    ) {
+                        updateSubtree(
+                            addedNode,
+                            true
+                        );
+                    }
+                }
+            }
+        );
+
+        observer.observe(
+            parentDocument.body,
+            {
+                childList: true,
+                characterData: true,
+                subtree: true
+            }
+        );
+
+        const mediaHandler = () => {
+            applyAll();
+        };
+
+        mobileQuery.addEventListener(
+            "change",
+            mediaHandler
+        );
+
+        parentWindow[stateKey] = {
+            observer,
+            mobileQuery,
+            mediaHandler,
+            restoreAll: () => {
+                updateSubtree(
+                    parentDocument.body,
+                    false
+                );
+            }
+        };
+
+        applyAll();
+    })();
+    </script>
+    """.replace(
+        "__EPL_MOBILE_TEAM_ALIASES__",
+        aliases_json
+    )
+
+    components.html(
+        script_html,
+        height=0,
+        scrolling=False
+    )
+
 inject_epl_theme()
 inject_match_card_border_animation_css()
 inject_epl_premium_match_card_css()
@@ -4814,6 +5146,7 @@ inject_epl_big_match_card_css()
 inject_mobile_prediction_score_row_css()
 inject_prediction_score_stepper_css()
 inject_prediction_score_readonly_script()
+inject_mobile_team_name_display_script()
 inject_hide_streamlit_embed_footer_css()
 inject_main_page_lift_css()
 
@@ -8896,6 +9229,7 @@ def render_avatar_popover(user: dict):
                     margin-bottom: 14px;
                     line-height: 1.4;
                 ">
+                    Chọn ảnh đại diện của bạn để hiển thị.
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -14532,7 +14866,7 @@ def render_auth_page():
 # ============================================================
 def get_mobile_team_display_name(team_name) -> str:
     """
-    Tạo tên ngắn gọn, rõ nghĩa dành riêng cho card mobile.
+    Tạo tên CLB ngắn gọn, rõ nghĩa cho toàn bộ giao diện mobile.
 
     Desktop vẫn sử dụng tên đầy đủ từ database.
     """
@@ -14544,33 +14878,14 @@ def get_mobile_team_display_name(team_name) -> str:
     if not full_name:
         return "TBD"
 
-    mobile_name_overrides = {
-        "afc bournemouth": "Bournemouth",
-        "brighton & hove albion": "Brighton",
-        "brighton & hove albion fc": "Brighton",
-        "coventry city": "Coventry",
-        "hull city": "Hull City",
-        "ipswich town": "Ipswich Town",
-        "manchester city": "Man City",
-        "manchester city fc": "Man City",
-        "manchester united": "Man United",
-        "manchester united fc": "Man United",
-        "newcastle united": "Newcastle",
-        "newcastle united fc": "Newcastle",
-        "nottingham forest": "Nottingham Forest",
-        "nottingham forest fc": "Nottingham Forest",
-        "tottenham hotspur": "Tottenham",
-        "tottenham hotspur fc": "Tottenham",
-        "west ham united": "West Ham",
-        "west ham united fc": "West Ham",
-        "wolverhampton wanderers": "Wolves",
-        "wolverhampton wanderers fc": "Wolves",
-    }
+    normalized_name = re.sub(
+        r"\s+",
+        " ",
+        full_name.casefold()
+    ).strip()
 
-    normalized_name = full_name.casefold()
-
-    if normalized_name in mobile_name_overrides:
-        return mobile_name_overrides[
+    if normalized_name in MOBILE_TEAM_NAME_OVERRIDES:
+        return MOBILE_TEAM_NAME_OVERRIDES[
             normalized_name
         ]
 
@@ -16249,7 +16564,6 @@ def render_prediction_team_logo(
             quote=True
         )
 
-        # Giữ HTML trên một khối liền mạch.
         logo_content = (
             f'<img src="{safe_logo_src}" '
             f'alt="" '
@@ -16279,7 +16593,6 @@ def render_prediction_team_logo(
         logo_html
     ).strip()
 
-    # st.html render HTML trực tiếp, không qua Markdown parser.
     if hasattr(st, "html"):
         st.html(logo_html)
     else:
@@ -17756,6 +18069,16 @@ def page_my_predictions():
         )
     })
 
+    mobile_display_df = display_df.copy()
+    mobile_display_df["Trận"] = df.apply(
+        lambda row: (
+            f"{get_mobile_team_display_name(row.get('home_team_name'))}"
+            " vs "
+            f"{get_mobile_team_display_name(row.get('away_team_name'))}"
+        ),
+        axis=1
+    )
+
     leaderboard = build_leaderboard_df(get_selected_season_slug())
 
     current_user_summary = leaderboard[
@@ -17795,11 +18118,44 @@ def page_my_predictions():
         }
         """
     ):
-        st.dataframe(
-            display_df,
-            use_container_width=True,
-            hide_index=True
+        st.markdown(
+            """
+            <style>
+            div[class*="st-key-my_predictions_mobile_table"] {
+                display: none !important;
+            }
+
+            @media (max-width: 768px) {
+                div[class*="st-key-my_predictions_desktop_table"] {
+                    display: none !important;
+                }
+
+                div[class*="st-key-my_predictions_mobile_table"] {
+                    display: block !important;
+                }
+            }
+            </style>
+            """,
+            unsafe_allow_html=True
         )
+
+        with st.container(
+            key="my_predictions_desktop_table"
+        ):
+            st.dataframe(
+                display_df,
+                use_container_width=True,
+                hide_index=True
+            )
+
+        with st.container(
+            key="my_predictions_mobile_table"
+        ):
+            st.dataframe(
+                mobile_display_df,
+                use_container_width=True,
+                hide_index=True
+            )
 
         st.markdown("---")
 
@@ -18205,7 +18561,15 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
 
     for index, row in standings_df.reset_index(drop=True).iterrows():
         rank = index + 1
-        team_name = html.escape(str(row.get("Đội bóng", "")).strip())
+        raw_team_name = str(
+            row.get("Đội bóng", "")
+        ).strip()
+        team_name = html.escape(raw_team_name)
+        mobile_team_name = html.escape(
+            get_mobile_team_display_name(
+                raw_team_name
+            )
+        )
         logo_path = str(row.get("Logo", "") or "").strip()
         logo_src = resolve_asset_src(logo_path) if logo_path else ""
 
@@ -18238,7 +18602,12 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
                 <td class="team-cell">
                     <div class="team-wrap">
                         {logo_html}
-                        <span>{team_name}</span>
+                        <span class="epl-team-name-desktop">
+                            {team_name}
+                        </span>
+                        <span class="epl-team-name-mobile">
+                            {mobile_team_name}
+                        </span>
                     </div>
                 </td>
                 {''.join(cells_html)}
@@ -18305,6 +18674,17 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
         align-items: center;
         gap: 11px;
     }}
+    .epl-team-name-mobile {{
+        display: none;
+    }}
+    html.epl-mobile-team-names
+    .epl-team-name-desktop {{
+        display: none;
+    }}
+    html.epl-mobile-team-names
+    .epl-team-name-mobile {{
+        display: inline;
+    }}
     .epl-team-logo {{
         width: 30px;
         height: 30px;
@@ -18367,6 +18747,39 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
             </table>
         </div>
     </div>
+
+    <script>
+    (() => {{
+        const parentWindow = window.parent;
+        const mobileQuery = parentWindow.matchMedia(
+            "(max-width: 768px)"
+        );
+
+        const applyTeamNameMode = () => {{
+            document.documentElement.classList.toggle(
+                "epl-mobile-team-names",
+                mobileQuery.matches
+            );
+        }};
+
+        applyTeamNameMode();
+
+        mobileQuery.addEventListener(
+            "change",
+            applyTeamNameMode
+        );
+
+        window.addEventListener(
+            "unload",
+            () => {{
+                mobileQuery.removeEventListener(
+                    "change",
+                    applyTeamNameMode
+                );
+            }}
+        );
+    }})();
+    </script>
     """
 
     components.html(
@@ -19324,13 +19737,21 @@ def render_epl_top_scorers_table(
             ).strip()
         )
 
+        raw_club_name = str(
+            row.get(
+                "club_name",
+                ""
+            )
+        ).strip()
+
         club_name = html.escape(
-            str(
-                row.get(
-                    "club_name",
-                    ""
-                )
-            ).strip()
+            raw_club_name
+        )
+
+        mobile_club_name = html.escape(
+            get_mobile_team_display_name(
+                raw_club_name
+            )
         )
 
         logo_path = str(
@@ -19387,7 +19808,12 @@ def render_epl_top_scorers_table(
                 <td class="epl-scorer-club-cell">
                     <div class="epl-scorer-club-wrap">
                         {logo_html}
-                        <span>{club_name}</span>
+                        <span class="epl-team-name-desktop">
+                            {club_name}
+                        </span>
+                        <span class="epl-team-name-mobile">
+                            {mobile_club_name}
+                        </span>
                     </div>
                 </td>
 
@@ -19656,6 +20082,23 @@ def render_epl_top_scorers_table(
             11px;
     }
 
+    .epl-team-name-mobile {
+        display:
+            none;
+    }
+
+    html.epl-mobile-team-names
+    .epl-team-name-desktop {
+        display:
+            none;
+    }
+
+    html.epl-mobile-team-names
+    .epl-team-name-mobile {
+        display:
+            inline;
+    }
+
     .epl-scorer-club-logo {
         width:
             29px;
@@ -19778,6 +20221,39 @@ def render_epl_top_scorers_table(
             </table>
         </div>
     </div>
+
+    <script>
+    (() => {
+        const parentWindow = window.parent;
+        const mobileQuery = parentWindow.matchMedia(
+            "(max-width: 768px)"
+        );
+
+        const applyTeamNameMode = () => {
+            document.documentElement.classList.toggle(
+                "epl-mobile-team-names",
+                mobileQuery.matches
+            );
+        };
+
+        applyTeamNameMode();
+
+        mobileQuery.addEventListener(
+            "change",
+            applyTeamNameMode
+        );
+
+        window.addEventListener(
+            "unload",
+            () => {
+                mobileQuery.removeEventListener(
+                    "change",
+                    applyTeamNameMode
+                );
+            }
+        );
+    })();
+    </script>
     """
 
     visible_rows = min(
@@ -20951,7 +21427,7 @@ def main():
             "Lịch thi đấu & dự đoán",
             "Dự đoán của tôi",
             "Bảng xếp hạng",
-            "Thống kê giải đấu",
+            "Thông số giải đấu",
             "Phân tích tổng quan"
         ]
 
@@ -20993,7 +21469,7 @@ def main():
         elif selected_page == "Bảng xếp hạng":
             page_leaderboard()
 
-        elif selected_page == "Thống kê giải đấu":
+        elif selected_page == "Thông số giải đấu":
             page_competition_stats()
 
         elif selected_page == "Phân tích tổng quan":
