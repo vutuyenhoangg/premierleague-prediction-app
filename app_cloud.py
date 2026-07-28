@@ -19,13 +19,10 @@ from pathlib import Path
 from datetime import datetime, timezone, timedelta, date
 import pandas as pd
 import streamlit as st
-import plotly.express as px
 from streamlit_extras.stylable_container import stylable_container
 import secrets
 from streamlit_cookies_controller import CookieController
 import re
-from google import genai
-from google.genai import types
 import textwrap
 
 # ============================================================
@@ -303,6 +300,8 @@ def set_selected_season(season_slug: str):
     for cached_function in [
         load_matches,
         load_predictions,
+        load_user_predictions,
+        _load_user_star_usage_counts_cached,
         build_leaderboard_df,
         load_epl_top_scorers
     ]:
@@ -7281,6 +7280,7 @@ def get_engine() -> Engine:
         pool_timeout=15,
         pool_size=3,
         max_overflow=5,
+        pool_use_lifo=True,
         connect_args={
             "connect_timeout": 10,
             "options": "-c statement_timeout=20000 -c lock_timeout=5000"
@@ -7669,6 +7669,104 @@ def build_star_usage_result(
     }
 
 
+@st.cache_data(ttl=10, show_spinner=False)
+def _load_user_star_usage_counts_cached(
+    user_id: int,
+    season_slug: str,
+    use_all_predictions: bool
+) -> dict:
+    """
+    Tính trạng thái sao của một user đúng một lần trong mỗi chu kỳ cache.
+
+    Kết quả giữ cả đóng góp theo match_id, nhờ đó việc loại trận đang sửa
+    chỉ còn là phép trừ O(1), thay vì merge/apply lại toàn bộ dữ liệu mỗi card.
+    """
+    if use_all_predictions:
+        predictions = load_predictions(season_slug)
+
+        if not predictions.empty:
+            predictions = predictions[
+                predictions["user_id"].astype(int) == int(user_id)
+            ]
+    else:
+        predictions = load_user_predictions(
+            int(user_id),
+            season_slug
+        )
+
+    matches = load_matches(season_slug)
+
+    counts = {
+        "hope_locked_used": 0,
+        "super_locked_used": 0,
+        "hope_reserved_used": 0,
+        "super_reserved_used": 0
+    }
+    contributions = {}
+
+    if predictions.empty or matches.empty:
+        return {
+            **counts,
+            "contributions": contributions
+        }
+
+    match_info = matches[
+        [
+            "match_id",
+            "kickoff_time_utc",
+            "is_finished"
+        ]
+    ]
+
+    usage_rows = predictions.merge(
+        match_info,
+        on="match_id",
+        how="left"
+    )
+
+    for row in usage_rows.itertuples(index=False):
+        match_id = int(row.match_id)
+        star_type = normalize_star_type(row.star_type)
+        is_locked = is_match_locked_for_star(
+            row.kickoff_time_utc,
+            row.is_finished
+        )
+        is_reserved = is_match_open_for_star_transfer(
+            row.kickoff_time_utc,
+            row.is_finished
+        )
+
+        if star_type not in {
+            STAR_TYPE_HOPE,
+            STAR_TYPE_SUPER
+        }:
+            continue
+
+        contribution = {
+            "star_type": star_type,
+            "is_locked": bool(is_locked),
+            "is_reserved": bool(is_reserved)
+        }
+        contributions[match_id] = contribution
+
+        if star_type == STAR_TYPE_HOPE:
+            if is_locked:
+                counts["hope_locked_used"] += 1
+            elif is_reserved:
+                counts["hope_reserved_used"] += 1
+
+        elif star_type == STAR_TYPE_SUPER:
+            if is_locked:
+                counts["super_locked_used"] += 1
+            elif is_reserved:
+                counts["super_reserved_used"] += 1
+
+    return {
+        **counts,
+        "contributions": contributions
+    }
+
+
 def get_user_star_usage(user_id: int, exclude_match_id: int | None = None) -> dict:
     """
     Dùng cho UI.
@@ -7679,77 +7777,49 @@ def get_user_star_usage(user_id: int, exclude_match_id: int | None = None) -> di
     - left: số sao còn lại theo kho chính thức, chỉ trừ locked_used.
     - free_left: số sao còn trống để gắn ngay, đã trừ cả reserved_used.
     """
-    predictions = load_predictions(get_selected_season_slug())
-    matches = load_matches(get_selected_season_slug())
+    user_id = int(user_id)
+    season_slug = get_selected_season_slug()
+    use_all_predictions = st.session_state.get(
+        "selected_page",
+        "Lịch thi đấu & dự đoán"
+    ) in {
+        "Dự đoán của tôi",
+        "Bảng xếp hạng",
+        "Phân tích tổng quan",
+        "Admin"
+    }
 
-    if predictions.empty or matches.empty:
-        hope_locked_used = 0
-        super_locked_used = 0
-        hope_reserved_used = 0
-        super_reserved_used = 0
-    else:
-        user_predictions = predictions[
-            predictions["user_id"].astype(int) == int(user_id)
-        ].copy()
+    counts = _load_user_star_usage_counts_cached(
+        user_id,
+        season_slug,
+        use_all_predictions
+    )
 
-        if exclude_match_id is not None and not user_predictions.empty:
-            user_predictions = user_predictions[
-                user_predictions["match_id"].astype(int) != int(exclude_match_id)
-            ]
+    hope_locked_used = int(counts["hope_locked_used"])
+    super_locked_used = int(counts["super_locked_used"])
+    hope_reserved_used = int(counts["hope_reserved_used"])
+    super_reserved_used = int(counts["super_reserved_used"])
 
-        if user_predictions.empty:
-            hope_locked_used = 0
-            super_locked_used = 0
-            hope_reserved_used = 0
-            super_reserved_used = 0
-        else:
-            match_cols = [
-                "match_id",
-                "kickoff_time_utc",
-                "is_finished"
-            ]
+    if exclude_match_id is not None:
+        contribution = counts["contributions"].get(
+            int(exclude_match_id)
+        )
 
-            match_info = matches[match_cols].copy()
+        if contribution:
+            star_type = contribution["star_type"]
 
-            df = user_predictions.merge(
-                match_info,
-                on="match_id",
-                how="left"
-            )
+            if star_type == STAR_TYPE_HOPE:
+                if contribution["is_locked"]:
+                    hope_locked_used = max(0, hope_locked_used - 1)
+                elif contribution["is_reserved"]:
+                    hope_reserved_used = max(0, hope_reserved_used - 1)
 
-            df["star_type"] = df["star_type"].apply(normalize_star_type)
+            elif star_type == STAR_TYPE_SUPER:
+                if contribution["is_locked"]:
+                    super_locked_used = max(0, super_locked_used - 1)
+                elif contribution["is_reserved"]:
+                    super_reserved_used = max(0, super_reserved_used - 1)
 
-            df["is_star_locked"] = df.apply(
-                lambda row: is_match_locked_for_star(
-                    row.get("kickoff_time_utc"),
-                    row.get("is_finished")
-                ),
-                axis=1
-            )
-
-            df["is_star_reserved"] = df.apply(
-                lambda row: is_match_open_for_star_transfer(
-                    row.get("kickoff_time_utc"),
-                    row.get("is_finished")
-                ),
-                axis=1
-            )
-
-            hope_locked_used = int(
-                ((df["star_type"] == STAR_TYPE_HOPE) & df["is_star_locked"]).sum()
-            )
-
-            super_locked_used = int(
-                ((df["star_type"] == STAR_TYPE_SUPER) & df["is_star_locked"]).sum()
-            )
-
-            hope_reserved_used = int(
-                ((df["star_type"] == STAR_TYPE_HOPE) & df["is_star_reserved"]).sum()
-            )
-
-            super_reserved_used = int(
-                ((df["star_type"] == STAR_TYPE_SUPER) & df["is_star_reserved"]).sum()
-            )
     return build_star_usage_result(
         user_id=user_id,
         hope_locked_used=hope_locked_used,
@@ -8331,7 +8401,8 @@ def is_big_six_match(
         and away_team_key in BIG_SIX_CANONICAL_TEAMS
     )
 
-def get_match_card_css(status_info, row=None):
+@st.cache_data(show_spinner=False)
+def get_match_card_css(status_info):
     """
     Thiết kế chung cho toàn bộ card Premier League.
 
@@ -9827,6 +9898,11 @@ def clear_daily_checkin_cache():
         pass
 
     try:
+        get_all_daily_checkin_bonus_counts_cached.clear()
+    except Exception:
+        pass
+
+    try:
         get_daily_checkin_state_cached.clear()
     except Exception:
         pass
@@ -9871,6 +9947,40 @@ def get_daily_checkin_bonus_counts_cached(user_id: int) -> dict:
 
 def get_daily_checkin_bonus_counts(user_id: int) -> dict:
     return get_daily_checkin_bonus_counts_cached(int(user_id))
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def get_all_daily_checkin_bonus_counts_cached() -> dict[int, dict]:
+    """
+    Tải thưởng điểm danh của toàn bộ user bằng một query.
+    Chỉ dùng ở bảng xếp hạng để tránh một query riêng cho từng người chơi.
+    """
+    try:
+        rewards = read_sql(
+            """
+            SELECT
+                user_id,
+                COALESCE(SUM(CASE WHEN reward_type = 'hope' THEN amount ELSE 0 END), 0) AS hope_bonus,
+                COALESCE(SUM(CASE WHEN reward_type = 'super' THEN amount ELSE 0 END), 0) AS super_bonus
+            FROM daily_checkin_rewards
+            GROUP BY user_id
+            """
+        )
+    except Exception:
+        return {}
+
+    if rewards.empty:
+        return {}
+
+    result = {}
+
+    for row in rewards.itertuples(index=False):
+        result[int(row.user_id)] = {
+            "hope_bonus": int(row.hope_bonus or 0),
+            "super_bonus": int(row.super_bonus or 0)
+        }
+
+    return result
 
 
 def get_user_star_quota(user_id: int) -> dict:
@@ -10378,6 +10488,35 @@ def load_predictions(season_slug: str | None = None) -> pd.DataFrame:
     )
 
 
+@st.cache_data(ttl=10, show_spinner=False)
+def load_user_predictions(
+    user_id: int,
+    season_slug: str | None = None
+) -> pd.DataFrame:
+    """
+    Chỉ tải dự đoán của user hiện tại cho các màn hình cá nhân/card trận.
+
+    Bảng xếp hạng, dashboard và chấm điểm vẫn dùng load_predictions()
+    để giữ nguyên phạm vi dữ liệu toàn giải.
+    """
+    season_slug = season_slug or DEFAULT_SEASON_SLUG
+
+    return read_sql(
+        """
+        SELECT p.*
+        FROM predictions AS p
+        JOIN matches AS m
+          ON m.match_id = p.match_id
+        WHERE p.user_id = :user_id
+          AND m.season_slug = :season_slug
+        """,
+        {
+            "user_id": int(user_id),
+            "season_slug": season_slug
+        }
+    )
+
+
 @st.cache_data(ttl=300, show_spinner=False)
 def load_goal_scorers_for_match(match_id: int) -> pd.DataFrame:
     """
@@ -10722,6 +10861,12 @@ def clear_data_cache():
     load_matches.clear()
     load_users.clear()
     load_predictions.clear()
+    load_user_predictions.clear()
+
+    try:
+        _load_user_star_usage_counts_cached.clear()
+    except (NameError, AttributeError):
+        pass
 
     try:
         build_leaderboard_df.clear()
@@ -10749,9 +10894,41 @@ def clear_prediction_write_cache():
         pass
 
     try:
+        load_user_predictions.clear()
+    except (NameError, AttributeError):
+        pass
+
+    try:
+        _load_user_star_usage_counts_cached.clear()
+    except (NameError, AttributeError):
+        pass
+
+    try:
         build_leaderboard_df.clear()
     except (NameError, AttributeError):
         pass
+
+
+def clear_scoring_cache():
+    """
+    Chấm điểm chỉ đổi ba cột điểm trong predictions.
+    Giữ cache trạng thái sao vì star_type/kickoff không thay đổi.
+    """
+    try:
+        load_predictions.clear()
+    except (NameError, AttributeError):
+        pass
+
+    try:
+        load_user_predictions.clear()
+    except (NameError, AttributeError):
+        pass
+
+    try:
+        build_leaderboard_df.clear()
+    except (NameError, AttributeError):
+        pass
+
 
 def _lock_user_for_prediction_write(conn, user_id: int):
     """
@@ -11322,16 +11499,19 @@ def update_user_avatar(user_id: int, avatar_key: str):
 def get_user_prediction(user_id: int, match_id: int):
     """
     Dùng cho UI.
-    Lấy từ load_predictions() đã cache để tránh query database lặp lại cho từng card.
+    Lấy từ load_user_predictions() đã cache để tránh tải dự đoán của user khác
+    và tránh query database lặp lại cho từng card.
     """
-    predictions = load_predictions(get_selected_season_slug())
+    predictions = load_user_predictions(
+        int(user_id),
+        get_selected_season_slug()
+    )
 
     if predictions.empty:
         return None
 
     filtered = predictions[
-        (predictions["user_id"].astype(int) == int(user_id))
-        & (predictions["match_id"].astype(int) == int(match_id))
+        predictions["match_id"].astype(int) == int(match_id)
     ]
 
     if filtered.empty:
@@ -11377,6 +11557,8 @@ def get_match_by_id(match_id: int):
 
 @st.cache_resource(show_spinner=False)
 def get_gemini_client():
+    from google import genai
+
     if not GEMINI_API_KEY:
         raise ValueError("Chưa cấu hình GEMINI_API_KEY trong Streamlit Secrets.")
 
@@ -11533,6 +11715,8 @@ def save_ai_match_summary_to_db(
 
 
 def generate_ai_match_summary(match_row: dict) -> str:
+    from google.genai import types
+
     client = get_gemini_client()
     prompt = build_ai_match_summary_prompt(match_row)
 
@@ -11737,6 +11921,8 @@ def save_ai_match_suggestion_to_db(
 
 
 def generate_ai_match_suggestion(match_row: dict) -> str:
+    from google.genai import types
+
     client = get_gemini_client()
     prompt = build_ai_match_suggestion_prompt(match_row)
 
@@ -12310,55 +12496,165 @@ def score_all_predictions(season_slug: str | None = None):
     if predictions.empty:
         return
 
+    match_columns = [
+        "match_id",
+        "is_finished",
+        "home_score_for_prediction",
+        "away_score_for_prediction",
+        "is_knockout",
+        "winner_team_id"
+    ]
+
     df = predictions.merge(
-        matches,
+        matches[match_columns],
         on="match_id",
         how="left"
     )
 
-    scored_rows = []
+    actual_home = pd.to_numeric(
+        df["home_score_for_prediction"],
+        errors="coerce"
+    )
+    actual_away = pd.to_numeric(
+        df["away_score_for_prediction"],
+        errors="coerce"
+    )
+    is_finished = df["is_finished"].map(to_bool)
 
-    for _, row in df.iterrows():
-        is_finished = to_bool(row.get("is_finished"))
+    scored_mask = (
+        is_finished
+        & actual_home.notna()
+        & actual_away.notna()
+    )
 
-        actual_home = to_optional_int(row.get("home_score_for_prediction"))
-        actual_away = to_optional_int(row.get("away_score_for_prediction"))
+    if not bool(scored_mask.any()):
+        return
 
-        if not is_finished or actual_home is None or actual_away is None:
-            continue
+    scored = df.loc[scored_mask].copy()
+    actual_home = actual_home.loc[scored_mask]
+    actual_away = actual_away.loc[scored_mask]
 
-        base_points = calculate_total_points(row)
+    pred_home = pd.to_numeric(
+        scored["predicted_home_score"],
+        errors="coerce"
+    )
+    pred_away = pd.to_numeric(
+        scored["predicted_away_score"],
+        errors="coerce"
+    )
+    valid_prediction = pred_home.notna() & pred_away.notna()
 
-        point_info = calculate_points_with_star(
-            base_points=base_points,
-            star_type=row.get("star_type")
+    exact_score = (
+        valid_prediction
+        & pred_home.eq(actual_home)
+        & pred_away.eq(actual_away)
+    )
+
+    correct_outcome = valid_prediction & (
+        (
+            pred_home.gt(pred_away)
+            & actual_home.gt(actual_away)
         )
-
-        new_base_points = int(point_info["base_points"])
-        new_star_bonus_points = int(point_info["star_bonus_points"])
-        new_points = int(point_info["points"])
-
-        current_base_points = to_optional_int(row.get("base_points"))
-        current_star_bonus_points = to_optional_int(row.get("star_bonus_points"))
-        current_points = to_optional_int(row.get("points"))
-
-        # Chỉ ghi DB nếu điểm thật sự thay đổi.
-        # Đây là phần giúp giảm loading mạnh nhất.
-        if (
-            current_base_points == new_base_points
-            and current_star_bonus_points == new_star_bonus_points
-            and current_points == new_points
-        ):
-            continue
-
-        scored_rows.append(
-            {
-                "base_points": new_base_points,
-                "star_bonus_points": new_star_bonus_points,
-                "points": new_points,
-                "prediction_id": int(row["prediction_id"])
-            }
+        | (
+            pred_home.lt(pred_away)
+            & actual_home.lt(actual_away)
         )
+        | (
+            pred_home.eq(pred_away)
+            & actual_home.eq(actual_away)
+        )
+    )
+
+    new_base_points = correct_outcome.astype(int)
+    new_base_points.loc[exact_score] = 3
+
+    is_knockout = scored["is_knockout"].map(to_bool)
+    predicted_winner = pd.to_numeric(
+        scored["predicted_winner_team_id"],
+        errors="coerce"
+    )
+    actual_winner = pd.to_numeric(
+        scored["winner_team_id"],
+        errors="coerce"
+    )
+    correct_knockout_winner = (
+        is_knockout
+        & predicted_winner.notna()
+        & actual_winner.notna()
+        & predicted_winner.eq(actual_winner)
+    )
+
+    new_base_points = (
+        new_base_points
+        + correct_knockout_winner.astype(int)
+    ).astype(int)
+
+    normalized_stars = (
+        scored["star_type"]
+        .fillna(STAR_TYPE_NONE)
+        .astype(str)
+        .str.strip()
+        .str.lower()
+    )
+    normalized_stars = normalized_stars.where(
+        normalized_stars.isin(STAR_CONFIG),
+        STAR_TYPE_NONE
+    )
+    multipliers = (
+        normalized_stars
+        .map({
+            star_type: int(config["multiplier"])
+            for star_type, config in STAR_CONFIG.items()
+        })
+        .fillna(1)
+        .astype(int)
+    )
+
+    new_star_bonus_points = (
+        new_base_points * (multipliers - 1)
+    ).astype(int)
+    new_points = (
+        new_base_points * multipliers
+    ).astype(int)
+
+    current_base_points = pd.to_numeric(
+        scored["base_points"],
+        errors="coerce"
+    )
+    current_star_bonus_points = pd.to_numeric(
+        scored["star_bonus_points"],
+        errors="coerce"
+    )
+    current_points = pd.to_numeric(
+        scored["points"],
+        errors="coerce"
+    )
+
+    changed_mask = (
+        current_base_points.isna()
+        | current_star_bonus_points.isna()
+        | current_points.isna()
+        | current_base_points.ne(new_base_points)
+        | current_star_bonus_points.ne(new_star_bonus_points)
+        | current_points.ne(new_points)
+    )
+
+    if not bool(changed_mask.any()):
+        return
+
+    changed = pd.DataFrame(
+        {
+            "prediction_id": pd.to_numeric(
+                scored.loc[changed_mask, "prediction_id"],
+                errors="raise"
+            ).astype(int),
+            "base_points": new_base_points.loc[changed_mask].astype(int),
+            "star_bonus_points": new_star_bonus_points.loc[changed_mask].astype(int),
+            "points": new_points.loc[changed_mask].astype(int)
+        }
+    )
+
+    scored_rows = changed.to_dict("records")
 
     if not scored_rows:
         return
@@ -12375,7 +12671,9 @@ def score_all_predictions(season_slug: str | None = None):
         scored_rows
     )
 
-    clear_data_cache()
+    # Chấm điểm chỉ thay đổi bảng predictions.
+    # Giữ cache matches/users/goal scorers để tránh query lại không cần thiết.
+    clear_scoring_cache()
 
 
 def update_match_result(
@@ -14250,89 +14548,7 @@ def render_match_card(
         existing = user_prediction_map.get(match_id)
 
     status_info = get_match_status_info(row)
-    card_css = get_match_card_css(
-        status_info,
-        row=row
-    )
-
-    def load_transfer_candidates_for_card(star_type: str) -> list[dict]:
-        """
-        Lấy các trận đang giữ tạm loại sao này và vẫn còn mở dự đoán,
-        để người chơi có thể chọn chuyển sao sang trận hiện tại.
-        """
-        star_type = normalize_star_type(star_type)
-
-        if star_type == STAR_TYPE_NONE:
-            return []
-
-        try:
-            df_candidates = read_sql(
-                """
-                SELECT
-                    p.prediction_id,
-                    p.match_id,
-                    p.star_type,
-                    m.home_team_name,
-                    m.away_team_name,
-                    m.round_name,
-                    m.kickoff_date_display_vietnam,
-                    m.kickoff_date_vietnam,
-                    m.kickoff_time_vietnam,
-                    m.kickoff_time_utc,
-                    m.is_finished
-                FROM predictions p
-                JOIN matches m
-                  ON p.match_id = m.match_id
-                WHERE p.user_id = :user_id
-                  AND p.match_id <> :target_match_id
-                  AND p.star_type = :star_type
-                  AND m.season_slug = :season_slug
-                ORDER BY m.kickoff_time_utc
-                """,
-                {
-                    "user_id": int(user_id),
-                    "target_match_id": int(match_id),
-                    "star_type": star_type,
-                    "season_slug": get_selected_season_slug()
-                }
-            )
-        except Exception:
-            return []
-
-        if df_candidates.empty:
-            return []
-
-        candidates = []
-
-        for _, candidate_row in df_candidates.iterrows():
-            candidate_match_id = int(candidate_row["match_id"])
-
-            candidate_is_open = (
-                not to_bool(candidate_row.get("is_finished"))
-                and can_edit_prediction(candidate_row.get("kickoff_time_utc"))
-            )
-
-            if not candidate_is_open:
-                continue
-
-            date_text = candidate_row.get(
-                "kickoff_date_display_vietnam",
-                candidate_row.get("kickoff_date_vietnam", "")
-            )
-
-            label = (
-                f"{candidate_row.get('home_team_name')} vs {candidate_row.get('away_team_name')}"
-                f" | {candidate_row.get('round_name')}"
-                f" | {date_text} {candidate_row.get('kickoff_time_vietnam', '')}"
-            )
-
-            candidates.append({
-                "prediction_id": int(candidate_row["prediction_id"]),
-                "match_id": candidate_match_id,
-                "label": label
-            })
-
-        return candidates
+    card_css = get_match_card_css(status_info)
 
     with stylable_container(
         key=card_container_key,
@@ -15649,7 +15865,10 @@ def page_matches():
             filtered["is_finished"].apply(to_bool)
         ]
 
-    user_predictions = load_predictions(get_selected_season_slug())
+    user_predictions = load_user_predictions(
+        user_id,
+        get_selected_season_slug()
+    )
     user_prediction_map = build_user_prediction_map(
         predictions=user_predictions,
         user_id=user_id
@@ -15876,71 +16095,96 @@ def build_leaderboard_df(season_slug: str | None = None):
 
         return result
 
-    df = predictions.merge(users, on="user_id", how="left")
-    df = df.merge(matches, on="match_id", how="left")
+    match_columns = [
+        "match_id",
+        "home_score_for_prediction",
+        "away_score_for_prediction",
+        "is_finished",
+        "is_knockout",
+        "winner_team_id",
+        "kickoff_time_utc"
+    ]
+
+    df = predictions.merge(
+        users,
+        on="user_id",
+        how="left"
+    )
+    df = df.merge(
+        matches[match_columns],
+        on="match_id",
+        how="left"
+    )
 
     if "avatar_key" not in df.columns:
         df["avatar_key"] = DEFAULT_AVATAR_KEY
 
-    metrics = []
+    pred_home = pd.to_numeric(
+        df["predicted_home_score"],
+        errors="coerce"
+    )
+    pred_away = pd.to_numeric(
+        df["predicted_away_score"],
+        errors="coerce"
+    )
+    actual_home = pd.to_numeric(
+        df["home_score_for_prediction"],
+        errors="coerce"
+    )
+    actual_away = pd.to_numeric(
+        df["away_score_for_prediction"],
+        errors="coerce"
+    )
+    is_finished = df["is_finished"].map(to_bool)
 
-    for _, row in df.iterrows():
-        pred_home = to_optional_int(row.get("predicted_home_score"))
-        pred_away = to_optional_int(row.get("predicted_away_score"))
+    df["is_scored"] = (
+        pred_home.notna()
+        & pred_away.notna()
+        & actual_home.notna()
+        & actual_away.notna()
+        & is_finished
+    )
 
-        actual_home = to_optional_int(row.get("home_score_for_prediction"))
-        actual_away = to_optional_int(row.get("away_score_for_prediction"))
+    df["exact_score"] = (
+        df["is_scored"]
+        & pred_home.eq(actual_home)
+        & pred_away.eq(actual_away)
+    )
 
-        is_scored = (
-            pred_home is not None
-            and pred_away is not None
-            and actual_home is not None
-            and actual_away is not None
-            and to_bool(row.get("is_finished"))
+    df["correct_outcome"] = df["is_scored"] & (
+        (
+            pred_home.gt(pred_away)
+            & actual_home.gt(actual_away)
         )
-
-        exact = False
-        correct_outcome = False
-
-        if is_scored:
-            exact = pred_home == actual_home and pred_away == actual_away
-            correct_outcome = (
-                get_outcome(pred_home, pred_away)
-                == get_outcome(actual_home, actual_away)
-            )
-
-        is_knockout = to_bool(row.get("is_knockout"))
-
-        knockout_winner_checkable = (
-            is_scored
-            and is_knockout
-            and to_optional_int(row.get("winner_team_id")) is not None
+        | (
+            pred_home.lt(pred_away)
+            & actual_home.lt(actual_away)
         )
+        | (
+            pred_home.eq(pred_away)
+            & actual_home.eq(actual_away)
+        )
+    )
 
-        knockout_winner_correct = False
+    is_knockout = df["is_knockout"].map(to_bool)
+    predicted_winner = pd.to_numeric(
+        df["predicted_winner_team_id"],
+        errors="coerce"
+    )
+    actual_winner = pd.to_numeric(
+        df["winner_team_id"],
+        errors="coerce"
+    )
 
-        if knockout_winner_checkable:
-            knockout_winner_correct = (
-                to_optional_int(row.get("predicted_winner_team_id"))
-                == to_optional_int(row.get("winner_team_id"))
-            )
+    df["knockout_winner_checkable"] = (
+        df["is_scored"]
+        & is_knockout
+        & actual_winner.notna()
+    )
 
-        metrics.append({
-            "is_scored": is_scored,
-            "exact_score": exact,
-            "correct_outcome": correct_outcome,
-            "knockout_winner_checkable": knockout_winner_checkable,
-            "knockout_winner_correct": knockout_winner_correct
-        })
-
-    metrics_df = pd.DataFrame(metrics)
-
-    df = pd.concat(
-        [
-            df.reset_index(drop=True),
-            metrics_df.reset_index(drop=True)
-        ],
-        axis=1
+    df["knockout_winner_correct"] = (
+        df["knockout_winner_checkable"]
+        & predicted_winner.eq(actual_winner)
     )
 
     df["points"] = pd.to_numeric(
@@ -15958,18 +16202,31 @@ def build_leaderboard_df(season_slug: str | None = None):
         errors="coerce"
     ).fillna(0)
 
-    df["star_type"] = df["star_type"].apply(normalize_star_type)
-    
+    normalized_stars = (
+        df["star_type"]
+        .fillna(STAR_TYPE_NONE)
+        .astype(str)
+        .str.strip()
+        .str.lower()
+    )
+    df["star_type"] = normalized_stars.where(
+        normalized_stars.isin(STAR_CONFIG),
+        STAR_TYPE_NONE
+    )
+
     # Chỉ tính sao là đã dùng thật khi trận đã khóa dự đoán.
     # Sao đang đặt ở trận chưa diễn ra không bị trừ khỏi kho sao thực tế.
-    df["is_star_locked_for_usage"] = df.apply(
-        lambda row: is_match_locked_for_star(
-            row.get("kickoff_time_utc"),
-            row.get("is_finished")
-        ),
-        axis=1
+    kickoff_time = pd.to_datetime(
+        df["kickoff_time_utc"],
+        utc=True,
+        errors="coerce"
     )
-    
+    df["is_star_locked_for_usage"] = (
+        is_finished
+        | kickoff_time.isna()
+        | kickoff_time.le(pd.Timestamp.now(tz="UTC"))
+    )
+
     df["hope_star_used"] = (
         (df["star_type"] == STAR_TYPE_HOPE)
         & df["is_star_locked_for_usage"]
@@ -16018,20 +16275,33 @@ def build_leaderboard_df(season_slug: str | None = None):
     for col in numeric_cols:
         summary[col] = summary[col].fillna(0).astype(int)
 
-    summary["exact_score_rate"] = summary.apply(
-        lambda row: row["exact_score_count"] / row["num_scored"]
-        if row["num_scored"] else 0,
-        axis=1
+    summary["exact_score_rate"] = (
+        summary["exact_score_count"].astype(float)
+        .div(
+            summary["num_scored"].astype(float).where(
+                summary["num_scored"].ne(0)
+            )
+        )
+        .fillna(0.0)
     )
 
     summary["result_prediction_checkable"] = summary["num_scored"]
     
     summary["result_prediction_correct"] = summary["correct_outcome_count"]
     
-    summary["result_prediction_rate"] = summary.apply(
-        lambda row: row["result_prediction_correct"] / row["result_prediction_checkable"]
-        if row["result_prediction_checkable"] else 0,
-        axis=1
+    summary["result_prediction_rate"] = (
+        summary["result_prediction_correct"]
+        .astype(float)
+        .div(
+            summary["result_prediction_checkable"]
+            .astype(float)
+            .where(
+                summary[
+                    "result_prediction_checkable"
+                ].ne(0)
+            )
+        )
+        .fillna(0.0)
     )
 
     summary = summary.sort_values(
@@ -17967,30 +18237,53 @@ def page_leaderboard():
     if "avatar_key" not in leaderboard.columns:
         leaderboard["avatar_key"] = DEFAULT_AVATAR_KEY
 
-    def format_hope_star_display_for_leaderboard(row):
-        quota = get_user_star_quota(int(row["user_id"]))
-        hope_total = int(quota["hope_total"])
-        hope_used = int(row["hope_stars_used"])
-    
-        return f"{max(0, hope_total - hope_used)}/{hope_total}"
-    
-    
-    def format_super_star_display_for_leaderboard(row):
-        quota = get_user_star_quota(int(row["user_id"]))
-        super_total = int(quota["super_total"])
-        super_used = int(row["super_stars_used"])
-    
-        return f"{max(0, super_total - super_used)}/{super_total}"
-    
-    
-    leaderboard["hope_star_display"] = leaderboard.apply(
-        format_hope_star_display_for_leaderboard,
-        axis=1
+    bonus_by_user = get_all_daily_checkin_bonus_counts_cached()
+    user_ids = leaderboard["user_id"].astype(int)
+
+    hope_totals = user_ids.map(
+        lambda user_id: (
+            HOPE_STARS_PER_USER
+            + int(
+                bonus_by_user.get(
+                    int(user_id),
+                    {}
+                ).get("hope_bonus", 0)
+            )
+        )
+    ).astype(int)
+
+    super_totals = user_ids.map(
+        lambda user_id: (
+            SUPER_STARS_PER_USER
+            + int(
+                bonus_by_user.get(
+                    int(user_id),
+                    {}
+                ).get("super_bonus", 0)
+            )
+        )
+    ).astype(int)
+
+    hope_used = pd.to_numeric(
+        leaderboard["hope_stars_used"],
+        errors="coerce"
+    ).fillna(0).astype(int)
+
+    super_used = pd.to_numeric(
+        leaderboard["super_stars_used"],
+        errors="coerce"
+    ).fillna(0).astype(int)
+
+    leaderboard["hope_star_display"] = (
+        (hope_totals - hope_used).clip(lower=0).astype(str)
+        + "/"
+        + hope_totals.astype(str)
     )
-    
-    leaderboard["super_star_display"] = leaderboard.apply(
-        format_super_star_display_for_leaderboard,
-        axis=1
+
+    leaderboard["super_star_display"] = (
+        (super_totals - super_used).clip(lower=0).astype(str)
+        + "/"
+        + super_totals.astype(str)
     )
     display_df = leaderboard[
         [
@@ -18222,6 +18515,8 @@ def page_leaderboard():
     st.table(styled_df)
 
 def page_dashboard():
+    import plotly.express as px
+
     render_page_title(
         "Bảng phân tích tổng quan",
         "Phân tích tổng quan hiệu suất dự đoán, điểm số và độ chính xác của tất cả người chơi."
