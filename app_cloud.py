@@ -1267,7 +1267,7 @@ def inject_epl_theme():
         }}
 
         .block-container {{
-            padding-top: 1rem !important;
+            padding-top: 0rem !important;
             padding-bottom: 2.4rem;
             max-width: 1440px;
         }}
