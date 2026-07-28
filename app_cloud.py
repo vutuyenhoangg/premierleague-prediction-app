@@ -17413,6 +17413,9 @@ def render_epl_top_scorers_club_filter(
         .epl-club-filter-current-logo img {
             width: 34px;
             height: 34px;
+        
+            /* Đẩy riêng logo hiện tại lên trên */
+            transform: translateY(-3px);
         }
 
         .epl-club-filter-option-logo img {
