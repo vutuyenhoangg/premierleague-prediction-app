@@ -2435,12 +2435,12 @@ def inject_epl_big_match_card_css():
     Giao diện riêng cho Big Match.
 
     Chỉ thay đổi phong cách hiển thị:
-    - Viền tím–vàng
-    - Ánh sáng chạy quanh card
+    - Ánh vàng nhẹ trên ảnh background
     - Tiêu đề và chữ VS
     - Ribbon Big Match
 
-    Ảnh nền kế thừa hoàn toàn CSS của card thường.
+    Khung, viền trạng thái, kích thước và bố cục
+    kế thừa hoàn toàn từ card thường.
     """
     st.markdown(
         """
@@ -2480,107 +2480,54 @@ def inject_epl_big_match_card_css():
         }
 
         /* =====================================================
-           KHUNG BIG MATCH
-           Không thay padding, margin hoặc kích thước card.
+           ÁNH VÀNG TINH TẾ TRÊN BACKGROUND BIG MATCH
+        
+           ::before tiếp tục kế thừa viền trạng thái của card thường.
+           ::after tiếp tục sử dụng chính ảnh nền dùng chung,
+           chỉ bổ sung sắc vàng nhẹ.
            ===================================================== */
-
-        /* =====================================================
-           KHUNG DÁT VÀNG BIG MATCH
-           ===================================================== */
         
-        div[class*="st-key-match_card_big_"] {
-            border-color:
-                #6E430C !important;
+        div[class*="st-key-match_card_big_"]::after {
+            /*
+             * Không khai báo lại background-image.
+             * Ảnh nền vẫn được lấy từ
+             * inject_epl_match_card_background_css().
+             */
+            background-color:
+                rgba(215, 165, 46, 0.58) !important;
         
-            box-shadow:
-                0 0 0 1px rgba(47, 16, 0, 0.96),
-                0 0 0 2px rgba(126, 76, 11, 0.98),
-                0 0 0 3px rgba(255, 239, 176, 0.98),
-                0 0 0 5px rgba(175, 112, 18, 0.98),
-                0 0 0 7px rgba(55, 0, 60, 0.99),
-                0 0 0 9px rgba(214, 168, 53, 0.38),
-        
-                0 28px 72px rgba(55, 0, 60, 0.28),
-                0 11px 32px var(--epl-card-status-glow),
-        
-                inset 0 0 0 1px rgba(255, 245, 201, 0.90),
-                inset 0 0 0 3px rgba(126, 76, 11, 0.17),
-                inset 0 0 42px rgba(218, 166, 51, 0.10)
-                !important;
-        }
-        
-        /*
-         * Ghi đè lớp viền động dùng chung.
-         * Lớp mask cũ vẫn được giữ nên vàng chỉ xuất hiện ở viền,
-         * không phủ lên nội dung hoặc ảnh background.
-         */
-        div[class*="st-key-match_card_big_"]::before {
-            background:
-                repeating-linear-gradient(
-                    127deg,
-                    rgba(255, 249, 207, 0.96) 0 1px,
-                    rgba(189, 125, 24, 0.72) 1px 4px,
-                    transparent 4px 11px
-                )
-                0 0 / 47px 31px,
-        
-                repeating-linear-gradient(
-                    39deg,
-                    transparent 0 7px,
-                    rgba(255, 225, 125, 0.66) 7px 9px,
-                    transparent 9px 18px
-                )
-                0 0 / 59px 37px,
-        
-                linear-gradient(
-                    112deg,
-                    #4F2A04 0%,
-                    #9C6210 9%,
-                    #D8A83D 17%,
-                    #FFF2AE 24%,
-                    #B87919 31%,
-                    #E9C966 40%,
-                    #FFF8CF 48%,
-                    #A86A12 57%,
-                    #DDB34E 68%,
-                    #704006 78%,
-                    #F0D57A 89%,
-                    #8E570C 100%
-                )
-                0 0 / 260% 100%
+            /*
+             * CSS nền chung hiện có hai lớp:
+             * 1. Linear gradient sáng
+             * 2. Ảnh background
+             */
+            background-blend-mode:
+                soft-light,
+                soft-light
                 !important;
         
-            border-radius:
-                inherit !important;
-        
+            /*
+             * Giữ nguyên độ mờ desktop của card thường.
+             */
             opacity:
-                0.98 !important;
+                0.18 !important;
         
             filter:
-                drop-shadow(
-                    0 0 5px rgba(232, 194, 91, 0.42)
-                )
+                sepia(0.26)
+                saturate(1.15)
+                brightness(1.03)
+                contrast(1.02)
                 !important;
         
-            animation:
-                eplGoldLeafTextureDrift
-                7.5s
-                ease-in-out
-                infinite
+            /*
+             * Ánh vàng tập trung nhẹ ở mép và trung tâm,
+             * không tạo thêm đường viền ngoài card.
+             */
+            box-shadow:
+                inset 0 0 120px rgba(179, 118, 12, 0.28),
+                inset 0 0 36px rgba(255, 244, 194, 0.18)
                 !important;
-        
-            will-change:
-                background-position;
         }
-        /*
-         * Không viết selector ::after cho Big Match.
-         *
-         * Vì vậy ảnh nền tự động kế thừa chính xác:
-         * - Desktop: opacity 0.18
-         * - Mobile: opacity 0.14
-         *
-         * giống tất cả card bình thường.
-         */
 
         /* =====================================================
            TIÊU ĐỀ
@@ -2832,25 +2779,32 @@ def inject_epl_big_match_card_css():
            ===================================================== */
 
         @media (max-width: 768px) {
-            div[class*="st-key-match_card_big_"] {
-                box-shadow:
-                    0 0 0 1px rgba(47, 16, 0, 0.96),
-                    0 0 0 2px rgba(255, 235, 160, 0.97),
-                    0 0 0 4px rgba(166, 103, 15, 0.98),
-                    0 0 0 6px rgba(55, 0, 60, 0.99),
-                    0 0 0 8px rgba(214, 168, 53, 0.32),
+            div[class*="st-key-match_card_big_"]::after {
+                /*
+                 * Giữ đúng độ mờ background mobile của card thường.
+                 */
+                opacity:
+                    0.14 !important;
             
-                    0 19px 44px rgba(55, 0, 60, 0.23),
-                    0 7px 22px var(--epl-card-status-glow),
+                background-color:
+                    rgba(215, 165, 46, 0.60) !important;
             
-                    inset 0 0 0 1px rgba(255, 245, 201, 0.88),
-                    inset 0 0 28px rgba(218, 166, 51, 0.08)
+                background-blend-mode:
+                    soft-light,
+                    soft-light
                     !important;
-            }
             
-            div[class*="st-key-match_card_big_"]::before {
-                animation-duration:
-                    9s !important;
+                filter:
+                    sepia(0.24)
+                    saturate(1.13)
+                    brightness(1.025)
+                    contrast(1.015)
+                    !important;
+            
+                box-shadow:
+                    inset 0 0 72px rgba(179, 118, 12, 0.25),
+                    inset 0 0 24px rgba(255, 244, 194, 0.16)
+                    !important;
             }
 
             div[class*="st-key-match_card_big_"]
@@ -2910,8 +2864,6 @@ def inject_epl_big_match_card_css():
         }
 
         @media (prefers-reduced-motion: reduce) {
-            div[class*="st-key-match_card_big_"]::before,
-        
             div[class*="st-key-match_card_big_"]
             .epl-big-match-ribbon::before,
         
