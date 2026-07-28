@@ -10266,22 +10266,34 @@ def load_goal_scorers_for_match(match_id: int) -> pd.DataFrame:
 
 @st.cache_data(ttl=300, show_spinner=False)
 def load_epl_top_scorers(
-    season_slug: str | None = None
+    season_slug: str | None = None,
+    team_id: int | None = None
 ) -> pd.DataFrame:
     """
-    Tính bảng Vua phá lưới từ match_goals của đúng mùa đang chọn.
+    Tính danh sách ghi bàn của đúng mùa đang chọn.
 
-    - Mỗi dòng bàn thắng hợp lệ được tính là 1 bàn.
+    - team_id=None: top 20 cầu thủ toàn giải.
+    - Có team_id: toàn bộ cầu thủ ghi bàn cho CLB đó.
     - Không tính phản lưới nhà.
-    - Penalty vẫn được tính bình thường.
-    - Chuẩn hóa tên bằng LOWER(TRIM(...)).
-    - Nếu cầu thủ xuất hiện ở nhiều CLB, hiển thị CLB của
-      lần ghi bàn gần nhất có trong dữ liệu.
+    - Penalty vẫn được tính.
     """
     season_slug = season_slug or DEFAULT_SEASON_SLUG
 
-    scorers = read_sql(
+    params = {
+        "season_slug": season_slug
+    }
+
+    team_filter_sql = ""
+
+    if team_id is not None:
+        params["team_id"] = int(team_id)
+
+        team_filter_sql = """
+          AND mg.team_id = :team_id
         """
+
+    scorers = read_sql(
+        f"""
         WITH valid_goals AS (
             SELECT
                 LOWER(TRIM(mg.player_name)) AS player_key,
@@ -10321,6 +10333,8 @@ def load_epl_top_scorers(
                     TRIM(mg.player_name),
                     ''
                   ) IS NOT NULL
+
+              {team_filter_sql}
         ),
 
         player_totals AS (
@@ -10363,9 +10377,7 @@ def load_epl_top_scorers(
             totals.goals DESC,
             info.player_name ASC
         """,
-        {
-            "season_slug": season_slug
-        }
+        params
     )
 
     if scorers.empty:
@@ -10384,8 +10396,13 @@ def load_epl_top_scorers(
         errors="coerce"
     ).fillna(0).astype(int)
 
-    # Các cầu thủ bằng số bàn thắng sẽ có cùng thứ hạng.
-    # Ví dụ: 1, 2, 2, 4.
+    # Tất cả = đúng 20 cầu thủ đầu tiên toàn giải.
+    # Chọn CLB = không giới hạn số cầu thủ.
+    if team_id is None:
+        scorers = scorers.head(20).copy()
+    else:
+        scorers = scorers.copy()
+
     scorers["rank"] = (
         scorers["goals"]
         .rank(
@@ -10403,7 +10420,7 @@ def load_epl_top_scorers(
             "club_logo",
             "goals"
         ]
-    ]
+    ].reset_index(drop=True)
 
 def format_goal_text(row) -> str:
     """
@@ -16413,6 +16430,609 @@ def render_competition_stats_view_switcher() -> str:
 
     return active_view
 
+def build_epl_season_clubs_df(
+    matches: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    Lấy các CLB xuất hiện trong lịch thi đấu của mùa.
+
+    Không lấy từ match_goals vì một CLB chưa ghi bàn
+    vẫn phải xuất hiện trong bộ lọc.
+    """
+    columns = [
+        "team_id",
+        "club_name",
+        "club_logo"
+    ]
+
+    if matches.empty:
+        return pd.DataFrame(columns=columns)
+
+    clubs = {}
+
+    for _, row in matches.iterrows():
+        for side in ["home", "away"]:
+            team_id = to_optional_int(
+                row.get(f"{side}_team_id")
+            )
+
+            raw_name = row.get(
+                f"{side}_team_name"
+            )
+
+            if (
+                team_id is None
+                or raw_name is None
+                or pd.isna(raw_name)
+            ):
+                continue
+
+            club_name = str(raw_name).strip()
+
+            if (
+                not club_name
+                or is_unknown_team(club_name)
+            ):
+                continue
+
+            raw_logo = row.get(
+                f"{side}_team_logo_path"
+            )
+
+            if (
+                raw_logo is None
+                or pd.isna(raw_logo)
+            ):
+                club_logo = ""
+            else:
+                club_logo = str(raw_logo).strip()
+
+            if team_id not in clubs:
+                clubs[team_id] = {
+                    "team_id": team_id,
+                    "club_name": club_name,
+                    "club_logo": club_logo
+                }
+
+            elif (
+                not clubs[team_id]["club_logo"]
+                and club_logo
+            ):
+                clubs[team_id][
+                    "club_logo"
+                ] = club_logo
+
+    clubs_df = pd.DataFrame(
+        clubs.values(),
+        columns=columns
+    )
+
+    if clubs_df.empty:
+        return clubs_df
+
+    clubs_df["_sort_name"] = (
+        clubs_df["club_name"]
+        .astype(str)
+        .str.casefold()
+    )
+
+    clubs_df = (
+        clubs_df
+        .sort_values("_sort_name")
+        .drop(columns="_sort_name")
+        .reset_index(drop=True)
+    )
+
+    return clubs_df
+
+def render_epl_top_scorers_club_filter(
+    clubs_df: pd.DataFrame,
+    season_slug: str
+) -> dict:
+    """
+    Hiển thị bộ lọc CLB dạng popover.
+
+    Giá trị mặc định của mỗi mùa là Tất cả.
+    """
+    clubs = []
+
+    for _, row in clubs_df.iterrows():
+        team_id = to_optional_int(
+            row.get("team_id")
+        )
+
+        if team_id is None:
+            continue
+
+        club_name = str(
+            row.get("club_name", "")
+        ).strip()
+
+        raw_logo = row.get(
+            "club_logo",
+            ""
+        )
+
+        if (
+            raw_logo is None
+            or pd.isna(raw_logo)
+        ):
+            club_logo = ""
+        else:
+            club_logo = str(raw_logo).strip()
+
+        clubs.append(
+            {
+                "team_id": team_id,
+                "club_name": club_name,
+                "club_logo": club_logo
+            }
+        )
+
+    clubs.sort(
+        key=lambda club: club[
+            "club_name"
+        ].casefold()
+    )
+
+    season_key = season_slug.replace(
+        "-",
+        "_"
+    )
+
+    state_key = (
+        f"top_scorers_club_filter_{season_key}"
+    )
+
+    raw_selected_id = (
+        st.session_state.get(
+            state_key,
+            "all"
+        )
+    )
+
+    if raw_selected_id == "all":
+        selected_id = None
+    else:
+        selected_id = to_optional_int(
+            raw_selected_id
+        )
+
+    valid_team_ids = {
+        club["team_id"]
+        for club in clubs
+    }
+
+    if (
+        selected_id is not None
+        and selected_id not in valid_team_ids
+    ):
+        selected_id = None
+        st.session_state[state_key] = "all"
+
+    selected_club = {
+        "team_id": None,
+        "club_name": "Tất cả",
+        "club_logo": ""
+    }
+
+    if selected_id is not None:
+        selected_club = next(
+            (
+                club
+                for club in clubs
+                if club["team_id"] == selected_id
+            ),
+            selected_club
+        )
+
+    def build_logo_html(
+        club: dict,
+        option_logo: bool = False
+    ) -> str:
+        club_name = str(
+            club.get(
+                "club_name",
+                ""
+            )
+        ).strip()
+
+        logo_path = str(
+            club.get(
+                "club_logo",
+                ""
+            )
+            or ""
+        ).strip()
+
+        logo_src = (
+            resolve_asset_src(logo_path)
+            if logo_path
+            else ""
+        )
+
+        class_name = (
+            "epl-club-filter-option-logo"
+            if option_logo
+            else "epl-club-filter-current-logo"
+        )
+
+        if logo_src:
+            return (
+                f'<div class="{class_name}">'
+                f'<img '
+                f'src="{html.escape(logo_src, quote=True)}" '
+                f'alt="{html.escape(club_name, quote=True)}">'
+                f'</div>'
+            )
+
+        fallback = (
+            "ALL"
+            if club.get("team_id") is None
+            else "".join(
+                part[0]
+                for part in club_name.split()
+                if part
+            )[:3].upper()
+        )
+
+        return (
+            f'<div class="{class_name} '
+            f'epl-club-filter-fallback">'
+            f'{html.escape(fallback)}'
+            f'</div>'
+        )
+
+    st.markdown(
+        """
+        <style>
+        div[class*="st-key-epl_scorers_club_filter_"] {
+            width: 100% !important;
+            max-width: 300px !important;
+
+            padding: 7px 9px !important;
+
+            border:
+                1px solid rgba(72, 24, 120, 0.16)
+                !important;
+
+            border-radius: 14px !important;
+
+            background:
+                rgba(255, 255, 255, 0.92)
+                !important;
+
+            box-shadow:
+                0 10px 28px rgba(37, 15, 62, 0.08),
+                inset 0 1px 0 rgba(255, 255, 255, 0.90)
+                !important;
+        }
+
+        div[class*="st-key-epl_scorers_club_filter_"]
+        div[data-testid="stHorizontalBlock"] {
+            align-items: center !important;
+            gap: 7px !important;
+        }
+
+        div[class*="st-key-epl_scorers_club_filter_"]
+        div[data-testid="stColumn"] {
+            padding: 0 !important;
+            min-width: 0 !important;
+        }
+
+        div[class*="st-key-epl_scorers_club_filter_"]
+        div[data-testid="stPopover"] {
+            width: 100% !important;
+        }
+
+        div[class*="st-key-epl_scorers_club_filter_"]
+        div[data-testid="stPopover"] > button,
+
+        div[class*="st-key-epl_scorers_club_filter_"]
+        div[data-testid="stPopover"] > div > button {
+            width: 100% !important;
+            min-height: 42px !important;
+
+            justify-content:
+                space-between !important;
+
+            padding:
+                0 12px !important;
+
+            border:
+                0 !important;
+
+            border-radius:
+                10px !important;
+
+            background:
+                transparent !important;
+
+            color:
+                #301060 !important;
+
+            box-shadow:
+                none !important;
+
+            font-size:
+                13px !important;
+
+            font-weight:
+                850 !important;
+
+            white-space:
+                nowrap !important;
+
+            overflow:
+                hidden !important;
+
+            text-overflow:
+                ellipsis !important;
+        }
+
+        div[class*="st-key-epl_scorers_club_filter_"]
+        div[data-testid="stPopover"] > button:hover,
+
+        div[class*="st-key-epl_scorers_club_filter_"]
+        div[data-testid="stPopover"] > div > button:hover {
+            background:
+                rgba(72, 24, 120, 0.06)
+                !important;
+        }
+
+        .epl-club-filter-current-logo,
+        .epl-club-filter-option-logo {
+            display: flex;
+
+            align-items: center;
+            justify-content: center;
+
+            overflow: hidden;
+
+            background:
+                rgba(72, 24, 120, 0.055);
+
+            color:
+                #3A0F70;
+
+            font-weight:
+                950;
+        }
+
+        .epl-club-filter-current-logo {
+            width: 40px;
+            height: 40px;
+
+            border-radius:
+                11px;
+
+            font-size:
+                9px;
+        }
+
+        .epl-club-filter-option-logo {
+            width: 31px;
+            height: 31px;
+
+            margin:
+                5px auto;
+
+            border-radius:
+                9px;
+
+            font-size:
+                8px;
+        }
+
+        .epl-club-filter-current-logo img,
+        .epl-club-filter-option-logo img {
+            width: 78%;
+            height: 78%;
+
+            display: block;
+
+            object-fit:
+                contain;
+        }
+
+        div[class*="st-key-epl_scorer_club_option_"]
+        button {
+            min-height:
+                39px !important;
+
+            justify-content:
+                flex-start !important;
+
+            padding:
+                0 11px !important;
+
+            border:
+                1px solid transparent !important;
+
+            border-radius:
+                9px !important;
+
+            background:
+                transparent !important;
+
+            color:
+                #334155 !important;
+
+            box-shadow:
+                none !important;
+
+            font-size:
+                13px !important;
+
+            font-weight:
+                780 !important;
+        }
+
+        div[class*="st-key-epl_scorer_club_option_"]
+        button:hover {
+            border-color:
+                rgba(72, 24, 120, 0.10)
+                !important;
+
+            background:
+                rgba(72, 24, 120, 0.055)
+                !important;
+
+            color:
+                #301060 !important;
+        }
+
+        div[class*="st-key-epl_scorer_club_option_"]
+        button:disabled {
+            border-color:
+                rgba(72, 24, 120, 0.16)
+                !important;
+
+            background:
+                rgba(72, 24, 120, 0.10)
+                !important;
+
+            color:
+                #301060 !important;
+
+            opacity:
+                1 !important;
+        }
+
+        @media (max-width: 768px) {
+            div[class*="st-key-epl_scorers_club_filter_"] {
+                width:
+                    100% !important;
+
+                max-width:
+                    none !important;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    with st.container(
+        key=(
+            "epl_scorers_club_filter_"
+            f"{season_key}"
+        )
+    ):
+        logo_col, menu_col = st.columns(
+            [0.19, 0.81]
+        )
+
+        with logo_col:
+            st.markdown(
+                build_logo_html(
+                    selected_club
+                ),
+                unsafe_allow_html=True
+            )
+
+        with menu_col:
+            with st.popover(
+                selected_club["club_name"],
+                use_container_width=True
+            ):
+                st.markdown(
+                    """
+                    <div style="
+                        color:#07111F;
+                        font-size:14px;
+                        font-weight:900;
+                        margin-bottom:2px;
+                    ">
+                        Lọc theo câu lạc bộ
+                    </div>
+
+                    <div style="
+                        color:#64748B;
+                        font-size:12px;
+                        line-height:1.4;
+                        margin-bottom:10px;
+                    ">
+                        Chọn một đội để xem danh sách ghi bàn.
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+                all_club = {
+                    "team_id": None,
+                    "club_name": "Tất cả",
+                    "club_logo": ""
+                }
+
+                option_logo_col, option_button_col = (
+                    st.columns([0.16, 0.84])
+                )
+
+                with option_logo_col:
+                    st.markdown(
+                        build_logo_html(
+                            all_club,
+                            option_logo=True
+                        ),
+                        unsafe_allow_html=True
+                    )
+
+                with option_button_col:
+                    if st.button(
+                        "Tất cả",
+                        key=(
+                            "epl_scorer_club_option_"
+                            f"{season_key}_all"
+                        ),
+                        use_container_width=True,
+                        disabled=selected_id is None
+                    ):
+                        st.session_state[
+                            state_key
+                        ] = "all"
+
+                        st.rerun()
+
+                for club in clubs:
+                    (
+                        option_logo_col,
+                        option_button_col
+                    ) = st.columns(
+                        [0.16, 0.84]
+                    )
+
+                    with option_logo_col:
+                        st.markdown(
+                            build_logo_html(
+                                club,
+                                option_logo=True
+                            ),
+                            unsafe_allow_html=True
+                        )
+
+                    with option_button_col:
+                        if st.button(
+                            club["club_name"],
+                            key=(
+                                "epl_scorer_club_option_"
+                                f"{season_key}_"
+                                f"{club['team_id']}"
+                            ),
+                            use_container_width=True,
+                            disabled=(
+                                selected_id
+                                == club["team_id"]
+                            )
+                        ):
+                            st.session_state[
+                                state_key
+                            ] = club["team_id"]
+
+                            st.rerun()
+
+    return selected_club
+
 def render_epl_top_scorers_table(
     top_scorers_df: pd.DataFrame
 ):
@@ -16922,7 +17542,6 @@ def render_epl_top_scorers_table(
     )
 
 def page_competition_stats():
-    # Hai nút được render đầu tiên, nằm trên tiêu đề trang.
     active_view = (
         render_competition_stats_view_switcher()
     )
@@ -16939,31 +17558,167 @@ def page_competition_stats():
     # VUA PHÁ LƯỚI
     # =====================================================
     if active_view == "top_scorers":
-        render_page_title(
-            (
-                "VUA PHÁ LƯỚI "
-                f"PREMIER LEAGUE {season_label}"
-            ),
-            (
-                "Xếp hạng cầu thủ theo "
-                "số bàn thắng đã ghi."
-            )
-        )
-
-        top_scorers = load_epl_top_scorers(
+        matches = load_matches(
             season_slug
         )
 
-        if top_scorers.empty:
-            st.info(
-                "Chưa có dữ liệu cầu thủ "
-                "ghi bàn cho mùa giải này."
+        clubs_df = (
+            build_epl_season_clubs_df(
+                matches
             )
+        )
+
+        st.markdown(
+            """
+            <style>
+            div[class*="st-key-epl_top_scorers_header_"]
+            div[data-testid="stHorizontalBlock"] {
+                align-items:
+                    center !important;
+            }
+
+            div[class*="st-key-epl_top_scorers_title_"]
+            .wc-page-title {
+                margin-bottom:
+                    0 !important;
+            }
+
+            @media (max-width: 768px) {
+                div[class*="st-key-epl_top_scorers_header_"]
+                div[data-testid="stHorizontalBlock"] {
+                    flex-wrap:
+                        wrap !important;
+                }
+
+                div[data-testid="stColumn"]:has(
+                    div[class*="st-key-epl_top_scorers_title_"]
+                ),
+
+                div[data-testid="stColumn"]:has(
+                    div[class*="st-key-epl_top_scorers_filter_slot_"]
+                ) {
+                    width:
+                        100% !important;
+
+                    min-width:
+                        100% !important;
+
+                    flex:
+                        1 1 100% !important;
+                }
+
+                div[class*="st-key-epl_top_scorers_filter_slot_"] {
+                    margin-top:
+                        8px !important;
+                }
+            }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+
+        season_key = season_slug.replace(
+            "-",
+            "_"
+        )
+
+        with st.container(
+            key=(
+                "epl_top_scorers_header_"
+                f"{season_key}"
+            )
+        ):
+            title_col, filter_col = st.columns(
+                [3.25, 1]
+            )
+
+            # Render bộ lọc trước để lấy chính xác
+            # trạng thái đang được chọn.
+            with filter_col:
+                with st.container(
+                    key=(
+                        "epl_top_scorers_filter_slot_"
+                        f"{season_key}"
+                    )
+                ):
+                    selected_club = (
+                        render_epl_top_scorers_club_filter(
+                            clubs_df,
+                            season_slug
+                        )
+                    )
+
+            selected_team_id = (
+                selected_club["team_id"]
+            )
+
+            selected_club_name = (
+                selected_club["club_name"]
+            )
+
+            with title_col:
+                with st.container(
+                    key=(
+                        "epl_top_scorers_title_"
+                        f"{season_key}"
+                    )
+                ):
+                    if selected_team_id is None:
+                        page_title = (
+                            "VUA PHÁ LƯỚI "
+                            "PREMIER LEAGUE "
+                            f"{season_label}"
+                        )
+
+                        page_subtitle = (
+                            "Top 20 cầu thủ có số "
+                            "bàn thắng cao nhất giải."
+                        )
+
+                    else:
+                        page_title = (
+                            "DANH SÁCH GHI BÀN "
+                            f"{selected_club_name} "
+                            f"{season_label}"
+                        ).upper()
+
+                        page_subtitle = (
+                            "Danh sách cầu thủ "
+                            "ghi bàn cho câu lạc bộ."
+                        )
+
+                    render_page_title(
+                        html.escape(page_title),
+                        page_subtitle
+                    )
+
+        top_scorers = (
+            load_epl_top_scorers(
+                season_slug=season_slug,
+                team_id=selected_team_id
+            )
+        )
+
+        if top_scorers.empty:
+            if selected_team_id is None:
+                st.info(
+                    "Chưa có dữ liệu cầu thủ "
+                    "ghi bàn cho mùa giải này."
+                )
+
+            else:
+                st.info(
+                    f"Chưa có dữ liệu cầu thủ "
+                    f"ghi bàn cho "
+                    f"{selected_club_name}."
+                )
+
             return
 
         render_epl_top_scorers_table(
             top_scorers
         )
+
         return
 
     # =====================================================
@@ -16993,6 +17748,7 @@ def page_competition_stats():
             "Chưa có đủ dữ liệu trận đấu "
             "để tính bảng xếp hạng."
         )
+
         return
 
     render_epl_standings_table(
