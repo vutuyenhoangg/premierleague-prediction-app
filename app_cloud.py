@@ -815,7 +815,7 @@ def render_season_selector():
                     '<span class="epl-season-copy">'
                         '<span class="epl-season-heading">Mùa giải</span>'
                         '<span class="epl-season-subtitle">'
-                            'Chọn mùa giải để xem lịch đấu'
+                            'Chọn mùa giải'
                         '</span>'
                     '</span>'
                 '</div>'
