@@ -9417,7 +9417,7 @@ def render_kpi_tiles(matches: pd.DataFrame):
 
     if matches.empty:
         finished_matches = 0
-        unknown_matches = 0
+        awaiting_result_matches = 0
         open_matches = 0
     else:
         matches_for_count = matches.copy()
@@ -9438,8 +9438,14 @@ def render_kpi_tiles(matches: pd.DataFrame):
             matches_for_count["is_finished_bool"].sum()
         )
 
-        unknown_matches = int(
-            matches_for_count["has_unknown_team"].sum()
+        awaiting_result_matches = int(
+            (
+                (
+                    matches_for_count["kickoff_time_utc_dt"]
+                    <= now_utc
+                )
+                & (~matches_for_count["is_finished_bool"])
+            ).sum()
         )
 
         open_matches = int(
@@ -9466,8 +9472,8 @@ def render_kpi_tiles(matches: pd.DataFrame):
                 <div class="wc-kpi-value" style="color:#16A34A;">{finished_matches}</div>
             </div>
             <div class="wc-kpi-tile">
-                <div class="wc-kpi-label">Chưa xác định đội</div>
-                <div class="wc-kpi-value" style="color:#64748B;">{unknown_matches}</div>
+                <div class="wc-kpi-label">Đang chờ kết quả</div>
+                <div class="wc-kpi-value" style="color:#F59E0B;">{awaiting_result_matches}</div>
             </div>
         </div>
         """,
