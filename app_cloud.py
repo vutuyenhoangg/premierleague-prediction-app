@@ -21004,6 +21004,351 @@ def build_epl_standings_df(matches: pd.DataFrame) -> pd.DataFrame:
 
     return standings[columns]
 
+def render_page_native_sticky_table(
+    table_html: str,
+    root_id: str
+):
+    """
+    Render bảng trực tiếp vào trang Streamlit:
+
+    - Không dùng iframe.
+    - Không tạo cuộn dọc riêng.
+    - Header bám theo trang chính.
+    - Header đồng bộ khi vuốt ngang trên mobile.
+    """
+    safe_root_id = json.dumps(str(root_id))
+
+    sticky_script = """
+    <script>
+    (() => {
+        const rootId = __ROOT_ID__;
+        const root = document.getElementById(rootId);
+
+        if (!root) {
+            return;
+        }
+
+        const tableScroller =
+            root.querySelector(
+                "[data-page-table-scroll]"
+            ) || root;
+
+        const sourceTable =
+            root.querySelector("table");
+
+        const sourceHead =
+            sourceTable
+                ? sourceTable.tHead
+                : null;
+
+        if (!sourceTable || !sourceHead) {
+            return;
+        }
+
+        const overlayId =
+            rootId + "__sticky_header";
+
+        const oldOverlay =
+            document.getElementById(overlayId);
+
+        if (oldOverlay) {
+            oldOverlay.remove();
+        }
+
+        const overlay =
+            document.createElement("div");
+
+        overlay.id = overlayId;
+
+        overlay.setAttribute(
+            "aria-hidden",
+            "true"
+        );
+
+        Object.assign(
+            overlay.style,
+            {
+                position: "fixed",
+                display: "none",
+                overflow: "hidden",
+                pointerEvents: "none",
+                background: "transparent",
+                zIndex: "999"
+            }
+        );
+
+        const overlayTable =
+            sourceTable.cloneNode(false);
+
+        overlayTable.removeAttribute("id");
+
+        const overlayHead =
+            sourceHead.cloneNode(true);
+
+        overlayTable.appendChild(overlayHead);
+        overlay.appendChild(overlayTable);
+        document.body.appendChild(overlay);
+
+        Object.assign(
+            overlayTable.style,
+            {
+                margin: "0",
+                tableLayout: "fixed",
+                transformOrigin: "left top"
+            }
+        );
+
+        const findVerticalScrollParent = (
+            node
+        ) => {
+            let parent = node.parentElement;
+
+            while (
+                parent
+                && parent !== document.body
+            ) {
+                const overflowY =
+                    window.getComputedStyle(
+                        parent
+                    ).overflowY;
+
+                if (
+                    /auto|scroll|overlay/.test(
+                        overflowY
+                    )
+                ) {
+                    return parent;
+                }
+
+                parent = parent.parentElement;
+            }
+
+            return window;
+        };
+
+        const pageScrollTarget =
+            findVerticalScrollParent(root);
+
+        let animationFrame = 0;
+        let cleaned = false;
+        let mutationObserver = null;
+        let resizeObserver = null;
+
+        const syncColumnWidths = () => {
+            const sourceCells = Array.from(
+                sourceHead.rows[0]?.cells || []
+            );
+
+            const overlayCells = Array.from(
+                overlayHead.rows[0]?.cells || []
+            );
+
+            sourceCells.forEach(
+                (sourceCell, index) => {
+                    const overlayCell =
+                        overlayCells[index];
+
+                    if (!overlayCell) {
+                        return;
+                    }
+
+                    const width =
+                        sourceCell
+                            .getBoundingClientRect()
+                            .width;
+
+                    Object.assign(
+                        overlayCell.style,
+                        {
+                            width: width + "px",
+                            minWidth: width + "px",
+                            maxWidth: width + "px",
+                            boxSizing: "border-box"
+                        }
+                    );
+                }
+            );
+
+            const tableWidth =
+                sourceTable
+                    .getBoundingClientRect()
+                    .width;
+
+            overlayTable.style.width =
+                tableWidth + "px";
+
+            overlayTable.style.minWidth =
+                tableWidth + "px";
+
+            overlayTable.style.maxWidth =
+                tableWidth + "px";
+        };
+
+        const cleanup = () => {
+            if (cleaned) {
+                return;
+            }
+
+            cleaned = true;
+
+            cancelAnimationFrame(
+                animationFrame
+            );
+
+            pageScrollTarget
+                .removeEventListener(
+                    "scroll",
+                    schedule
+                );
+
+            tableScroller
+                .removeEventListener(
+                    "scroll",
+                    schedule
+                );
+
+            window.removeEventListener(
+                "resize",
+                schedule
+            );
+
+            if (mutationObserver) {
+                mutationObserver.disconnect();
+            }
+
+            if (resizeObserver) {
+                resizeObserver.disconnect();
+            }
+
+            overlay.remove();
+        };
+
+        const update = () => {
+            if (!root.isConnected) {
+                cleanup();
+                return;
+            }
+
+            const rootRect =
+                root.getBoundingClientRect();
+
+            const sourceHeadRect =
+                sourceHead
+                    .getBoundingClientRect();
+
+            const appHeader =
+                document.querySelector(
+                    '[data-testid="stHeader"]'
+                );
+
+            const stickyTop = Math.max(
+                0,
+                appHeader
+                    ? appHeader
+                        .getBoundingClientRect()
+                        .bottom
+                    : 0
+            );
+
+            const headerHeight =
+                sourceHeadRect.height;
+
+            const shouldShow = (
+                sourceHeadRect.top <= stickyTop
+                && rootRect.bottom
+                    > stickyTop + headerHeight
+            );
+
+            if (!shouldShow) {
+                overlay.style.display = "none";
+                return;
+            }
+
+            syncColumnWidths();
+
+            const scrollerRect =
+                tableScroller
+                    .getBoundingClientRect();
+
+            Object.assign(
+                overlay.style,
+                {
+                    display: "block",
+                    top: stickyTop + "px",
+                    left: scrollerRect.left + "px",
+                    width: scrollerRect.width + "px",
+                    height: headerHeight + "px"
+                }
+            );
+
+            overlayTable.style.transform =
+                "translate3d("
+                + (-tableScroller.scrollLeft)
+                + "px, 0, 0)";
+        };
+
+        function schedule() {
+            cancelAnimationFrame(
+                animationFrame
+            );
+
+            animationFrame =
+                requestAnimationFrame(update);
+        }
+
+        pageScrollTarget.addEventListener(
+            "scroll",
+            schedule,
+            { passive: true }
+        );
+
+        tableScroller.addEventListener(
+            "scroll",
+            schedule,
+            { passive: true }
+        );
+
+        window.addEventListener(
+            "resize",
+            schedule,
+            { passive: true }
+        );
+
+        mutationObserver =
+            new MutationObserver(() => {
+                if (!root.isConnected) {
+                    cleanup();
+                }
+            });
+
+        mutationObserver.observe(
+            document.body,
+            {
+                childList: true,
+                subtree: true
+            }
+        );
+
+        if ("ResizeObserver" in window) {
+            resizeObserver =
+                new ResizeObserver(schedule);
+
+            resizeObserver.observe(root);
+            resizeObserver.observe(sourceTable);
+        }
+
+        schedule();
+    })();
+    </script>
+    """.replace(
+        "__ROOT_ID__",
+        safe_root_id
+    )
+
+    st.html(
+        table_html + sticky_script,
+        unsafe_allow_javascript=True
+    )
 
 def render_epl_standings_table(standings_df: pd.DataFrame):
     if standings_df.empty:
@@ -21554,8 +21899,14 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
     }}
     </style>
 
-    <div class="epl-standings-box">
-        <div class="epl-standings-scroll">
+    <div
+        id="epl-standings-table-root"
+        class="epl-standings-box"
+    >
+        <div
+            class="epl-standings-scroll"
+            data-page-table-scroll
+        >
             <table class="epl-standings-table">
                 <thead>
                     <tr>
@@ -21686,10 +22037,9 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
     </script>
     """
 
-    components.html(
+    render_page_native_sticky_table(
         standings_html,
-        height=820,
-        scrolling=True
+        "epl-standings-table-root"
     )
 
 def render_competition_stats_view_switcher() -> str:
@@ -23101,20 +23451,9 @@ def render_epl_top_scorers_table(
 
     scorers_html = """
     <style>
-    * {
+    #epl-scorers-table-root,
+    #epl-scorers-table-root * {
         box-sizing: border-box;
-    }
-
-    body {
-        margin: 0;
-        background: transparent;
-
-        font-family:
-            system-ui,
-            -apple-system,
-            BlinkMacSystemFont,
-            "Segoe UI",
-            sans-serif;
     }
 
     .epl-scorers-box {
@@ -23138,10 +23477,8 @@ def render_epl_top_scorers_table(
 
     .epl-scorers-scroll {
         width: 100%;
-        max-height: 748px;
-
-        overflow:
-            auto;
+        max-height: none;
+        overflow: visible;
     }
 
     .epl-scorers-table {
@@ -23156,12 +23493,17 @@ def render_epl_top_scorers_table(
 
         font-size:
             14px;
+
+        font-family:
+            system-ui,
+            -apple-system,
+            BlinkMacSystemFont,
+            "Segoe UI",
+            sans-serif;
     }
 
     .epl-scorers-table th {
-        position: sticky;
-        top: 0;
-        z-index: 2;
+        position: static;
 
         padding:
             14px 16px;
@@ -23446,14 +23788,8 @@ def render_epl_top_scorers_table(
     
     html.epl-mobile-team-names
     .epl-scorers-scroll {
-        width:
-            100%;
-    
-        overflow-x:
-            hidden;
-    
-        overflow-y:
-            auto;
+        width: 100%;
+        overflow: visible;
     }
     
     html.epl-mobile-team-names
@@ -23798,8 +24134,14 @@ def render_epl_top_scorers_table(
     }
     </style>
 
-    <div class="epl-scorers-box">
-        <div class="epl-scorers-scroll">
+    <div
+        id="epl-scorers-table-root"
+        class="epl-scorers-box"
+    >
+        <div
+            class="epl-scorers-scroll"
+            data-page-table-scroll
+        >
             <table class="epl-scorers-table">
                 <thead>
                     <tr>
@@ -23870,20 +24212,9 @@ def render_epl_top_scorers_table(
     </script>
     """
 
-    visible_rows = min(
-        len(top_scorers_df),
-        12
-    )
-
-    component_height = min(
-        125 + visible_rows * 58,
-        820
-    )
-
-    components.html(
+    render_page_native_sticky_table(
         scorers_html,
-        height=component_height,
-        scrolling=False
+        "epl-scorers-table-root"
     )
 
 def page_competition_stats():
