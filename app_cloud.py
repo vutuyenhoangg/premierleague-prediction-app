@@ -8234,7 +8234,7 @@ def inject_mobile_goal_scorer_panel_css():
             gap: 5px;
 
             margin: 0 auto 19px;
-            padding: 2px 22px 5px;
+            padding: 27px 22px 5px;
 
             background: transparent;
             border: 0;
@@ -8246,7 +8246,7 @@ def inject_mobile_goal_scorer_panel_css():
 
             position: absolute;
 
-            top: 2px;
+            top: 19px;
             bottom: 5px;
             left: 50%;
 
@@ -8261,6 +8261,36 @@ def inject_mobile_goal_scorer_panel_css():
             );
 
             transform: translateX(-0.5px);
+
+            pointer-events: none;
+        }
+
+        .wc-goal-scorers-grid::after {
+            content: "⚽";
+
+            position: absolute;
+
+            top: 0;
+            left: 50%;
+            z-index: 2;
+
+            display: flex;
+
+            width: 22px;
+            height: 22px;
+
+            align-items: center;
+            justify-content: center;
+
+            font-family:
+                "Segoe UI Emoji",
+                "Apple Color Emoji",
+                "Noto Color Emoji",
+                sans-serif;
+            font-size: 18px;
+            line-height: 1;
+
+            transform: translateX(-50%);
 
             pointer-events: none;
         }
@@ -8339,9 +8369,20 @@ def inject_mobile_goal_scorer_panel_css():
 
                 margin-bottom: 17px;
                 padding:
-                    2px
+                    24px
                     7px
                     4px;
+            }
+
+            .wc-goal-scorers-grid::before {
+                top: 17px;
+            }
+
+            .wc-goal-scorers-grid::after {
+                width: 20px;
+                height: 20px;
+
+                font-size: 16px;
             }
 
             .wc-goal-scorer-row {
@@ -17816,7 +17857,7 @@ def render_finished_match_score_row(
                 </span>
 
                 <span class="epl-finished-score-separator">
-                    –
+                    :
                 </span>
 
                 <span
