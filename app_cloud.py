@@ -17816,7 +17816,7 @@ def render_finished_match_score_row(
                 </span>
 
                 <span class="epl-finished-score-separator">
-                    :
+                    –
                 </span>
 
                 <span
