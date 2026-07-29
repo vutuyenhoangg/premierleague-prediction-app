@@ -32,6 +32,7 @@ import secrets
 from streamlit_cookies_controller import CookieController
 import re
 import textwrap
+import inspect
 
 LOGGER = logging.getLogger("epl_prediction_arena")
 
@@ -1443,12 +1444,29 @@ def build_avatar_background_css() -> str:
                 url("__AVATAR_SPRITE_SRC__");
         }
 
+        div[class*="st-key-avatar_grid_desktop_shell"],
+        div[class*="st-key-avatar_picker_radio_"],
+        div[class*="st-key-avatar_picker_radio_"] [data-testid="stRadio"] {
+            display: block !important;
+        
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+        
+            align-self: stretch !important;
+            box-sizing: border-box !important;
+        }
+
         div[class*="st-key-avatar_picker_radio_"]
         div[role="radiogroup"] {
             display: grid !important;
-            grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+            grid-template-columns: repeat(4, minmax(104px, 1fr)) !important;
             gap: 8px !important;
             width: 100% !important;
+            max-width: 100% !important;
+            min-width: 100% !important;
+            box-sizing: border-box !important;
+            align-self: stretch !important;
         }
 
         div[class*="st-key-avatar_picker_radio_"]
@@ -1456,6 +1474,8 @@ def build_avatar_background_css() -> str:
             position: relative !important;
             display: block !important;
             width: 100% !important;
+            min-width: 0 !important;
+            box-sizing: border-box !important;
             height: 88px !important;
             min-height: 88px !important;
             margin: 0 !important;
@@ -1527,6 +1547,19 @@ def build_avatar_background_css() -> str:
             line-height: 1;
             box-shadow: 0 5px 12px rgba(15,23,42,0.18);
             pointer-events: none;
+        }
+        div[class*="st-key-avatar_picker_radio_"]
+        label[data-baseweb="radio"]:has(input:checked) {
+            border-color: #F5C542 !important;
+            background: #FFF7ED !important;
+            box-shadow:
+                0 0 0 4px rgba(245,197,66,0.20),
+                0 10px 24px rgba(15,23,42,0.10) !important;
+        }
+        
+        div[class*="st-key-avatar_picker_radio_"]
+        label[data-baseweb="radio"]:has(input:checked)::after {
+            display: flex;
         }
 
         div[class*="st-key-avatar_picker_radio_"]
@@ -1642,47 +1675,6 @@ def build_avatar_background_css() -> str:
 
 
 @st.cache_resource(show_spinner=False, max_entries=128)
-def build_selected_avatar_css(
-    current_avatar_key: str
-) -> str:
-    """
-    Đánh dấu lựa chọn hiện tại trong radio grid.
-    """
-    avatar_keys = load_avatar_catalog()
-
-    if not avatar_keys:
-        return ""
-
-    current_avatar_key = normalize_avatar_key(
-        current_avatar_key,
-        avatar_keys=list(avatar_keys)
-    )
-
-    try:
-        selected_position = (
-            avatar_keys.index(current_avatar_key)
-            + 1
-        )
-    except ValueError:
-        return ""
-
-    return f"""
-    <style>
-    div[class*="st-key-avatar_picker_radio_"]
-    label[data-baseweb="radio"]:nth-of-type({selected_position}) {{
-        border-color: #F5C542 !important;
-        background: #FFF7ED !important;
-        box-shadow:
-            0 0 0 4px rgba(245,197,66,0.20),
-            0 10px 24px rgba(15,23,42,0.10) !important;
-    }}
-
-    div[class*="st-key-avatar_picker_radio_"]
-    label[data-baseweb="radio"]:nth-of-type({selected_position})::after {{
-        display: flex;
-    }}
-    </style>
-    """
 
 # ============================================================
 # 2. THEME + UI HELPERS
@@ -9978,20 +9970,37 @@ def handle_avatar_picker_change(
     picker_key: str
 ):
     """
-    Cập nhật avatar từ một radio widget duy nhất.
+    Cập nhật avatar từ radio widget duy nhất.
 
-    Callback không gọi rerun: widget nằm trong fragment nên Streamlit tự chạy
-    lại đúng fragment sau khi callback hoàn tất.
+    Nếu database cập nhật thất bại, avatar cũ được khôi phục
+    ở lượt render tiếp theo, không sửa trực tiếp state của
+    widget ngay bên trong callback.
     """
+    restore_key = f"{picker_key}__restore"
+    avatar_keys = tuple(load_avatar_catalog())
+
     selected_avatar_key = st.session_state.get(
         picker_key
     )
-    previous_avatar_key = (
+
+    previous_avatar_key = normalize_avatar_key(
         st.session_state.get(
             "user",
             {}
-        ).get("avatar_key")
+        ).get("avatar_key"),
+        avatar_keys=list(avatar_keys)
     )
+
+    if selected_avatar_key not in avatar_keys:
+        if previous_avatar_key in avatar_keys:
+            st.session_state[restore_key] = (
+                previous_avatar_key
+            )
+
+        st.session_state["avatar_picker_error"] = (
+            "Avatar được chọn không hợp lệ."
+        )
+        return
 
     try:
         update_user_avatar(
@@ -10005,8 +10014,18 @@ def handle_avatar_picker_change(
                 {}
             )
         )
-        updated_user["avatar_key"] = selected_avatar_key
+
+        updated_user["avatar_key"] = (
+            selected_avatar_key
+        )
+
         st.session_state["user"] = updated_user
+
+        st.session_state.pop(
+            restore_key,
+            None
+        )
+
         st.session_state.pop(
             "avatar_picker_error",
             None
@@ -10018,8 +10037,8 @@ def handle_avatar_picker_change(
             int(user_id)
         )
 
-        if previous_avatar_key:
-            st.session_state[picker_key] = (
+        if previous_avatar_key in avatar_keys:
+            st.session_state[restore_key] = (
                 previous_avatar_key
             )
 
@@ -10027,7 +10046,6 @@ def handle_avatar_picker_change(
             str(error)
             or "Không thể cập nhật avatar lúc này."
         )
-
 
 @st.fragment
 def render_avatar_popover(user: dict):
@@ -10062,6 +10080,17 @@ def render_avatar_popover(user: dict):
     picker_key = (
         f"avatar_picker_radio_{int(user['user_id'])}"
     )
+    restore_key = f"{picker_key}__restore"
+    
+    restore_avatar_key = st.session_state.pop(
+        restore_key,
+        None
+    )
+    
+    if restore_avatar_key in avatar_keys:
+        st.session_state[picker_key] = (
+            restore_avatar_key
+        )
 
     if (
         picker_key not in st.session_state
@@ -10072,42 +10101,44 @@ def render_avatar_popover(user: dict):
 
     def render_avatar_grid():
         sprite_css = build_avatar_background_css()
-
+    
         if sprite_css:
             st.markdown(
                 sprite_css,
                 unsafe_allow_html=True
             )
-
-        selected_css = build_selected_avatar_css(
-            current_avatar_key
-        )
-
-        if selected_css:
-            st.markdown(
-                selected_css,
-                unsafe_allow_html=True
-            )
-
-        st.radio(
-            "Chọn avatar",
-            options=avatar_keys,
-            index=None,
-            key=picker_key,
-            format_func=lambda _: "Chọn avatar",
-            label_visibility="collapsed",
-            on_change=handle_avatar_picker_change,
-            args=(
+    
+        radio_kwargs = {
+            "label": "Chọn avatar",
+            "options": avatar_keys,
+            "index": None,
+            "key": picker_key,
+            "format_func": lambda _: "Chọn avatar",
+            "label_visibility": "collapsed",
+            "on_change": handle_avatar_picker_change,
+            "args": (
                 int(user["user_id"]),
                 picker_key
             )
-        )
-
+        }
+    
+        try:
+            if (
+                "width"
+                in inspect.signature(st.radio).parameters
+            ):
+                radio_kwargs["width"] = "stretch"
+    
+        except (TypeError, ValueError):
+            pass
+    
+        st.radio(**radio_kwargs)
+    
         avatar_picker_error = st.session_state.pop(
             "avatar_picker_error",
             None
         )
-
+    
         if avatar_picker_error:
             st.error(avatar_picker_error)
 
