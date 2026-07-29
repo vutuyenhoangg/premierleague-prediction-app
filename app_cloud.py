@@ -3747,7 +3747,8 @@ def inject_main_page_lift_css():
          * Container này chỉ chứa CSS và JavaScript.
          * Đưa nó ra khỏi luồng bố cục để không tạo khoảng trống.
          */
-        div[class*="st-key-global_ui_bootstrap"] {
+        div[class*="st-key-global_ui_bootstrap"],
+        div[class*="st-key-matches_page_ui_bootstrap"] {
             position: absolute !important;
 
             top: 0 !important;
@@ -3772,6 +3773,9 @@ def inject_main_page_lift_css():
          */
         div[data-testid="stElementContainer"]:has(
             div[class*="st-key-global_ui_bootstrap"]
+        ),
+        div[data-testid="stElementContainer"]:has(
+            div[class*="st-key-matches_page_ui_bootstrap"]
         ) {
             position: absolute !important;
 
@@ -3795,6 +3799,8 @@ def inject_main_page_lift_css():
          * bên trong container tiếp tục cộng dồn.
          */
         div[class*="st-key-global_ui_bootstrap"]
+        div[data-testid="stVerticalBlock"],
+        div[class*="st-key-matches_page_ui_bootstrap"]
         div[data-testid="stVerticalBlock"] {
             min-height: 0 !important;
 
@@ -5525,23 +5531,23 @@ def inject_prediction_score_stepper_css():
         
         /*
          * Box tỉ số nằm đúng tâm card.
-         * Ba cột số nhà, dấu hai chấm và số khách cân xứng tuyệt đối.
+         * Hai ô số có chiều rộng bằng nhau, dấu gạch ngang ở chính giữa.
          */
         .epl-finished-score-value {
             display: grid;
         
             grid-template-columns:
-                66px
+                minmax(0, 1fr)
                 20px
-                66px;
+                minmax(0, 1fr);
         
             width: 174px;
             height: 86px;
         
             box-sizing: border-box;
         
-            align-items: stretch;
-            justify-items: center;
+            align-items: center;
+            justify-items: stretch;
             justify-self: center;
         
             margin: 0;
@@ -5562,14 +5568,13 @@ def inject_prediction_score_stepper_css():
         }
         
         .epl-finished-score-number {
-            display: flex;
+            display: grid;
         
-            width: 66px;
-            min-width: 66px;
-            height: 100%;
+            width: 100%;
+            min-width: 0;
+            height: auto;
         
-            align-items: center;
-            justify-content: center;
+            place-items: center;
         
             margin: 0;
             padding: 0;
@@ -5585,13 +5590,15 @@ def inject_prediction_score_stepper_css():
         
             font-size: 64px;
             font-weight: 950;
-            line-height: 1;
+            line-height: 0.88;
             letter-spacing: 0;
             text-align: center;
         
             font-variant-numeric: tabular-nums;
             font-feature-settings: "tnum" 1;
         
+            transform: translateY(-1px);
+
             text-shadow: none;
             user-select: none;
         }
@@ -5601,25 +5608,24 @@ def inject_prediction_score_stepper_css():
         }
         
         .epl-finished-score-separator {
-            display: flex;
+            display: grid;
         
-            width: 20px;
-            height: 100%;
+            width: 100%;
+            height: auto;
         
-            align-items: center;
-            justify-content: center;
+            place-items: center;
         
             margin: 0;
             padding: 0;
         
             color: #FF2882;
         
-            font-size: 29px;
+            font-size: 27px;
             font-weight: 800;
             line-height: 1;
             text-align: center;
         
-            transform: none;
+            transform: translateY(-1px);
         
             user-select: none;
         }
@@ -5698,9 +5704,9 @@ def inject_prediction_score_stepper_css():
         
             .epl-finished-score-value {
                 grid-template-columns:
-                    44px
+                    minmax(0, 1fr)
                     14px
-                    44px;
+                    minmax(0, 1fr);
             
                 width: 120px;
                 height: 64px;
@@ -5711,18 +5717,11 @@ def inject_prediction_score_stepper_css():
             }
             
             .epl-finished-score-number {
-                width: 44px;
-                min-width: 44px;
-            
                 font-size: 44px;
             }
             
             .epl-finished-score-separator {
-                width: 14px;
-            
-                font-size: 22px;
-            
-                transform: none;
+                font-size: 20px;
             }
         }
         
@@ -5739,9 +5738,9 @@ def inject_prediction_score_stepper_css():
         
             .epl-finished-score-value {
                 grid-template-columns:
-                    42px
+                    minmax(0, 1fr)
                     14px
-                    42px;
+                    minmax(0, 1fr);
             
                 width: 112px;
                 height: 60px;
@@ -5750,16 +5749,11 @@ def inject_prediction_score_stepper_css():
             }
             
             .epl-finished-score-number {
-                width: 42px;
-                min-width: 42px;
-            
                 font-size: 40px;
             }
             
             .epl-finished-score-separator {
-                width: 14px;
-            
-                font-size: 21px;
+                font-size: 19px;
             }
         
             .epl-finished-score-team-name {
@@ -18932,7 +18926,7 @@ def render_finished_match_score_row(
                 </span>
 
                 <span class="epl-finished-score-separator">
-                    :
+                    &minus;
                 </span>
 
                 <span
@@ -25716,7 +25710,6 @@ def main():
         render_sidebar_brand()
 
         st.markdown(f"Xin chào, **{user['display_name']}**")
-        st.caption(f"Role: {user['role']}")
         render_sidebar_star_balance(user["user_id"])
 
         if st.button("Đăng xuất", use_container_width=True):
