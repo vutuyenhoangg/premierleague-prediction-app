@@ -4742,42 +4742,179 @@ def inject_prediction_score_stepper_css():
             }
         }
         /* =====================================================
-           TỈ SỐ THẬT — CHỈ CARD ĐÃ CÓ KẾT QUẢ
+           BẢNG TỈ SỐ THẬT — CHỈ CARD ĐÃ CÓ KẾT QUẢ
            ===================================================== */
         
+        .epl-finished-score-wrap {
+            position: relative;
+        
+            width: min(100%, 680px);
+        
+            box-sizing: border-box;
+        
+            margin: 28px auto 30px;
+            padding-top: 13px;
+        }
+        
+        /* Nhãn trạng thái nằm trên bảng tỉ số */
+        .epl-finished-score-label {
+            position: absolute;
+            z-index: 4;
+        
+            top: 0;
+            left: 50%;
+        
+            display: flex;
+        
+            height: 26px;
+        
+            box-sizing: border-box;
+        
+            align-items: center;
+            justify-content: center;
+        
+            padding: 0 14px;
+        
+            transform: translateX(-50%);
+        
+            background: #FF2882;
+            color: #FFFFFF;
+        
+            border: 3px solid #F8FAFC;
+            border-radius: 999px;
+        
+            font-size: 10px;
+            font-weight: 950;
+            line-height: 1;
+            letter-spacing: 0.11em;
+            white-space: nowrap;
+        
+            text-transform: uppercase;
+        }
+        
+        /* Toàn bộ bảng kết quả là một khối duy nhất */
         .epl-finished-score-row {
+            position: relative;
+            isolation: isolate;
+        
             display: grid;
         
             grid-template-columns:
-                minmax(0, 1fr)
-                48px
-                minmax(0, 1fr);
+                minmax(94px, 1fr)
+                minmax(190px, 1.35fr)
+                minmax(94px, 1fr);
         
             width: 100%;
-            max-width: 780px;
+            min-height: 126px;
         
-            margin: 20px auto 26px;
+            box-sizing: border-box;
         
-            align-items: end;
+            align-items: center;
+        
+            margin: 0;
+            padding: 24px 28px 18px;
+        
+            overflow: hidden;
+        
+            background:
+                linear-gradient(
+                    110deg,
+                    #25002B 0%,
+                    #37003C 48%,
+                    #25002B 100%
+                );
+        
+            border: 1px solid rgba(255, 255, 255, 0.20);
+        
+            clip-path: polygon(
+                15px 0,
+                calc(100% - 15px) 0,
+                100% 15px,
+                100% calc(100% - 15px),
+                calc(100% - 15px) 100%,
+                15px 100%,
+                0 calc(100% - 15px),
+                0 15px
+            );
+        
+            box-shadow: none;
         }
         
+        /* Đường màu đặc trưng EPL ở cạnh trên */
+        .epl-finished-score-row::before {
+            content: "";
+        
+            position: absolute;
+            z-index: 2;
+        
+            top: 0;
+            right: 0;
+            left: 0;
+        
+            height: 4px;
+        
+            background:
+                linear-gradient(
+                    90deg,
+                    #FF2882 0%,
+                    #FF2882 52%,
+                    #00FF85 52%,
+                    #00FF85 100%
+                );
+        
+            pointer-events: none;
+        }
+        
+        /* Họa tiết phẳng rất nhẹ phía sau */
+        .epl-finished-score-row::after {
+            content: "";
+        
+            position: absolute;
+            z-index: 0;
+        
+            inset: 0;
+        
+            background:
+                linear-gradient(
+                    125deg,
+                    transparent 0%,
+                    transparent 37%,
+                    rgba(255, 255, 255, 0.045) 37%,
+                    rgba(255, 255, 255, 0.045) 43%,
+                    transparent 43%,
+                    transparent 100%
+                );
+        
+            pointer-events: none;
+        }
+        
+        .epl-finished-score-row > * {
+            position: relative;
+            z-index: 1;
+        }
+        
+        /* Hai khu vực đội bóng */
         .epl-finished-score-team {
-            display: flex;
-            flex-direction: column;
+            display: grid;
         
             min-width: 0;
         
-            align-items: center;
-            justify-content: flex-end;
+            grid-template-rows:
+                58px
+                auto;
         
-            gap: 10px;
+            align-items: center;
+            justify-items: center;
+        
+            gap: 8px;
         }
         
+        /* Logo không có box và không có shadow */
         .epl-finished-score-logo {
             display: flex;
         
             width: 100%;
-            height: 60px;
+            height: 58px;
         
             align-items: center;
             justify-content: center;
@@ -4785,11 +4922,11 @@ def inject_prediction_score_stepper_css():
             margin: 0;
             padding: 0;
         
+            overflow: visible;
+        
             background: transparent;
             border: 0;
             box-shadow: none;
-        
-            overflow: visible;
         }
         
         .epl-finished-score-logo img {
@@ -4798,8 +4935,8 @@ def inject_prediction_score_stepper_css():
             width: auto;
             height: auto;
         
-            max-width: 62px;
-            max-height: 60px;
+            max-width: 58px;
+            max-height: 56px;
         
             margin: 0 auto;
         
@@ -4815,48 +4952,87 @@ def inject_prediction_score_stepper_css():
         }
         
         .epl-finished-score-logo-fallback {
+            display: flex;
+        
+            width: 46px;
+            height: 46px;
+        
+            align-items: center;
+            justify-content: center;
+        
+            overflow: hidden;
+        
+            color: #FFFFFF;
+        
+            border: 1px solid rgba(255, 255, 255, 0.32);
+            border-radius: 50%;
+        
+            font-size: 10px;
+            font-weight: 900;
+            line-height: 1;
+            text-align: center;
+        }
+        
+        /* Tên đội nằm ngay dưới logo */
+        .epl-finished-score-team-name {
             display: block;
         
-            max-width: 130px;
+            width: 100%;
+            max-width: 132px;
         
-            color: #37003C;
+            margin: 0;
+        
+            overflow: hidden;
+        
+            color: rgba(255, 255, 255, 0.82);
         
             font-size: 12px;
             font-weight: 850;
             line-height: 1.2;
             text-align: center;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         
-        .epl-finished-score-tile {
-            display: flex;
+        /* Nhấn đội chiến thắng */
+        .epl-finished-score-team.is-winner
+        .epl-finished-score-team-name {
+            color: #00FF85;
+        }
         
-            width: 112px;
-            height: 80px;
+        /* Một khung tỉ số chung, không còn hai ô nhập liệu */
+        .epl-finished-score-value {
+            display: grid;
+        
+            grid-template-columns:
+                minmax(54px, 1fr)
+                24px
+                minmax(54px, 1fr);
+        
+            width: min(100%, 222px);
+            height: 78px;
         
             box-sizing: border-box;
         
             align-items: center;
-            justify-content: center;
+            justify-items: center;
+            justify-self: center;
         
-            padding: 0 8px;
+            padding: 0 16px;
         
-            background: #37003C;
-            color: #FFFFFF;
+            background: rgba(255, 255, 255, 0.075);
         
-            border: 3px solid #FF2882;
-        
-            clip-path: polygon(
-                12px 0,
-                calc(100% - 12px) 0,
-                100% 12px,
-                100% calc(100% - 12px),
-                calc(100% - 12px) 100%,
-                12px 100%,
-                0 calc(100% - 12px),
-                0 12px
-            );
+            border: 1px solid rgba(255, 255, 255, 0.20);
+            border-radius: 16px;
         
             box-shadow: none;
+        
+            font-variant-numeric: tabular-nums;
+        }
+        
+        /* Hai con số */
+        .epl-finished-score-number {
+            color: #FFFFFF;
         
             font-family:
                 system-ui,
@@ -4865,103 +5041,160 @@ def inject_prediction_score_stepper_css():
                 "Segoe UI",
                 sans-serif;
         
-            font-size: 46px;
+            font-size: clamp(48px, 5vw, 62px);
             font-weight: 950;
             line-height: 1;
             letter-spacing: -0.06em;
-            text-align: center;
-        
-            font-variant-numeric: tabular-nums;
         
             user-select: none;
-            pointer-events: none;
         }
         
+        /* Số của đội thắng */
+        .epl-finished-score-number.is-winner {
+            color: #00FF85;
+        }
+        
+        /* Dấu phân cách ở trong cùng một khung */
         .epl-finished-score-separator {
-            display: flex;
+            color: #FF2882;
         
-            width: 100%;
-            height: 80px;
-        
-            align-items: center;
-            justify-content: center;
-        
-            color: #37003C;
-        
-            font-size: 38px;
+            font-size: 30px;
             font-weight: 950;
             line-height: 1;
         
+            transform: translateY(-2px);
+        
             user-select: none;
         }
         
+        /* =========================
+           MOBILE
+           ========================= */
+        
         @media (max-width: 768px) {
+            .epl-finished-score-wrap {
+                margin:
+                    22px auto 24px;
+        
+                padding-top:
+                    12px;
+            }
+        
+            .epl-finished-score-label {
+                height:
+                    24px;
+        
+                padding:
+                    0 11px;
+        
+                border-width:
+                    2px;
+        
+                font-size:
+                    9px;
+            }
+        
             .epl-finished-score-row {
                 grid-template-columns:
-                    minmax(0, 1fr)
-                    34px
-                    minmax(0, 1fr);
+                    minmax(58px, 0.8fr)
+                    minmax(142px, 1.5fr)
+                    minmax(58px, 0.8fr);
         
-                margin:
-                    16px auto 22px;
+                min-height:
+                    108px;
+        
+                padding:
+                    22px 10px 14px;
             }
         
             .epl-finished-score-team {
+                grid-template-rows:
+                    46px
+                    auto;
+        
                 gap:
-                    8px;
+                    6px;
             }
         
             .epl-finished-score-logo {
                 height:
-                    50px;
+                    46px;
             }
         
             .epl-finished-score-logo img {
                 max-width:
-                    52px;
+                    47px;
         
                 max-height:
-                    50px;
+                    45px;
             }
         
-            .epl-finished-score-tile {
-                width:
-                    98px;
-        
-                height:
-                    72px;
+            .epl-finished-score-team-name {
+                max-width:
+                    76px;
         
                 font-size:
-                    42px;
+                    10.5px;
+            }
+        
+            .epl-finished-score-value {
+                grid-template-columns:
+                    minmax(40px, 1fr)
+                    18px
+                    minmax(40px, 1fr);
+        
+                width:
+                    100%;
+        
+                min-width:
+                    0;
+        
+                height:
+                    66px;
+        
+                padding:
+                    0 8px;
+        
+                border-radius:
+                    13px;
+            }
+        
+            .epl-finished-score-number {
+                font-size:
+                    44px;
             }
         
             .epl-finished-score-separator {
-                height:
-                    72px;
-        
                 font-size:
-                    34px;
+                    25px;
             }
         }
         
         @media (max-width: 390px) {
-            .epl-finished-score-tile {
-                width:
-                    92px;
+            .epl-finished-score-row {
+                grid-template-columns:
+                    58px
+                    minmax(132px, 1fr)
+                    58px;
         
-                height:
-                    68px;
+                padding-right:
+                    8px;
         
+                padding-left:
+                    8px;
+            }
+        
+            .epl-finished-score-number {
                 font-size:
                     40px;
             }
         
-            .epl-finished-score-separator {
-                height:
-                    68px;
+            .epl-finished-score-team-name {
+                max-width:
+                    62px;
         
                 font-size:
-                    32px;
+                    9.5px;
             }
         }
         </style>
@@ -16945,8 +17178,10 @@ def render_finished_match_score_row(
     actual_away: int
 ):
     """
-    Hiển thị tỉ số thật trong khung lớn, không có mũi tên.
-    Chỉ được gọi khi trận đã kết thúc và có đủ tỉ số.
+    Hiển thị bảng tỉ số thật dạng read-only.
+
+    Hàm này không tạo widget, không cho phép chỉnh sửa
+    và chỉ được gọi với trận đã có kết quả.
     """
     actual_home = int(actual_home)
     actual_away = int(actual_away)
@@ -16965,9 +17200,64 @@ def render_finished_match_score_row(
         )
     )
 
+    home_display_name = (
+        get_mobile_team_display_name(
+            home_name
+        )
+    )
+
+    away_display_name = (
+        get_mobile_team_display_name(
+            away_name
+        )
+    )
+
+    safe_home_name = html.escape(
+        str(home_display_name),
+        quote=True
+    )
+
+    safe_away_name = html.escape(
+        str(away_display_name),
+        quote=True
+    )
+
+    home_is_winner = (
+        actual_home > actual_away
+    )
+
+    away_is_winner = (
+        actual_away > actual_home
+    )
+
+    home_team_state = (
+        " is-winner"
+        if home_is_winner
+        else ""
+    )
+
+    away_team_state = (
+        " is-winner"
+        if away_is_winner
+        else ""
+    )
+
+    home_score_state = (
+        " is-winner"
+        if home_is_winner
+        else ""
+    )
+
+    away_score_state = (
+        " is-winner"
+        if away_is_winner
+        else ""
+    )
+
     result_aria_label = html.escape(
         (
-            f"Kết quả {home_name} "
+            f"Kết quả trận đấu: "
+            f"{home_name} "
             f"{actual_home} - {actual_away} "
             f"{away_name}"
         ),
@@ -16975,32 +17265,59 @@ def render_finished_match_score_row(
     )
 
     score_row_html = f"""
-    <div
-        class="epl-finished-score-row"
-        role="group"
-        aria-label="{result_aria_label}"
-        data-match-id="{int(match_id)}"
-    >
-        <div class="epl-finished-score-team">
-            {home_logo_html}
-
-            <div class="epl-finished-score-tile">
-                {actual_home}
-            </div>
+    <div class="epl-finished-score-wrap">
+        <div
+            class="epl-finished-score-label"
+            aria-hidden="true"
+        >
+            Kết thúc
         </div>
 
         <div
-            class="epl-finished-score-separator"
-            aria-hidden="true"
+            class="epl-finished-score-row"
+            role="group"
+            aria-label="{result_aria_label}"
+            data-match-id="{int(match_id)}"
         >
-            :
-        </div>
+            <div
+                class="epl-finished-score-team{home_team_state}"
+            >
+                {home_logo_html}
 
-        <div class="epl-finished-score-team">
-            {away_logo_html}
+                <div class="epl-finished-score-team-name">
+                    {safe_home_name}
+                </div>
+            </div>
 
-            <div class="epl-finished-score-tile">
-                {actual_away}
+            <div
+                class="epl-finished-score-value"
+                aria-hidden="true"
+            >
+                <span
+                    class="epl-finished-score-number{home_score_state}"
+                >
+                    {actual_home}
+                </span>
+
+                <span class="epl-finished-score-separator">
+                    :
+                </span>
+
+                <span
+                    class="epl-finished-score-number{away_score_state}"
+                >
+                    {actual_away}
+                </span>
+            </div>
+
+            <div
+                class="epl-finished-score-team{away_team_state}"
+            >
+                {away_logo_html}
+
+                <div class="epl-finished-score-team-name">
+                    {safe_away_name}
+                </div>
             </div>
         </div>
     </div>
@@ -17017,7 +17334,6 @@ def render_finished_match_score_row(
             score_row_html,
             unsafe_allow_html=True
         )
-
 def render_match_card(
     row,
     user_id: int,
