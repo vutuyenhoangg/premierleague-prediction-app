@@ -1540,6 +1540,32 @@ def build_avatar_background_css() -> str:
             line-height: 0 !important;
         }
 
+        /*
+        Trạng thái avatar đang dùng được gắn trực tiếp vào thuộc tính disabled
+        của đúng button. Cách này không phụ thuộc vào thứ tự các thẻ <style>
+        sau fragment rerun và không cần đoán DOM bằng nth-of-type.
+        */
+        div[class*="st-key-avatar_pick_"]:has(button:disabled) {
+            opacity: 1 !important;
+        }
+
+        div[class*="st-key-avatar_pick_"] button:disabled,
+        div[class*="st-key-avatar_pick_"] button:disabled:hover {
+            opacity: 1 !important;
+            border-color: #F5C542 !important;
+            background: #FFF7ED !important;
+            transform: none !important;
+            box-shadow:
+                0 0 0 4px rgba(245,197,66,0.20),
+                0 10px 24px rgba(15,23,42,0.10) !important;
+            cursor: default !important;
+        }
+
+        div[class*="st-key-avatar_pick_"] button:disabled::after {
+            content: "✓" !important;
+            display: flex !important;
+        }
+
         @media (max-width: 768px) {
             div[class*="st-key-avatar_pick_"] button {
                 height: 112px !important;
@@ -1631,46 +1657,6 @@ def build_avatar_background_css() -> str:
         + "</style>"
     )
 
-
-@st.cache_resource(show_spinner=False, max_entries=128)
-def build_selected_avatar_css(
-    current_avatar_key: str
-) -> str:
-    """
-    Đánh dấu button tương ứng với avatar hiện tại.
-    """
-    avatar_keys = load_avatar_catalog()
-
-    if not avatar_keys:
-        return ""
-
-    current_avatar_key = normalize_avatar_key(
-        current_avatar_key,
-        avatar_keys=list(avatar_keys)
-    )
-
-    if current_avatar_key not in avatar_keys:
-        return ""
-
-    avatar_button_key = get_avatar_button_key(
-        current_avatar_key
-    )
-
-    return f"""
-    <style>
-    .st-key-{avatar_button_key} button {{
-        border-color: #F5C542 !important;
-        background: #FFF7ED !important;
-        box-shadow:
-            0 0 0 4px rgba(245,197,66,0.20),
-            0 10px 24px rgba(15,23,42,0.10) !important;
-    }}
-
-    .st-key-{avatar_button_key} button::after {{
-        display: flex;
-    }}
-    </style>
-    """
 
 # ============================================================
 # 2. THEME + UI HELPERS
@@ -10000,16 +9986,6 @@ def render_avatar_popover(user: dict):
                 unsafe_allow_html=True
             )
 
-        selected_css = build_selected_avatar_css(
-            current_avatar_key
-        )
-
-        if selected_css:
-            st.markdown(
-                selected_css,
-                unsafe_allow_html=True
-            )
-
         for start_index in range(
             0,
             len(avatar_keys),
@@ -10034,7 +10010,17 @@ def render_avatar_popover(user: dict):
                             avatar_key
                         ),
                         use_container_width=True,
-                        help="Bấm để chọn avatar này."
+                        help=(
+                            "Avatar đang dùng."
+                            if avatar_key
+                            == current_avatar_key
+                            else
+                            "Bấm để chọn avatar này."
+                        ),
+                        disabled=(
+                            avatar_key
+                            == current_avatar_key
+                        )
                     )
 
                     if (
