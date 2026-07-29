@@ -4742,22 +4742,22 @@ def inject_prediction_score_stepper_css():
             }
         }
         /* =====================================================
-           KẾT QUẢ TRẬN ĐẤU — GIAO DIỆN TRONG SUỐT
-           CHỈ ÁP DỤNG CHO CARD ĐÃ CÓ KẾT QUẢ
+           KẾT QUẢ TRẬN ĐẤU — CARD ĐÃ KẾT THÚC
            ===================================================== */
         
         .epl-finished-score-wrap {
             position: relative;
+            isolation: isolate;
         
             width: min(100%, 680px);
         
             box-sizing: border-box;
         
-            margin: 28px auto 10px;
-            padding-top: 14px;
+            margin: 28px auto 0;
+            padding-top: 15px;
         }
         
-        /* Dải màu EPL nằm phía trên */
+        /* Dải màu EPL */
         .epl-finished-score-wrap::before {
             content: "";
         
@@ -4773,61 +4773,147 @@ def inject_prediction_score_stepper_css():
             background: linear-gradient(
                 90deg,
                 #FF2882 0%,
-                #FF2882 49%,
-                #00FF85 51%,
+                #FF2882 49.5%,
+                #00FF85 50.5%,
                 #00FF85 100%
             );
         
-            border-radius: 999px;
+            border-radius: 1px;
         
             pointer-events: none;
         }
         
-        /* Nhãn Kết thúc đặt giữa dải màu */
+        /* Vệt sáng chạy dọc dải màu */
+        .epl-finished-score-wrap::after {
+            content: "";
+        
+            position: absolute;
+            z-index: 2;
+        
+            top: 12px;
+            right: 0;
+            left: 0;
+        
+            height: 4px;
+        
+            background-image: linear-gradient(
+                100deg,
+                transparent 0%,
+                transparent 38%,
+                rgba(255, 255, 255, 0.96) 49%,
+                rgba(255, 255, 255, 0.55) 53%,
+                transparent 64%,
+                transparent 100%
+            );
+        
+            background-repeat: no-repeat;
+            background-size: 130px 100%;
+            background-position: -160px 0;
+        
+            animation:
+                epl-finished-strip-shimmer
+                2.8s
+                linear
+                infinite;
+        
+            pointer-events: none;
+        }
+        
+        @keyframes epl-finished-strip-shimmer {
+            from {
+                background-position: -160px 0;
+            }
+        
+            to {
+                background-position: calc(100% + 160px) 0;
+            }
+        }
+        
+        /* Khung trắng góc cạnh bên ngoài nhãn */
         .epl-finished-score-label {
             position: absolute;
-            z-index: 3;
+            z-index: 4;
         
-            top: 0;
+            top: -1px;
             left: 50%;
         
             display: flex;
         
-            min-width: 88px;
-            height: 26px;
+            width: 98px;
+            height: 29px;
         
             box-sizing: border-box;
         
             align-items: center;
             justify-content: center;
         
-            padding: 0 14px;
+            padding: 2px;
         
             transform: translateX(-50%);
         
-            background: #FF2882;
-            color: #FFFFFF;
+            background: rgba(255, 255, 255, 0.98);
         
-            border: 2px solid rgba(255, 255, 255, 0.92);
-            border-radius: 999px;
+            clip-path: polygon(
+                9px 0,
+                calc(100% - 9px) 0,
+                100% 9px,
+                100% calc(100% - 9px),
+                calc(100% - 9px) 100%,
+                9px 100%,
+                0 calc(100% - 9px),
+                0 9px
+            );
         
             box-shadow: none;
+        }
+        
+        /* Phần màu hồng phía trong */
+        .epl-finished-score-label span {
+            display: flex;
+        
+            width: 100%;
+            height: 100%;
+        
+            box-sizing: border-box;
+        
+            align-items: center;
+            justify-content: center;
+        
+            padding: 0 12px;
+        
+            background: linear-gradient(
+                110deg,
+                #FF2882 0%,
+                #FF2882 42%,
+                #FF75B1 50%,
+                #FF2882 58%,
+                #FF2882 100%
+            );
+        
+            color: #FFFFFF;
+        
+            clip-path: polygon(
+                7px 0,
+                calc(100% - 7px) 0,
+                100% 7px,
+                100% calc(100% - 7px),
+                calc(100% - 7px) 100%,
+                7px 100%,
+                0 calc(100% - 7px),
+                0 7px
+            );
         
             font-size: 10px;
             font-weight: 950;
             line-height: 1;
-            letter-spacing: 0.11em;
+            letter-spacing: 0.10em;
             white-space: nowrap;
             text-transform: uppercase;
         }
         
         /*
-         * Bỏ hoàn toàn:
-         * - Nền tím lớn.
-         * - Border bao quanh.
-         * - Clip-path.
-         * - Họa tiết nền.
-         * - Shadow.
+         * Hai cột đội rộng bằng nhau.
+         * Vùng tỉ số có chiều rộng cố định và nằm đúng tâm card.
          */
         .epl-finished-score-row {
             position: relative;
@@ -4835,30 +4921,28 @@ def inject_prediction_score_stepper_css():
             display: grid;
         
             grid-template-columns:
-                minmax(100px, 1fr)
-                minmax(180px, 1.15fr)
-                minmax(100px, 1fr);
+                minmax(0, 1fr)
+                178px
+                minmax(0, 1fr);
         
             width: 100%;
-            min-height: 120px;
+            min-height: 118px;
         
             box-sizing: border-box;
         
             align-items: center;
         
             margin: 0;
-            padding: 28px 24px 4px;
+            padding: 28px 18px 0;
         
             overflow: visible;
         
             background: transparent;
             border: 0;
             border-radius: 0;
-            clip-path: none;
             box-shadow: none;
         }
         
-        /* Khu vực thông tin của mỗi đội */
         .epl-finished-score-team {
             display: grid;
         
@@ -4871,10 +4955,9 @@ def inject_prediction_score_stepper_css():
             align-items: center;
             justify-items: center;
         
-            gap: 9px;
+            gap: 8px;
         }
         
-        /* Logo không có box */
         .epl-finished-score-logo {
             display: flex;
         
@@ -4916,7 +4999,6 @@ def inject_prediction_score_stepper_css():
             pointer-events: none;
         }
         
-        /* Trường hợp thiếu file logo */
         .epl-finished-score-logo-fallback {
             display: flex;
         
@@ -4935,7 +5017,7 @@ def inject_prediction_score_stepper_css():
             background: rgba(55, 0, 60, 0.05);
             color: #37003C;
         
-            border: 1px solid rgba(55, 0, 60, 0.20);
+            border: 1px solid rgba(55, 0, 60, 0.18);
             border-radius: 50%;
         
             font-size: 9px;
@@ -4944,7 +5026,6 @@ def inject_prediction_score_stepper_css():
             text-align: center;
         }
         
-        /* Tên đội */
         .epl-finished-score-team-name {
             display: block;
         
@@ -4965,26 +5046,24 @@ def inject_prediction_score_stepper_css():
             white-space: nowrap;
         }
         
-        /* Nhấn đội chiến thắng bằng màu xanh dễ đọc */
         .epl-finished-score-team.is-winner
         .epl-finished-score-team-name {
             color: #00864A;
         }
         
         /*
-         * Tỉ số đứng trực tiếp trên nền card.
-         * Không còn box nhỏ hoặc lớn bao quanh.
+         * Hai ô số rộng đúng bằng nhau.
+         * Dấu hai chấm có cột riêng và nằm tại tâm tuyệt đối.
          */
         .epl-finished-score-value {
             display: grid;
         
             grid-template-columns:
-                minmax(54px, 1fr)
-                22px
-                minmax(54px, 1fr);
+                72px
+                20px
+                72px;
         
-            width: min(100%, 210px);
-            min-width: 0;
+            width: 164px;
         
             box-sizing: border-box;
         
@@ -4997,14 +5076,24 @@ def inject_prediction_score_stepper_css():
         
             background: transparent;
             border: 0;
-            border-radius: 0;
             box-shadow: none;
         
             font-variant-numeric: tabular-nums;
+            font-feature-settings: "tnum" 1;
         }
         
-        /* Hai con số */
         .epl-finished-score-number {
+            display: flex;
+        
+            width: 72px;
+            min-width: 72px;
+        
+            align-items: center;
+            justify-content: center;
+        
+            margin: 0;
+            padding: 0;
+        
             color: #37003C;
         
             font-family:
@@ -5014,69 +5103,83 @@ def inject_prediction_score_stepper_css():
                 "Segoe UI",
                 sans-serif;
         
-            font-size: clamp(54px, 5vw, 68px);
+            font-size: 64px;
             font-weight: 950;
             line-height: 1;
-            letter-spacing: -0.07em;
+            letter-spacing: 0;
+            text-align: center;
+        
+            font-variant-numeric: tabular-nums;
+            font-feature-settings: "tnum" 1;
         
             text-shadow: none;
-        
             user-select: none;
         }
         
-        /* Số của đội chiến thắng */
         .epl-finished-score-number.is-winner {
             color: #009E57;
         }
         
-        /* Dấu phân cách */
         .epl-finished-score-separator {
+            display: flex;
+        
+            width: 20px;
+        
+            align-items: center;
+            justify-content: center;
+        
             color: #FF2882;
         
-            font-size: 31px;
+            font-size: 29px;
             font-weight: 950;
             line-height: 1;
+            text-align: center;
         
             transform: translateY(-3px);
         
             user-select: none;
         }
         
-        /* =========================
-           MOBILE
-           ========================= */
+        @media (prefers-reduced-motion: reduce) {
+            .epl-finished-score-wrap::after {
+                animation: none;
+            }
+        }
         
         @media (max-width: 768px) {
             .epl-finished-score-wrap {
                 width: 100%;
         
-                margin: 24px auto 8px;
-                padding-top: 12px;
+                margin-top: 24px;
+                padding-top: 13px;
             }
         
-            .epl-finished-score-wrap::before {
+            .epl-finished-score-wrap::before,
+            .epl-finished-score-wrap::after {
                 top: 11px;
                 height: 3px;
             }
         
             .epl-finished-score-label {
-                min-width: 80px;
-                height: 24px;
+                top: 0;
         
-                padding: 0 11px;
+                width: 88px;
+                height: 26px;
+            }
         
+            .epl-finished-score-label span {
                 font-size: 9px;
             }
         
             .epl-finished-score-row {
                 grid-template-columns:
-                    minmax(62px, 0.9fr)
-                    minmax(128px, 1.15fr)
-                    minmax(62px, 0.9fr);
+                    minmax(0, 1fr)
+                    126px
+                    minmax(0, 1fr);
         
-                min-height: 104px;
+                min-height: 102px;
         
-                padding: 25px 8px 2px;
+                padding: 25px 6px 0;
             }
         
             .epl-finished-score-team {
@@ -5111,19 +5214,24 @@ def inject_prediction_score_stepper_css():
         
             .epl-finished-score-value {
                 grid-template-columns:
-                    minmax(39px, 1fr)
-                    17px
-                    minmax(39px, 1fr);
+                    50px
+                    18px
+                    50px;
         
-                width: 100%;
+                width: 118px;
             }
         
             .epl-finished-score-number {
+                width: 50px;
+                min-width: 50px;
+        
                 font-size: 46px;
             }
         
             .epl-finished-score-separator {
-                font-size: 25px;
+                width: 18px;
+        
+                font-size: 24px;
         
                 transform: translateY(-2px);
             }
@@ -5132,20 +5240,32 @@ def inject_prediction_score_stepper_css():
         @media (max-width: 390px) {
             .epl-finished-score-row {
                 grid-template-columns:
-                    58px
-                    minmax(116px, 1fr)
-                    58px;
+                    minmax(0, 1fr)
+                    116px
+                    minmax(0, 1fr);
         
-                padding-right: 5px;
-                padding-left: 5px;
+                padding-right: 4px;
+                padding-left: 4px;
+            }
+        
+            .epl-finished-score-value {
+                grid-template-columns:
+                    45px
+                    18px
+                    45px;
+        
+                width: 108px;
             }
         
             .epl-finished-score-number {
-                font-size: 42px;
+                width: 45px;
+                min-width: 45px;
+        
+                font-size: 41px;
             }
         
             .epl-finished-score-team-name {
-                max-width: 64px;
+                max-width: 68px;
         
                 font-size: 9.5px;
             }
@@ -7899,10 +8019,10 @@ def render_daily_checkin_shortcut_button(user_id: int):
 
 def inject_mobile_goal_scorer_button_css():
     """
-    Giao diện nút cầu thủ ghi bàn trên desktop và mobile.
+    Nút tròn mở/đóng danh sách cầu thủ ghi bàn.
 
-    Chỉ tác động đến widget có key:
-    goal_scorers_button_<match_id>
+    Nút được căn đúng giữa card, tương ứng với vị trí
+    dấu hai chấm của bảng tỉ số.
     """
     st.markdown(
         """
@@ -7915,101 +8035,99 @@ def inject_mobile_goal_scorer_button_css():
             align-items: center !important;
             justify-content: center !important;
 
-            margin: 4px auto 12px !important;
+            margin: 1px auto 9px !important;
+
+            text-align: center !important;
+        }
+
+        div[class*="st-key-goal_scorers_button_"]
+        [data-testid="stButton"],
+        div[class*="st-key-goal_scorers_button_"]
+        .stButton {
+            display: flex !important;
+
+            width: 100% !important;
+
+            align-items: center !important;
+            justify-content: center !important;
         }
 
         div[class*="st-key-goal_scorers_button_"] button {
             display: inline-flex !important;
 
-            width: auto !important;
-            min-width: 218px !important;
-            min-height: 46px !important;
+            width: 36px !important;
+            height: 36px !important;
+
+            min-width: 36px !important;
+            min-height: 36px !important;
+
+            max-width: 36px !important;
+            max-height: 36px !important;
 
             box-sizing: border-box !important;
+
+            flex: 0 0 36px !important;
 
             align-items: center !important;
             justify-content: center !important;
 
-            gap: 9px !important;
+            margin: 0 auto !important;
+            padding: 0 0 2px !important;
 
-            padding: 7px 16px 7px 9px !important;
+            background: rgba(55, 0, 60, 0.07) !important;
+            color: #6F3B76 !important;
 
-            background: rgba(255, 255, 255, 0.82) !important;
-            color: #37003C !important;
-
-            border: 1px solid rgba(55, 0, 60, 0.30) !important;
-            border-left: 4px solid #FF2882 !important;
-            border-radius: 12px !important;
+            border: 1px solid rgba(55, 0, 60, 0.14) !important;
+            border-radius: 50% !important;
 
             box-shadow: none !important;
 
-            font-size: 13px !important;
-            font-weight: 850 !important;
+            font-size: 22px !important;
+            font-weight: 500 !important;
             line-height: 1 !important;
-            white-space: nowrap !important;
 
             transition:
-                background-color 160ms ease,
-                color 160ms ease,
-                border-color 160ms ease !important;
-        }
-
-        /* Icon bóng đá riêng của nút */
-        div[class*="st-key-goal_scorers_button_"]
-        button::before {
-            content: "⚽";
-
-            display: inline-flex;
-
-            width: 28px;
-            height: 28px;
-
-            flex: 0 0 28px;
-
-            align-items: center;
-            justify-content: center;
-
-            background: #37003C;
-
-            border-radius: 8px;
-
-            font-size: 14px;
-            line-height: 1;
+                background-color 150ms ease,
+                border-color 150ms ease,
+                color 150ms ease !important;
         }
 
         div[class*="st-key-goal_scorers_button_"]
-        button * {
+        button p {
+            margin: 0 !important;
+            padding: 0 !important;
+
             color: inherit !important;
 
             font-size: inherit !important;
             font-weight: inherit !important;
             line-height: 1 !important;
+        }
 
-            white-space: nowrap !important;
-            word-break: keep-all !important;
-            overflow-wrap: normal !important;
+        /* Xóa icon quả bóng và mọi pseudo-element cũ */
+        div[class*="st-key-goal_scorers_button_"]
+        button::before,
+        div[class*="st-key-goal_scorers_button_"]
+        button::after {
+            content: none !important;
+
+            display: none !important;
         }
 
         div[class*="st-key-goal_scorers_button_"]
         button:hover {
-            background: #37003C !important;
+            background: #FF2882 !important;
             color: #FFFFFF !important;
 
-            border-color: #37003C !important;
-            border-left-color: #00FF85 !important;
+            border-color: #FF2882 !important;
 
             box-shadow: none !important;
             transform: none !important;
         }
 
         div[class*="st-key-goal_scorers_button_"]
-        button:hover::before {
-            background: #FF2882;
-        }
-
-        div[class*="st-key-goal_scorers_button_"]
         button:active {
-            background: #25002B !important;
+            background: #D91E6D !important;
             color: #FFFFFF !important;
 
             box-shadow: none !important;
@@ -8018,7 +8136,7 @@ def inject_mobile_goal_scorer_button_css():
 
         div[class*="st-key-goal_scorers_button_"]
         button:focus-visible {
-            outline: 3px solid rgba(255, 40, 130, 0.24) !important;
+            outline: 3px solid rgba(255, 40, 130, 0.20) !important;
             outline-offset: 2px !important;
 
             box-shadow: none !important;
@@ -8026,28 +8144,23 @@ def inject_mobile_goal_scorer_button_css():
 
         @media (max-width: 768px) {
             div[class*="st-key-goal_scorers_button_"] {
-                margin-top: 5px !important;
-                margin-bottom: 11px !important;
+                margin-top: 2px !important;
+                margin-bottom: 8px !important;
             }
 
             div[class*="st-key-goal_scorers_button_"] button {
-                width: min(100%, 286px) !important;
-                min-width: 0 !important;
-                min-height: 44px !important;
+                width: 34px !important;
+                height: 34px !important;
 
-                padding: 7px 13px 7px 8px !important;
+                min-width: 34px !important;
+                min-height: 34px !important;
 
-                font-size: 12.5px !important;
-            }
+                max-width: 34px !important;
+                max-height: 34px !important;
 
-            div[class*="st-key-goal_scorers_button_"]
-            button::before {
-                width: 27px;
-                height: 27px;
+                flex-basis: 34px !important;
 
-                flex-basis: 27px;
-
-                font-size: 13px;
+                font-size: 21px !important;
             }
         }
         </style>
@@ -8056,74 +8169,130 @@ def inject_mobile_goal_scorer_button_css():
     )
 
 def inject_mobile_goal_scorer_panel_css():
+    """
+    Danh sách cầu thủ hai đội:
+
+    - Đội nhà nằm bên trái.
+    - Đội khách nằm bên phải.
+    - Mỗi cầu thủ là một dòng riêng.
+    - Không sử dụng box trắng lớn.
+    """
     st.markdown(
         """
         <style>
-        .wc-goal-scorers-box {
-            width: min(100%, 680px) !important;
-            max-width: 680px !important;
-        
-            box-sizing: border-box !important;
-        
-            margin: 2px auto 20px !important;
-            padding: 13px 16px !important;
-        
-            background: rgba(255, 255, 255, 0.72) !important;
-        
-            border: 1px solid rgba(55, 0, 60, 0.12) !important;
-            border-left: 4px solid #FF2882 !important;
-            border-radius: 12px !important;
-        
-            box-shadow: none !important;
-        
-            font-size: 13px !important;
-            line-height: 1.55 !important;
+        .wc-goal-scorers-grid {
+            display: grid;
+
+            grid-template-columns:
+                minmax(0, 1fr)
+                1px
+                minmax(0, 1fr);
+
+            column-gap: 16px;
+
+            width: min(100%, 680px);
+
+            box-sizing: border-box;
+
+            margin: 0 auto 19px;
+            padding: 1px 22px 5px;
+
+            background: transparent;
+            border: 0;
+            border-radius: 0;
+            box-shadow: none;
         }
-        
-        .wc-goal-scorers-title {
-            color: #37003C !important;
-        
-            font-weight: 950 !important;
-            letter-spacing: 0.01em !important;
+
+        .wc-goal-scorer-divider {
+            width: 1px;
+            min-height: 22px;
+
+            align-self: stretch;
+
+            background: linear-gradient(
+                180deg,
+                transparent 0%,
+                rgba(55, 0, 60, 0.18) 24%,
+                rgba(55, 0, 60, 0.18) 76%,
+                transparent 100%
+            );
         }
-        
-        .wc-goal-scorer-line {
-            width: 100% !important;
-        
-            margin-top: 3px !important;
-        
-            color: #334155 !important;
-        
-            white-space: normal !important;
-            word-break: normal !important;
-            overflow-wrap: anywhere !important;
+
+        .wc-goal-scorer-side {
+            display: flex;
+
+            min-width: 0;
+
+            flex-direction: column;
+
+            gap: 5px;
         }
-        
-        .wc-goal-scorer-team {
-            color: #37003C !important;
-        
-            font-weight: 900 !important;
-            white-space: nowrap !important;
+
+        .wc-goal-scorer-side.is-home {
+            align-items: flex-end;
+
+            text-align: right;
         }
-        
-        .wc-goal-scorer-names {
-            color: #334155 !important;
-        
-            white-space: normal !important;
-            word-break: normal !important;
-            overflow-wrap: anywhere !important;
+
+        .wc-goal-scorer-side.is-away {
+            align-items: flex-start;
+
+            text-align: left;
         }
-        
+
+        .wc-goal-scorer-item {
+            display: block;
+
+            max-width: 100%;
+
+            color: #37003C;
+
+            font-size: 12.5px;
+            font-weight: 650;
+            line-height: 1.35;
+
+            white-space: normal;
+            word-break: normal;
+            overflow-wrap: anywhere;
+        }
+
+        .wc-goal-scorer-empty {
+            color: rgba(55, 0, 60, 0.38);
+
+            font-size: 13px;
+            font-weight: 700;
+            line-height: 1.35;
+        }
+
+        .wc-goal-scorers-no-data {
+            width: 100%;
+
+            box-sizing: border-box;
+
+            margin: 0 auto 18px;
+
+            color: #64748B;
+
+            font-size: 12px;
+            font-weight: 650;
+            line-height: 1.4;
+            text-align: center;
+        }
+
         @media (max-width: 768px) {
-            .wc-goal-scorers-box {
-                width: 100% !important;
-                max-width: 100% !important;
-        
-                margin-top: 1px !important;
-                margin-bottom: 18px !important;
-                padding: 12px 13px !important;
-        
-                font-size: 12.5px !important;
+            .wc-goal-scorers-grid {
+                column-gap: 10px;
+
+                margin-bottom: 17px;
+                padding:
+                    1px
+                    7px
+                    4px;
+            }
+
+            .wc-goal-scorer-item {
+                font-size: 11.5px;
+                line-height: 1.35;
             }
         }
         </style>
@@ -13291,28 +13460,34 @@ def toggle_goal_scorers(match_id: int):
     )
 
 
-def render_goal_scorers_for_match(match_id: int):
+def render_goal_scorers_for_match(
+    match_id: int,
+    home_name: str,
+    away_name: str
+):
     """
-    Hiển thị nút mở rộng/thu gọn danh sách cầu thủ ghi bàn.
+    Hiển thị nút tròn mở/đóng và danh sách cầu thủ ghi bàn.
 
-    Logic giữ nguyên:
-    - Mỗi card có trạng thái ẩn/hiện riêng.
-    - Bấm mở/ẩn trận này không tự đóng các trận khác.
-    - Chưa mở thì không query bảng match_goals.
-    - Khi mở thì chỉ query cầu thủ ghi bàn của đúng trận đó.
-
-    UI update:
-    - Thêm class CSS cho box cầu thủ ghi bàn để mobile có thể kéo rộng sang phải.
+    Logic dữ liệu được giữ nguyên:
+    - Mỗi trận có trạng thái mở/đóng riêng.
+    - Chỉ query match_goals khi danh sách được mở.
+    - Cầu thủ đội nhà và đội khách được tách riêng.
+    - Mỗi bàn thắng hiển thị thành một dòng dọc.
     """
     from html import escape
 
     match_id = int(match_id)
     toggle_key = f"show_goal_scorers_{match_id}"
 
-    is_open = st.session_state.get(toggle_key, False)
+    is_open = st.session_state.get(
+        toggle_key,
+        False
+    )
 
-    button_label = (
-        "Ẩn cầu thủ ghi bàn"
+    button_label = "−" if is_open else "+"
+
+    button_help = (
+        "Ẩn danh sách cầu thủ ghi bàn"
         if is_open
         else "Xem cầu thủ ghi bàn"
     )
@@ -13321,6 +13496,7 @@ def render_goal_scorers_for_match(match_id: int):
         button_label,
         key=f"goal_scorers_button_{match_id}",
         type="secondary",
+        help=button_help,
         on_click=toggle_goal_scorers,
         args=(match_id,)
     )
@@ -13328,72 +13504,105 @@ def render_goal_scorers_for_match(match_id: int):
     if not is_open:
         return
 
-    match_goals = load_goal_scorers_for_match(match_id)
-
-    if match_goals.empty:
-        st.caption("Chưa có dữ liệu cầu thủ ghi bàn cho trận này.")
-        return
-
-    home_goals = match_goals[match_goals["team_side"] == "home"]
-    away_goals = match_goals[match_goals["team_side"] == "away"]
-
-    goal_lines = []
-
-    if not home_goals.empty:
-        home_team = escape(
-            str(home_goals.iloc[0]["team_name"]).strip(),
-            quote=False
-        )
-        home_text = ", ".join(home_goals.apply(format_goal_text, axis=1))
-
-        goal_lines.append(
-            '<div class="wc-goal-scorer-line">'
-            f'<span class="wc-goal-scorer-team">{home_team}:</span> '
-            f'<span class="wc-goal-scorer-names">{home_text}</span>'
-            '</div>'
-        )
-
-    if not away_goals.empty:
-        away_team = escape(
-            str(away_goals.iloc[0]["team_name"]).strip(),
-            quote=False
-        )
-        away_text = ", ".join(away_goals.apply(format_goal_text, axis=1))
-
-        goal_lines.append(
-            '<div class="wc-goal-scorer-line">'
-            f'<span class="wc-goal-scorer-team">{away_team}:</span> '
-            f'<span class="wc-goal-scorer-names">{away_text}</span>'
-            '</div>'
-        )
-
-    if not goal_lines:
-        st.caption("Trận này chưa có dữ liệu cầu thủ ghi bàn.")
-        return
-
-    scorers_html = (
-        '<div class="wc-goal-scorers-box" style="'
-        'margin-top:8px;'
-        'margin-bottom:18px;'
-        'padding-left:12px;'
-        'border-left:3px solid rgba(245,197,66,0.9);'
-        'font-size:13px;'
-        'line-height:1.55;'
-        '">'
-        '<div class="wc-goal-scorers-title" style="'
-        'font-weight:900;'
-        'color:#07111F;'
-        'margin-bottom:4px;'
-        'letter-spacing:0.01em;'
-        '">'
-        'Cầu thủ ghi bàn'
-        '</div>'
-        f'{"".join(goal_lines)}'
-        '</div>'
+    match_goals = load_goal_scorers_for_match(
+        match_id
     )
 
+    if match_goals.empty:
+        st.markdown(
+            (
+                '<div class="wc-goal-scorers-no-data">'
+                'Chưa có dữ liệu cầu thủ ghi bàn cho trận này.'
+                '</div>'
+            ),
+            unsafe_allow_html=True
+        )
+        return
+
+    home_goals = match_goals[
+        match_goals["team_side"] == "home"
+    ]
+
+    away_goals = match_goals[
+        match_goals["team_side"] == "away"
+    ]
+
+    def build_goal_items(goal_df):
+        """
+        Mỗi cầu thủ/bàn thắng là một hàng HTML riêng.
+        """
+        if goal_df.empty:
+            return (
+                '<div class="wc-goal-scorer-empty" '
+                'aria-hidden="true">—</div>'
+            )
+
+        return "".join(
+            (
+                '<div class="wc-goal-scorer-item">'
+                f'{format_goal_text(goal_row)}'
+                '</div>'
+            )
+            for _, goal_row in goal_df.iterrows()
+        )
+
+    home_items_html = build_goal_items(
+        home_goals
+    )
+
+    away_items_html = build_goal_items(
+        away_goals
+    )
+
+    safe_home_name = escape(
+        str(
+            get_mobile_team_display_name(
+                home_name
+            )
+        ),
+        quote=True
+    )
+
+    safe_away_name = escape(
+        str(
+            get_mobile_team_display_name(
+                away_name
+            )
+        ),
+        quote=True
+    )
+
+    scorers_html = f"""
+    <div
+        class="wc-goal-scorers-grid"
+        role="group"
+        aria-label="Danh sách cầu thủ ghi bàn"
+    >
+        <div
+            class="wc-goal-scorer-side is-home"
+            aria-label="Cầu thủ ghi bàn của {safe_home_name}"
+        >
+            {home_items_html}
+        </div>
+
+        <div
+            class="wc-goal-scorer-divider"
+            aria-hidden="true"
+        ></div>
+
+        <div
+            class="wc-goal-scorer-side is-away"
+            aria-label="Cầu thủ ghi bàn của {safe_away_name}"
+        >
+            {away_items_html}
+        </div>
+    </div>
+    """
+
     st.markdown(
-        scorers_html,
+        textwrap.dedent(
+            scorers_html
+        ).strip(),
         unsafe_allow_html=True
     )
 
@@ -17315,7 +17524,7 @@ def render_finished_match_score_row(
             class="epl-finished-score-label"
             aria-hidden="true"
         >
-            Kết thúc
+            <span>Kết thúc</span>
         </div>
 
         <div
@@ -17725,7 +17934,9 @@ def render_match_card(
             # nằm ngay dưới bảng tỉ số.
             if (actual_home + actual_away) > 0:
                 render_goal_scorers_for_match(
-                    match_id
+                    match_id=match_id,
+                    home_name=home_name,
+                    away_name=away_name
                 )
 
         if existing:
