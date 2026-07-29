@@ -9663,8 +9663,16 @@ def parse_utc_datetime(value):
     return pd.to_datetime(value, utc=True, errors="coerce")
 
 
-def can_edit_prediction(kickoff_time_utc) -> bool:
-    kickoff = parse_utc_datetime(kickoff_time_utc)
+def can_edit_prediction(
+    kickoff_time_utc,
+    is_finished=False
+) -> bool:
+    if to_bool(is_finished):
+        return False
+
+    kickoff = parse_utc_datetime(
+        kickoff_time_utc
+    )
 
     if pd.isna(kickoff):
         return False
@@ -13393,8 +13401,13 @@ def _normalize_prediction_for_match(
     if not 0 <= predicted_away_score <= 20:
         raise ValueError("Tỉ số đội khách không hợp lệ.")
 
-    if not can_edit_prediction(match.get("kickoff_time_utc")):
-        raise ValueError("Trận đấu đã khóa dự đoán.")
+    if not can_edit_prediction(
+        match.get("kickoff_time_utc"),
+        is_finished=match.get("is_finished")
+    ):
+        raise ValueError(
+            "Trận đấu đã có kết quả hoặc đã khóa dự đoán."
+        )
 
     if predicted_winner_team_id is not None:
         predicted_winner_team_id = int(predicted_winner_team_id)
@@ -14544,7 +14557,10 @@ def transfer_star_and_save_prediction(
         if source_match is None:
             raise ValueError("Không tìm thấy trận đang giữ sao.")
 
-        if not can_edit_prediction(source_match.get("kickoff_time_utc")):
+        if not can_edit_prediction(
+            source_match.get("kickoff_time_utc"),
+            is_finished=source_match.get("is_finished")
+        ):
             raise ValueError(
                 "Trận đang giữ sao đã khóa, không thể chuyển sao nữa."
             )
@@ -14679,9 +14695,13 @@ def delete_prediction(user_id: int, match_id: int) -> dict:
         if match is None:
             raise ValueError("Không tìm thấy trận đấu.")
 
-        if not can_edit_prediction(match.get("kickoff_time_utc")):
+        if not can_edit_prediction(
+            match.get("kickoff_time_utc"),
+            is_finished=match.get("is_finished")
+        ):
             raise ValueError(
-                "Trận đấu đã khóa dự đoán, bạn không thể hủy dự đoán nữa."
+                "Trận đấu đã có kết quả hoặc đã khóa, "
+                "bạn không thể xóa dự đoán nữa."
             )
 
         existing = _get_prediction_for_update(
@@ -17025,7 +17045,10 @@ def render_match_card(
     is_knockout = to_bool(row.get("is_knockout"))
     is_finished = to_bool(row.get("is_finished"))
 
-    editable = can_edit_prediction(row.get("kickoff_time_utc"))
+    editable = can_edit_prediction(
+        row.get("kickoff_time_utc"),
+        is_finished=is_finished
+    )
 
     if user_prediction_map is None:
         existing = get_user_prediction(user_id, match_id)
