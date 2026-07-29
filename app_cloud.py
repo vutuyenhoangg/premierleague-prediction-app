@@ -9,12 +9,19 @@ import streamlit.components.v1 as components
 import html
 import json
 import os
+import logging
+import threading
 import hmac
 import hashlib
 import base64
 import mimetypes
 from sqlalchemy import create_engine, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import (
+    DBAPIError,
+    IntegrityError,
+    OperationalError,
+    TimeoutError as SQLAlchemyTimeoutError
+)
 from sqlalchemy.engine import Engine
 from pathlib import Path
 from datetime import datetime, timezone, timedelta, date
@@ -25,6 +32,8 @@ import secrets
 from streamlit_cookies_controller import CookieController
 import re
 import textwrap
+
+LOGGER = logging.getLogger("epl_prediction_arena")
 
 # ============================================================
 # 1. CONFIG
@@ -140,6 +149,11 @@ AVATAR_EXTENSIONS = {".png"}
 # Avatar lớn nhất hiển thị 82px; 168px đủ sắc nét cho màn hình HiDPI 2x
 # nhưng nhẹ hơn đáng kể so với việc giữ bản 192px cho cả 80 ảnh.
 AVATAR_RENDER_SIZE_PX = 168
+# Kho chọn avatar dùng một sprite WebP chung thay vì 80 ảnh Base64 riêng.
+# Kích thước 128px vẫn lớn hơn ảnh hiển thị tối đa 82px và giảm đáng kể
+# RAM, kích thước WebSocket delta và thời gian dựng DOM.
+AVATAR_SPRITE_CELL_PX = 128
+AVATAR_SPRITE_COLUMNS = 8
 AVATAR_ORDER = [
     "avatar_01.png",
     "avatar_02.png",
@@ -1224,46 +1238,398 @@ def get_avatar_button_key(avatar_key: str) -> str:
     return f"avatar_pick_{safe_avatar_key}"
 
 
-@st.cache_resource(show_spinner=False, max_entries=4)
-def load_avatar_catalog() -> tuple[tuple[str, str], ...]:
+def load_avatar_catalog() -> tuple[str, ...]:
     """
-    Đọc và thu nhỏ toàn bộ avatar đúng một lần cho mỗi app process.
+    Catalog nhẹ chỉ chứa tên file.
 
-    Giá trị trả về chỉ gồm tuple bất biến để nhiều session có thể dùng chung
-    mà không phát sinh bản sao Base64 lớn trong RAM sau mỗi Streamlit rerun.
-    Khi deploy phiên bản ảnh mới, app process khởi động lại và catalog được
-    tạo lại tự động.
+    Bản cũ giữ đồng thời 80 chuỗi Base64 riêng trong RAM và gửi lại toàn bộ
+    chuỗi đó ở mỗi rerun. Ảnh của catalog giờ được gộp thành một sprite chung.
     """
-    avatar_keys = tuple(load_avatar_keys())
+    return tuple(load_avatar_keys())
 
-    return tuple(
-        (
-            avatar_key,
-            get_avatar_src(
-                avatar_key,
-                avatar_keys=avatar_keys
-            )
+
+@st.cache_resource(show_spinner=False, max_entries=2)
+def build_avatar_sprite_payload() -> tuple[str, int, int]:
+    """
+    Tạo một sprite WebP dùng chung cho toàn bộ avatar.
+
+    Trả về:
+    - data URI của sprite;
+    - số cột;
+    - số hàng.
+
+    Hàm chạy một lần cho mỗi app process. Khi deploy bộ ảnh mới, process mới
+    sẽ tự tạo sprite mới; không giữ 80 ảnh Base64 độc lập trong cache.
+    """
+    avatar_keys = load_avatar_catalog()
+
+    if not avatar_keys:
+        return "", AVATAR_SPRITE_COLUMNS, 0
+
+    try:
+        from io import BytesIO
+        from PIL import Image, ImageOps
+
+        columns = min(
+            AVATAR_SPRITE_COLUMNS,
+            len(avatar_keys)
         )
-        for avatar_key in avatar_keys
+        rows = (
+            len(avatar_keys)
+            + columns
+            - 1
+        ) // columns
+
+        sprite = Image.new(
+            "RGB",
+            (
+                columns * AVATAR_SPRITE_CELL_PX,
+                rows * AVATAR_SPRITE_CELL_PX
+            ),
+            color=(255, 255, 255)
+        )
+
+        avatar_dir = get_avatar_dir()
+
+        for index, avatar_key in enumerate(avatar_keys):
+            avatar_path = avatar_dir / avatar_key
+
+            if not avatar_path.exists() or not avatar_path.is_file():
+                continue
+
+            with Image.open(avatar_path) as source_image:
+                avatar_image = ImageOps.exif_transpose(
+                    source_image
+                ).convert("RGB")
+
+                avatar_image = ImageOps.fit(
+                    avatar_image,
+                    (
+                        AVATAR_SPRITE_CELL_PX,
+                        AVATAR_SPRITE_CELL_PX
+                    ),
+                    method=Image.Resampling.LANCZOS,
+                    centering=(0.5, 0.5)
+                )
+
+                column_index = index % columns
+                row_index = index // columns
+
+                sprite.paste(
+                    avatar_image,
+                    (
+                        column_index * AVATAR_SPRITE_CELL_PX,
+                        row_index * AVATAR_SPRITE_CELL_PX
+                    )
+                )
+
+        output_buffer = BytesIO()
+        output_mime_type = "image/webp"
+
+        try:
+            sprite.save(
+                output_buffer,
+                format="WEBP",
+                quality=84,
+                lossless=False,
+                method=4
+            )
+
+        except Exception:
+            # Một số bản Pillow không có codec WebP.
+            output_buffer = BytesIO()
+            output_mime_type = "image/png"
+            sprite.save(
+                output_buffer,
+                format="PNG",
+                optimize=True
+            )
+
+        encoded = base64.b64encode(
+            output_buffer.getvalue()
+        ).decode("ascii")
+
+        return (
+            f"data:{output_mime_type};base64,{encoded}",
+            columns,
+            rows
+        )
+
+    except Exception:
+        # Fallback an toàn: vẫn giữ app hoạt động nếu Pillow/WebP gặp lỗi.
+        # Chỉ dùng ảnh hiện tại ở nút avatar; grid sẽ không có ảnh nền thay
+        # vì làm sập toàn bộ ứng dụng.
+        LOGGER.warning(
+            "Could not build avatar sprite; using image fallback.",
+            exc_info=True
+        )
+        return "", AVATAR_SPRITE_COLUMNS, 0
+
+
+def get_avatar_sprite_position(
+    avatar_key: str,
+    avatar_keys: tuple[str, ...] | None = None
+) -> tuple[float, float] | None:
+    """
+    Trả về background-position theo phần trăm cho một avatar trong sprite.
+    """
+    avatar_keys = avatar_keys or load_avatar_catalog()
+
+    if not avatar_keys:
+        return None
+
+    normalized_avatar_key = normalize_avatar_key(
+        avatar_key,
+        avatar_keys=list(avatar_keys)
     )
 
+    try:
+        index = avatar_keys.index(normalized_avatar_key)
+    except ValueError:
+        return None
 
-@st.cache_resource(show_spinner=False, max_entries=1)
+    _, columns, rows = build_avatar_sprite_payload()
+
+    if columns <= 0 or rows <= 0:
+        return None
+
+    column_index = index % columns
+    row_index = index // columns
+
+    x_position = (
+        0.0
+        if columns <= 1
+        else column_index * 100.0 / (columns - 1)
+    )
+    y_position = (
+        0.0
+        if rows <= 1
+        else row_index * 100.0 / (rows - 1)
+    )
+
+    return x_position, y_position
+
+
+@st.cache_resource(show_spinner=False, max_entries=2)
 def build_avatar_background_css() -> str:
     """
-    Tạo đúng một bản CSS chứa ảnh nền cho toàn bộ avatar.
+    Tạo CSS cho grid avatar từ đúng một sprite Base64.
     """
-    css_parts = []
+    avatar_keys = load_avatar_catalog()
+    sprite_src, columns, rows = build_avatar_sprite_payload()
 
-    for avatar_key, avatar_src in load_avatar_catalog():
-        avatar_button_key = get_avatar_button_key(
-            avatar_key
+    if not avatar_keys:
+        return ""
+
+    sprite_available = bool(
+        sprite_src
+        and columns > 0
+        and rows > 0
+    )
+
+    if not sprite_available:
+        # Pixel trong suốt; từng avatar sẽ được gắn riêng ở fallback bên dưới.
+        sprite_src = (
+            "data:image/gif;base64,"
+            "R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs="
         )
+        columns = 1
+        rows = 1
+
+    css_parts = [
+        """
+        :root {
+            --epl-avatar-sprite-image:
+                url("__AVATAR_SPRITE_SRC__");
+        }
+
+        div[class*="st-key-avatar_picker_radio_"]
+        div[role="radiogroup"] {
+            display: grid !important;
+            grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+            gap: 8px !important;
+            width: 100% !important;
+        }
+
+        div[class*="st-key-avatar_picker_radio_"]
+        label[data-baseweb="radio"] {
+            position: relative !important;
+            display: block !important;
+            width: 100% !important;
+            height: 88px !important;
+            min-height: 88px !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: 2px solid rgba(15,23,42,0.10) !important;
+            border-radius: 18px !important;
+            background: #FFFFFF !important;
+            box-shadow: 0 8px 20px rgba(15,23,42,0.06) !important;
+            overflow: hidden !important;
+            cursor: pointer !important;
+            transition:
+                transform 0.18s ease,
+                box-shadow 0.18s ease,
+                border-color 0.18s ease,
+                background 0.18s ease !important;
+        }
+
+        div[class*="st-key-avatar_picker_radio_"]
+        label[data-baseweb="radio"]:hover {
+            border-color: #F5C542 !important;
+            background: #FFF7ED !important;
+            transform: translateY(-1px) !important;
+            box-shadow:
+                0 0 0 4px rgba(245,197,66,0.18),
+                0 12px 28px rgba(15,23,42,0.13) !important;
+        }
+
+        div[class*="st-key-avatar_picker_radio_"]
+        label[data-baseweb="radio"]:active {
+            transform: translateY(0) scale(0.98) !important;
+        }
+
+        div[class*="st-key-avatar_picker_radio_"]
+        label[data-baseweb="radio"]::before {
+            content: "";
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 64px;
+            height: 64px;
+            transform: translate(-50%, -50%);
+            border-radius: 999px;
+            background-image:
+                var(--epl-avatar-sprite-image);
+            background-size: __AVATAR_SPRITE_WIDTH__% __AVATAR_SPRITE_HEIGHT__%;
+            background-repeat: no-repeat;
+            border: 3px solid #FFFFFF;
+            box-shadow: 0 7px 18px rgba(15,23,42,0.16);
+            pointer-events: none;
+        }
+
+        div[class*="st-key-avatar_picker_radio_"]
+        label[data-baseweb="radio"]::after {
+            content: "✓";
+            position: absolute;
+            right: 13px;
+            bottom: 13px;
+            width: 22px;
+            height: 22px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #FFFFFF;
+            border-radius: 999px;
+            background: #F5C542;
+            color: #07111F;
+            font-size: 13px;
+            font-weight: 950;
+            line-height: 1;
+            box-shadow: 0 5px 12px rgba(15,23,42,0.18);
+            pointer-events: none;
+        }
+
+        div[class*="st-key-avatar_picker_radio_"]
+        label[data-baseweb="radio"] > div {
+            position: absolute !important;
+            width: 1px !important;
+            height: 1px !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            opacity: 0 !important;
+            overflow: hidden !important;
+            pointer-events: none !important;
+        }
+
+        @media (max-width: 768px) {
+            div[class*="st-key-avatar_picker_radio_"]
+            div[role="radiogroup"] {
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+                gap: 10px !important;
+            }
+
+            div[class*="st-key-avatar_picker_radio_"]
+            label[data-baseweb="radio"] {
+                height: 112px !important;
+                min-height: 112px !important;
+            }
+
+            div[class*="st-key-avatar_picker_radio_"]
+            label[data-baseweb="radio"]::before {
+                width: 82px;
+                height: 82px;
+            }
+
+            div[class*="st-key-avatar_picker_radio_"]
+            label[data-baseweb="radio"]::after {
+                right: 12px;
+                bottom: 12px;
+            }
+        }
+
+        @media (max-width: 390px) {
+            div[class*="st-key-avatar_picker_radio_"]
+            label[data-baseweb="radio"] {
+                height: 104px !important;
+                min-height: 104px !important;
+                border-radius: 16px !important;
+            }
+
+            div[class*="st-key-avatar_picker_radio_"]
+            label[data-baseweb="radio"]::before {
+                width: 76px;
+                height: 76px;
+            }
+        }
+        """
+        .replace("__AVATAR_SPRITE_SRC__", sprite_src)
+        .replace(
+            "__AVATAR_SPRITE_WIDTH__",
+            str(columns * 100)
+        )
+        .replace(
+            "__AVATAR_SPRITE_HEIGHT__",
+            str(rows * 100)
+        )
+    ]
+
+    for index, avatar_key in enumerate(avatar_keys, start=1):
+        if not sprite_available:
+            avatar_src = get_avatar_src(
+                avatar_key,
+                avatar_keys=list(avatar_keys)
+            )
+
+            if avatar_src:
+                css_parts.append(
+                    f"""
+                    div[class*="st-key-avatar_picker_radio_"]
+                    label[data-baseweb="radio"]:nth-of-type({index})::before {{
+                        background-image: url("{avatar_src}");
+                        background-size: cover;
+                        background-position: center;
+                    }}
+                    """
+                )
+
+            continue
+
+        position = get_avatar_sprite_position(
+            avatar_key,
+            avatar_keys=avatar_keys
+        )
+
+        if position is None:
+            continue
+
+        x_position, y_position = position
 
         css_parts.append(
             f"""
-            .st-key-{avatar_button_key} button::before {{
-                background-image: url("{avatar_src}");
+            div[class*="st-key-avatar_picker_radio_"]
+            label[data-baseweb="radio"]:nth-of-type({index})::before {{
+                background-position:
+                    {x_position:.6f}% {y_position:.6f}%;
             }}
             """
         )
@@ -1280,15 +1646,30 @@ def build_selected_avatar_css(
     current_avatar_key: str
 ) -> str:
     """
-    Phần CSS nhỏ chỉ đánh dấu avatar đang được chọn.
+    Đánh dấu lựa chọn hiện tại trong radio grid.
     """
-    avatar_button_key = get_avatar_button_key(
-        current_avatar_key
+    avatar_keys = load_avatar_catalog()
+
+    if not avatar_keys:
+        return ""
+
+    current_avatar_key = normalize_avatar_key(
+        current_avatar_key,
+        avatar_keys=list(avatar_keys)
     )
+
+    try:
+        selected_position = (
+            avatar_keys.index(current_avatar_key)
+            + 1
+        )
+    except ValueError:
+        return ""
 
     return f"""
     <style>
-    .st-key-{avatar_button_key} button {{
+    div[class*="st-key-avatar_picker_radio_"]
+    label[data-baseweb="radio"]:nth-of-type({selected_position}) {{
         border-color: #F5C542 !important;
         background: #FFF7ED !important;
         box-shadow:
@@ -1296,8 +1677,8 @@ def build_selected_avatar_css(
             0 10px 24px rgba(15,23,42,0.10) !important;
     }}
 
-    .st-key-{avatar_button_key} button::after {{
-        content: "✓";
+    div[class*="st-key-avatar_picker_radio_"]
+    label[data-baseweb="radio"]:nth-of-type({selected_position})::after {{
         display: flex;
     }}
     </style>
@@ -9592,6 +9973,62 @@ def render_sidebar_star_balance(user_id: int):
         unsafe_allow_html=True
     )
 
+def handle_avatar_picker_change(
+    user_id: int,
+    picker_key: str
+):
+    """
+    Cập nhật avatar từ một radio widget duy nhất.
+
+    Callback không gọi rerun: widget nằm trong fragment nên Streamlit tự chạy
+    lại đúng fragment sau khi callback hoàn tất.
+    """
+    selected_avatar_key = st.session_state.get(
+        picker_key
+    )
+    previous_avatar_key = (
+        st.session_state.get(
+            "user",
+            {}
+        ).get("avatar_key")
+    )
+
+    try:
+        update_user_avatar(
+            user_id=int(user_id),
+            avatar_key=selected_avatar_key
+        )
+
+        updated_user = dict(
+            st.session_state.get(
+                "user",
+                {}
+            )
+        )
+        updated_user["avatar_key"] = selected_avatar_key
+        st.session_state["user"] = updated_user
+        st.session_state.pop(
+            "avatar_picker_error",
+            None
+        )
+
+    except Exception as error:
+        LOGGER.exception(
+            "Failed to update avatar for user_id=%s",
+            int(user_id)
+        )
+
+        if previous_avatar_key:
+            st.session_state[picker_key] = (
+                previous_avatar_key
+            )
+
+        st.session_state["avatar_picker_error"] = (
+            str(error)
+            or "Không thể cập nhật avatar lúc này."
+        )
+
+
 @st.fragment
 def render_avatar_popover(user: dict):
     """
@@ -9611,206 +10048,69 @@ def render_avatar_popover(user: dict):
     if not avatar_catalog:
         return
 
-    avatar_keys = tuple(
-        avatar_key
-        for avatar_key, _ in avatar_catalog
-    )
+    avatar_keys = tuple(avatar_catalog)
 
     current_avatar_key = normalize_avatar_key(
         user.get("avatar_key"),
-        avatar_keys=avatar_keys
+        avatar_keys=list(avatar_keys)
     )
-    avatar_src_by_key = dict(avatar_catalog)
-    current_avatar_src = avatar_src_by_key.get(
+    current_avatar_src = get_avatar_src(
         current_avatar_key,
-        ""
+        avatar_keys=list(avatar_keys)
     )
 
-    avatar_items = []
-
-    for avatar_key, _ in avatar_catalog:
-        avatar_items.append(
-            {
-                "avatar_key": avatar_key,
-                "button_key": get_avatar_button_key(
-                    avatar_key
-                ),
-                "is_selected": avatar_key == current_avatar_key
-            }
-        )
-
-    avatar_grid_css = (
-        """
-        <style>
-        div[class*="st-key-avatar_pick_"] button {
-            position: relative !important;
-            width: 100% !important;
-            height: 88px !important;
-            min-height: 88px !important;
-            padding: 0 !important;
-            margin: 0 0 8px 0 !important;
-            border-radius: 18px !important;
-            border: 2px solid rgba(15,23,42,0.10) !important;
-            background: #FFFFFF !important;
-            box-shadow: 0 8px 20px rgba(15,23,42,0.06) !important;
-            overflow: hidden !important;
-            cursor: pointer !important;
-            color: transparent !important;
-            font-size: 0 !important;
-            line-height: 0 !important;
-            transition:
-                transform 0.18s ease,
-                box-shadow 0.18s ease,
-                border-color 0.18s ease,
-                background 0.18s ease !important;
-        }
-
-        div[class*="st-key-avatar_pick_"] button:hover {
-            border-color: #F5C542 !important;
-            background: #FFF7ED !important;
-            transform: translateY(-1px) !important;
-            box-shadow:
-                0 0 0 4px rgba(245,197,66,0.18),
-                0 12px 28px rgba(15,23,42,0.13) !important;
-        }
-
-        div[class*="st-key-avatar_pick_"] button:active {
-            transform: translateY(0) scale(0.98) !important;
-        }
-
-        div[class*="st-key-avatar_pick_"] button::before {
-            content: "";
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            width: 64px;
-            height: 64px;
-            transform: translate(-50%, -50%);
-            border-radius: 999px;
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
-            border: 3px solid #FFFFFF;
-            box-shadow: 0 7px 18px rgba(15,23,42,0.16);
-        }
-
-        div[class*="st-key-avatar_pick_"] button::after {
-            content: "";
-            position: absolute;
-            right: 13px;
-            bottom: 13px;
-            width: 22px;
-            height: 22px;
-            border-radius: 999px;
-            background: #F5C542;
-            color: #07111F;
-            border: 2px solid #FFFFFF;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            font-size: 13px;
-            font-weight: 950;
-            line-height: 1;
-            box-shadow: 0 5px 12px rgba(15,23,42,0.18);
-            pointer-events: none;
-        }
-
-        div[class*="st-key-avatar_pick_"] button * {
-            display: none !important;
-            visibility: hidden !important;
-            color: transparent !important;
-            font-size: 0 !important;
-            line-height: 0 !important;
-        }
-
-        @media (max-width: 768px) {
-            div[class*="st-key-avatar_pick_"] button {
-                height: 112px !important;
-                min-height: 112px !important;
-                border-radius: 18px !important;
-                margin-bottom: 10px !important;
-            }
-
-            div[class*="st-key-avatar_pick_"] button::before {
-                width: 82px;
-                height: 82px;
-                border-width: 3px;
-                box-shadow: 0 8px 20px rgba(15,23,42,0.18);
-            }
-
-            div[class*="st-key-avatar_pick_"] button::after {
-                right: 12px;
-                bottom: 12px;
-                width: 22px;
-                height: 22px;
-                font-size: 12px;
-            }
-        }
-
-        @media (max-width: 390px) {
-            div[class*="st-key-avatar_pick_"] button {
-                height: 104px !important;
-                min-height: 104px !important;
-                border-radius: 16px !important;
-            }
-
-            div[class*="st-key-avatar_pick_"] button::before {
-                width: 76px;
-                height: 76px;
-            }
-        }
-        """
-        + "\n</style>"
+    picker_key = (
+        f"avatar_picker_radio_{int(user['user_id'])}"
     )
 
-    def render_avatar_grid(avatars_per_row: int = 4):
-        st.markdown(
-            avatar_grid_css,
-            unsafe_allow_html=True
+    if (
+        picker_key not in st.session_state
+        or st.session_state.get(picker_key)
+        not in avatar_keys
+    ):
+        st.session_state[picker_key] = current_avatar_key
+
+    def render_avatar_grid():
+        sprite_css = build_avatar_background_css()
+
+        if sprite_css:
+            st.markdown(
+                sprite_css,
+                unsafe_allow_html=True
+            )
+
+        selected_css = build_selected_avatar_css(
+            current_avatar_key
         )
 
-        st.markdown(
-            build_avatar_background_css(),
-            unsafe_allow_html=True
+        if selected_css:
+            st.markdown(
+                selected_css,
+                unsafe_allow_html=True
+            )
+
+        st.radio(
+            "Chọn avatar",
+            options=avatar_keys,
+            index=None,
+            key=picker_key,
+            format_func=lambda _: "Chọn avatar",
+            label_visibility="collapsed",
+            on_change=handle_avatar_picker_change,
+            args=(
+                int(user["user_id"]),
+                picker_key
+            )
         )
 
-        st.markdown(
-            build_selected_avatar_css(
-                current_avatar_key
-            ),
-            unsafe_allow_html=True
+        avatar_picker_error = st.session_state.pop(
+            "avatar_picker_error",
+            None
         )
 
-        for start_idx in range(0, len(avatar_items), avatars_per_row):
-            row_avatar_items = avatar_items[
-                start_idx:start_idx + avatars_per_row
-            ]
-            cols = st.columns(avatars_per_row, gap="small")
+        if avatar_picker_error:
+            st.error(avatar_picker_error)
 
-            for col, item in zip(cols, row_avatar_items):
-                with col:
-                    avatar_clicked = st.button(
-                        "Chọn avatar",
-                        key=item["button_key"],
-                        use_container_width=True,
-                        help="Bấm để chọn avatar này."
-                    )
-
-                    if avatar_clicked and not item["is_selected"]:
-                        try:
-                            update_user_avatar(
-                                user_id=int(user["user_id"]),
-                                avatar_key=item["avatar_key"]
-                            )
-                    
-                            updated_user = dict(st.session_state.get("user", user))
-                            updated_user["avatar_key"] = item["avatar_key"]
-                            st.session_state["user"] = updated_user
-                    
-                            rerun_current_fragment()
-                    
-                        except ValueError as e:
-                            st.error(str(e))
     with stylable_container(
         key="top_right_avatar_popover_shell",
         css_styles=f"""
@@ -10176,7 +10476,7 @@ def render_avatar_popover(user: dict):
                     '<div class="wc-avatar-grid-desktop-shell">',
                     unsafe_allow_html=True
                 )
-                render_avatar_grid(avatars_per_row=4)
+                render_avatar_grid()
                 st.markdown("</div>", unsafe_allow_html=True)
 # ============================================================
 # 3. BASIC UTILITIES
@@ -10209,13 +10509,133 @@ def get_engine() -> Engine:
     return engine
 
 
-def read_sql(query: str, params: dict | None = None) -> pd.DataFrame:
-    with get_engine().connect() as conn:
-        return pd.read_sql_query(
-            text(query),
-            conn,
-            params=params or {}
+def is_retryable_database_error(error: Exception) -> bool:
+    """
+    Chỉ retry lỗi kết nối tạm thời của truy vấn đọc.
+
+    Không retry statement timeout hoặc lỗi SQL/schema vì chạy lại chỉ làm
+    người dùng chờ lâu hơn. Thao tác ghi không dùng helper này để tránh ghi
+    trùng trong trường hợp kết quả commit không xác định.
+    """
+    current_error = error
+    visited_error_ids = set()
+
+    for _ in range(5):
+        if current_error is None:
+            break
+
+        current_error_id = id(current_error)
+
+        if current_error_id in visited_error_ids:
+            break
+
+        visited_error_ids.add(current_error_id)
+        error_text = str(current_error).casefold()
+
+        if (
+            "statement timeout" in error_text
+            or "query canceled" in error_text
+            or "syntax error" in error_text
+            or "undefined table" in error_text
+            or "undefined column" in error_text
+        ):
+            return False
+
+        if isinstance(
+            current_error,
+            SQLAlchemyTimeoutError
+        ):
+            return True
+
+        if isinstance(
+            current_error,
+            OperationalError
+        ):
+            return True
+
+        if (
+            isinstance(current_error, DBAPIError)
+            and bool(
+                getattr(
+                    current_error,
+                    "connection_invalidated",
+                    False
+                )
+            )
+        ):
+            return True
+
+        transient_markers = (
+            "server closed the connection",
+            "connection reset",
+            "connection refused",
+            "connection aborted",
+            "connection timed out",
+            "could not connect",
+            "ssl syscall error",
+            "terminating connection",
+            "connection is closed",
+            "broken pipe"
         )
+
+        if any(
+            marker in error_text
+            for marker in transient_markers
+        ):
+            return True
+
+        current_error = (
+            getattr(current_error, "__cause__", None)
+            or getattr(current_error, "__context__", None)
+        )
+
+    return False
+
+
+def reset_database_pool_after_disconnect():
+    """
+    Loại các connection hỏng khỏi pool trước lần retry duy nhất.
+    """
+    try:
+        get_engine().dispose(close=False)
+    except TypeError:
+        # Tương thích SQLAlchemy cũ chưa hỗ trợ close=False.
+        get_engine().dispose()
+    except Exception:
+        pass
+
+
+def read_sql(query: str, params: dict | None = None) -> pd.DataFrame:
+    last_error = None
+
+    for attempt in range(2):
+        try:
+            with get_engine().connect() as conn:
+                return pd.read_sql_query(
+                    text(query),
+                    conn,
+                    params=params or {}
+                )
+
+        except Exception as error:
+            last_error = error
+
+            if (
+                attempt >= 1
+                or not is_retryable_database_error(
+                    error
+                )
+            ):
+                raise
+
+            LOGGER.warning(
+                "Transient database read failure; "
+                "retrying once.",
+                exc_info=True
+            )
+            reset_database_pool_after_disconnect()
+
+    raise last_error
 
 def rerun_current_fragment():
     """
@@ -10238,11 +10658,31 @@ def rerun_full_app():
         st.experimental_rerun()
 
 def fetch_one(query: str, params: dict | None = None):
-    with get_engine().connect() as conn:
-        row = conn.execute(
-            text(query),
-            params or {}
-        ).mappings().fetchone()
+    for attempt in range(2):
+        try:
+            with get_engine().connect() as conn:
+                row = conn.execute(
+                    text(query),
+                    params or {}
+                ).mappings().fetchone()
+
+            break
+
+        except Exception as error:
+            if (
+                attempt >= 1
+                or not is_retryable_database_error(
+                    error
+                )
+            ):
+                raise
+
+            LOGGER.warning(
+                "Transient database fetch failure; "
+                "retrying once.",
+                exc_info=True
+            )
+            reset_database_pool_after_disconnect()
 
     if row is None:
         return None
@@ -10604,7 +11044,10 @@ def build_star_usage_result(
 def _load_user_star_usage_counts_cached(
     user_id: int,
     season_slug: str,
-    use_all_predictions: bool
+    use_all_predictions: bool,
+    all_predictions_revision: int,
+    all_user_predictions_revision: int,
+    single_user_predictions_revision: int
 ) -> dict:
     """
     Tính trạng thái sao của một user đúng một lần trong mỗi chu kỳ cache.
@@ -10720,10 +11163,32 @@ def get_user_star_usage(user_id: int, exclude_match_id: int | None = None) -> di
         "Admin"
     }
 
+    if use_all_predictions:
+        all_predictions_revision = (
+            get_all_predictions_revision(
+                season_slug
+            )
+        )
+        all_user_predictions_revision = 0
+        single_user_predictions_revision = 0
+
+    else:
+        (
+            all_user_predictions_revision,
+            single_user_predictions_revision
+        ) = get_user_predictions_revisions(
+            user_id,
+            season_slug
+        )
+        all_predictions_revision = 0
+
     counts = _load_user_star_usage_counts_cached(
         user_id,
         season_slug,
-        use_all_predictions
+        use_all_predictions,
+        all_predictions_revision,
+        all_user_predictions_revision,
+        single_user_predictions_revision
     )
 
     hope_locked_used = int(counts["hope_locked_used"])
@@ -12106,6 +12571,163 @@ def format_countdown_seconds(total_seconds: int) -> str:
 
     return f"{hours}h {minutes}m {seconds}s"
 
+
+def inject_match_countdown_runtime():
+    """
+    Một runtime duy nhất cập nhật tất cả badge countdown trên trang.
+
+    Bản cũ tạo một iframe + một setInterval cho từng card. Khi một ngày có
+    nhiều trận, số iframe/timer tăng tuyến tính và làm trình duyệt tốn CPU/RAM.
+    """
+    st.markdown(
+        """
+        <style>
+        .wc-countdown-badge {
+            display: inline-block;
+            padding: 7px 13px;
+            border-radius: 999px;
+            font-weight: 850;
+            font-size: 13px;
+            line-height: 1.25;
+            margin-bottom: 8px;
+            border: 1px solid rgba(15,23,42,0.06);
+            font-family:
+                system-ui,
+                -apple-system,
+                BlinkMacSystemFont,
+                "Segoe UI",
+                sans-serif;
+            white-space: nowrap;
+            box-sizing: border-box;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    components.html(
+        """
+        <script>
+        (() => {
+            const parentWindow = window.parent;
+            const parentDocument = parentWindow.document;
+            const runtimeKey = "__eplMatchCountdownRuntime";
+            const previousRuntime = parentWindow[runtimeKey];
+
+            if (
+                previousRuntime
+                && typeof previousRuntime.stop === "function"
+            ) {
+                previousRuntime.stop();
+            }
+
+            let timerId = null;
+            let emptyTicks = 0;
+
+            const formatCountdown = (totalSeconds) => {
+                totalSeconds = Math.max(
+                    0,
+                    Math.floor(totalSeconds)
+                );
+
+                const days = Math.floor(
+                    totalSeconds / 86400
+                );
+                const hours = Math.floor(
+                    (totalSeconds % 86400) / 3600
+                );
+                const minutes = Math.floor(
+                    (totalSeconds % 3600) / 60
+                );
+                const seconds = totalSeconds % 60;
+
+                if (days >= 1) {
+                    return (
+                        days + "d "
+                        + hours + "h "
+                        + minutes + "m"
+                    );
+                }
+
+                return (
+                    hours + "h "
+                    + minutes + "m "
+                    + seconds + "s"
+                );
+            };
+
+            const stop = () => {
+                if (timerId !== null) {
+                    parentWindow.clearInterval(timerId);
+                    timerId = null;
+                }
+            };
+
+            const updateAllCountdowns = () => {
+                const badges = parentDocument.querySelectorAll(
+                    ".wc-countdown-badge[data-kickoff-ms]"
+                );
+
+                if (!badges.length) {
+                    emptyTicks += 1;
+
+                    // Tự dừng khi người dùng đã chuyển sang trang khác.
+                    if (emptyTicks >= 3) {
+                        stop();
+                    }
+
+                    return;
+                }
+
+                emptyTicks = 0;
+                const nowMs = Date.now();
+
+                badges.forEach((badge) => {
+                    const kickoffMs = Number(
+                        badge.dataset.kickoffMs
+                    );
+
+                    if (!Number.isFinite(kickoffMs)) {
+                        return;
+                    }
+
+                    const remainingMs = kickoffMs - nowMs;
+
+                    if (remainingMs <= 0) {
+                        badge.textContent = (
+                            badge.dataset.expiredLabel
+                            || ""
+                        );
+                        badge.removeAttribute(
+                            "data-kickoff-ms"
+                        );
+                        return;
+                    }
+
+                    badge.textContent = formatCountdown(
+                        remainingMs / 1000
+                    );
+                });
+            };
+
+            updateAllCountdowns();
+
+            timerId = parentWindow.setInterval(
+                updateAllCountdowns,
+                1000
+            );
+
+            parentWindow[runtimeKey] = {
+                stop
+            };
+        })();
+        </script>
+        """,
+        height=0,
+        scrolling=False
+    )
+
+
 def render_status_badge(status_info, row=None):
     """
     Hiển thị badge trạng thái ở đầu card trận đấu.
@@ -12142,105 +12764,22 @@ def render_status_badge(status_info, row=None):
                 remaining_seconds
             )
 
-            safe_component_id = f"wc_countdown_badge_{int(row.get('match_id'))}"
             safe_initial_text = html.escape(initial_countdown_text)
             safe_expired_label = html.escape(badge_label)
             safe_badge_bg = html.escape(str(status_info["badge_bg"]))
             safe_badge_text = html.escape(str(status_info["badge_text"]))
 
-            countdown_html = f"""
-            <!doctype html>
-            <html>
-            <head>
-                <meta charset="utf-8">
-                <style>
-                    html,
-                    body {{
-                        margin: 0;
-                        padding: 0;
-                        background: transparent;
-                        overflow: hidden;
-                    }}
-
-                    .wc-countdown-badge {{
-                        display: inline-block;
-                        padding: 7px 13px;
-                        border-radius: 999px;
-                        background: {safe_badge_bg};
-                        color: {safe_badge_text};
-                        font-weight: 850;
-                        font-size: 13px;
-                        line-height: 1.25;
-                        margin-bottom: 8px;
-                        border: 1px solid rgba(15,23,42,0.06);
-                        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-                        white-space: nowrap;
-                        box-sizing: border-box;
-                    }}
-                </style>
-            </head>
-            <body>
-                <div
-                    id="{safe_component_id}"
-                    class="wc-countdown-badge"
-                    data-kickoff-ms="{kickoff_epoch_ms}"
-                    data-expired-label="{safe_expired_label}"
-                >{safe_initial_text}</div>
-
-                <script>
-                (function() {{
-                    const badge = document.getElementById("{safe_component_id}");
-
-                    if (!badge) {{
-                        return;
-                    }}
-
-                    const kickoffMs = Number(badge.dataset.kickoffMs);
-                    const expiredLabel = badge.dataset.expiredLabel || "";
-
-                    function formatCountdown(totalSeconds) {{
-                        totalSeconds = Math.max(0, Math.floor(totalSeconds));
-
-                        const days = Math.floor(totalSeconds / 86400);
-                        const hours = Math.floor((totalSeconds % 86400) / 3600);
-                        const minutes = Math.floor((totalSeconds % 3600) / 60);
-                        const seconds = totalSeconds % 60;
-
-                        if (days >= 1) {{
-                            return days + "d " + hours + "h " + minutes + "m";
-                        }}
-
-                        return hours + "h " + minutes + "m " + seconds + "s";
-                    }}
-
-                    function updateCountdown() {{
-                        const remainingMs = kickoffMs - Date.now();
-
-                        if (remainingMs <= 0) {{
-                            badge.textContent = expiredLabel;
-                            window.clearInterval(timer);
-                            return;
-                        }}
-
-                        badge.textContent = formatCountdown(remainingMs / 1000);
-                    }}
-
-                    updateCountdown();
-
-                    const timer = window.setInterval(
-                        updateCountdown,
-                        1000
-                    );
-                }})();
-                </script>
-            </body>
-            </html>
-            """
-
-            components.html(
-                countdown_html,
-                height=38,
-                scrolling=False
+            st.markdown(
+                (
+                    '<div class="wc-countdown-badge" '
+                    f'data-kickoff-ms="{kickoff_epoch_ms}" '
+                    f'data-expired-label="{safe_expired_label}" '
+                    f'style="background:{safe_badge_bg};'
+                    f'color:{safe_badge_text};">'
+                    f'{safe_initial_text}'
+                    '</div>'
+                ),
+                unsafe_allow_html=True
             )
 
             return
@@ -12641,6 +13180,21 @@ def init_app_tables():
             IF to_regclass('public.daily_checkin_rewards') IS NOT NULL THEN
                 CREATE INDEX IF NOT EXISTS idx_daily_checkin_rewards_user_id
                 ON daily_checkin_rewards (user_id);
+            END IF;
+
+            IF to_regclass('public.daily_checkins') IS NOT NULL THEN
+                CREATE INDEX IF NOT EXISTS idx_daily_checkins_user_cycle_day
+                ON daily_checkins (user_id, cycle_no, day_no);
+            END IF;
+
+            IF to_regclass('public.login_sessions') IS NOT NULL THEN
+                CREATE INDEX IF NOT EXISTS idx_login_sessions_expires_at
+                ON login_sessions (expires_at);
+            END IF;
+
+            IF to_regclass('public.final_poster_popup_views') IS NOT NULL THEN
+                CREATE INDEX IF NOT EXISTS idx_final_poster_views_user_date
+                ON final_poster_popup_views (user_id, popup_date);
             END IF;
         END $$;
         """
@@ -13385,6 +13939,131 @@ def logout_user():
 # 6. DATA LOADING
 # ============================================================
 
+@st.cache_resource(show_spinner=False)
+def get_prediction_cache_revision_store() -> dict:
+    """
+    Revision nhỏ dùng làm cache key thay cho việc clear toàn bộ cache.
+
+    Một user lưu dự đoán chỉ làm mới:
+    - cache tổng của đúng mùa;
+    - cache cá nhân của đúng user;
+    - không xóa dữ liệu cá nhân của những user khác.
+    """
+    return {
+        "lock": threading.RLock(),
+        "all_predictions": {},
+        "all_user_predictions": {},
+        "single_user_predictions": {}
+    }
+
+
+def get_all_predictions_revision(
+    season_slug: str
+) -> int:
+    store = get_prediction_cache_revision_store()
+
+    with store["lock"]:
+        return int(
+            store["all_predictions"].get(
+                str(season_slug),
+                0
+            )
+        )
+
+
+def get_user_predictions_revisions(
+    user_id: int,
+    season_slug: str
+) -> tuple[int, int]:
+    store = get_prediction_cache_revision_store()
+    season_slug = str(season_slug)
+    user_key = (
+        int(user_id),
+        season_slug
+    )
+
+    with store["lock"]:
+        return (
+            int(
+                store[
+                    "all_user_predictions"
+                ].get(
+                    season_slug,
+                    0
+                )
+            ),
+            int(
+                store[
+                    "single_user_predictions"
+                ].get(
+                    user_key,
+                    0
+                )
+            )
+        )
+
+
+def bump_prediction_cache_revisions(
+    season_slug: str,
+    user_id: int | None = None,
+    all_users: bool = False
+):
+    """
+    Làm mới cache theo phạm vi thay đổi thực tế.
+    """
+    store = get_prediction_cache_revision_store()
+    season_slug = str(
+        season_slug
+        or DEFAULT_SEASON_SLUG
+    )
+
+    with store["lock"]:
+        store["all_predictions"][season_slug] = (
+            int(
+                store["all_predictions"].get(
+                    season_slug,
+                    0
+                )
+            )
+            + 1
+        )
+
+        if all_users:
+            store[
+                "all_user_predictions"
+            ][season_slug] = (
+                int(
+                    store[
+                        "all_user_predictions"
+                    ].get(
+                        season_slug,
+                        0
+                    )
+                )
+                + 1
+            )
+
+        elif user_id is not None:
+            user_key = (
+                int(user_id),
+                season_slug
+            )
+
+            store[
+                "single_user_predictions"
+            ][user_key] = (
+                int(
+                    store[
+                        "single_user_predictions"
+                    ].get(
+                        user_key,
+                        0
+                    )
+                )
+                + 1
+            )
+
+
 @st.cache_resource(
     ttl=30,
     max_entries=8,
@@ -13517,12 +14196,13 @@ def load_users() -> pd.DataFrame:
 
 @st.cache_resource(
     ttl=30,
-    max_entries=8,
+    max_entries=64,
     show_spinner=False
 )
-def load_predictions(season_slug: str | None = None) -> pd.DataFrame:
-    season_slug = season_slug or DEFAULT_SEASON_SLUG
-
+def _load_predictions_cached(
+    season_slug: str,
+    revision: int
+) -> pd.DataFrame:
     return read_sql(
         """
         SELECT p.*
@@ -13537,14 +14217,32 @@ def load_predictions(season_slug: str | None = None) -> pd.DataFrame:
     )
 
 
+def load_predictions(
+    season_slug: str | None = None
+) -> pd.DataFrame:
+    season_slug = (
+        season_slug
+        or DEFAULT_SEASON_SLUG
+    )
+
+    return _load_predictions_cached(
+        season_slug,
+        get_all_predictions_revision(
+            season_slug
+        )
+    )
+
+
 @st.cache_resource(
     ttl=30,
-    max_entries=512,
+    max_entries=256,
     show_spinner=False
 )
-def load_user_predictions(
+def _load_user_predictions_cached(
     user_id: int,
-    season_slug: str | None = None
+    season_slug: str,
+    season_revision: int,
+    user_revision: int
 ) -> pd.DataFrame:
     """
     Chỉ tải dự đoán của user hiện tại cho các màn hình cá nhân/card trận.
@@ -13552,8 +14250,6 @@ def load_user_predictions(
     Bảng xếp hạng, dashboard và chấm điểm vẫn dùng load_predictions()
     để giữ nguyên phạm vi dữ liệu toàn giải.
     """
-    season_slug = season_slug or DEFAULT_SEASON_SLUG
-
     return read_sql(
         """
         SELECT p.*
@@ -13570,39 +14266,80 @@ def load_user_predictions(
     )
 
 
+def load_user_predictions(
+    user_id: int,
+    season_slug: str | None = None
+) -> pd.DataFrame:
+    season_slug = (
+        season_slug
+        or DEFAULT_SEASON_SLUG
+    )
+    season_revision, user_revision = (
+        get_user_predictions_revisions(
+            int(user_id),
+            season_slug
+        )
+    )
+
+    return _load_user_predictions_cached(
+        int(user_id),
+        season_slug,
+        season_revision,
+        user_revision
+    )
+
+
 @st.cache_resource(
     ttl=900,
     max_entries=256,
     show_spinner=False
 )
-def load_goal_scorers_for_match(match_id: int) -> pd.DataFrame:
+def _load_goal_scorers_for_match_cached(
+    match_id: int
+) -> pd.DataFrame:
+    return read_sql(
+        """
+        SELECT
+            goal_key,
+            match_id,
+            team_id,
+            team_name,
+            team_side,
+            player_name,
+            minute,
+            is_penalty,
+            is_own_goal
+        FROM match_goals
+        WHERE match_id = :match_id
+        ORDER BY goal_key ASC
+        """,
+        {
+            "match_id": int(match_id)
+        }
+    )
+
+
+def load_goal_scorers_for_match(
+    match_id: int
+) -> pd.DataFrame:
     """
     Chỉ load danh sách cầu thủ ghi bàn của đúng 1 trận.
-    Không query toàn bộ bảng match_goals nữa.
+
+    Cache chỉ lưu kết quả thành công. Nếu Supabase lỗi tạm thời, wrapper trả
+    trạng thái rỗng cho fragment hiện tại nhưng lần bấm/rerun sau vẫn có thể
+    thử lại ngay, thay vì giữ lỗi rỗng trong cache suốt 15 phút.
     """
     try:
-        return read_sql(
-            """
-            SELECT
-                goal_key,
-                match_id,
-                team_id,
-                team_name,
-                team_side,
-                player_name,
-                minute,
-                is_penalty,
-                is_own_goal
-            FROM match_goals
-            WHERE match_id = :match_id
-            ORDER BY goal_key ASC
-            """,
-            {
-                "match_id": int(match_id)
-            }
+        return _load_goal_scorers_for_match_cached(
+            int(match_id)
         )
 
     except Exception:
+        LOGGER.warning(
+            "Could not load goal scorers for match_id=%s",
+            int(match_id),
+            exc_info=True
+        )
         return pd.DataFrame()
 
 @st.cache_resource(
@@ -14160,8 +14897,27 @@ def clear_data_cache():
     """
     load_matches.clear()
     load_users.clear()
-    load_predictions.clear()
-    load_user_predictions.clear()
+    _load_predictions_cached.clear()
+    _load_user_predictions_cached.clear()
+
+    try:
+        revision_store = (
+            get_prediction_cache_revision_store()
+        )
+
+        with revision_store["lock"]:
+            revision_store[
+                "all_predictions"
+            ].clear()
+            revision_store[
+                "all_user_predictions"
+            ].clear()
+            revision_store[
+                "single_user_predictions"
+            ].clear()
+
+    except Exception:
+        pass
 
     try:
         _load_user_star_usage_counts_cached.clear()
@@ -14174,7 +14930,7 @@ def clear_data_cache():
         pass
 
     try:
-        load_goal_scorers_for_match.clear()
+        _load_goal_scorers_for_match_cached.clear()
     except NameError:
         pass
 
@@ -14183,25 +14939,19 @@ def clear_data_cache():
     except (NameError, AttributeError):
         pass
 
-def clear_prediction_write_cache():
+def clear_prediction_write_cache(
+    user_id: int,
+    season_slug: str
+):
     """
     Chỉ xóa các cache bị ảnh hưởng trực tiếp khi dự đoán thay đổi.
-    Không xóa cache trận đấu, user, cầu thủ ghi bàn hoặc AI.
+    Không xóa cache cá nhân của user khác hoặc cache mùa khác.
     """
-    try:
-        load_predictions.clear()
-    except (NameError, AttributeError):
-        pass
-
-    try:
-        load_user_predictions.clear()
-    except (NameError, AttributeError):
-        pass
-
-    try:
-        _load_user_star_usage_counts_cached.clear()
-    except (NameError, AttributeError):
-        pass
+    bump_prediction_cache_revisions(
+        season_slug=season_slug,
+        user_id=int(user_id),
+        all_users=False
+    )
 
     try:
         build_leaderboard_df.clear()
@@ -14209,20 +14959,19 @@ def clear_prediction_write_cache():
         pass
 
 
-def clear_scoring_cache():
+def clear_scoring_cache(
+    season_slug: str,
+    user_id: int | None = None
+):
     """
-    Chấm điểm chỉ đổi ba cột điểm trong predictions.
+    Chấm điểm chỉ đổi ba cột điểm trong predictions của đúng phạm vi.
     Giữ cache trạng thái sao vì star_type/kickoff không thay đổi.
     """
-    try:
-        load_predictions.clear()
-    except (NameError, AttributeError):
-        pass
-
-    try:
-        load_user_predictions.clear()
-    except (NameError, AttributeError):
-        pass
+    bump_prediction_cache_revisions(
+        season_slug=season_slug,
+        user_id=user_id,
+        all_users=user_id is None
+    )
 
     try:
         build_leaderboard_df.clear()
@@ -15562,7 +16311,13 @@ def save_prediction(
         )
 
     if result.get("status") != "unchanged":
-        clear_prediction_write_cache()
+        clear_prediction_write_cache(
+            user_id=user_id,
+            season_slug=(
+                match.get("season_slug")
+                or get_selected_season_slug()
+            )
+        )
 
     return result
 
@@ -15724,7 +16479,13 @@ def transfer_star_and_save_prediction(
             "target_write_status": target_result["status"]
         }
 
-    clear_prediction_write_cache()
+    clear_prediction_write_cache(
+        user_id=user_id,
+        season_slug=(
+            target_match.get("season_slug")
+            or get_selected_season_slug()
+        )
+    )
     return result
 
 def delete_prediction(user_id: int, match_id: int) -> dict:
@@ -15803,7 +16564,13 @@ def delete_prediction(user_id: int, match_id: int) -> dict:
                 "Dự đoán đã thay đổi ở một phiên khác. Vui lòng thao tác lại."
             )
 
-    clear_prediction_write_cache()
+    clear_prediction_write_cache(
+        user_id=user_id,
+        season_slug=(
+            match.get("season_slug")
+            or get_selected_season_slug()
+        )
+    )
 
     return {
         "status": "deleted",
@@ -15812,22 +16579,35 @@ def delete_prediction(user_id: int, match_id: int) -> dict:
 
 @st.cache_data(
     ttl=30,
-    max_entries=8,
+    max_entries=512,
     show_spinner=False
 )
-def score_all_predictions(season_slug: str | None = None):
+def score_all_predictions(
+    season_slug: str | None = None,
+    user_id: int | None = None
+):
     """
     Chấm điểm lại toàn bộ dự đoán đã có kết quả.
 
     Tối ưu:
     - Vẫn giữ nguyên logic tính điểm hiện tại.
-    - Vẫn kiểm tra toàn bộ prediction đã có kết quả.
+    - Mặc định vẫn kiểm tra toàn bộ prediction đã có kết quả.
+    - Trang cá nhân có thể truyền user_id để chỉ chấm dữ liệu của user đó.
     - Chỉ UPDATE database khi điểm mới khác điểm đang lưu.
     - Nếu không có gì thay đổi thì KHÔNG clear cache, giúp Bảng xếp hạng load nhanh hơn nhiều.
     """
     season_slug = season_slug or get_selected_season_slug()
     matches = load_matches(season_slug)
-    predictions = load_predictions(season_slug)
+
+    if user_id is None:
+        predictions = load_predictions(
+            season_slug
+        )
+    else:
+        predictions = load_user_predictions(
+            int(user_id),
+            season_slug
+        )
 
     if predictions.empty:
         return
@@ -16009,7 +16789,10 @@ def score_all_predictions(season_slug: str | None = None):
 
     # Chấm điểm chỉ thay đổi bảng predictions.
     # Giữ cache matches/users/goal scorers để tránh query lại không cần thiết.
-    clear_scoring_cache()
+    clear_scoring_cache(
+        season_slug=season_slug,
+        user_id=user_id
+    )
 
 
 def update_match_result(
@@ -17790,6 +18573,11 @@ def handle_prediction_form_submit(
         )
 
     except Exception:
+        LOGGER.exception(
+            "Failed to save prediction for user_id=%s match_id=%s",
+            user_id,
+            match_id
+        )
         set_prediction_feedback_message(
             match_id=match_id,
             message=(
@@ -17838,6 +18626,11 @@ def handle_delete_prediction_form_submit(
         )
 
     except Exception:
+        LOGGER.exception(
+            "Failed to delete prediction for user_id=%s match_id=%s",
+            user_id,
+            match_id
+        )
         set_prediction_feedback_message(
             match_id=match_id,
             message=(
@@ -19628,16 +20421,23 @@ def page_matches():
                 user_prediction_map=user_prediction_map
             )
 
+    # Khởi tạo đúng một timer sau khi toàn bộ badge đã có trong DOM.
+    inject_match_countdown_runtime()
+
 def page_my_predictions():
     render_page_title(
         "Dự đoán của tôi",
         "Theo dõi toàn bộ dự đoán đã lưu và điểm số từng trận."
     )
 
-    score_all_predictions(get_selected_season_slug())
-
     user_id = st.session_state["user"]["user_id"]
     season_slug = get_selected_season_slug()
+
+    # Trang cá nhân chỉ cần chấm dự đoán của chính user đang xem.
+    score_all_predictions(
+        season_slug,
+        user_id=int(user_id)
+    )
 
     matches = load_matches(season_slug)
     my_predictions = load_user_predictions(
@@ -23589,43 +24389,140 @@ def page_leaderboard():
         display_df[col] = display_df[col].apply(lambda x: f"{x * 100:.1f}%")
 
     avatar_row_styles = []
-    avatar_catalog = load_avatar_catalog()
-    available_avatar_keys = tuple(
-        avatar_key
-        for avatar_key, _ in avatar_catalog
+    available_avatar_keys = load_avatar_catalog()
+    sprite_src, sprite_columns, sprite_rows = (
+        build_avatar_sprite_payload()
     )
-    avatar_src_by_key = dict(avatar_catalog)
 
-    for row_position, avatar_key in enumerate(leaderboard["avatar_key"].tolist(), start=1):
-        normalized_avatar_key = normalize_avatar_key(
-            avatar_key,
-            avatar_keys=available_avatar_keys
-        )
-        avatar_src = avatar_src_by_key.get(
-            normalized_avatar_key,
-            ""
-        )
-
-        if not avatar_src:
-            continue
-
+    if (
+        available_avatar_keys
+        and sprite_src
+        and sprite_columns > 0
+        and sprite_rows > 0
+    ):
+        # Ảnh sprite chỉ xuất hiện đúng một lần trong CSS của bảng.
+        # Mỗi dòng sau đó chỉ cần một background-position rất nhỏ.
         avatar_row_styles.append(
             {
-                "selector": f"tbody tr:nth-child({row_position}) td:nth-child(2)::before",
+                "selector": "tbody td:nth-child(2)::before",
                 "props": [
                     ("content", '""'),
                     ("display", "inline-block"),
                     ("width", "28px"),
                     ("height", "28px"),
                     ("border-radius", "999px"),
-                    ("background-image", f'url("{avatar_src}")'),
-                    ("background-size", "cover"),
-                    ("background-position", "center"),
+                    (
+                        "background-image",
+                        "var(--epl-avatar-sprite-image)"
+                    ),
+                    (
+                        "background-size",
+                        (
+                            f"{sprite_columns * 100}% "
+                            f"{sprite_rows * 100}%"
+                        )
+                    ),
                     ("background-repeat", "no-repeat"),
                     ("vertical-align", "middle"),
                     ("margin-right", "10px"),
                     ("border", "2px solid #FFFFFF"),
-                    ("box-shadow", "0 3px 8px rgba(15,23,42,0.16)")
+                    (
+                        "box-shadow",
+                        "0 3px 8px rgba(15,23,42,0.16)"
+                    )
+                ]
+            }
+        )
+
+    for row_position, avatar_key in enumerate(
+        leaderboard["avatar_key"].tolist(),
+        start=1
+    ):
+        normalized_avatar_key = normalize_avatar_key(
+            avatar_key,
+            avatar_keys=list(available_avatar_keys)
+        )
+        sprite_position = get_avatar_sprite_position(
+            normalized_avatar_key,
+            avatar_keys=available_avatar_keys
+        )
+
+        if not sprite_src:
+            avatar_src = get_avatar_src(
+                normalized_avatar_key,
+                avatar_keys=list(
+                    available_avatar_keys
+                )
+            )
+
+            if avatar_src:
+                avatar_row_styles.append(
+                    {
+                        "selector": (
+                            "tbody tr:nth-child("
+                            f"{row_position}"
+                            ") td:nth-child(2)::before"
+                        ),
+                        "props": [
+                            ("content", '""'),
+                            ("display", "inline-block"),
+                            ("width", "28px"),
+                            ("height", "28px"),
+                            ("border-radius", "999px"),
+                            (
+                                "background-image",
+                                f'url("{avatar_src}")'
+                            ),
+                            ("background-size", "cover"),
+                            (
+                                "background-position",
+                                "center"
+                            ),
+                            (
+                                "background-repeat",
+                                "no-repeat"
+                            ),
+                            (
+                                "vertical-align",
+                                "middle"
+                            ),
+                            (
+                                "margin-right",
+                                "10px"
+                            ),
+                            (
+                                "border",
+                                "2px solid #FFFFFF"
+                            ),
+                            (
+                                "box-shadow",
+                                (
+                                    "0 3px 8px "
+                                    "rgba(15,23,42,0.16)"
+                                )
+                            )
+                        ]
+                    }
+                )
+
+            continue
+
+        if sprite_position is None:
+            continue
+
+        x_position, y_position = sprite_position
+
+        avatar_row_styles.append(
+            {
+                "selector": f"tbody tr:nth-child({row_position}) td:nth-child(2)::before",
+                "props": [
+                    (
+                        "background-position",
+                        (
+                            f"{x_position:.6f}% "
+                            f"{y_position:.6f}%"
+                        )
+                    )
                 ]
             }
         )
@@ -24377,6 +25274,61 @@ def render_footer():
     )
 
 
+def render_page_safely(
+    page_name: str,
+    page_renderer
+):
+    """
+    Không để lỗi kết nối/tài nguyên tạm thời biến thành màn hình crash đỏ.
+
+    Lỗi đầy đủ vẫn được ghi ở server log để có thể chẩn đoán. Giao diện bình
+    thường không thay đổi; khối này chỉ xuất hiện khi page renderer thật sự lỗi.
+    """
+    try:
+        page_renderer()
+
+    except Exception:
+        LOGGER.exception(
+            "Failed to render page %s",
+            page_name
+        )
+
+        st.error(
+            "Dữ liệu tạm thời chưa tải được. "
+            "Bạn có thể thử lại ngay mà không cần đăng nhập lại."
+        )
+        st.caption(
+            "Nếu Supabase vừa khởi động lại hoặc mạng chập chờn, "
+            "lần thử tiếp theo thường sẽ hoạt động bình thường."
+        )
+
+        if st.button(
+            "Thử tải lại",
+            key=(
+                "retry_page_"
+                + re.sub(
+                    r"[^a-z0-9]+",
+                    "_",
+                    page_name.casefold()
+                ).strip("_")
+            ),
+            use_container_width=True
+        ):
+            reset_database_pool_after_disconnect()
+
+            try:
+                clear_data_cache()
+            except Exception:
+                pass
+
+            try:
+                score_all_predictions.clear()
+            except Exception:
+                pass
+
+            st.rerun()
+
+
 # ============================================================
 # 11. MAIN APP
 # ============================================================
@@ -24510,23 +25462,24 @@ def main():
     with st.container(
         key="main_page_content_shell"
     ):
-        if selected_page == "Lịch thi đấu & dự đoán":
-            page_matches()
+        page_renderers = {
+            "Lịch thi đấu & dự đoán": page_matches,
+            "Dự đoán của tôi": page_my_predictions,
+            "Bảng xếp hạng": page_leaderboard,
+            "Thống kê giải đấu": page_competition_stats,
+            "Phân tích tổng quan": page_dashboard,
+            "Admin": page_admin
+        }
 
-        elif selected_page == "Dự đoán của tôi":
-            page_my_predictions()
+        page_renderer = page_renderers.get(
+            selected_page
+        )
 
-        elif selected_page == "Bảng xếp hạng":
-            page_leaderboard()
-
-        elif selected_page == "Thống kê giải đấu":
-            page_competition_stats()
-
-        elif selected_page == "Phân tích tổng quan":
-            page_dashboard()
-
-        elif selected_page == "Admin":
-            page_admin()
+        if page_renderer is not None:
+            render_page_safely(
+                page_name=selected_page,
+                page_renderer=page_renderer
+            )
 
         render_footer()
 
