@@ -4741,6 +4741,229 @@ def inject_prediction_score_stepper_css():
                 top: 118px !important;
             }
         }
+        /* =====================================================
+           TỈ SỐ THẬT — CHỈ CARD ĐÃ CÓ KẾT QUẢ
+           ===================================================== */
+        
+        .epl-finished-score-row {
+            display: grid;
+        
+            grid-template-columns:
+                minmax(0, 1fr)
+                48px
+                minmax(0, 1fr);
+        
+            width: 100%;
+            max-width: 780px;
+        
+            margin: 20px auto 26px;
+        
+            align-items: end;
+        }
+        
+        .epl-finished-score-team {
+            display: flex;
+            flex-direction: column;
+        
+            min-width: 0;
+        
+            align-items: center;
+            justify-content: flex-end;
+        
+            gap: 10px;
+        }
+        
+        .epl-finished-score-logo {
+            display: flex;
+        
+            width: 100%;
+            height: 60px;
+        
+            align-items: center;
+            justify-content: center;
+        
+            margin: 0;
+            padding: 0;
+        
+            background: transparent;
+            border: 0;
+            box-shadow: none;
+        
+            overflow: visible;
+        }
+        
+        .epl-finished-score-logo img {
+            display: block;
+        
+            width: auto;
+            height: auto;
+        
+            max-width: 62px;
+            max-height: 60px;
+        
+            margin: 0 auto;
+        
+            object-fit: contain;
+            object-position: center;
+        
+            background: transparent;
+            border: 0;
+            box-shadow: none;
+        
+            user-select: none;
+            pointer-events: none;
+        }
+        
+        .epl-finished-score-logo-fallback {
+            display: block;
+        
+            max-width: 130px;
+        
+            color: #37003C;
+        
+            font-size: 12px;
+            font-weight: 850;
+            line-height: 1.2;
+            text-align: center;
+        }
+        
+        .epl-finished-score-tile {
+            display: flex;
+        
+            width: 112px;
+            height: 80px;
+        
+            box-sizing: border-box;
+        
+            align-items: center;
+            justify-content: center;
+        
+            padding: 0 8px;
+        
+            background: #37003C;
+            color: #FFFFFF;
+        
+            border: 3px solid #FF2882;
+        
+            clip-path: polygon(
+                12px 0,
+                calc(100% - 12px) 0,
+                100% 12px,
+                100% calc(100% - 12px),
+                calc(100% - 12px) 100%,
+                12px 100%,
+                0 calc(100% - 12px),
+                0 12px
+            );
+        
+            box-shadow: none;
+        
+            font-family:
+                system-ui,
+                -apple-system,
+                BlinkMacSystemFont,
+                "Segoe UI",
+                sans-serif;
+        
+            font-size: 46px;
+            font-weight: 950;
+            line-height: 1;
+            letter-spacing: -0.06em;
+            text-align: center;
+        
+            font-variant-numeric: tabular-nums;
+        
+            user-select: none;
+            pointer-events: none;
+        }
+        
+        .epl-finished-score-separator {
+            display: flex;
+        
+            width: 100%;
+            height: 80px;
+        
+            align-items: center;
+            justify-content: center;
+        
+            color: #37003C;
+        
+            font-size: 38px;
+            font-weight: 950;
+            line-height: 1;
+        
+            user-select: none;
+        }
+        
+        @media (max-width: 768px) {
+            .epl-finished-score-row {
+                grid-template-columns:
+                    minmax(0, 1fr)
+                    34px
+                    minmax(0, 1fr);
+        
+                margin:
+                    16px auto 22px;
+            }
+        
+            .epl-finished-score-team {
+                gap:
+                    8px;
+            }
+        
+            .epl-finished-score-logo {
+                height:
+                    50px;
+            }
+        
+            .epl-finished-score-logo img {
+                max-width:
+                    52px;
+        
+                max-height:
+                    50px;
+            }
+        
+            .epl-finished-score-tile {
+                width:
+                    98px;
+        
+                height:
+                    72px;
+        
+                font-size:
+                    42px;
+            }
+        
+            .epl-finished-score-separator {
+                height:
+                    72px;
+        
+                font-size:
+                    34px;
+            }
+        }
+        
+        @media (max-width: 390px) {
+            .epl-finished-score-tile {
+                width:
+                    92px;
+        
+                height:
+                    68px;
+        
+                font-size:
+                    40px;
+            }
+        
+            .epl-finished-score-separator {
+                height:
+                    68px;
+        
+                font-size:
+                    32px;
+            }
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -16617,6 +16840,164 @@ def render_prediction_team_logo(
             unsafe_allow_html=True
         )
 
+def _build_finished_score_logo_html(
+    team_name: str,
+    logo_path
+) -> str:
+    """
+    Tạo logo tĩnh cho hàng tỉ số thật.
+    Không tạo widget hoặc session state mới.
+    """
+    team_label = str(
+        team_name or "Đội bóng"
+    ).strip()
+
+    safe_team_name = html.escape(
+        team_label,
+        quote=True
+    )
+
+    if (
+        logo_path is None
+        or pd.isna(logo_path)
+    ):
+        normalized_logo_path = ""
+    else:
+        normalized_logo_path = str(
+            logo_path
+        ).strip()
+
+    logo_src = (
+        resolve_asset_src(normalized_logo_path)
+        if normalized_logo_path
+        else ""
+    )
+
+    logo_is_valid = bool(
+        logo_src
+        and logo_src.startswith(
+            (
+                "data:image/",
+                "http://",
+                "https://",
+                "/app/static/"
+            )
+        )
+    )
+
+    if logo_is_valid:
+        safe_logo_src = html.escape(
+            logo_src,
+            quote=True
+        )
+
+        logo_content = (
+            f'<img src="{safe_logo_src}" '
+            'alt="" '
+            'aria-hidden="true" '
+            'loading="lazy" '
+            'decoding="async">'
+        )
+    else:
+        logo_content = (
+            '<span class="epl-finished-score-logo-fallback">'
+            f'{safe_team_name}'
+            '</span>'
+        )
+
+    return (
+        '<div class="epl-finished-score-logo" '
+        'role="img" '
+        f'aria-label="Logo {safe_team_name}" '
+        f'title="{safe_team_name}">'
+        f'{logo_content}'
+        '</div>'
+    )
+
+
+def render_finished_match_score_row(
+    match_id: int,
+    home_name: str,
+    away_name: str,
+    home_logo_path,
+    away_logo_path,
+    actual_home: int,
+    actual_away: int
+):
+    """
+    Hiển thị tỉ số thật trong khung lớn, không có mũi tên.
+    Chỉ được gọi khi trận đã kết thúc và có đủ tỉ số.
+    """
+    actual_home = int(actual_home)
+    actual_away = int(actual_away)
+
+    home_logo_html = (
+        _build_finished_score_logo_html(
+            home_name,
+            home_logo_path
+        )
+    )
+
+    away_logo_html = (
+        _build_finished_score_logo_html(
+            away_name,
+            away_logo_path
+        )
+    )
+
+    result_aria_label = html.escape(
+        (
+            f"Kết quả {home_name} "
+            f"{actual_home} - {actual_away} "
+            f"{away_name}"
+        ),
+        quote=True
+    )
+
+    score_row_html = f"""
+    <div
+        class="epl-finished-score-row"
+        role="group"
+        aria-label="{result_aria_label}"
+        data-match-id="{int(match_id)}"
+    >
+        <div class="epl-finished-score-team">
+            {home_logo_html}
+
+            <div class="epl-finished-score-tile">
+                {actual_home}
+            </div>
+        </div>
+
+        <div
+            class="epl-finished-score-separator"
+            aria-hidden="true"
+        >
+            :
+        </div>
+
+        <div class="epl-finished-score-team">
+            {away_logo_html}
+
+            <div class="epl-finished-score-tile">
+                {actual_away}
+            </div>
+        </div>
+    </div>
+    """
+
+    score_row_html = textwrap.dedent(
+        score_row_html
+    ).strip()
+
+    if hasattr(st, "html"):
+        st.html(score_row_html)
+    else:
+        st.markdown(
+            score_row_html,
+            unsafe_allow_html=True
+        )
+
 def render_match_card(
     row,
     user_id: int,
@@ -16798,11 +17179,78 @@ def render_match_card(
                 if ai_suggestion_clicked:
                     st.session_state["ai_suggestion_match_id"] = match_id
                     st.rerun()
-            if is_finished and actual_home is not None and actual_away is not None:
-                result_text = f"{actual_home} - {actual_away}"
+            if (
+                is_finished
+                and actual_home is not None
+                and actual_away is not None
+            ):
+                home_outcome_name = (
+                    get_mobile_team_display_name(
+                        home_name
+                    )
+                )
 
-                if has_extra_time or has_penalty:
-                    result_text = f"{result_text} (a.e.t)"
+                away_outcome_name = (
+                    get_mobile_team_display_name(
+                        away_name
+                    )
+                )
+
+                winner_name = row.get(
+                    "winner_team_name"
+                )
+
+                winner_name_is_valid = (
+                    winner_name is not None
+                    and not pd.isna(winner_name)
+                    and str(winner_name).strip().lower()
+                    not in ["", "nan", "none"]
+                )
+
+                if actual_home > actual_away:
+                    outcome_text = (
+                        f"{home_outcome_name} thắng"
+                    )
+
+                elif actual_away > actual_home:
+                    outcome_text = (
+                        f"{away_outcome_name} thắng"
+                    )
+
+                elif (
+                    is_knockout
+                    and has_penalty
+                    and score_pen_home > score_pen_away
+                ):
+                    outcome_text = (
+                        f"{home_outcome_name} thắng"
+                    )
+
+                elif (
+                    is_knockout
+                    and has_penalty
+                    and score_pen_away > score_pen_home
+                ):
+                    outcome_text = (
+                        f"{away_outcome_name} thắng"
+                    )
+
+                elif (
+                    is_knockout
+                    and winner_name_is_valid
+                ):
+                    winner_outcome_name = (
+                        get_mobile_team_display_name(
+                            winner_name
+                        )
+                    )
+
+                    outcome_text = (
+                        f"{winner_outcome_name} thắng"
+                    )
+
+                else:
+                    outcome_text = "Hòa"
 
                 penalty_line_html = ""
 
@@ -16832,6 +17280,7 @@ def render_match_card(
                     '<div style="'
                     'background:rgba(255,255,255,0.86);'
                     'border:1px solid rgba(15,23,42,0.08);'
+                    f'border-left:5px solid {status_info["border_color"]};'
                     'border-radius:16px;'
                     'padding:13px 15px;'
                     'box-shadow:0 6px 18px rgba(15,23,42,0.04);'
@@ -16846,14 +17295,15 @@ def render_match_card(
                     'Kết quả'
                     '</div>'
                     '<div style="'
-                    'color:#07111F;'
-                    'font-size:32px;'
+                    f'color:{status_info["badge_text"]};'
+                    'font-size:clamp(17px,1.6vw,22px);'
                     'font-weight:950;'
-                    'line-height:1.1;'
-                    'letter-spacing:-0.03em;'
-                    'white-space:nowrap;'
+                    'line-height:1.25;'
+                    'letter-spacing:-0.02em;'
+                    'white-space:normal;'
+                    'overflow-wrap:anywhere;'
                     '">'
-                    f'{html.escape(result_text)}'
+                    f'{html.escape(str(outcome_text))}'
                     '</div>'
                     f'{penalty_line_html}'
                     '</div>'
@@ -16864,67 +17314,45 @@ def render_match_card(
                     unsafe_allow_html=True
                 )
 
-                winner_name = row.get("winner_team_name")
-
-                winner_name_is_valid = (
-                    winner_name is not None
-                    and not pd.isna(winner_name)
-                    and str(winner_name).strip().lower() not in ["", "nan", "none"]
-                )
-
-                if winner_name_is_valid:
-                    final_winner_text = str(winner_name).strip()
-
-                elif not is_knockout and actual_home == actual_away:
-                    final_winner_text = "2 đội hòa nhau"
-
-                elif has_penalty and score_pen_home > score_pen_away:
-                    final_winner_text = str(home_name)
-
-                elif has_penalty and score_pen_away > score_pen_home:
-                    final_winner_text = str(away_name)
-
-                elif actual_home > actual_away:
-                    final_winner_text = str(home_name)
-
-                elif actual_away > actual_home:
-                    final_winner_text = str(away_name)
-
-                elif is_knockout:
-                    final_winner_text = "Chưa xác định"
-
-                else:
-                    final_winner_text = "2 đội hòa nhau"
-
-                winner_caption_html = (
-                    '<div style="'
-                    'margin-top:14px;'
-                    'color:#64748B;'
-                    'font-size:13px;'
-                    'line-height:1.35;'
-                    '">'
-                    'Thắng chung cuộc: '
-                    '<span style="'
-                    'color:#475569;'
-                    'font-weight:750;'
-                    '">'
-                    f'{html.escape(final_winner_text)}'
-                    '</span>'
-                    '</div>'
-                )
-
-                st.markdown(
-                    winner_caption_html,
-                    unsafe_allow_html=True
-                )
-
             else:
-                render_match_status_box(status_info)
+                render_match_status_box(
+                    status_info
+                )
 
-        if is_unknown_team(home_name) or is_unknown_team(away_name):
-            st.info("Chưa xác định đủ đội, tạm thời chưa mở dự đoán.")
-            render_match_venue_footer(row, match_id)
+        if (
+            is_unknown_team(home_name)
+            or is_unknown_team(away_name)
+        ):
+            st.info(
+                "Chưa xác định đủ đội, "
+                "tạm thời chưa mở dự đoán."
+            )
+
+            render_match_venue_footer(
+                row,
+                match_id
+            )
+
             return
+
+        if (
+            is_finished
+            and actual_home is not None
+            and actual_away is not None
+        ):
+            render_finished_match_score_row(
+                match_id=match_id,
+                home_name=home_name,
+                away_name=away_name,
+                home_logo_path=row.get(
+                    "home_team_logo_path"
+                ),
+                away_logo_path=row.get(
+                    "away_team_logo_path"
+                ),
+                actual_home=actual_home,
+                actual_away=actual_away
+            )
 
         if existing:
             pred_home = int(existing["predicted_home_score"])
