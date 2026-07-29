@@ -137,7 +137,9 @@ MOBILE_TEAM_NAME_OVERRIDES = {
 AVATAR_FOLDER = "data/static/avatars"
 DEFAULT_AVATAR_KEY = "avatar_01.png"
 AVATAR_EXTENSIONS = {".png"}
-AVATAR_RENDER_SIZE_PX = 192
+# Avatar lớn nhất hiển thị 82px; 168px đủ sắc nét cho màn hình HiDPI 2x
+# nhưng nhẹ hơn đáng kể so với việc giữ bản 192px cho cả 80 ảnh.
+AVATAR_RENDER_SIZE_PX = 168
 AVATAR_ORDER = [
     "avatar_01.png",
     "avatar_02.png",
@@ -265,7 +267,7 @@ FINAL_POSTER_END_DATE = date(2026, 7, 20)
 
 FOOTER_PROJECT_URL = ""
 
-@st.cache_data(show_spinner=False)
+@st.cache_resource(show_spinner=False, max_entries=128)
 def resolve_asset_src(asset_path: str) -> str:
     if not asset_path:
         return ""
@@ -352,18 +354,9 @@ def set_selected_season(season_slug: str):
     ]:
         st.session_state.pop(key, None)
 
-    for cached_function in [
-        load_matches,
-        load_predictions,
-        load_user_predictions,
-        _load_user_star_usage_counts_cached,
-        build_leaderboard_df,
-        load_epl_top_scorers
-    ]:
-        try:
-            cached_function.clear()
-        except Exception:
-            pass
+    # Mọi cache dữ liệu đều có season_slug trong cache key.
+    # Không xóa cache của cả hai mùa khi đổi bộ lọc; nhờ vậy quay lại mùa
+    # vừa xem không phải tải lại toàn bộ matches/predictions từ database.
 
 
 def render_season_selector():
@@ -990,6 +983,33 @@ st.set_page_config(
 )
 
 def enforce_embed_url():
+    """
+    Giữ query parameter embed=true nhưng không tạo một iframe JavaScript mới
+    ở mọi lượt rerun khi Streamlit hỗ trợ st.query_params.
+    """
+    query_params_supported = True
+
+    try:
+        current_embed_value = st.query_params.get(
+            "embed"
+        )
+    except Exception:
+        query_params_supported = False
+        current_embed_value = None
+
+    if query_params_supported:
+        if str(current_embed_value).lower() != "true":
+            try:
+                st.query_params["embed"] = "true"
+            except Exception:
+                query_params_supported = False
+            else:
+                st.rerun()
+
+        if query_params_supported:
+            return
+
+    # Fallback cho Streamlit cũ.
     components.html(
         """
         <script>
@@ -1026,11 +1046,11 @@ def get_avatar_dir() -> Path:
     return primary_dir
 
 
-@st.cache_data(ttl=10, show_spinner=False)
+@st.cache_resource(ttl=60, show_spinner=False, max_entries=4)
 def _load_avatar_keys_cached(avatar_dir_str: str) -> list[str]:
     """
     Cache danh sách avatar trong thời gian ngắn.
-    Avatar mới sẽ được nhận sau tối đa 10 giây.
+    Avatar mới sẽ được nhận sau tối đa 60 giây.
     """
     avatar_dir = Path(avatar_dir_str)
 
@@ -1094,7 +1114,7 @@ def normalize_avatar_key(
     return avatar_keys[0]
 
 
-@st.cache_data(
+@st.cache_resource(
     show_spinner=False,
     max_entries=256
 )
@@ -1138,7 +1158,8 @@ def _read_avatar_src_cached(
             avatar_image.save(
                 output_buffer,
                 format="WEBP",
-                lossless=True,
+                quality=88,
+                lossless=False,
                 method=4
             )
 
@@ -1185,6 +1206,102 @@ def get_avatar_src(
         file_stat.st_size,
         AVATAR_RENDER_SIZE_PX
     )
+
+
+def get_avatar_button_key(avatar_key: str) -> str:
+    """
+    Tạo widget key ổn định cho từng avatar.
+    """
+    safe_avatar_key = (
+        str(avatar_key)
+        .replace(".", "_")
+        .replace("-", "_")
+        .replace(" ", "_")
+        .replace("/", "_")
+        .replace("\\", "_")
+    )
+
+    return f"avatar_pick_{safe_avatar_key}"
+
+
+@st.cache_resource(show_spinner=False, max_entries=4)
+def load_avatar_catalog() -> tuple[tuple[str, str], ...]:
+    """
+    Đọc và thu nhỏ toàn bộ avatar đúng một lần cho mỗi app process.
+
+    Giá trị trả về chỉ gồm tuple bất biến để nhiều session có thể dùng chung
+    mà không phát sinh bản sao Base64 lớn trong RAM sau mỗi Streamlit rerun.
+    Khi deploy phiên bản ảnh mới, app process khởi động lại và catalog được
+    tạo lại tự động.
+    """
+    avatar_keys = tuple(load_avatar_keys())
+
+    return tuple(
+        (
+            avatar_key,
+            get_avatar_src(
+                avatar_key,
+                avatar_keys=avatar_keys
+            )
+        )
+        for avatar_key in avatar_keys
+    )
+
+
+@st.cache_resource(show_spinner=False, max_entries=1)
+def build_avatar_background_css() -> str:
+    """
+    Tạo đúng một bản CSS chứa ảnh nền cho toàn bộ avatar.
+    """
+    css_parts = []
+
+    for avatar_key, avatar_src in load_avatar_catalog():
+        avatar_button_key = get_avatar_button_key(
+            avatar_key
+        )
+
+        css_parts.append(
+            f"""
+            .st-key-{avatar_button_key} button::before {{
+                background-image: url("{avatar_src}");
+            }}
+            """
+        )
+
+    return (
+        "<style>"
+        + "\n".join(css_parts)
+        + "</style>"
+    )
+
+
+@st.cache_resource(show_spinner=False, max_entries=128)
+def build_selected_avatar_css(
+    current_avatar_key: str
+) -> str:
+    """
+    Phần CSS nhỏ chỉ đánh dấu avatar đang được chọn.
+    """
+    avatar_button_key = get_avatar_button_key(
+        current_avatar_key
+    )
+
+    return f"""
+    <style>
+    .st-key-{avatar_button_key} button {{
+        border-color: #F5C542 !important;
+        background: #FFF7ED !important;
+        box-shadow:
+            0 0 0 4px rgba(245,197,66,0.20),
+            0 10px 24px rgba(15,23,42,0.10) !important;
+    }}
+
+    .st-key-{avatar_button_key} button::after {{
+        content: "✓";
+        display: flex;
+    }}
+    </style>
+    """
 
 # ============================================================
 # 2. THEME + UI HELPERS
@@ -5492,25 +5609,58 @@ def inject_mobile_team_name_display_script():
             })
             .map(([fullName, shortName]) => {
                 return {
-                    pattern: new RegExp(
-                        escapeRegExp(fullName),
-                        "gi"
-                    ),
+                    fullName,
                     replacement: shortName
                 };
             });
 
-        const toMobileText = (value) => {
-            let result = String(value ?? "");
-
-            for (const pair of replacementPairs) {
-                result = result.replace(
-                    pair.pattern,
+        /*
+         * Gộp toàn bộ tên CLB vào một RegExp duy nhất.
+         * Bản cũ chạy lần lượt hàng chục RegExp trên mọi text node,
+         * làm mobile tốn CPU rõ rệt khi DOM lớn.
+         */
+        const replacementByNormalizedName = new Map(
+            replacementPairs.map((pair) => {
+                return [
+                    pair.fullName.toLocaleLowerCase(),
                     pair.replacement
-                );
+                ];
+            })
+        );
+
+        const combinedAliasPattern = (
+            replacementPairs.length
+            ? new RegExp(
+                replacementPairs
+                    .map((pair) => {
+                        return escapeRegExp(
+                            pair.fullName
+                        );
+                    })
+                    .join("|"),
+                "gi"
+            )
+            : null
+        );
+
+        const toMobileText = (value) => {
+            const sourceText = String(value ?? "");
+
+            if (!combinedAliasPattern) {
+                return sourceText;
             }
 
-            return result;
+            return sourceText.replace(
+                combinedAliasPattern,
+                (matchedText) => {
+                    return (
+                        replacementByNormalizedName.get(
+                            matchedText.toLocaleLowerCase()
+                        )
+                        ?? matchedText
+                    );
+                }
+            );
         };
 
         if (
@@ -5681,15 +5831,6 @@ def inject_mobile_team_name_display_script():
             }
         );
 
-        observer.observe(
-            parentDocument.body,
-            {
-                childList: true,
-                characterData: true,
-                subtree: true
-            }
-        );
-
         const mediaHandler = () => {
             applyAll();
         };
@@ -5711,7 +5852,20 @@ def inject_mobile_team_name_display_script():
             }
         };
 
+        /*
+         * Chuẩn hóa DOM hiện tại trước rồi mới bật observer,
+         * tránh observer tự nhận chính các thay đổi vừa tạo ra.
+         */
         applyAll();
+
+        observer.observe(
+            parentDocument.body,
+            {
+                childList: true,
+                characterData: true,
+                subtree: true
+            }
+        );
     })();
     </script>
     """.replace(
@@ -6629,15 +6783,7 @@ def inject_match_datepicker_calendar_theme(match_dates):
                 parentDocument.body,
                 {
                     childList: true,
-                    subtree: true,
-                    attributes: true,
-                    attributeFilter: [
-                        "class",
-                        "style",
-                        "aria-label",
-                        "aria-selected",
-                        "data-selected"
-                    ]
+                    subtree: true
                 }
             );
 
@@ -9460,79 +9606,38 @@ def render_avatar_popover(user: dict):
     - CSS target theo key riêng để hạn chế ảnh hưởng các nút khác.
     """
     user = st.session_state.get("user", user)
-    avatar_keys = load_avatar_keys()
+    avatar_catalog = load_avatar_catalog()
 
-    if not avatar_keys:
+    if not avatar_catalog:
         return
+
+    avatar_keys = tuple(
+        avatar_key
+        for avatar_key, _ in avatar_catalog
+    )
 
     current_avatar_key = normalize_avatar_key(
         user.get("avatar_key"),
         avatar_keys=avatar_keys
     )
-    current_avatar_src = get_avatar_src(
+    avatar_src_by_key = dict(avatar_catalog)
+    current_avatar_src = avatar_src_by_key.get(
         current_avatar_key,
-        avatar_keys=avatar_keys
+        ""
     )
-
-    def make_safe_key(text: str) -> str:
-        return (
-            str(text)
-            .replace(".", "_")
-            .replace("-", "_")
-            .replace(" ", "_")
-            .replace("/", "_")
-            .replace("\\", "_")
-        )
 
     avatar_items = []
 
-    for avatar_key in avatar_keys:
-        safe_avatar_key = make_safe_key(avatar_key)
-        avatar_button_key = f"avatar_pick_{safe_avatar_key}"
-
+    for avatar_key, _ in avatar_catalog:
         avatar_items.append(
             {
                 "avatar_key": avatar_key,
-                "avatar_src": get_avatar_src(
-                    avatar_key,
-                    avatar_keys=avatar_keys
+                "button_key": get_avatar_button_key(
+                    avatar_key
                 ),
-                "button_key": avatar_button_key,
                 "is_selected": avatar_key == current_avatar_key
             }
         )
-
-    avatar_specific_css = []
-
-    for item in avatar_items:
-        avatar_button_key = item["button_key"]
-        avatar_src = item["avatar_src"]
-
-        avatar_specific_css.append(
-            f"""
-            .st-key-{avatar_button_key} button::before {{
-                background-image: url("{avatar_src}");
-            }}
-            """
-        )
-
-        if item["is_selected"]:
-            avatar_specific_css.append(
-                f"""
-                .st-key-{avatar_button_key} button {{
-                    border-color: #F5C542 !important;
-                    background: #FFF7ED !important;
-                    box-shadow:
-                        0 0 0 4px rgba(245,197,66,0.20),
-                        0 10px 24px rgba(15,23,42,0.10) !important;
-                }}
-
-                .st-key-{avatar_button_key} button::after {{
-                    content: "✓";
-                    display: flex;
-                }}
-                """
-            )
 
     avatar_grid_css = (
         """
@@ -9655,13 +9760,24 @@ def render_avatar_popover(user: dict):
             }
         }
         """
-        + "\n".join(avatar_specific_css)
         + "\n</style>"
     )
 
     def render_avatar_grid(avatars_per_row: int = 4):
         st.markdown(
             avatar_grid_css,
+            unsafe_allow_html=True
+        )
+
+        st.markdown(
+            build_avatar_background_css(),
+            unsafe_allow_html=True
+        )
+
+        st.markdown(
+            build_selected_avatar_css(
+                current_avatar_key
+            ),
             unsafe_allow_html=True
         )
 
@@ -10480,7 +10596,11 @@ def build_star_usage_result(
     }
 
 
-@st.cache_data(ttl=10, show_spinner=False)
+@st.cache_data(
+    ttl=10,
+    max_entries=512,
+    show_spinner=False
+)
 def _load_user_star_usage_counts_cached(
     user_id: int,
     season_slug: str,
@@ -11212,7 +11332,7 @@ def is_big_six_match(
         and away_team_key in BIG_SIX_CANONICAL_TEAMS
     )
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=8)
 def get_match_card_css(status_info):
     """
     Thiết kế chung cho toàn bộ card Premier League.
@@ -12485,6 +12605,47 @@ def init_app_tables():
         WHERE expires_at <= NOW()
         """
     )
+
+    # Các index phục vụ trực tiếp những truy vấn đọc thường xuyên nhất.
+    # Chỉ chạy trong chế độ migration, không phát sinh DDL ở mỗi app rerun.
+    execute_sql(
+        """
+        CREATE INDEX IF NOT EXISTS idx_matches_season_kickoff
+        ON matches (season_slug, kickoff_time_utc)
+        """
+    )
+
+    execute_sql(
+        """
+        CREATE INDEX IF NOT EXISTS idx_predictions_match_id
+        ON predictions (match_id)
+        """
+    )
+
+    execute_sql(
+        """
+        CREATE INDEX IF NOT EXISTS idx_predictions_user_star
+        ON predictions (user_id, star_type, match_id)
+        """
+    )
+
+    execute_sql(
+        """
+        DO $$
+        BEGIN
+            IF to_regclass('public.match_goals') IS NOT NULL THEN
+                CREATE INDEX IF NOT EXISTS idx_match_goals_match_id_goal_key
+                ON match_goals (match_id, goal_key);
+            END IF;
+
+            IF to_regclass('public.daily_checkin_rewards') IS NOT NULL THEN
+                CREATE INDEX IF NOT EXISTS idx_daily_checkin_rewards_user_id
+                ON daily_checkin_rewards (user_id);
+            END IF;
+        END $$;
+        """
+    )
+
     # Tạo unique index cho tên hiển thị nếu dữ liệu hiện tại chưa bị trùng.
     # Index này giúp chặn các biến thể như "Hoang", " hoang ", "HOANG".
     try:
@@ -12554,6 +12715,11 @@ def create_login_session(user_id: int) -> str:
 
     execute_sql(
         """
+        WITH expired_sessions AS (
+            DELETE FROM login_sessions
+            WHERE expires_at <= NOW()
+            RETURNING session_id
+        )
         INSERT INTO login_sessions (
             user_id,
             token_hash,
@@ -12724,7 +12890,11 @@ def clear_daily_checkin_cache():
     except Exception:
         pass
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(
+    ttl=60,
+    max_entries=512,
+    show_spinner=False
+)
 def get_daily_checkin_bonus_counts_cached(user_id: int) -> dict:
     try:
         row = fetch_one(
@@ -12894,7 +13064,11 @@ def get_daily_checkin_state_from_db(user_id: int) -> dict:
     }
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(
+    ttl=60,
+    max_entries=512,
+    show_spinner=False
+)
 def get_daily_checkin_state_cached(user_id: int, today_key: str) -> dict:
     return get_daily_checkin_state_from_db(int(user_id))
 
@@ -13041,69 +13215,107 @@ def create_user(username: str, display_name: str, password: str):
     if len(password) < 8:
         raise ValueError("Mật khẩu nên có ít nhất 8 ký tự.")
 
-    existing_username = fetch_one(
-        """
-        SELECT user_id
-        FROM users
-        WHERE username = :username
-        """,
-        {
-            "username": username
-        }
-    )
-
-    if existing_username is not None:
-        raise ValueError("Username này đã tồn tại.")
-
-    existing_display_name = fetch_one(
-        """
-        SELECT user_id
-        FROM users
-        WHERE LOWER(TRIM(display_name)) = LOWER(TRIM(:display_name))
-        """,
-        {
-            "display_name": display_name
-        }
-    )
-
-    if existing_display_name is not None:
-        raise ValueError("Tên hiển thị này đã được sử dụng. Hãy chọn tên khác.")
-
     salt, password_hash = hash_password(password)
 
-    role = "admin" if count_users() == 0 else "player"
-
     try:
-        execute_sql(
-            """
-            INSERT INTO users (
-                username,
-                display_name,
-                password_salt,
-                password_hash,
-                role,
-                created_at
+        with get_engine().begin() as conn:
+            # Tuần tự hóa luồng đăng ký để không thể có hai tài khoản đầu tiên
+            # cùng nhận role admin hoặc hai display_name trùng nhau do race.
+            conn.execute(
+                text(
+                    """
+                    SELECT pg_advisory_xact_lock(
+                        2026072901
+                    )
+                    """
+                )
             )
-            VALUES (
-                :username,
-                :display_name,
-                :password_salt,
-                :password_hash,
-                :role,
-                :created_at
-            )
-            """,
-            {
-                "username": username,
-                "display_name": display_name,
-                "password_salt": salt,
-                "password_hash": password_hash,
-                "role": role,
-                "created_at": now_utc_iso()
-            }
-        )
 
-        clear_data_cache()
+            user_state = conn.execute(
+                text(
+                    """
+                    SELECT
+                        COUNT(*)::INTEGER AS user_count,
+                        COALESCE(
+                            BOOL_OR(username = :username),
+                            FALSE
+                        ) AS username_exists,
+                        COALESCE(
+                            BOOL_OR(
+                                LOWER(TRIM(display_name))
+                                = LOWER(TRIM(:display_name))
+                            ),
+                            FALSE
+                        ) AS display_name_exists
+                    FROM users
+                    """
+                ),
+                {
+                    "username": username,
+                    "display_name": display_name
+                }
+            ).mappings().one()
+
+            if to_bool(user_state["username_exists"]):
+                raise ValueError(
+                    "Username này đã tồn tại."
+                )
+
+            if to_bool(user_state["display_name_exists"]):
+                raise ValueError(
+                    "Tên hiển thị này đã được sử dụng. "
+                    "Hãy chọn tên khác."
+                )
+
+            role = (
+                "admin"
+                if int(user_state["user_count"]) == 0
+                else "player"
+            )
+
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO users (
+                        username,
+                        display_name,
+                        password_salt,
+                        password_hash,
+                        role,
+                        created_at
+                    )
+                    VALUES (
+                        :username,
+                        :display_name,
+                        :password_salt,
+                        :password_hash,
+                        :role,
+                        :created_at
+                    )
+                    """
+                ),
+                {
+                    "username": username,
+                    "display_name": display_name,
+                    "password_salt": salt,
+                    "password_hash": password_hash,
+                    "role": role,
+                    "created_at": now_utc_iso()
+                }
+            )
+
+        # Tạo user chỉ làm thay đổi danh sách người chơi và BXH.
+        # Không xóa matches/predictions/goal scorers vì sẽ gây query lại
+        # toàn bộ dữ liệu ngay sau khi đăng ký.
+        try:
+            load_users.clear()
+        except (NameError, AttributeError):
+            pass
+
+        try:
+            build_leaderboard_df.clear()
+        except (NameError, AttributeError):
+            pass
 
     except IntegrityError:
         raise ValueError("Username hoặc tên hiển thị đã tồn tại.")
@@ -13116,12 +13328,24 @@ def login_user(username: str, password: str):
 
     user = fetch_one(
         """
-        SELECT *
+        SELECT
+            user_id,
+            username,
+            display_name,
+            role,
+            created_at,
+            COALESCE(
+                avatar_key,
+                :default_avatar_key
+            ) AS avatar_key,
+            password_salt,
+            password_hash
         FROM users
         WHERE username = :username
         """,
         {
-            "username": username
+            "username": username,
+            "default_avatar_key": DEFAULT_AVATAR_KEY
         }
     )
 
@@ -13136,6 +13360,10 @@ def login_user(username: str, password: str):
 
     if not is_valid:
         return None
+
+    # Không đưa salt/hash vào session_state hoặc cookie flow.
+    user.pop("password_salt", None)
+    user.pop("password_hash", None)
 
     return user
 
@@ -13157,8 +13385,9 @@ def logout_user():
 # 6. DATA LOADING
 # ============================================================
 
-@st.cache_data(
+@st.cache_resource(
     ttl=30,
+    max_entries=8,
     show_spinner=False
 )
 def load_matches(season_slug: str | None = None) -> pd.DataFrame:
@@ -13263,7 +13492,11 @@ def load_matches(season_slug: str | None = None) -> pd.DataFrame:
 
     return df
 
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_resource(
+    ttl=300,
+    max_entries=2,
+    show_spinner=False
+)
 def load_users() -> pd.DataFrame:
     return read_sql(
         """
@@ -13282,7 +13515,11 @@ def load_users() -> pd.DataFrame:
     )
 
 
-@st.cache_data(ttl=10, show_spinner=False)
+@st.cache_resource(
+    ttl=30,
+    max_entries=8,
+    show_spinner=False
+)
 def load_predictions(season_slug: str | None = None) -> pd.DataFrame:
     season_slug = season_slug or DEFAULT_SEASON_SLUG
 
@@ -13300,7 +13537,11 @@ def load_predictions(season_slug: str | None = None) -> pd.DataFrame:
     )
 
 
-@st.cache_data(ttl=10, show_spinner=False)
+@st.cache_resource(
+    ttl=30,
+    max_entries=512,
+    show_spinner=False
+)
 def load_user_predictions(
     user_id: int,
     season_slug: str | None = None
@@ -13329,7 +13570,7 @@ def load_user_predictions(
     )
 
 
-@st.cache_data(
+@st.cache_resource(
     ttl=900,
     max_entries=256,
     show_spinner=False
@@ -13364,7 +13605,11 @@ def load_goal_scorers_for_match(match_id: int) -> pd.DataFrame:
     except Exception:
         return pd.DataFrame()
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_resource(
+    ttl=300,
+    max_entries=64,
+    show_spinner=False
+)
 def load_epl_top_scorers(
     season_slug: str | None = None,
     team_id: int | None = None
@@ -14205,7 +14450,9 @@ def _normalize_prediction_for_match(
     is_knockout = to_bool(match.get("is_knockout"))
 
     if not is_knockout:
-        return predicted_winner_team_id
+        # Trận league không dùng trường đội thắng chung cuộc.
+        # Luôn chuẩn hóa về NULL để dữ liệu cũ/tampered input không lọt vào.
+        return None
 
     home_team_id = to_optional_int(match.get("home_team_id"))
     away_team_id = to_optional_int(match.get("away_team_id"))
@@ -14480,22 +14727,35 @@ def get_user_star_usage_from_db(
         hope_reserved_used = 0
         super_reserved_used = 0
     else:
-        df["star_type"] = df["star_type"].apply(normalize_star_type)
-
-        df["is_star_locked"] = df.apply(
-            lambda row: is_match_locked_for_star(
-                row.get("kickoff_time_utc"),
-                row.get("is_finished")
-            ),
-            axis=1
+        normalized_stars = (
+            df["star_type"]
+            .fillna(STAR_TYPE_NONE)
+            .astype(str)
+            .str.strip()
+            .str.lower()
+        )
+        df["star_type"] = normalized_stars.where(
+            normalized_stars.isin(STAR_CONFIG),
+            STAR_TYPE_NONE
         )
 
-        df["is_star_reserved"] = df.apply(
-            lambda row: is_match_open_for_star_transfer(
-                row.get("kickoff_time_utc"),
-                row.get("is_finished")
-            ),
-            axis=1
+        kickoff_time = pd.to_datetime(
+            df["kickoff_time_utc"],
+            utc=True,
+            errors="coerce"
+        )
+        is_finished = df["is_finished"].map(to_bool)
+        now_utc = pd.Timestamp.now(tz="UTC")
+
+        df["is_star_locked"] = (
+            is_finished
+            | kickoff_time.isna()
+            | kickoff_time.le(now_utc)
+        )
+        df["is_star_reserved"] = (
+            ~is_finished
+            & kickoff_time.notna()
+            & kickoff_time.gt(now_utc)
         )
 
         hope_locked_used = int(
@@ -14598,9 +14858,13 @@ def build_user_prediction_map(predictions: pd.DataFrame, user_id: int) -> dict[i
     if user_predictions.empty:
         return {}
 
+    prediction_records = user_predictions.to_dict(
+        orient="records"
+    )
+
     return {
-        int(row["match_id"]): row.to_dict()
-        for _, row in user_predictions.iterrows()
+        int(prediction["match_id"]): prediction
+        for prediction in prediction_records
     }
 
 def get_match_by_id(match_id: int):
@@ -15546,6 +15810,11 @@ def delete_prediction(user_id: int, match_id: int) -> dict:
         "prediction_id": prediction_id
     }
 
+@st.cache_data(
+    ttl=30,
+    max_entries=8,
+    show_spinner=False
+)
 def score_all_predictions(season_slug: str | None = None):
     """
     Chấm điểm lại toàn bộ dự đoán đã có kết quả.
@@ -15758,6 +16027,16 @@ def update_match_result(
     if match is None:
         raise ValueError("Không tìm thấy trận đấu.")
 
+    match_season_slug = (
+        str(
+            match.get(
+                "season_slug",
+                get_selected_season_slug()
+            )
+        ).strip()
+        or get_selected_season_slug()
+    )
+
     is_knockout = to_bool(match.get("is_knockout"))
 
     home_team_id = to_optional_int(match.get("home_team_id"))
@@ -15833,7 +16112,14 @@ def update_match_result(
     )
 
     clear_data_cache()
-    score_all_predictions(get_selected_season_slug())
+
+    # Bắt buộc bỏ cache kiểm tra chấm điểm sau khi kết quả trận thay đổi.
+    try:
+        score_all_predictions.clear()
+    except AttributeError:
+        pass
+
+    score_all_predictions(match_season_slug)
 
 
 # ============================================================
@@ -19281,22 +19567,25 @@ def page_matches():
     ]
 
     now_utc = pd.Timestamp.now(tz="UTC")
+    is_finished_filter = filtered["is_finished"].map(
+        to_bool
+    )
 
     if status_filter == "Sắp diễn ra":
         filtered = filtered[
             (filtered["kickoff_time_utc_dt"] > now_utc)
-            & (~filtered["is_finished"].apply(to_bool))
+            & (~is_finished_filter)
         ]
 
     elif status_filter == "Đã khóa":
         filtered = filtered[
             (filtered["kickoff_time_utc_dt"] <= now_utc)
-            & (~filtered["is_finished"].apply(to_bool))
+            & (~is_finished_filter)
         ]
 
     elif status_filter == "Đã có kết quả":
         filtered = filtered[
-            filtered["is_finished"].apply(to_bool)
+            is_finished_filter
         ]
 
     user_predictions = load_user_predictions(
@@ -19348,15 +19637,13 @@ def page_my_predictions():
     score_all_predictions(get_selected_season_slug())
 
     user_id = st.session_state["user"]["user_id"]
+    season_slug = get_selected_season_slug()
 
-    matches = load_matches(get_selected_season_slug())
-    predictions = load_predictions(get_selected_season_slug())
-
-    if predictions.empty:
-        st.info("Bạn chưa có dự đoán nào.")
-        return
-
-    my_predictions = predictions[predictions["user_id"] == user_id].copy()
+    matches = load_matches(season_slug)
+    my_predictions = load_user_predictions(
+        int(user_id),
+        season_slug
+    )
 
     if my_predictions.empty:
         st.info("Bạn chưa có dự đoán nào.")
@@ -19411,7 +19698,7 @@ def page_my_predictions():
         axis=1
     )
 
-    leaderboard = build_leaderboard_df(get_selected_season_slug())
+    leaderboard = build_leaderboard_df(season_slug)
 
     current_user_summary = leaderboard[
         leaderboard["user_id"].astype(int) == int(user_id)
@@ -19534,7 +19821,11 @@ def page_my_predictions():
 
         st.markdown("<div style='height: 24px;'></div>", unsafe_allow_html=True)
 
-@st.cache_data(ttl=10, show_spinner=False)
+@st.cache_data(
+    ttl=10,
+    max_entries=8,
+    show_spinner=False
+)
 def build_leaderboard_df(season_slug: str | None = None):
     users = load_users()
     season_slug = season_slug or get_selected_season_slug()
@@ -19582,19 +19873,14 @@ def build_leaderboard_df(season_slug: str | None = None):
         "kickoff_time_utc"
     ]
 
+    # Chỉ ghép predictions với dữ liệu trận ở bước tính toán.
+    # Thông tin user được ghép lại sau khi aggregate để giảm kích thước
+    # DataFrame trung gian và vẫn giữ người chơi chưa có dự đoán.
     df = predictions.merge(
-        users,
-        on="user_id",
-        how="left"
-    )
-    df = df.merge(
         matches[match_columns],
         on="match_id",
         how="left"
     )
-
-    if "avatar_key" not in df.columns:
-        df["avatar_key"] = DEFAULT_AVATAR_KEY
 
     pred_home = pd.to_numeric(
         df["predicted_home_score"],
@@ -19717,7 +20003,7 @@ def build_leaderboard_df(season_slug: str | None = None):
     summary = (
         df
         .groupby(
-            ["user_id", "username", "display_name", "role", "avatar_key"],
+            ["user_id"],
             as_index=False
         )
         .agg(
@@ -19734,6 +20020,23 @@ def build_leaderboard_df(season_slug: str | None = None):
             knockout_winner_correct=("knockout_winner_correct", "sum")
         )
     )
+
+    # Left join từ users để người chơi chưa dự đoán vẫn xuất hiện trên BXH
+    # với toàn bộ chỉ số bằng 0. Bản cũ làm họ biến mất khi đã có ít nhất
+    # một người chơi khác gửi dự đoán.
+    summary = users.merge(
+        summary,
+        on="user_id",
+        how="left"
+    )
+
+    if "avatar_key" not in summary.columns:
+        summary["avatar_key"] = DEFAULT_AVATAR_KEY
+    else:
+        summary["avatar_key"] = (
+            summary["avatar_key"]
+            .fillna(DEFAULT_AVATAR_KEY)
+        )
 
     numeric_cols = [
         "total_points",
@@ -19781,9 +20084,31 @@ def build_leaderboard_df(season_slug: str | None = None):
         .fillna(0.0)
     )
 
+    summary["outcome_rate"] = (
+        summary["result_prediction_rate"]
+    )
+
+    summary["knockout_winner_rate"] = (
+        summary["knockout_winner_correct"]
+        .astype(float)
+        .div(
+            summary["knockout_winner_checkable"]
+            .astype(float)
+            .where(
+                summary["knockout_winner_checkable"].ne(0)
+            )
+        )
+        .fillna(0.0)
+    )
+
     summary = summary.sort_values(
-        ["total_points", "exact_score_count", "correct_outcome_count"],
-        ascending=[False, False, False]
+        [
+            "total_points",
+            "exact_score_count",
+            "correct_outcome_count",
+            "display_name"
+        ],
+        ascending=[False, False, False, True]
     ).reset_index(drop=True)
 
     summary["rank"] = range(1, len(summary) + 1)
@@ -23264,12 +23589,21 @@ def page_leaderboard():
         display_df[col] = display_df[col].apply(lambda x: f"{x * 100:.1f}%")
 
     avatar_row_styles = []
-    available_avatar_keys = load_avatar_keys()
+    avatar_catalog = load_avatar_catalog()
+    available_avatar_keys = tuple(
+        avatar_key
+        for avatar_key, _ in avatar_catalog
+    )
+    avatar_src_by_key = dict(avatar_catalog)
 
     for row_position, avatar_key in enumerate(leaderboard["avatar_key"].tolist(), start=1):
-        avatar_src = get_avatar_src(
+        normalized_avatar_key = normalize_avatar_key(
             avatar_key,
             avatar_keys=available_avatar_keys
+        )
+        avatar_src = avatar_src_by_key.get(
+            normalized_avatar_key,
+            ""
         )
 
         if not avatar_src:
@@ -23466,7 +23800,6 @@ def page_dashboard():
 
     leaderboard = build_leaderboard_df(get_selected_season_slug())
     predictions = load_predictions(get_selected_season_slug())
-    matches = load_matches(get_selected_season_slug())
 
     if leaderboard.empty:
         st.info("Chưa đủ dữ liệu để vẽ dashboard.")
@@ -23836,7 +24169,11 @@ def page_admin():
             st.warning("Chưa có dữ liệu trận đấu.")
             return
 
-        matches = matches.sort_values("kickoff_time_utc_dt")
+        matches = (
+            matches
+            .sort_values("kickoff_time_utc_dt")
+            .copy()
+        )
 
         matches["match_label"] = matches.apply(
             lambda row: (
@@ -24051,23 +24388,7 @@ def main():
         enforce_embed_url()
 
         inject_epl_theme()
-        inject_match_card_border_animation_css()
-        inject_epl_premium_match_card_css()
-        inject_epl_match_card_background_css()
-        inject_epl_big_match_card_css()
-
-        inject_mobile_prediction_score_row_css()
-        inject_prediction_score_stepper_css()
-        inject_prediction_score_readonly_script()
-        inject_mobile_team_name_display_script()
-
         inject_hide_streamlit_embed_footer_css()
-        inject_mobile_match_title_css()
-        inject_desktop_match_vs_style()
-
-        inject_mobile_goal_scorer_button_css()
-        inject_mobile_goal_scorer_panel_css()
-        inject_ai_summary_button_css()
         inject_sidebar_menu_radio_css()
 
         # Đặt cuối cùng để ưu tiên CSS bố cục tổng.
@@ -24148,6 +24469,34 @@ def main():
         )
 
         render_sidebar_footer()
+
+    # Chỉ nạp CSS/JavaScript chuyên biệt của trang đang mở.
+    # Trước đây mọi trang, kể cả đăng nhập, đều phải nhận toàn bộ CSS card
+    # và ba DOM observer của trang dự đoán dù không sử dụng.
+    if selected_page == "Lịch thi đấu & dự đoán":
+        with st.container(
+            key="matches_page_ui_bootstrap"
+        ):
+            inject_match_card_border_animation_css()
+            inject_epl_premium_match_card_css()
+            inject_epl_match_card_background_css()
+            inject_epl_big_match_card_css()
+
+            inject_mobile_prediction_score_row_css()
+            inject_prediction_score_stepper_css()
+            inject_prediction_score_readonly_script()
+            inject_mobile_team_name_display_script()
+
+            inject_mobile_match_title_css()
+            inject_desktop_match_vs_style()
+
+            inject_mobile_goal_scorer_button_css()
+            inject_mobile_goal_scorer_panel_css()
+            inject_ai_summary_button_css()
+
+    elif selected_page == "Admin":
+        # Admin vẫn giữ cơ chế rút gọn tên CLB trên mobile như bản cũ.
+        inject_mobile_team_name_display_script()
 
     # Nút điểm danh vẫn được render bên ngoài wrapper nội dung,
     # vì vậy giữ nguyên vị trí fixed hiện tại.
