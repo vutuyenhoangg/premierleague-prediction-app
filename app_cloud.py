@@ -8020,23 +8020,18 @@ def render_daily_checkin_shortcut_button(user_id: int):
 def inject_mobile_goal_scorer_button_css():
     """
     Nút tròn mở/đóng danh sách cầu thủ ghi bàn.
-
-    Nút được căn đúng giữa card, tương ứng với vị trí
-    dấu hai chấm của bảng tỉ số.
     """
     st.markdown(
         """
         <style>
         div[class*="st-key-goal_scorers_button_"] {
             display: flex !important;
-
             width: 100% !important;
 
             align-items: center !important;
             justify-content: center !important;
 
-            margin: 1px auto 9px !important;
-
+            margin: 0 auto 9px !important;
             text-align: center !important;
         }
 
@@ -8045,7 +8040,6 @@ def inject_mobile_goal_scorer_button_css():
         div[class*="st-key-goal_scorers_button_"]
         .stButton {
             display: flex !important;
-
             width: 100% !important;
 
             align-items: center !important;
@@ -8055,35 +8049,33 @@ def inject_mobile_goal_scorer_button_css():
         div[class*="st-key-goal_scorers_button_"] button {
             display: inline-flex !important;
 
-            width: 36px !important;
-            height: 36px !important;
+            width: 38px !important;
+            height: 38px !important;
 
-            min-width: 36px !important;
-            min-height: 36px !important;
-
-            max-width: 36px !important;
-            max-height: 36px !important;
+            min-width: 38px !important;
+            min-height: 38px !important;
+            max-width: 38px !important;
+            max-height: 38px !important;
 
             box-sizing: border-box !important;
-
-            flex: 0 0 36px !important;
+            flex: 0 0 38px !important;
 
             align-items: center !important;
             justify-content: center !important;
 
             margin: 0 auto !important;
-            padding: 0 0 2px !important;
+            padding: 0 !important;
 
             background: rgba(55, 0, 60, 0.07) !important;
             color: #6F3B76 !important;
 
-            border: 1px solid rgba(55, 0, 60, 0.14) !important;
+            border: 1px solid rgba(55, 0, 60, 0.16) !important;
             border-radius: 50% !important;
 
             box-shadow: none !important;
 
-            font-size: 22px !important;
-            font-weight: 500 !important;
+            font-size: 30px !important;
+            font-weight: 700 !important;
             line-height: 1 !important;
 
             transition:
@@ -8093,29 +8085,42 @@ def inject_mobile_goal_scorer_button_css():
         }
 
         div[class*="st-key-goal_scorers_button_"]
-        button p {
+        button [data-testid="stMarkdownContainer"] {
+            display: flex !important;
+
+            width: 100% !important;
+            height: 100% !important;
+
+            align-items: center !important;
+            justify-content: center !important;
+
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        div[class*="st-key-goal_scorers_button_"] button p,
+        div[class*="st-key-goal_scorers_button_"] button span {
             margin: 0 !important;
             padding: 0 !important;
 
             color: inherit !important;
 
-            font-size: inherit !important;
-            font-weight: inherit !important;
+            font-size: 30px !important;
+            font-weight: 700 !important;
             line-height: 1 !important;
+
+            transform: translateY(-1px);
         }
 
-        /* Xóa icon quả bóng và mọi pseudo-element cũ */
         div[class*="st-key-goal_scorers_button_"]
         button::before,
         div[class*="st-key-goal_scorers_button_"]
         button::after {
             content: none !important;
-
             display: none !important;
         }
 
-        div[class*="st-key-goal_scorers_button_"]
-        button:hover {
+        div[class*="st-key-goal_scorers_button_"] button:hover {
             background: #FF2882 !important;
             color: #FFFFFF !important;
 
@@ -8125,8 +8130,7 @@ def inject_mobile_goal_scorer_button_css():
             transform: none !important;
         }
 
-        div[class*="st-key-goal_scorers_button_"]
-        button:active {
+        div[class*="st-key-goal_scorers_button_"] button:active {
             background: #D91E6D !important;
             color: #FFFFFF !important;
 
@@ -8134,8 +8138,7 @@ def inject_mobile_goal_scorer_button_css():
             transform: none !important;
         }
 
-        div[class*="st-key-goal_scorers_button_"]
-        button:focus-visible {
+        div[class*="st-key-goal_scorers_button_"] button:focus-visible {
             outline: 3px solid rgba(255, 40, 130, 0.20) !important;
             outline-offset: 2px !important;
 
@@ -8144,23 +8147,24 @@ def inject_mobile_goal_scorer_button_css():
 
         @media (max-width: 768px) {
             div[class*="st-key-goal_scorers_button_"] {
-                margin-top: 2px !important;
                 margin-bottom: 8px !important;
             }
 
             div[class*="st-key-goal_scorers_button_"] button {
-                width: 34px !important;
-                height: 34px !important;
+                width: 36px !important;
+                height: 36px !important;
 
-                min-width: 34px !important;
-                min-height: 34px !important;
+                min-width: 36px !important;
+                min-height: 36px !important;
+                max-width: 36px !important;
+                max-height: 36px !important;
 
-                max-width: 34px !important;
-                max-height: 34px !important;
+                flex-basis: 36px !important;
+            }
 
-                flex-basis: 34px !important;
-
-                font-size: 21px !important;
+            div[class*="st-key-goal_scorers_button_"] button p,
+            div[class*="st-key-goal_scorers_button_"] button span {
+                font-size: 29px !important;
             }
         }
         </style>
@@ -13420,17 +13424,36 @@ def load_epl_top_scorers(
 
 def format_goal_text(row) -> str:
     """
-    Format 1 dòng cầu thủ ghi bàn để hiển thị UI.
+    Format một bàn thắng dưới dạng:
+    Tên cầu thủ 33’
     """
-    from html import escape
+    raw_player_name = row.get("player_name")
 
-    player_name = escape(str(row.get("player_name", "")).strip())
+    player_name = (
+        ""
+        if raw_player_name is None or pd.isna(raw_player_name)
+        else str(raw_player_name).strip()
+    )
+
+    parts = [player_name or "Không xác định"]
+
     minute = row.get("minute")
 
-    parts = [player_name]
+    if minute is not None and pd.notna(minute):
+        minute_text = str(minute).strip()
 
-    if pd.notna(minute) and str(minute).strip():
-        parts.append(escape(str(minute).strip()))
+        # Tránh trường hợp dữ liệu số bị thành 33.0
+        minute_text = re.sub(
+            r"\.0$",
+            "",
+            minute_text
+        )
+
+        # Chuẩn hóa 33, 33' hoặc 33’ về cùng dạng 33’
+        minute_text = minute_text.rstrip("'’")
+
+        if minute_text:
+            parts.append(f"{minute_text}’")
 
     tags = []
 
@@ -13444,7 +13467,6 @@ def format_goal_text(row) -> str:
         parts.append(f"({', '.join(tags)})")
 
     return " ".join(parts)
-
 
 def toggle_goal_scorers(match_id: int):
     """
@@ -13528,19 +13550,16 @@ def render_goal_scorers_for_match(
     ]
 
     def build_goal_items(goal_df):
-        """
-        Mỗi cầu thủ/bàn thắng là một hàng HTML riêng.
-        """
         if goal_df.empty:
             return (
                 '<div class="wc-goal-scorer-empty" '
                 'aria-hidden="true">—</div>'
             )
-
+    
         return "".join(
             (
                 '<div class="wc-goal-scorer-item">'
-                f'{format_goal_text(goal_row)}'
+                f'{escape(format_goal_text(goal_row), quote=False)}'
                 '</div>'
             )
             for _, goal_row in goal_df.iterrows()
@@ -13555,56 +13574,43 @@ def render_goal_scorers_for_match(
     )
 
     safe_home_name = escape(
-        str(
-            get_mobile_team_display_name(
-                home_name
-            )
-        ),
+        str(get_mobile_team_display_name(home_name)),
         quote=True
     )
-
+    
     safe_away_name = escape(
-        str(
-            get_mobile_team_display_name(
-                away_name
-            )
-        ),
+        str(get_mobile_team_display_name(away_name)),
         quote=True
     )
-
-    scorers_html = f"""
-    <div
-        class="wc-goal-scorers-grid"
-        role="group"
-        aria-label="Danh sách cầu thủ ghi bàn"
-    >
-        <div
-            class="wc-goal-scorer-side is-home"
-            aria-label="Cầu thủ ghi bàn của {safe_home_name}"
-        >
-            {home_items_html}
-        </div>
-
-        <div
-            class="wc-goal-scorer-divider"
-            aria-hidden="true"
-        ></div>
-
-        <div
-            class="wc-goal-scorer-side is-away"
-            aria-label="Cầu thủ ghi bàn của {safe_away_name}"
-        >
-            {away_items_html}
-        </div>
-    </div>
-    """
-
-    st.markdown(
-        textwrap.dedent(
-            scorers_html
-        ).strip(),
-        unsafe_allow_html=True
+    
+    scorers_html = (
+        '<div class="wc-goal-scorers-grid" '
+        'role="group" '
+        'aria-label="Danh sách cầu thủ ghi bàn">'
+    
+        '<div class="wc-goal-scorer-side is-home" '
+        f'aria-label="Cầu thủ ghi bàn của {safe_home_name}">'
+        f'{home_items_html}'
+        '</div>'
+    
+        '<div class="wc-goal-scorer-divider" '
+        'aria-hidden="true"></div>'
+    
+        '<div class="wc-goal-scorer-side is-away" '
+        f'aria-label="Cầu thủ ghi bàn của {safe_away_name}">'
+        f'{away_items_html}'
+        '</div>'
+    
+        '</div>'
     )
+    
+    if hasattr(st, "html"):
+        st.html(scorers_html)
+    else:
+        st.markdown(
+            scorers_html,
+            unsafe_allow_html=True
+        )
 
 def clear_data_cache():
     """
