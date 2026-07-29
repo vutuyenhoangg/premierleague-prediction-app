@@ -32,7 +32,6 @@ import secrets
 from streamlit_cookies_controller import CookieController
 import re
 import textwrap
-import inspect
 
 LOGGER = logging.getLogger("epl_prediction_arena")
 
@@ -1414,7 +1413,11 @@ def get_avatar_sprite_position(
 @st.cache_resource(show_spinner=False, max_entries=2)
 def build_avatar_background_css() -> str:
     """
-    Tạo CSS cho grid avatar từ đúng một sprite Base64.
+    Tạo CSS cho grid avatar dạng button từ đúng một sprite Base64.
+
+    Cơ chế tương tác dùng st.button giống dự án World Cup. Sprite chỉ chịu
+    trách nhiệm hiển thị ảnh, không tham gia xác định lựa chọn hoặc callback.
+    Vì vậy code không còn phụ thuộc vào DOM nội bộ của st.radio/nth-of-type.
     """
     avatar_keys = load_avatar_catalog()
     sprite_src, columns, rows = build_avatar_sprite_payload()
@@ -1444,48 +1447,31 @@ def build_avatar_background_css() -> str:
                 url("__AVATAR_SPRITE_SRC__");
         }
 
-        div[class*="st-key-avatar_grid_desktop_shell"],
-        div[class*="st-key-avatar_picker_radio_"],
-        div[class*="st-key-avatar_picker_radio_"] [data-testid="stRadio"] {
-            display: block !important;
-        
+        div[class*="st-key-avatar_pick_"] {
             width: 100% !important;
-            max-width: 100% !important;
             min-width: 0 !important;
-        
-            align-self: stretch !important;
-            box-sizing: border-box !important;
         }
 
-        div[class*="st-key-avatar_picker_radio_"]
-        div[role="radiogroup"] {
-            display: grid !important;
-            grid-template-columns: repeat(4, minmax(104px, 1fr)) !important;
-            gap: 8px !important;
+        div[class*="st-key-avatar_pick_"] [data-testid="stButton"] {
             width: 100% !important;
-            max-width: 100% !important;
-            min-width: 100% !important;
-            box-sizing: border-box !important;
-            align-self: stretch !important;
         }
 
-        div[class*="st-key-avatar_picker_radio_"]
-        label[data-baseweb="radio"] {
+        div[class*="st-key-avatar_pick_"] button {
             position: relative !important;
-            display: block !important;
             width: 100% !important;
-            min-width: 0 !important;
-            box-sizing: border-box !important;
             height: 88px !important;
             min-height: 88px !important;
-            margin: 0 !important;
             padding: 0 !important;
+            margin: 0 0 8px 0 !important;
             border: 2px solid rgba(15,23,42,0.10) !important;
             border-radius: 18px !important;
             background: #FFFFFF !important;
             box-shadow: 0 8px 20px rgba(15,23,42,0.06) !important;
             overflow: hidden !important;
             cursor: pointer !important;
+            color: transparent !important;
+            font-size: 0 !important;
+            line-height: 0 !important;
             transition:
                 transform 0.18s ease,
                 box-shadow 0.18s ease,
@@ -1493,8 +1479,7 @@ def build_avatar_background_css() -> str:
                 background 0.18s ease !important;
         }
 
-        div[class*="st-key-avatar_picker_radio_"]
-        label[data-baseweb="radio"]:hover {
+        div[class*="st-key-avatar_pick_"] button:hover {
             border-color: #F5C542 !important;
             background: #FFF7ED !important;
             transform: translateY(-1px) !important;
@@ -1503,13 +1488,11 @@ def build_avatar_background_css() -> str:
                 0 12px 28px rgba(15,23,42,0.13) !important;
         }
 
-        div[class*="st-key-avatar_picker_radio_"]
-        label[data-baseweb="radio"]:active {
+        div[class*="st-key-avatar_pick_"] button:active {
             transform: translateY(0) scale(0.98) !important;
         }
 
-        div[class*="st-key-avatar_picker_radio_"]
-        label[data-baseweb="radio"]::before {
+        div[class*="st-key-avatar_pick_"] button::before {
             content: "";
             position: absolute;
             left: 50%;
@@ -1517,18 +1500,18 @@ def build_avatar_background_css() -> str:
             width: 64px;
             height: 64px;
             transform: translate(-50%, -50%);
+            border: 3px solid #FFFFFF;
             border-radius: 999px;
             background-image:
                 var(--epl-avatar-sprite-image);
-            background-size: __AVATAR_SPRITE_WIDTH__% __AVATAR_SPRITE_HEIGHT__%;
+            background-size:
+                __AVATAR_SPRITE_WIDTH__% __AVATAR_SPRITE_HEIGHT__%;
             background-repeat: no-repeat;
-            border: 3px solid #FFFFFF;
             box-shadow: 0 7px 18px rgba(15,23,42,0.16);
             pointer-events: none;
         }
 
-        div[class*="st-key-avatar_picker_radio_"]
-        label[data-baseweb="radio"]::after {
+        div[class*="st-key-avatar_pick_"] button::after {
             content: "✓";
             position: absolute;
             right: 13px;
@@ -1548,68 +1531,41 @@ def build_avatar_background_css() -> str:
             box-shadow: 0 5px 12px rgba(15,23,42,0.18);
             pointer-events: none;
         }
-        div[class*="st-key-avatar_picker_radio_"]
-        label[data-baseweb="radio"]:has(input:checked) {
-            border-color: #F5C542 !important;
-            background: #FFF7ED !important;
-            box-shadow:
-                0 0 0 4px rgba(245,197,66,0.20),
-                0 10px 24px rgba(15,23,42,0.10) !important;
-        }
-        
-        div[class*="st-key-avatar_picker_radio_"]
-        label[data-baseweb="radio"]:has(input:checked)::after {
-            display: flex;
-        }
 
-        div[class*="st-key-avatar_picker_radio_"]
-        label[data-baseweb="radio"] > div {
-            position: absolute !important;
-            width: 1px !important;
-            height: 1px !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            opacity: 0 !important;
-            overflow: hidden !important;
-            pointer-events: none !important;
+        div[class*="st-key-avatar_pick_"] button * {
+            display: none !important;
+            visibility: hidden !important;
+            color: transparent !important;
+            font-size: 0 !important;
+            line-height: 0 !important;
         }
 
         @media (max-width: 768px) {
-            div[class*="st-key-avatar_picker_radio_"]
-            div[role="radiogroup"] {
-                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-                gap: 10px !important;
-            }
-
-            div[class*="st-key-avatar_picker_radio_"]
-            label[data-baseweb="radio"] {
+            div[class*="st-key-avatar_pick_"] button {
                 height: 112px !important;
                 min-height: 112px !important;
+                margin-bottom: 10px !important;
             }
 
-            div[class*="st-key-avatar_picker_radio_"]
-            label[data-baseweb="radio"]::before {
+            div[class*="st-key-avatar_pick_"] button::before {
                 width: 82px;
                 height: 82px;
             }
 
-            div[class*="st-key-avatar_picker_radio_"]
-            label[data-baseweb="radio"]::after {
+            div[class*="st-key-avatar_pick_"] button::after {
                 right: 12px;
                 bottom: 12px;
             }
         }
 
         @media (max-width: 390px) {
-            div[class*="st-key-avatar_picker_radio_"]
-            label[data-baseweb="radio"] {
+            div[class*="st-key-avatar_pick_"] button {
                 height: 104px !important;
                 min-height: 104px !important;
                 border-radius: 16px !important;
             }
 
-            div[class*="st-key-avatar_picker_radio_"]
-            label[data-baseweb="radio"]::before {
+            div[class*="st-key-avatar_pick_"] button::before {
                 width: 76px;
                 height: 76px;
             }
@@ -1626,7 +1582,11 @@ def build_avatar_background_css() -> str:
         )
     ]
 
-    for index, avatar_key in enumerate(avatar_keys, start=1):
+    for avatar_key in avatar_keys:
+        avatar_button_key = get_avatar_button_key(
+            avatar_key
+        )
+
         if not sprite_available:
             avatar_src = get_avatar_src(
                 avatar_key,
@@ -1636,8 +1596,7 @@ def build_avatar_background_css() -> str:
             if avatar_src:
                 css_parts.append(
                     f"""
-                    div[class*="st-key-avatar_picker_radio_"]
-                    label[data-baseweb="radio"]:nth-of-type({index})::before {{
+                    .st-key-{avatar_button_key} button::before {{
                         background-image: url("{avatar_src}");
                         background-size: cover;
                         background-position: center;
@@ -1659,8 +1618,7 @@ def build_avatar_background_css() -> str:
 
         css_parts.append(
             f"""
-            div[class*="st-key-avatar_picker_radio_"]
-            label[data-baseweb="radio"]:nth-of-type({index})::before {{
+            .st-key-{avatar_button_key} button::before {{
                 background-position:
                     {x_position:.6f}% {y_position:.6f}%;
             }}
@@ -1675,6 +1633,44 @@ def build_avatar_background_css() -> str:
 
 
 @st.cache_resource(show_spinner=False, max_entries=128)
+def build_selected_avatar_css(
+    current_avatar_key: str
+) -> str:
+    """
+    Đánh dấu button tương ứng với avatar hiện tại.
+    """
+    avatar_keys = load_avatar_catalog()
+
+    if not avatar_keys:
+        return ""
+
+    current_avatar_key = normalize_avatar_key(
+        current_avatar_key,
+        avatar_keys=list(avatar_keys)
+    )
+
+    if current_avatar_key not in avatar_keys:
+        return ""
+
+    avatar_button_key = get_avatar_button_key(
+        current_avatar_key
+    )
+
+    return f"""
+    <style>
+    .st-key-{avatar_button_key} button {{
+        border-color: #F5C542 !important;
+        background: #FFF7ED !important;
+        box-shadow:
+            0 0 0 4px rgba(245,197,66,0.20),
+            0 10px 24px rgba(15,23,42,0.10) !important;
+    }}
+
+    .st-key-{avatar_button_key} button::after {{
+        display: flex;
+    }}
+    </style>
+    """
 
 # ============================================================
 # 2. THEME + UI HELPERS
@@ -9965,88 +9961,6 @@ def render_sidebar_star_balance(user_id: int):
         unsafe_allow_html=True
     )
 
-def handle_avatar_picker_change(
-    user_id: int,
-    picker_key: str
-):
-    """
-    Cập nhật avatar từ radio widget duy nhất.
-
-    Nếu database cập nhật thất bại, avatar cũ được khôi phục
-    ở lượt render tiếp theo, không sửa trực tiếp state của
-    widget ngay bên trong callback.
-    """
-    restore_key = f"{picker_key}__restore"
-    avatar_keys = tuple(load_avatar_catalog())
-
-    selected_avatar_key = st.session_state.get(
-        picker_key
-    )
-
-    previous_avatar_key = normalize_avatar_key(
-        st.session_state.get(
-            "user",
-            {}
-        ).get("avatar_key"),
-        avatar_keys=list(avatar_keys)
-    )
-
-    if selected_avatar_key not in avatar_keys:
-        if previous_avatar_key in avatar_keys:
-            st.session_state[restore_key] = (
-                previous_avatar_key
-            )
-
-        st.session_state["avatar_picker_error"] = (
-            "Avatar được chọn không hợp lệ."
-        )
-        return
-
-    try:
-        update_user_avatar(
-            user_id=int(user_id),
-            avatar_key=selected_avatar_key
-        )
-
-        updated_user = dict(
-            st.session_state.get(
-                "user",
-                {}
-            )
-        )
-
-        updated_user["avatar_key"] = (
-            selected_avatar_key
-        )
-
-        st.session_state["user"] = updated_user
-
-        st.session_state.pop(
-            restore_key,
-            None
-        )
-
-        st.session_state.pop(
-            "avatar_picker_error",
-            None
-        )
-
-    except Exception as error:
-        LOGGER.exception(
-            "Failed to update avatar for user_id=%s",
-            int(user_id)
-        )
-
-        if previous_avatar_key in avatar_keys:
-            st.session_state[restore_key] = (
-                previous_avatar_key
-            )
-
-        st.session_state["avatar_picker_error"] = (
-            str(error)
-            or "Không thể cập nhật avatar lúc này."
-        )
-
 @st.fragment
 def render_avatar_popover(user: dict):
     """
@@ -10077,68 +9991,106 @@ def render_avatar_popover(user: dict):
         avatar_keys=list(avatar_keys)
     )
 
-    picker_key = (
-        f"avatar_picker_radio_{int(user['user_id'])}"
-    )
-    restore_key = f"{picker_key}__restore"
-    
-    restore_avatar_key = st.session_state.pop(
-        restore_key,
-        None
-    )
-    
-    if restore_avatar_key in avatar_keys:
-        st.session_state[picker_key] = (
-            restore_avatar_key
-        )
-
-    if (
-        picker_key not in st.session_state
-        or st.session_state.get(picker_key)
-        not in avatar_keys
-    ):
-        st.session_state[picker_key] = current_avatar_key
-
     def render_avatar_grid():
         sprite_css = build_avatar_background_css()
-    
+
         if sprite_css:
             st.markdown(
                 sprite_css,
                 unsafe_allow_html=True
             )
-    
-        radio_kwargs = {
-            "label": "Chọn avatar",
-            "options": avatar_keys,
-            "index": None,
-            "key": picker_key,
-            "format_func": lambda _: "Chọn avatar",
-            "label_visibility": "collapsed",
-            "on_change": handle_avatar_picker_change,
-            "args": (
-                int(user["user_id"]),
-                picker_key
+
+        selected_css = build_selected_avatar_css(
+            current_avatar_key
+        )
+
+        if selected_css:
+            st.markdown(
+                selected_css,
+                unsafe_allow_html=True
             )
-        }
-    
-        try:
-            if (
-                "width"
-                in inspect.signature(st.radio).parameters
+
+        for start_index in range(
+            0,
+            len(avatar_keys),
+            4
+        ):
+            row_avatar_keys = avatar_keys[
+                start_index:start_index + 4
+            ]
+            columns = st.columns(
+                4,
+                gap="small"
+            )
+
+            for column, avatar_key in zip(
+                columns,
+                row_avatar_keys
             ):
-                radio_kwargs["width"] = "stretch"
-    
-        except (TypeError, ValueError):
-            pass
-    
-        st.radio(**radio_kwargs)
-    
+                with column:
+                    avatar_clicked = st.button(
+                        "Chọn avatar",
+                        key=get_avatar_button_key(
+                            avatar_key
+                        ),
+                        use_container_width=True,
+                        help="Bấm để chọn avatar này."
+                    )
+
+                    if (
+                        avatar_clicked
+                        and avatar_key
+                        != current_avatar_key
+                    ):
+                        try:
+                            saved_avatar_key = (
+                                update_user_avatar(
+                                    user_id=int(
+                                        user["user_id"]
+                                    ),
+                                    avatar_key=avatar_key
+                                )
+                            )
+
+                            updated_user = dict(
+                                st.session_state.get(
+                                    "user",
+                                    user
+                                )
+                            )
+                            updated_user["avatar_key"] = (
+                                saved_avatar_key
+                            )
+                            st.session_state["user"] = (
+                                updated_user
+                            )
+                            st.session_state.pop(
+                                "avatar_picker_error",
+                                None
+                            )
+
+                            rerun_current_fragment()
+
+                        except Exception as error:
+                            LOGGER.exception(
+                                "Failed to update avatar "
+                                "for user_id=%s",
+                                int(user["user_id"])
+                            )
+                            st.session_state[
+                                "avatar_picker_error"
+                            ] = (
+                                str(error)
+                                or
+                                "Không thể cập nhật "
+                                "avatar lúc này."
+                            )
+
         avatar_picker_error = st.session_state.pop(
             "avatar_picker_error",
             None
         )
-    
+
         if avatar_picker_error:
             st.error(avatar_picker_error)
 
@@ -15567,24 +15519,49 @@ def update_user_avatar(user_id: int, avatar_key: str):
     Cập nhật avatar cho user hiện tại.
 
     Chỉ lưu tên file avatar vào database.
-    Sau khi đổi avatar, clear cache users và leaderboard để Bảng xếp hạng cập nhật ngay.
+    Dùng RETURNING để xác nhận đúng user đã được cập nhật trước khi đổi state
+    trên giao diện. Không retry thao tác ghi để tránh một lần bấm bị ghi lặp
+    khi trạng thái commit của kết nối không xác định.
     """
-    avatar_key = normalize_avatar_key(avatar_key)
+    avatar_keys = list(load_avatar_catalog())
+    avatar_key = normalize_avatar_key(
+        avatar_key,
+        avatar_keys=avatar_keys
+    )
 
     if not avatar_key:
         raise ValueError("Chưa có avatar hợp lệ để chọn.")
 
-    execute_sql(
-        """
-        UPDATE users
-        SET avatar_key = :avatar_key
-        WHERE user_id = :user_id
-        """,
-        {
-            "avatar_key": avatar_key,
-            "user_id": int(user_id)
-        }
+    with get_engine().begin() as conn:
+        updated_row = conn.execute(
+            text(
+                """
+                UPDATE users
+                SET avatar_key = :avatar_key
+                WHERE user_id = :user_id
+                RETURNING avatar_key
+                """
+            ),
+            {
+                "avatar_key": avatar_key,
+                "user_id": int(user_id)
+            }
+        ).mappings().fetchone()
+
+    if updated_row is None:
+        raise ValueError(
+            "Không tìm thấy tài khoản để cập nhật avatar."
+        )
+
+    saved_avatar_key = normalize_avatar_key(
+        updated_row.get("avatar_key"),
+        avatar_keys=avatar_keys
     )
+
+    if saved_avatar_key != avatar_key:
+        raise RuntimeError(
+            "Database chưa xác nhận đúng avatar vừa chọn."
+        )
 
     try:
         load_users.clear()
@@ -15595,6 +15572,8 @@ def update_user_avatar(user_id: int, avatar_key: str):
         build_leaderboard_df.clear()
     except Exception:
         pass
+
+    return saved_avatar_key
 
 def get_user_prediction(user_id: int, match_id: int):
     """
