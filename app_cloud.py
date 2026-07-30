@@ -10198,6 +10198,8 @@ def render_avatar_popover(user: dict):
 
     Cập nhật UI:
     - Avatar chính có viền vàng nhẹ và badge bút chì nhỏ ở chính giữa mép dưới.
+    - Có thể kéo avatar tới vị trí bất kỳ trong vùng nhìn thấy của trình duyệt.
+    - Vị trí được lưu riêng theo user_id trên từng trình duyệt/thiết bị.
     - Popup desktop: 4 avatar mỗi hàng.
     - Popup mobile: 2 avatar mỗi hàng, card cao hơn, ảnh avatar lớn hơn để dễ nhìn.
     - Người dùng chọn avatar bằng cách bấm trực tiếp vào khung avatar.
@@ -10334,6 +10336,11 @@ def render_avatar_popover(user: dict):
             width: 72px !important;
             height: 72px !important;
             overflow: visible !important;
+            cursor: grab;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            will-change: left, top;
         }}
 
         div[class*="st-key-top_right_avatar_popover_shell"]
@@ -10366,7 +10373,10 @@ def render_avatar_popover(user: dict):
                 0 12px 30px rgba(7, 17, 31, 0.24),
                 0 0 0 6px rgba(245, 197, 66, 0.08) !important;
             overflow: visible !important;
-            cursor: pointer !important;
+            cursor: grab !important;
+            touch-action: none !important;
+            user-select: none !important;
+            -webkit-user-select: none !important;
             font-size: 0 !important;
             line-height: 0 !important;
             color: transparent !important;
@@ -10412,7 +10422,7 @@ def render_avatar_popover(user: dict):
 
         div[class*="st-key-top_right_avatar_popover_shell"]
         div[data-testid="stPopover"] > div > button::before {{
-            content: "Đổi avatar";
+            content: "Kéo để di chuyển · Bấm để đổi avatar";
             position: absolute;
             right: 68px;
             top: 50%;
@@ -10429,6 +10439,29 @@ def render_avatar_popover(user: dict):
             line-height: 1;
             box-shadow: 0 10px 24px rgba(7, 17, 31, 0.22);
             transition: opacity 0.18s ease, transform 0.18s ease;
+        }}
+
+        div[class*="st-key-top_right_avatar_popover_shell"]
+        div[data-testid="stPopover"] > button:active,
+
+        div[class*="st-key-top_right_avatar_popover_shell"]
+        div[data-testid="stPopover"] > div > button:active {{
+            cursor: grabbing !important;
+        }}
+
+        div[class*="st-key-top_right_avatar_popover_shell"].epl-avatar-dragging,
+
+        div[class*="st-key-top_right_avatar_popover_shell"].epl-avatar-dragging * {{
+            cursor: grabbing !important;
+        }}
+
+        div[class*="st-key-top_right_avatar_popover_shell"].epl-avatar-dragging
+        div[data-testid="stPopover"] > button,
+
+        div[class*="st-key-top_right_avatar_popover_shell"].epl-avatar-dragging
+        div[data-testid="stPopover"] > div > button {{
+            transform: scale(1.045) !important;
+            transition: none !important;
         }}
 
         div[class*="st-key-top_right_avatar_popover_shell"]
@@ -10690,6 +10723,538 @@ def render_avatar_popover(user: dict):
                 )
                 render_avatar_grid()
                 st.markdown("</div>", unsafe_allow_html=True)
+
+    avatar_drag_storage_key = (
+        "epl-avatar-floating-position-v1:"
+        f"{int(user['user_id'])}"
+    )
+
+    avatar_drag_script = """
+    <script>
+    (() => {
+        const controllerName =
+            "__eplAvatarDragController";
+
+        const oldController =
+            window[controllerName];
+
+        if (
+            oldController
+            && typeof oldController.cleanup
+                === "function"
+        ) {
+            oldController.cleanup();
+        }
+
+        const shell =
+            document.querySelector(
+                'div[class*="st-key-'
+                + 'top_right_avatar_popover_shell"]'
+            );
+
+        if (!shell) {
+            return;
+        }
+
+        const button =
+            shell.querySelector(
+                'div[data-testid="stPopover"] > button'
+            )
+            || shell.querySelector(
+                'div[data-testid="stPopover"] '
+                + '> div > button'
+            );
+
+        if (!button) {
+            return;
+        }
+
+        const storageKey =
+            __AVATAR_DRAG_STORAGE_KEY__;
+
+        const edgeGap = 8;
+        const dragThreshold = 6;
+
+        let activePointer = null;
+        let dragStarted = false;
+        let suppressClickUntil = 0;
+        let resizeFrame = 0;
+        let mutationObserver = null;
+        let cleaned = false;
+
+        const clampPosition = (
+            proposedLeft,
+            proposedTop
+        ) => {
+            const shellRect =
+                shell.getBoundingClientRect();
+
+            const maxLeft =
+                Math.max(
+                    edgeGap,
+                    window.innerWidth
+                    - shellRect.width
+                    - edgeGap
+                );
+
+            const maxTop =
+                Math.max(
+                    edgeGap,
+                    window.innerHeight
+                    - shellRect.height
+                    - edgeGap
+                );
+
+            return {
+                left: Math.min(
+                    Math.max(
+                        Number(proposedLeft)
+                            || edgeGap,
+                        edgeGap
+                    ),
+                    maxLeft
+                ),
+                top: Math.min(
+                    Math.max(
+                        Number(proposedTop)
+                            || edgeGap,
+                        edgeGap
+                    ),
+                    maxTop
+                )
+            };
+        };
+
+        const savePosition = (
+            position
+        ) => {
+            try {
+                window.localStorage.setItem(
+                    storageKey,
+                    JSON.stringify({
+                        left: Math.round(
+                            position.left
+                        ),
+                        top: Math.round(
+                            position.top
+                        )
+                    })
+                );
+            } catch (error) {
+                /*
+                 * Trình duyệt có thể chặn localStorage.
+                 * Nút vẫn kéo được trong phiên hiện tại.
+                 */
+            }
+        };
+
+        const applyPosition = (
+            proposedLeft,
+            proposedTop,
+            shouldSave = false
+        ) => {
+            const position =
+                clampPosition(
+                    proposedLeft,
+                    proposedTop
+                );
+
+            shell.style.setProperty(
+                "left",
+                position.left + "px",
+                "important"
+            );
+
+            shell.style.setProperty(
+                "top",
+                position.top + "px",
+                "important"
+            );
+
+            shell.style.setProperty(
+                "right",
+                "auto",
+                "important"
+            );
+
+            shell.style.setProperty(
+                "bottom",
+                "auto",
+                "important"
+            );
+
+            if (shouldSave) {
+                savePosition(position);
+            }
+
+            return position;
+        };
+
+        const restorePosition = () => {
+            let storedPosition = null;
+
+            try {
+                storedPosition = JSON.parse(
+                    window.localStorage.getItem(
+                        storageKey
+                    )
+                    || "null"
+                );
+            } catch (error) {
+                storedPosition = null;
+            }
+
+            if (
+                storedPosition
+                && Number.isFinite(
+                    Number(storedPosition.left)
+                )
+                && Number.isFinite(
+                    Number(storedPosition.top)
+                )
+            ) {
+                applyPosition(
+                    Number(storedPosition.left),
+                    Number(storedPosition.top),
+                    false
+                );
+
+                return;
+            }
+
+            const initialRect =
+                shell.getBoundingClientRect();
+
+            applyPosition(
+                initialRect.left,
+                initialRect.top,
+                false
+            );
+        };
+
+        const stopDragging = (
+            event,
+            persistPosition
+        ) => {
+            if (!activePointer) {
+                return;
+            }
+
+            if (
+                event
+                && event.pointerId
+                    !== activePointer.pointerId
+            ) {
+                return;
+            }
+
+            if (
+                persistPosition
+                && dragStarted
+            ) {
+                const finalRect =
+                    shell.getBoundingClientRect();
+
+                applyPosition(
+                    finalRect.left,
+                    finalRect.top,
+                    true
+                );
+
+                suppressClickUntil =
+                    Date.now() + 500;
+
+                if (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+            }
+
+            activePointer = null;
+            dragStarted = false;
+
+            shell.classList.remove(
+                "epl-avatar-dragging"
+            );
+        };
+
+        const onPointerDown = (
+            event
+        ) => {
+            if (
+                event.button !== undefined
+                && event.button !== 0
+            ) {
+                return;
+            }
+
+            const shellRect =
+                shell.getBoundingClientRect();
+
+            activePointer = {
+                pointerId: event.pointerId,
+                startX: event.clientX,
+                startY: event.clientY,
+                startLeft: shellRect.left,
+                startTop: shellRect.top
+            };
+
+            dragStarted = false;
+        };
+
+        const onPointerMove = (
+            event
+        ) => {
+            if (
+                !activePointer
+                || event.pointerId
+                    !== activePointer.pointerId
+            ) {
+                return;
+            }
+
+            const deltaX =
+                event.clientX
+                - activePointer.startX;
+
+            const deltaY =
+                event.clientY
+                - activePointer.startY;
+
+            if (
+                !dragStarted
+                && Math.hypot(
+                    deltaX,
+                    deltaY
+                ) < dragThreshold
+            ) {
+                return;
+            }
+
+            dragStarted = true;
+
+            shell.classList.add(
+                "epl-avatar-dragging"
+            );
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            applyPosition(
+                activePointer.startLeft
+                    + deltaX,
+                activePointer.startTop
+                    + deltaY,
+                false
+            );
+        };
+
+        const onPointerUp = (
+            event
+        ) => {
+            stopDragging(
+                event,
+                true
+            );
+        };
+
+        const onPointerCancel = (
+            event
+        ) => {
+            stopDragging(
+                event,
+                dragStarted
+            );
+        };
+
+        const onClickCapture = (
+            event
+        ) => {
+            if (
+                Date.now()
+                >= suppressClickUntil
+            ) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+        };
+
+        const keepInsideViewport = () => {
+            cancelAnimationFrame(
+                resizeFrame
+            );
+
+            resizeFrame =
+                requestAnimationFrame(
+                    () => {
+                        const currentRect =
+                            shell
+                                .getBoundingClientRect();
+
+                        applyPosition(
+                            currentRect.left,
+                            currentRect.top,
+                            true
+                        );
+                    }
+                );
+        };
+
+        const cleanup = () => {
+            if (cleaned) {
+                return;
+            }
+
+            cleaned = true;
+
+            cancelAnimationFrame(
+                resizeFrame
+            );
+
+            button.removeEventListener(
+                "pointerdown",
+                onPointerDown
+            );
+
+            document.removeEventListener(
+                "pointermove",
+                onPointerMove,
+                true
+            );
+
+            document.removeEventListener(
+                "pointerup",
+                onPointerUp,
+                true
+            );
+
+            document.removeEventListener(
+                "pointercancel",
+                onPointerCancel,
+                true
+            );
+
+            shell.removeEventListener(
+                "click",
+                onClickCapture,
+                true
+            );
+
+            window.removeEventListener(
+                "resize",
+                keepInsideViewport
+            );
+
+            if (window.visualViewport) {
+                window.visualViewport
+                    .removeEventListener(
+                        "resize",
+                        keepInsideViewport
+                    );
+            }
+
+            if (mutationObserver) {
+                mutationObserver.disconnect();
+            }
+        };
+
+        button.setAttribute(
+            "title",
+            "Giữ và kéo để di chuyển. "
+            + "Bấm để đổi avatar."
+        );
+
+        button.setAttribute(
+            "aria-label",
+            "Đổi avatar; giữ và kéo "
+            + "để di chuyển nút"
+        );
+
+        button.addEventListener(
+            "pointerdown",
+            onPointerDown
+        );
+
+        document.addEventListener(
+            "pointermove",
+            onPointerMove,
+            {
+                capture: true,
+                passive: false
+            }
+        );
+
+        document.addEventListener(
+            "pointerup",
+            onPointerUp,
+            true
+        );
+
+        document.addEventListener(
+            "pointercancel",
+            onPointerCancel,
+            true
+        );
+
+        shell.addEventListener(
+            "click",
+            onClickCapture,
+            true
+        );
+
+        window.addEventListener(
+            "resize",
+            keepInsideViewport,
+            { passive: true }
+        );
+
+        if (window.visualViewport) {
+            window.visualViewport
+                .addEventListener(
+                    "resize",
+                    keepInsideViewport,
+                    { passive: true }
+                );
+        }
+
+        mutationObserver =
+            new MutationObserver(
+                () => {
+                    if (!shell.isConnected) {
+                        cleanup();
+                    }
+                }
+            );
+
+        mutationObserver.observe(
+            document.body,
+            {
+                childList: true,
+                subtree: true
+            }
+        );
+
+        restorePosition();
+
+        window[controllerName] = {
+            cleanup
+        };
+    })();
+    </script>
+    """.replace(
+        "__AVATAR_DRAG_STORAGE_KEY__",
+        json.dumps(
+            avatar_drag_storage_key
+        )
+    )
+
+    st.html(
+        avatar_drag_script,
+        unsafe_allow_javascript=True
+    )
 # ============================================================
 # 3. BASIC UTILITIES
 # ============================================================
@@ -21750,7 +22315,8 @@ def build_epl_standings_df(matches: pd.DataFrame) -> pd.DataFrame:
 
 def render_page_native_sticky_table(
     table_html: str,
-    root_id: str
+    root_id: str,
+    mobile_frozen_columns: tuple[str, ...] = ()
 ):
     """
     Render bảng trực tiếp vào trang Streamlit:
@@ -21759,13 +22325,24 @@ def render_page_native_sticky_table(
     - Không tạo cuộn dọc riêng.
     - Header bám theo trang chính.
     - Header đồng bộ khi vuốt ngang trên mobile.
+    - Có thể tạo lớp giao điểm riêng cho các cột freeze trên mobile.
     """
     safe_root_id = json.dumps(str(root_id))
+    safe_mobile_frozen_columns = json.dumps(
+        [
+            str(column_key)
+            for column_key
+            in mobile_frozen_columns
+        ]
+    )
 
     sticky_script = """
     <script>
     (() => {
         const rootId = __ROOT_ID__;
+        const mobileFrozenColumns =
+            __MOBILE_FROZEN_COLUMNS__;
+
         const root = document.getElementById(rootId);
 
         if (!root) {
@@ -21831,6 +22408,40 @@ def render_page_native_sticky_table(
 
         overlayTable.appendChild(overlayHead);
         overlay.appendChild(overlayTable);
+
+        /*
+         * Lớp header riêng cho phần giao nhau giữa:
+         * - header đang freeze theo chiều dọc;
+         * - các cột đang freeze theo chiều ngang.
+         *
+         * Không dựa vào position: sticky bên trong bảng đã transform,
+         * vì Safari/Chrome mobile có thể tính sai left khi vuốt ngang.
+         */
+        const frozenOverlayTable =
+            sourceTable.cloneNode(false);
+
+        frozenOverlayTable.removeAttribute(
+            "id"
+        );
+
+        const frozenOverlayHead =
+            document.createElement("thead");
+
+        const frozenOverlayRow =
+            document.createElement("tr");
+
+        frozenOverlayHead.appendChild(
+            frozenOverlayRow
+        );
+
+        frozenOverlayTable.appendChild(
+            frozenOverlayHead
+        );
+
+        overlay.appendChild(
+            frozenOverlayTable
+        );
+
         document.body.appendChild(overlay);
 
         Object.assign(
@@ -21841,6 +22452,25 @@ def render_page_native_sticky_table(
                 transformOrigin: "left top"
             }
         );
+
+        Object.assign(
+            frozenOverlayTable.style,
+            {
+                position: "absolute",
+                display: "none",
+                top: "0",
+                left: "0",
+                margin: "0",
+                tableLayout: "fixed",
+                transform: "none",
+                zIndex: "3"
+            }
+        );
+
+        const mobileQuery =
+            window.matchMedia(
+                "(max-width: 768px)"
+            );
 
         const findVerticalScrollParent = (
             node
@@ -21877,13 +22507,66 @@ def render_page_native_sticky_table(
         let cleaned = false;
         let mutationObserver = null;
         let resizeObserver = null;
+        let overlayOrderSignature = "";
 
         const syncColumnWidths = () => {
-            const sourceCells = Array.from(
+            const sourceCells =
+                Array.from(
                 sourceHead.rows[0]?.cells || []
             );
 
-            const overlayCells = Array.from(
+            const currentOrderSignature =
+                sourceCells
+                    .map(
+                        (cell) =>
+                            cell.dataset.col || ""
+                    )
+                    .join("|");
+
+            if (
+                currentOrderSignature
+                !== overlayOrderSignature
+            ) {
+                overlayHead.replaceChildren(
+                    ...Array.from(
+                        sourceHead.rows
+                    ).map(
+                        (sourceRow) =>
+                            sourceRow.cloneNode(true)
+                    )
+                );
+
+                frozenOverlayRow
+                    .replaceChildren();
+
+                mobileFrozenColumns
+                    .forEach(
+                        (columnKey) => {
+                            const sourceCell =
+                                sourceCells.find(
+                                    (cell) =>
+                                        cell.dataset.col
+                                        === columnKey
+                                );
+
+                            if (!sourceCell) {
+                                return;
+                            }
+
+                            frozenOverlayRow
+                                .appendChild(
+                                    sourceCell
+                                        .cloneNode(true)
+                                );
+                        }
+                    );
+
+                overlayOrderSignature =
+                    currentOrderSignature;
+            }
+
+            const overlayCells =
+                Array.from(
                 overlayHead.rows[0]?.cells || []
             );
 
@@ -21907,7 +22590,12 @@ def render_page_native_sticky_table(
                             width: width + "px",
                             minWidth: width + "px",
                             maxWidth: width + "px",
-                            boxSizing: "border-box"
+                            boxSizing: "border-box",
+                            position: "static",
+                            left: "auto",
+                            right: "auto",
+                            zIndex: "1",
+                            boxShadow: "none"
                         }
                     );
                 }
@@ -21926,6 +22614,69 @@ def render_page_native_sticky_table(
 
             overlayTable.style.maxWidth =
                 tableWidth + "px";
+
+            const sourceCellsByColumn =
+                new Map(
+                    sourceCells.map(
+                        (cell) => [
+                            cell.dataset.col,
+                            cell
+                        ]
+                    )
+                );
+
+            const frozenCells =
+                Array.from(
+                    frozenOverlayRow.cells || []
+                );
+
+            let frozenWidth = 0;
+
+            frozenCells.forEach(
+                (frozenCell, index) => {
+                    const columnKey =
+                        mobileFrozenColumns[index];
+
+                    const sourceCell =
+                        sourceCellsByColumn.get(
+                            columnKey
+                        );
+
+                    if (!sourceCell) {
+                        return;
+                    }
+
+                    const width =
+                        sourceCell
+                            .getBoundingClientRect()
+                            .width;
+
+                    frozenWidth += width;
+
+                    Object.assign(
+                        frozenCell.style,
+                        {
+                            width: width + "px",
+                            minWidth: width + "px",
+                            maxWidth: width + "px",
+                            boxSizing: "border-box",
+                            position: "static",
+                            left: "auto",
+                            right: "auto",
+                            zIndex: "4"
+                        }
+                    );
+                }
+            );
+
+            frozenOverlayTable.style.width =
+                frozenWidth + "px";
+
+            frozenOverlayTable.style.minWidth =
+                frozenWidth + "px";
+
+            frozenOverlayTable.style.maxWidth =
+                frozenWidth + "px";
         };
 
         const cleanup = () => {
@@ -22029,6 +22780,20 @@ def render_page_native_sticky_table(
                 "translate3d("
                 + (-tableScroller.scrollLeft)
                 + "px, 0, 0)";
+
+            const showFrozenIntersection = (
+                mobileQuery.matches
+                && mobileFrozenColumns.length > 0
+                && frozenOverlayRow.cells.length > 0
+            );
+
+            frozenOverlayTable.style.display =
+                showFrozenIntersection
+                    ? "table"
+                    : "none";
+
+            frozenOverlayTable.style.height =
+                headerHeight + "px";
         };
 
         function schedule() {
@@ -22087,6 +22852,9 @@ def render_page_native_sticky_table(
     """.replace(
         "__ROOT_ID__",
         safe_root_id
+    ).replace(
+        "__MOBILE_FROZEN_COLUMNS__",
+        safe_mobile_frozen_columns
     )
 
     st.html(
@@ -22783,7 +23551,12 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
 
     render_page_native_sticky_table(
         standings_html,
-        "epl-standings-table-root"
+        "epl-standings-table-root",
+        mobile_frozen_columns=(
+            "rank",
+            "team",
+            "points"
+        )
     )
 
 def render_competition_stats_view_switcher() -> str:
