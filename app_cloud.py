@@ -9605,16 +9605,17 @@ def get_star_radio_css(
 
     return css
 
-def get_prediction_action_spacing_css(has_delete: bool = False):
-    css = """
+def get_prediction_action_spacing_css():
+    return """
     {
-        width: fit-content !important;
-        max-width: 100% !important;
-        margin-top: 14px !important;
+        margin-top: 16px !important;
         margin-bottom: 18px !important;
     }
 
-    button,
+    button {
+        white-space: nowrap !important;
+    }
+
     button * {
         white-space: nowrap !important;
         word-break: keep-all !important;
@@ -9623,226 +9624,8 @@ def get_prediction_action_spacing_css(has_delete: bool = False):
 
     @media (max-width: 768px) {
         {
-            width: 100% !important;
-            margin-top: 14px !important;
-            margin-bottom: 18px !important;
-        }
-    }
-    """
-
-    if has_delete:
-        css += """
-        {
-            width: 100% !important;
-        }
-
-        div[data-testid="stHorizontalBlock"] {
-            display: flex !important;
-            flex-direction: row !important;
-            align-items: stretch !important;
-            justify-content: flex-start !important;
-            gap: 8px !important;
-        }
-
-        div[data-testid="column"] {
-            flex: 0 0 auto !important;
-            width: auto !important;
-            min-width: 0 !important;
-        }
-
-        @media (max-width: 768px) {
-            div[data-testid="stHorizontalBlock"] {
-                display: grid !important;
-                grid-template-columns: minmax(0, 1fr) auto !important;
-                gap: 8px !important;
-                width: 100% !important;
-            }
-
-            div[data-testid="column"] {
-                width: 100% !important;
-                min-width: 0 !important;
-            }
-        }
-        """
-
-    return css
-
-
-def get_prediction_primary_button_css():
-    return """
-    {
-        width: fit-content !important;
-        max-width: 100% !important;
-    }
-
-    div[data-testid="stFormSubmitButton"] {
-        width: 100% !important;
-    }
-
-    button {
-        display: inline-flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        width: 100% !important;
-        min-width: 148px !important;
-        height: 38px !important;
-        min-height: 38px !important;
-        padding: 0 16px !important;
-        border: 1px solid rgba(255, 70, 155, 0.88) !important;
-        border-radius: 12px !important;
-        background:
-            linear-gradient(135deg, #3B0738 0%, #580047 100%) !important;
-        color: #FFFFFF !important;
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.14),
-            0 5px 13px rgba(75, 0, 60, 0.18) !important;
-        font-size: 13px !important;
-        font-weight: 850 !important;
-        line-height: 1 !important;
-        letter-spacing: 0.01em !important;
-        cursor: pointer !important;
-        transition:
-            background 0.16s ease,
-            border-color 0.16s ease,
-            box-shadow 0.16s ease,
-            transform 0.16s ease !important;
-    }
-
-    button,
-    button * {
-        color: #FFFFFF !important;
-        white-space: nowrap !important;
-    }
-
-    button:hover {
-        background:
-            linear-gradient(135deg, #470943 0%, #680052 100%) !important;
-        border-color: #FF469B !important;
-        color: #FFFFFF !important;
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.17),
-            0 7px 16px rgba(75, 0, 60, 0.22) !important;
-        transform: translateY(-1px) !important;
-    }
-
-    button:active {
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.12),
-            0 3px 8px rgba(75, 0, 60, 0.18) !important;
-        transform: translateY(0) !important;
-    }
-
-    button:focus-visible {
-        outline: none !important;
-        box-shadow:
-            0 0 0 3px rgba(255, 70, 155, 0.20),
-            0 5px 13px rgba(75, 0, 60, 0.18) !important;
-    }
-
-    button:disabled {
-        border-color: rgba(148, 163, 184, 0.42) !important;
-        background: rgba(226, 232, 240, 0.90) !important;
-        color: #94A3B8 !important;
-        box-shadow: none !important;
-        cursor: not-allowed !important;
-        transform: none !important;
-    }
-
-    button:disabled * {
-        color: #94A3B8 !important;
-    }
-
-    @media (max-width: 768px) {
-        {
-            width: 100% !important;
-        }
-
-        button {
-            width: 100% !important;
-            min-width: 0 !important;
-            height: 40px !important;
-            min-height: 40px !important;
-            padding: 0 14px !important;
-            border-radius: 11px !important;
-            font-size: 12.5px !important;
-        }
-    }
-    """
-
-
-def get_prediction_delete_button_css():
-    return """
-    {
-        width: fit-content !important;
-        max-width: 100% !important;
-    }
-
-    div[data-testid="stFormSubmitButton"] {
-        width: fit-content !important;
-    }
-
-    button {
-        display: inline-flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        width: auto !important;
-        min-width: 0 !important;
-        height: 38px !important;
-        min-height: 38px !important;
-        padding: 0 12px !important;
-        border: 1px solid rgba(190, 24, 45, 0.28) !important;
-        border-radius: 12px !important;
-        background: rgba(255, 255, 255, 0.72) !important;
-        color: #BE123C !important;
-        box-shadow: none !important;
-        font-size: 12px !important;
-        font-weight: 800 !important;
-        line-height: 1 !important;
-        letter-spacing: 0.01em !important;
-        cursor: pointer !important;
-        transition:
-            background 0.16s ease,
-            border-color 0.16s ease,
-            color 0.16s ease,
-            transform 0.16s ease !important;
-    }
-
-    button,
-    button * {
-        color: #BE123C !important;
-        white-space: nowrap !important;
-    }
-
-    button:hover {
-        border-color: rgba(190, 24, 60, 0.58) !important;
-        background: rgba(255, 241, 242, 0.94) !important;
-        color: #9F1239 !important;
-        box-shadow: none !important;
-        transform: translateY(-1px) !important;
-    }
-
-    button:hover * {
-        color: #9F1239 !important;
-    }
-
-    button:active {
-        background: rgba(255, 228, 230, 0.92) !important;
-        box-shadow: none !important;
-        transform: translateY(0) !important;
-    }
-
-    button:focus-visible {
-        outline: none !important;
-        box-shadow: 0 0 0 3px rgba(190, 24, 60, 0.13) !important;
-    }
-
-    @media (max-width: 768px) {
-        button {
-            height: 40px !important;
-            min-height: 40px !important;
-            padding: 0 12px !important;
-            border-radius: 11px !important;
-            font-size: 12px !important;
+            margin-top: 15px !important;
+            margin-bottom: 20px !important;
         }
     }
     """
@@ -21544,33 +21327,51 @@ def render_match_card(
             if existing:
                 with stylable_container(
                     key=f"prediction_action_spacing_shell_{match_id}",
-                    css_styles=get_prediction_action_spacing_css(
-                        has_delete=True
-                    )
+                    css_styles=get_prediction_action_spacing_css()
                 ):
-                    save_col, delete_col = st.columns(
-                        [1, 1],
-                        gap="small"
-                    )
+                    save_col, spacer_col, delete_col = st.columns([1.45, 6.8, 0.85])
 
                     with save_col:
-                        with stylable_container(
-                            key=f"update_prediction_button_shell_{match_id}",
-                            css_styles=get_prediction_primary_button_css()
-                        ):
-                            st.form_submit_button(
-                                "Cập nhật dự đoán",
-                                on_click=handle_prediction_form_submit,
-                                kwargs=submit_callback_kwargs
-                            )
+                        st.form_submit_button(
+                            "Cập nhật dự đoán",
+                            on_click=handle_prediction_form_submit,
+                            kwargs=submit_callback_kwargs
+                        )
 
                     with delete_col:
                         with stylable_container(
                             key=f"delete_prediction_button_shell_{match_id}",
-                            css_styles=get_prediction_delete_button_css()
+                            css_styles="""
+                            button {
+                                width: 100% !important;
+                                background: rgba(255, 255, 255, 0.66) !important;
+                                color: #DC2626 !important;
+                                border: 1px solid rgba(220, 38, 38, 0.38) !important;
+                                box-shadow: none !important;
+                                font-size: 12px !important;
+                                font-weight: 750 !important;
+                                padding: 5px 9px !important;
+                                min-height: 32px !important;
+                                border-radius: 999px !important;
+                                white-space: nowrap !important;
+                            }
+
+                            button:hover {
+                                color: #B91C1C !important;
+                                border-color: rgba(185, 28, 28, 0.68) !important;
+                                background: rgba(254, 226, 226, 0.46) !important;
+                                transform: none !important;
+                                box-shadow: none !important;
+                            }
+
+                            button:active {
+                                transform: none !important;
+                                box-shadow: none !important;
+                            }
+                            """
                         ):
                             st.form_submit_button(
-                                "Xóa",
+                                "Xóa dự đoán",
                                 help="Xóa dự đoán đã lưu cho trận này.",
                                 on_click=handle_delete_prediction_form_submit,
                                 kwargs={
@@ -21584,15 +21385,11 @@ def render_match_card(
                     key=f"prediction_action_spacing_shell_{match_id}",
                     css_styles=get_prediction_action_spacing_css()
                 ):
-                    with stylable_container(
-                        key=f"save_prediction_button_shell_{match_id}",
-                        css_styles=get_prediction_primary_button_css()
-                    ):
-                        st.form_submit_button(
-                            "Lưu dự đoán",
-                            on_click=handle_prediction_form_submit,
-                            kwargs=submit_callback_kwargs
-                        )
+                    st.form_submit_button(
+                        "Lưu dự đoán",
+                        on_click=handle_prediction_form_submit,
+                        kwargs=submit_callback_kwargs
+                    )
 
         render_match_venue_footer(row, match_id)
 
