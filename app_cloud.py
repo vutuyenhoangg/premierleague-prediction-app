@@ -9608,24 +9608,280 @@ def get_star_radio_css(
 def get_prediction_action_spacing_css():
     return """
     {
-        margin-top: 16px !important;
-        margin-bottom: 18px !important;
+        width: fit-content !important;
+        max-width: 100% !important;
+        margin-top: 12px !important;
+        margin-bottom: 14px !important;
     }
 
+    div[data-testid="stHorizontalBlock"] {
+        width: fit-content !important;
+        max-width: 100% !important;
+        align-items: center !important;
+        flex-wrap: nowrap !important;
+        gap: 7px !important;
+    }
+
+    div[data-testid="stColumn"] {
+        flex: 0 0 auto !important;
+        width: auto !important;
+        min-width: 0 !important;
+    }
+
+    div[data-testid="stFormSubmitButton"] {
+        width: auto !important;
+        margin: 0 !important;
+    }
+
+    @media (max-width: 768px) {
+        {
+            margin-top: 11px !important;
+            margin-bottom: 15px !important;
+        }
+
+        div[data-testid="stHorizontalBlock"] {
+            gap: 6px !important;
+        }
+    }
+    """
+
+def get_prediction_primary_button_css():
+    """
+    Nút hành động chính của form dự đoán.
+    CSS được bọc trong stylable_container riêng cho từng trận.
+    """
+    return """
     button {
+        width: auto !important;
+        min-width: 0 !important;
+        height: 34px !important;
+        min-height: 34px !important;
+        padding: 0 13px !important;
+
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 7px !important;
+
+        position: relative !important;
+        overflow: hidden !important;
+
+        border: 1px solid rgba(245, 197, 66, 0.78) !important;
+        border-radius: 10px !important;
+        background:
+            linear-gradient(
+                135deg,
+                #37003C 0%,
+                #54105D 100%
+            ) !important;
+
+        color: #FFFFFF !important;
+        box-shadow:
+            0 4px 10px rgba(55, 0, 60, 0.15) !important;
+
+        font-size: 12.5px !important;
+        font-weight: 800 !important;
+        letter-spacing: 0.005em !important;
+        line-height: 1 !important;
         white-space: nowrap !important;
+
+        transition:
+            background 0.16s ease,
+            border-color 0.16s ease,
+            box-shadow 0.16s ease,
+            transform 0.16s ease !important;
     }
 
-    button * {
+    button::before {
+        content: "✓";
+
+        width: 15px;
+        height: 15px;
+        min-width: 15px;
+
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+
+        border-radius: 999px;
+        background: #00FF85;
+        color: #37003C;
+
+        font-size: 10px;
+        font-weight: 950;
+        line-height: 1;
+    }
+
+    button *,
+    button p {
+        color: inherit !important;
+        font: inherit !important;
+        line-height: 1 !important;
         white-space: nowrap !important;
         word-break: keep-all !important;
         overflow-wrap: normal !important;
     }
 
+    button:hover {
+        border-color: #F5C542 !important;
+        background:
+            linear-gradient(
+                135deg,
+                #430049 0%,
+                #65146F 100%
+            ) !important;
+        color: #FFFFFF !important;
+        box-shadow:
+            0 6px 14px rgba(55, 0, 60, 0.20) !important;
+        transform: translateY(-1px) !important;
+    }
+
+    button:active {
+        box-shadow:
+            0 2px 6px rgba(55, 0, 60, 0.16) !important;
+        transform: translateY(0) !important;
+    }
+
+    button:focus-visible {
+        outline: 3px solid rgba(245, 197, 66, 0.30) !important;
+        outline-offset: 2px !important;
+    }
+
+    button:disabled,
+    button:disabled:hover {
+        border-color: rgba(148, 163, 184, 0.42) !important;
+        background: #E2E8F0 !important;
+        color: #94A3B8 !important;
+        box-shadow: none !important;
+        transform: none !important;
+        cursor: not-allowed !important;
+    }
+
+    button:disabled::before {
+        background: #CBD5E1;
+        color: #94A3B8;
+    }
+
     @media (max-width: 768px) {
-        {
-            margin-top: 15px !important;
-            margin-bottom: 20px !important;
+        button {
+            height: 36px !important;
+            min-height: 36px !important;
+            padding: 0 12px !important;
+            gap: 6px !important;
+            border-radius: 10px !important;
+            font-size: 12px !important;
+        }
+
+        button::before {
+            width: 14px;
+            height: 14px;
+            min-width: 14px;
+            font-size: 9px;
+        }
+    }
+    """
+
+def get_prediction_delete_button_css():
+    """
+    Nút xóa dạng icon siêu gọn.
+    Nhãn thật vẫn nằm trong DOM; tooltip giải thích đầy đủ hành động.
+    """
+    return """
+    button {
+        width: 32px !important;
+        min-width: 32px !important;
+        max-width: 32px !important;
+        height: 32px !important;
+        min-height: 32px !important;
+        max-height: 32px !important;
+        padding: 0 !important;
+
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+
+        position: relative !important;
+        overflow: hidden !important;
+
+        border: 1px solid rgba(220, 38, 38, 0.24) !important;
+        border-radius: 10px !important;
+        background: rgba(255, 255, 255, 0.72) !important;
+        color: #DC2626 !important;
+        box-shadow: none !important;
+
+        font-size: 0 !important;
+        line-height: 0 !important;
+
+        transition:
+            background 0.16s ease,
+            border-color 0.16s ease,
+            color 0.16s ease,
+            box-shadow 0.16s ease,
+            transform 0.16s ease !important;
+    }
+
+    button::before {
+        content: "";
+
+        width: 15px;
+        height: 15px;
+
+        display: block;
+        background: currentColor;
+
+        -webkit-mask:
+            url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 3h6l1 2h4v2H4V5h4l1-2Zm-2 6h10l-1 12H8L7 9Zm3 2v8h2v-8h-2Zm4 0v8h2v-8h-2Z'/%3E%3C/svg%3E")
+            center / contain no-repeat;
+        mask:
+            url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 3h6l1 2h4v2H4V5h4l1-2Zm-2 6h10l-1 12H8L7 9Zm3 2v8h2v-8h-2Zm4 0v8h2v-8h-2Z'/%3E%3C/svg%3E")
+            center / contain no-repeat;
+    }
+
+    button *,
+    button p {
+        position: absolute !important;
+        width: 1px !important;
+        height: 1px !important;
+        padding: 0 !important;
+        margin: -1px !important;
+        overflow: hidden !important;
+        clip: rect(0, 0, 0, 0) !important;
+        white-space: nowrap !important;
+        border: 0 !important;
+    }
+
+    button:hover {
+        border-color: rgba(220, 38, 38, 0.56) !important;
+        background: rgba(254, 226, 226, 0.78) !important;
+        color: #B91C1C !important;
+        box-shadow:
+            0 4px 10px rgba(185, 28, 28, 0.10) !important;
+        transform: translateY(-1px) !important;
+    }
+
+    button:active {
+        box-shadow: none !important;
+        transform: scale(0.96) !important;
+    }
+
+    button:focus-visible {
+        outline: 3px solid rgba(220, 38, 38, 0.16) !important;
+        outline-offset: 2px !important;
+    }
+
+    @media (max-width: 768px) {
+        button {
+            width: 34px !important;
+            min-width: 34px !important;
+            max-width: 34px !important;
+            height: 34px !important;
+            min-height: 34px !important;
+            max-height: 34px !important;
+        }
+
+        button::before {
+            width: 15px;
+            height: 15px;
         }
     }
     """
@@ -21329,50 +21585,27 @@ def render_match_card(
                     key=f"prediction_action_spacing_shell_{match_id}",
                     css_styles=get_prediction_action_spacing_css()
                 ):
-                    save_col, spacer_col, delete_col = st.columns([1.45, 6.8, 0.85])
+                    save_col, delete_col = st.columns([1, 1], gap="small")
 
                     with save_col:
-                        st.form_submit_button(
-                            "Cập nhật dự đoán",
-                            on_click=handle_prediction_form_submit,
-                            kwargs=submit_callback_kwargs
-                        )
+                        with stylable_container(
+                            key=f"prediction_primary_button_shell_{match_id}",
+                            css_styles=get_prediction_primary_button_css()
+                        ):
+                            st.form_submit_button(
+                                "Cập nhật dự đoán",
+                                on_click=handle_prediction_form_submit,
+                                kwargs=submit_callback_kwargs
+                            )
 
                     with delete_col:
                         with stylable_container(
                             key=f"delete_prediction_button_shell_{match_id}",
-                            css_styles="""
-                            button {
-                                width: 100% !important;
-                                background: rgba(255, 255, 255, 0.66) !important;
-                                color: #DC2626 !important;
-                                border: 1px solid rgba(220, 38, 38, 0.38) !important;
-                                box-shadow: none !important;
-                                font-size: 12px !important;
-                                font-weight: 750 !important;
-                                padding: 5px 9px !important;
-                                min-height: 32px !important;
-                                border-radius: 999px !important;
-                                white-space: nowrap !important;
-                            }
-
-                            button:hover {
-                                color: #B91C1C !important;
-                                border-color: rgba(185, 28, 28, 0.68) !important;
-                                background: rgba(254, 226, 226, 0.46) !important;
-                                transform: none !important;
-                                box-shadow: none !important;
-                            }
-
-                            button:active {
-                                transform: none !important;
-                                box-shadow: none !important;
-                            }
-                            """
+                            css_styles=get_prediction_delete_button_css()
                         ):
                             st.form_submit_button(
                                 "Xóa dự đoán",
-                                help="Xóa dự đoán đã lưu cho trận này.",
+                                help="Xóa dự đoán",
                                 on_click=handle_delete_prediction_form_submit,
                                 kwargs={
                                     "user_id": int(user_id),
@@ -21385,11 +21618,15 @@ def render_match_card(
                     key=f"prediction_action_spacing_shell_{match_id}",
                     css_styles=get_prediction_action_spacing_css()
                 ):
-                    st.form_submit_button(
-                        "Lưu dự đoán",
-                        on_click=handle_prediction_form_submit,
-                        kwargs=submit_callback_kwargs
-                    )
+                    with stylable_container(
+                        key=f"prediction_primary_button_shell_{match_id}",
+                        css_styles=get_prediction_primary_button_css()
+                    ):
+                        st.form_submit_button(
+                            "Lưu dự đoán",
+                            on_click=handle_prediction_form_submit,
+                            kwargs=submit_callback_kwargs
+                        )
 
         render_match_venue_footer(row, match_id)
 
