@@ -26939,7 +26939,7 @@ def render_round_leaderboard_table(
                         </div>
 
                         <span class="epl-round-mobile-meta">
-                            {num_scored} trận đã chấm
+                            {num_scored} trận · TB/trận {average_points:.1f}
                         </span>
                     </div>
 
@@ -26953,17 +26953,35 @@ def render_round_leaderboard_table(
                 </div>
 
                 <div class="epl-round-mobile-stats">
-                    <span>
-                        <small>Đúng tỉ số</small>
-                        <strong>{exact_score_count}</strong>
+                    <span class="epl-round-mobile-stat is-breakdown">
+                        <small>Chi tiết điểm</small>
+                        <strong
+                            class="epl-round-mobile-breakdown"
+                            aria-label="Điểm gốc {base_points}, điểm bổ trợ {format_signed(star_bonus_points)}"
+                        >
+                            <b>Gốc {base_points}</b>
+                            <b class="{star_bonus_class}">
+                                Sao {format_signed(star_bonus_points)}
+                            </b>
+                        </strong>
                     </span>
-                    <span>
-                        <small>Đúng kết quả</small>
-                        <strong>{correct_outcome_count}</strong>
+                    <span class="epl-round-mobile-stat">
+                        <small>Bổ trợ đã dùng</small>
+                        <strong class="epl-round-mobile-boosters">
+                            <b>⭐ {hope_stars_used}</b>
+                            <b>✨ {super_stars_used}</b>
+                        </strong>
                     </span>
-                    <span>
-                        <small>Tỷ lệ đúng</small>
-                        <strong>{result_prediction_rate * 100:.1f}%</strong>
+                    <span class="epl-round-mobile-stat">
+                        <small>Hiệu quả dự đoán</small>
+                        <strong
+                            class="epl-round-mobile-accuracy"
+                            aria-label="Đúng tỉ số {exact_score_count}, đúng kết quả {correct_outcome_count}, tỷ lệ đúng {result_prediction_rate * 100:.1f}%"
+                        >
+                            <b>Tỉ số {exact_score_count}</b>
+                            <b>Kết quả {correct_outcome_count}</b>
+                            <b>{result_prediction_rate * 100:.1f}%</b>
+                        </strong>
                     </span>
                 </div>
             </article>
@@ -27651,23 +27669,28 @@ def render_round_leaderboard_table(
 
         .epl-round-mobile-stats > span {{
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 5px;
+            gap: 3px;
             min-width: 0;
+            min-height: 32px;
+            padding: 1px 5px;
             border-right: 1px solid rgba(136,157,174,0.17);
         }}
 
-        .epl-round-mobile-stats > span:last-child {{
+        .epl-round-mobile-stats > span:nth-child(3n) {{
             border-right: 0;
         }}
 
         .epl-round-mobile-stats small {{
+            width: 100%;
             overflow: hidden;
             color: #758797;
             font-size: 8.5px;
             font-weight: 760;
-            line-height: 1;
+            line-height: 1.1;
+            text-align: center;
             text-overflow: ellipsis;
             white-space: nowrap;
         }}
@@ -27676,7 +27699,37 @@ def render_round_leaderboard_table(
             color: #17324A;
             font-size: 11px;
             font-weight: 950;
-            line-height: 1;
+            line-height: 1.1;
+        }}
+
+        .epl-round-mobile-breakdown,
+        .epl-round-mobile-boosters,
+        .epl-round-mobile-accuracy {{
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            min-width: 0;
+            white-space: nowrap;
+        }}
+
+        .epl-round-mobile-breakdown b,
+        .epl-round-mobile-boosters b,
+        .epl-round-mobile-accuracy b {{
+            font-size: 9px;
+            font-weight: 900;
+        }}
+
+        .epl-round-mobile-breakdown .is-positive {{
+            color: #16804A;
+        }}
+
+        .epl-round-mobile-breakdown .is-negative {{
+            color: #C2413A;
+        }}
+
+        .epl-round-mobile-breakdown .is-zero {{
+            color: #64748B;
         }}
 
         .epl-round-leaderboard-footer {{
@@ -28428,7 +28481,9 @@ def page_leaderboard():
                         </div>
 
                         <div class="epl-mobile-meta">
-                            <span>{num_scored} trận đã chấm</span>
+                            <span>
+                                {num_scored} trận · TB/trận {average_points:.1f}
+                            </span>
                             {champion_meta}
                         </div>
                     </div>
@@ -28443,17 +28498,38 @@ def page_leaderboard():
                 </div>
 
                 <div class="epl-mobile-stats">
-                    <span>
-                        <small>Đúng tỉ số</small>
-                        <strong>{exact_score_count}</strong>
+                    <span class="epl-mobile-stat is-breakdown">
+                        <small>Chi tiết điểm</small>
+                        <strong
+                            class="epl-mobile-breakdown"
+                            aria-label="Điểm gốc {base_points}, thưởng sao {format_signed(star_bonus_points)}, thưởng vòng {format_signed(round_bonus_points)}"
+                        >
+                            <b>Gốc {base_points}</b>
+                            <b class="{star_bonus_class}">
+                                Sao {format_signed(star_bonus_points)}
+                            </b>
+                            <b class="is-round-bonus">
+                                Vòng {format_signed(round_bonus_points)}
+                            </b>
+                        </strong>
                     </span>
-                    <span>
-                        <small>Đúng kết quả</small>
-                        <strong>{correct_outcome_count}</strong>
+                    <span class="epl-mobile-stat">
+                        <small>Bổ trợ còn lại</small>
+                        <strong class="epl-mobile-boosters">
+                            <b>⭐ {escaped_hope_display}</b>
+                            <b>✨ {escaped_super_display}</b>
+                        </strong>
                     </span>
-                    <span>
-                        <small>Tỷ lệ đúng</small>
-                        <strong>{result_prediction_rate * 100:.1f}%</strong>
+                    <span class="epl-mobile-stat">
+                        <small>Hiệu quả dự đoán</small>
+                        <strong
+                            class="epl-mobile-accuracy"
+                            aria-label="Đúng tỉ số {exact_score_count}, đúng kết quả {correct_outcome_count}, tỷ lệ đúng {result_prediction_rate * 100:.1f}%"
+                        >
+                            <b>Tỉ số {exact_score_count}</b>
+                            <b>Kết quả {correct_outcome_count}</b>
+                            <b>{result_prediction_rate * 100:.1f}%</b>
+                        </strong>
                     </span>
                 </div>
             </article>
@@ -29099,23 +29175,28 @@ def page_leaderboard():
 
         .epl-mobile-stats > span {{
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 5px;
+            gap: 3px;
             min-width: 0;
+            min-height: 32px;
+            padding: 1px 5px;
             border-right: 1px solid rgba(136,157,174,0.17);
         }}
 
-        .epl-mobile-stats > span:last-child {{
+        .epl-mobile-stats > span:nth-child(3n) {{
             border-right: 0;
         }}
 
         .epl-mobile-stats small {{
+            width: 100%;
             overflow: hidden;
             color: #758797;
             font-size: 8.5px;
             font-weight: 760;
-            line-height: 1;
+            line-height: 1.1;
+            text-align: center;
             text-overflow: ellipsis;
             white-space: nowrap;
         }}
@@ -29124,7 +29205,38 @@ def page_leaderboard():
             color: #17324A;
             font-size: 11px;
             font-weight: 950;
-            line-height: 1;
+            line-height: 1.1;
+        }}
+
+        .epl-mobile-breakdown,
+        .epl-mobile-boosters,
+        .epl-mobile-accuracy {{
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            min-width: 0;
+            white-space: nowrap;
+        }}
+
+        .epl-mobile-breakdown b,
+        .epl-mobile-boosters b,
+        .epl-mobile-accuracy b {{
+            font-size: 8.5px;
+            font-weight: 900;
+        }}
+
+        .epl-mobile-breakdown .is-positive,
+        .epl-mobile-breakdown .is-round-bonus {{
+            color: #16804A;
+        }}
+
+        .epl-mobile-breakdown .is-negative {{
+            color: #C2413A;
+        }}
+
+        .epl-mobile-breakdown .is-zero {{
+            color: #64748B;
         }}
 
         .epl-leaderboard-footer {{
