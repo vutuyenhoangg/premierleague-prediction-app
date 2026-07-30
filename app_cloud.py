@@ -9149,10 +9149,12 @@ def inject_sidebar_menu_radio_css():
          * không dùng :first-of-type hoặc selector button toàn cục vì các
          * selector đó có thể bắt nhầm Share, Favorite và Edit trên header.
         */
-        div[data-testid="stSidebarCollapsedControl"] button,
-        div[data-testid="stSidebarCollapseButton"] button,
-        button[data-testid="stSidebarCollapsedControl"],
-        button[data-testid="stSidebarCollapseButton"],
+        [data-testid="stExpandSidebarButton"]:is(button),
+        [data-testid="stExpandSidebarButton"] button,
+        [data-testid="stSidebarCollapsedControl"]:is(button),
+        [data-testid="stSidebarCollapsedControl"] button,
+        [data-testid="stSidebarCollapseButton"]:is(button),
+        [data-testid="stSidebarCollapseButton"] button,
         section[data-testid="stSidebar"]
         button[data-testid="stBaseButton-headerNoPadding"],
         section[data-testid="stSidebar"]
@@ -9172,10 +9174,12 @@ def inject_sidebar_menu_radio_css():
             white-space: nowrap !important;
         }
 
-        div[data-testid="stSidebarCollapsedControl"] button::after,
-        div[data-testid="stSidebarCollapseButton"] button::after,
-        button[data-testid="stSidebarCollapsedControl"]::after,
-        button[data-testid="stSidebarCollapseButton"]::after,
+        [data-testid="stExpandSidebarButton"]:is(button)::after,
+        [data-testid="stExpandSidebarButton"] button::after,
+        [data-testid="stSidebarCollapsedControl"]:is(button)::after,
+        [data-testid="stSidebarCollapsedControl"] button::after,
+        [data-testid="stSidebarCollapseButton"]:is(button)::after,
+        [data-testid="stSidebarCollapseButton"] button::after,
         section[data-testid="stSidebar"]
         button[data-testid="stBaseButton-headerNoPadding"]::after,
         section[data-testid="stSidebar"]
