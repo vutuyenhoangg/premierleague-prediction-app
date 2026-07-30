@@ -23920,9 +23920,27 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
             "L": "Thua"
         }
         form_symbols = {
-            "W": "&#10003;",
-            "D": "&minus;",
-            "L": "&times;"
+            "W": (
+                '<svg class="form-result-icon" '
+                'viewBox="0 0 16 16" '
+                'aria-hidden="true" focusable="false">'
+                '<path d="M3.25 8.1L6.4 11L12.75 4.8"/>'
+                '</svg>'
+            ),
+            "D": (
+                '<svg class="form-result-icon" '
+                'viewBox="0 0 16 16" '
+                'aria-hidden="true" focusable="false">'
+                '<path d="M3.5 8H12.5"/>'
+                '</svg>'
+            ),
+            "L": (
+                '<svg class="form-result-icon" '
+                'viewBox="0 0 16 16" '
+                'aria-hidden="true" focusable="false">'
+                '<path d="M4 4L12 12M12 4L4 12"/>'
+                '</svg>'
+            )
         }
         form_classes = {
             "W": "form-win",
@@ -24098,19 +24116,30 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
     }}
     .form-result {{
         --form-color: #94A3B8;
-        display: inline-flex;
+        display: inline-grid;
         width: 19px;
         height: 19px;
         flex: 0 0 19px;
-        align-items: center;
-        justify-content: center;
+        place-items: center;
         box-sizing: border-box;
         border-radius: 50%;
         background: var(--form-color);
         color: #FFFFFF;
-        font-size: 13px;
-        font-weight: 950;
-        line-height: 1;
+        font-size: 0;
+        line-height: 0;
+    }}
+    .form-result-icon {{
+        display: block;
+        width: 12px;
+        height: 12px;
+        margin: 0;
+        padding: 0;
+        overflow: visible;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2.25;
+        stroke-linecap: round;
+        stroke-linejoin: round;
     }}
     .form-result:last-child {{
         box-shadow:
@@ -24383,7 +24412,16 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
                 17px;
 
             font-size:
-                11.5px;
+                0;
+        }}
+
+        .epl-standings-table
+        .form-result-icon {{
+            width:
+                10.5px;
+
+            height:
+                10.5px;
         }}
     
         /* =========================
