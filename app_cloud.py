@@ -1008,7 +1008,7 @@ def get_default_filter_date_for_season(available_dates: list[date]) -> date:
 
 st.set_page_config(
     page_title="EPL Prediction Arena",
-    page_icon="⚽",
+    page_icon="static/epl-app-icon.png",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -4521,7 +4521,7 @@ def inject_prediction_score_stepper_css():
         }
 
         /* =====================================================
-           DẤU : GIỮA HAI TỈ SỐ
+           DẤU - GIỮA HAI TỈ SỐ
            ===================================================== */
 
         div[class*="st-key-prediction_score_row_"]
@@ -4539,11 +4539,11 @@ def inject_prediction_score_stepper_css():
         ):has(
             div[class*="st-key-away_score_shell_"]
         )::after {
-            content: ":";
+            content: "-";
 
             position: absolute !important;
 
-            top: 90px !important;
+            top: 94px !important;
             left: 50% !important;
 
             color:
@@ -4659,7 +4659,7 @@ def inject_prediction_score_stepper_css():
             ):has(
                 div[class*="st-key-away_score_shell_"]
             )::after {
-                top: 83px !important;
+                top: 88px !important;
                 font-size: 23px !important;
             }
         }
