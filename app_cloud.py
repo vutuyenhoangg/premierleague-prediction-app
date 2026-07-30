@@ -10422,7 +10422,7 @@ def render_avatar_popover(user: dict):
 
         div[class*="st-key-top_right_avatar_popover_shell"]
         div[data-testid="stPopover"] > div > button::before {{
-            content: "Kéo để di chuyển · Bấm để đổi avatar";
+            content: "Xem và đổi avatar";
             position: absolute;
             right: 68px;
             top: 50%;
@@ -11163,8 +11163,7 @@ def render_avatar_popover(user: dict):
 
         button.setAttribute(
             "title",
-            "Giữ và kéo để di chuyển. "
-            + "Bấm để đổi avatar."
+            "Xem và đổi avatar"
         );
 
         button.setAttribute(
