@@ -5183,7 +5183,7 @@ def inject_prediction_score_stepper_css():
             ):has(
                 div[class*="st-key-away_score_shell_"]
             )::after {
-                top: 118px !important;
+                top: 124px !important;
             }
         }
         /* =====================================================
