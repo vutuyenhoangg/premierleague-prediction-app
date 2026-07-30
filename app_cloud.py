@@ -25598,17 +25598,17 @@ def render_prediction_round_filter(
         div[class*="st-key-round_leaderboard_filter_"] {
             width: min(520px, 100%) !important;
             margin: -2px 0 18px 0 !important;
-            padding: 10px 12px 11px !important;
-            border: 1px solid rgba(7,17,31,0.10) !important;
-            border-radius: 14px !important;
-            background: rgba(255,255,255,0.90) !important;
-            box-shadow: 0 9px 24px rgba(7,17,31,0.055) !important;
+            padding: 0 !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+            background: transparent !important;
+            box-shadow: none !important;
         }
 
         div[class*="st-key-round_leaderboard_filter_"]
         div[data-testid="stHorizontalBlock"] {
             gap: 8px !important;
-            align-items: flex-end !important;
+            align-items: center !important;
         }
 
         div[class*="st-key-round_leaderboard_filter_"]
@@ -25618,21 +25618,21 @@ def render_prediction_round_filter(
         }
 
         div[class*="st-key-round_leaderboard_filter_"]
-        div[data-testid="stSelectbox"] label {
-            color: #526579 !important;
-            font-size: 11px !important;
-            font-weight: 900 !important;
-            letter-spacing: 0.055em !important;
-            text-transform: uppercase !important;
-        }
-
-        div[class*="st-key-round_leaderboard_filter_"]
         div[data-baseweb="select"] > div {
             min-height: 40px !important;
             border-color: rgba(7,17,31,0.16) !important;
             border-radius: 10px !important;
             background: #FFFFFF !important;
             box-shadow: none !important;
+        }
+
+        div[class*="st-key-round_leaderboard_filter_"]
+        div[data-testid="stSelectbox"] input[readonly] {
+            caret-color: transparent !important;
+            cursor: pointer !important;
+            user-select: none !important;
+            -webkit-user-select: none !important;
+            -webkit-touch-callout: none !important;
         }
 
         div[class*="st-key-round_leaderboard_filter_"]
@@ -25675,7 +25675,7 @@ def render_prediction_round_filter(
         @media (max-width: 768px) {
             div[class*="st-key-round_leaderboard_filter_"] {
                 width: 100% !important;
-                padding: 9px 10px 10px !important;
+                padding: 0 !important;
             }
         }
         </style>
@@ -25753,10 +25753,158 @@ def render_prediction_round_filter(
 
         with select_column:
             selected_round = st.selectbox(
-                "Vòng đấu",
+                "Chọn vòng",
                 options=round_names,
-                key=select_state_key
+                key=select_state_key,
+                label_visibility="collapsed"
             )
+
+    components.html(
+        """
+        <script>
+        (() => {
+            const parentWindow = window.parent;
+            const parentDocument = parentWindow.document;
+
+            const inputSelector = [
+                'div[class*="st-key-round_leaderboard_filter_"]',
+                'div[data-testid="stSelectbox"] input'
+            ].join(" ");
+
+            const readonlyStateKey =
+                "__eplRoundLeaderboardSelectReadonly";
+
+            const previousState =
+                parentWindow[readonlyStateKey];
+
+            if (previousState?.observer) {
+                previousState.observer.disconnect();
+            }
+
+            if (previousState?.listeners) {
+                for (const [eventName, listener] of Object.entries(
+                    previousState.listeners
+                )) {
+                    parentDocument.removeEventListener(
+                        eventName,
+                        listener,
+                        true
+                    );
+                }
+            }
+
+            const isRoundInput = (target) => {
+                return (
+                    target
+                    && target instanceof parentWindow.HTMLInputElement
+                    && target.matches(inputSelector)
+                );
+            };
+
+            const blockKeyboardTextEditing = (event) => {
+                if (!isRoundInput(event.target)) {
+                    return;
+                }
+
+                const blockedKeys = new Set([
+                    "Backspace",
+                    "Delete"
+                ]);
+
+                if (
+                    event.key.length === 1
+                    || blockedKeys.has(event.key)
+                ) {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                }
+            };
+
+            const blockManualTextInput = (event) => {
+                if (!isRoundInput(event.target)) {
+                    return;
+                }
+
+                event.preventDefault();
+                event.stopImmediatePropagation();
+            };
+
+            const listeners = {
+                keydown: blockKeyboardTextEditing,
+                beforeinput: blockManualTextInput,
+                paste: blockManualTextInput,
+                drop: blockManualTextInput
+            };
+
+            for (const [eventName, listener] of Object.entries(
+                listeners
+            )) {
+                parentDocument.addEventListener(
+                    eventName,
+                    listener,
+                    true
+                );
+            }
+
+            const lockInput = (input) => {
+                if (!isRoundInput(input)) {
+                    return;
+                }
+
+                input.readOnly = true;
+                input.setAttribute("readonly", "");
+                input.setAttribute("aria-readonly", "true");
+                input.setAttribute("inputmode", "none");
+                input.setAttribute("autocomplete", "off");
+                input.setAttribute("spellcheck", "false");
+            };
+
+            const applyReadonly = () => {
+                parentDocument
+                    .querySelectorAll(inputSelector)
+                    .forEach(lockInput);
+            };
+
+            let updateScheduled = false;
+
+            const scheduleUpdate = () => {
+                if (updateScheduled) {
+                    return;
+                }
+
+                updateScheduled = true;
+
+                parentWindow.requestAnimationFrame(() => {
+                    updateScheduled = false;
+                    applyReadonly();
+                });
+            };
+
+            applyReadonly();
+
+            const observer =
+                new parentWindow.MutationObserver(
+                    scheduleUpdate
+                );
+
+            observer.observe(
+                parentDocument.body,
+                {
+                    childList: true,
+                    subtree: true
+                }
+            );
+
+            parentWindow[readonlyStateKey] = {
+                observer,
+                listeners
+            };
+        })();
+        </script>
+        """,
+        height=0,
+        scrolling=False
+    )
 
     return selected_round
 
