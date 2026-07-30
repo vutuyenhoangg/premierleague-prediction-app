@@ -5160,7 +5160,7 @@ def inject_prediction_score_stepper_css():
         ):has(
             div[class*="st-key-away_score_shell_"]
         )::after {
-            top: 132px !important;
+            top: 136px !important;
         }
         
         /* Mobile */
