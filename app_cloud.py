@@ -25699,15 +25699,34 @@ def render_prediction_leaderboard_view_switcher() -> str:
         @media (max-width: 768px) {
             div[class*="st-key-prediction_leaderboard_tabs"] {
                 width: 100% !important;
-                margin-bottom: 15px !important;
-                border-radius: 13px !important;
+                margin-bottom: 12px !important;
+                padding: 4px !important;
+                border-radius: 12px !important;
+                box-shadow: 0 7px 20px rgba(7,17,31,0.06) !important;
+            }
+
+            div[class*="st-key-prediction_leaderboard_tabs"]
+            div[data-testid="stHorizontalBlock"] {
+                display: grid !important;
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+                gap: 4px !important;
+                align-items: stretch !important;
+            }
+
+            div[class*="st-key-prediction_leaderboard_tabs"]
+            div[data-testid="stColumn"] {
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: none !important;
+                flex: none !important;
             }
 
             div[class*="st-key-prediction_leaderboard_tabs"]
             div[class*="st-key-prediction_leaderboard_tab_"]
             button {
-                min-height: 40px !important;
-                padding: 0 10px !important;
+                min-height: 38px !important;
+                padding: 0 8px !important;
+                border-radius: 9px !important;
                 font-size: 12.5px !important;
             }
         }
@@ -25868,7 +25887,39 @@ def render_prediction_round_filter(
         @media (max-width: 768px) {
             div[class*="st-key-round_leaderboard_filter_"] {
                 width: 100% !important;
+                margin: 0 0 13px 0 !important;
                 padding: 0 !important;
+            }
+
+            div[class*="st-key-round_leaderboard_filter_"]
+            div[data-testid="stHorizontalBlock"] {
+                display: grid !important;
+                grid-template-columns: 40px minmax(0, 1fr) 40px !important;
+                gap: 8px !important;
+                align-items: center !important;
+            }
+
+            div[class*="st-key-round_leaderboard_filter_"]
+            div[data-testid="stColumn"] {
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: none !important;
+                flex: none !important;
+            }
+
+            div[class*="st-key-round_leaderboard_filter_"]
+            div[data-baseweb="select"] > div {
+                min-height: 40px !important;
+                border-radius: 10px !important;
+            }
+
+            div[class*="st-key-round_leaderboard_filter_"]
+            div[class*="st-key-round_leaderboard_arrow_"]
+            button {
+                width: 40px !important;
+                min-width: 40px !important;
+                height: 40px !important;
+                min-height: 40px !important;
             }
         }
         </style>
@@ -26665,6 +26716,7 @@ def render_round_leaderboard_table(
         )
 
     table_rows = []
+    mobile_rows = []
 
     for _, row in page_df.iterrows():
         rank_value = safe_int(
@@ -26857,6 +26909,64 @@ def render_round_leaderboard_table(
                     {result_prediction_rate * 100:.1f}%
                 </td>
             </tr>
+            """
+        )
+
+        mobile_rows.append(
+            f"""
+            <article class="epl-round-mobile-row {' '.join(row_classes)}">
+                <div class="epl-round-mobile-main">
+                    <span
+                        class="epl-round-mobile-rank"
+                        aria-label="Hạng {rank_value}"
+                    >
+                        {rank_value}
+                    </span>
+
+                    <span
+                        class="epl-round-mobile-avatar"
+                        style="{avatar_style}"
+                        aria-hidden="true"
+                    ></span>
+
+                    <div class="epl-round-mobile-player">
+                        <div class="epl-round-mobile-name-line">
+                            <span class="epl-round-mobile-name">
+                                {escaped_name}
+                            </span>
+                            {champion_crown}
+                            {player_badge}
+                        </div>
+
+                        <span class="epl-round-mobile-meta">
+                            {num_scored} trận đã chấm
+                        </span>
+                    </div>
+
+                    <div
+                        class="epl-round-mobile-score"
+                        aria-label="{round_points} điểm vòng"
+                    >
+                        <strong>{round_points}</strong>
+                        <span>điểm</span>
+                    </div>
+                </div>
+
+                <div class="epl-round-mobile-stats">
+                    <span>
+                        <small>Đúng tỉ số</small>
+                        <strong>{exact_score_count}</strong>
+                    </span>
+                    <span>
+                        <small>Đúng kết quả</small>
+                        <strong>{correct_outcome_count}</strong>
+                    </span>
+                    <span>
+                        <small>Tỷ lệ đúng</small>
+                        <strong>{result_prediction_rate * 100:.1f}%</strong>
+                    </span>
+                </div>
+            </article>
             """
         )
 
@@ -27312,70 +27422,272 @@ def render_round_leaderboard_table(
         font-weight: 900;
     }}
 
+    .epl-round-leaderboard-mobile {{
+        display: none;
+    }}
+
     @media (max-width: 768px) {{
         .epl-round-leaderboard-card {{
-            border-radius: 14px;
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(7,17,31,0.07);
         }}
 
         .epl-round-leaderboard-toolbar {{
-            align-items: flex-start;
-            padding: 12px;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 12px;
+            border-bottom-width: 2px;
+        }}
+
+        .epl-round-leaderboard-toolbar-left {{
+            gap: 5px;
         }}
 
         .epl-round-leaderboard-toolbar-right {{
             justify-content: flex-end;
         }}
 
+        .epl-round-chip {{
+            min-height: 24px;
+            padding: 3px 8px;
+            font-size: 10px;
+        }}
+
+        .epl-round-progress {{
+            font-size: 10px;
+        }}
+
+        .epl-round-status {{
+            min-height: 23px;
+            padding: 3px 7px;
+            font-size: 9px;
+        }}
+
         .epl-round-scroll-hint {{
             display: none;
         }}
 
-        .epl-round-leaderboard-table {{
-            min-width: 1000px;
-            font-size: 12px;
-        }}
-
-        .epl-round-leaderboard-table th,
-        .epl-round-leaderboard-table td {{
-            height: 50px;
-            padding: 8px 9px;
-        }}
-
-        .epl-round-leaderboard-table .col-rank {{
-            width: 52px;
-            min-width: 52px;
-            max-width: 52px;
-        }}
-
-        .epl-round-leaderboard-table .col-player {{
-            width: 184px;
-            min-width: 184px;
-            max-width: 184px;
-        }}
-
-        .epl-round-leaderboard-table .sticky-player {{
-            left: 52px;
-        }}
-
-        .epl-round-leaderboard-card .player-avatar {{
-            width: 28px;
-            height: 28px;
-            margin-right: 7px;
-        }}
-
-        .epl-round-leaderboard-card .player-name {{
-            max-width: 100px;
-        }}
-
-        .epl-round-you-badge {{
+        .epl-round-leaderboard-scroll {{
             display: none;
         }}
 
-        .epl-round-leaderboard-footer {{
-            align-items: flex-start;
+        .epl-round-leaderboard-mobile {{
+            display: block;
+            background: #F5F8FB;
+        }}
+
+        .epl-round-mobile-row {{
+            padding: 11px 12px 10px;
+            border-bottom: 1px solid #E3EAF0;
+            background: #FFFFFF;
+        }}
+
+        .epl-round-mobile-row:nth-child(even) {{
+            background: #F8FAFC;
+        }}
+
+        .epl-round-mobile-row:last-child {{
+            border-bottom: 0;
+        }}
+
+        .epl-round-mobile-row.is-current-user {{
+            background:
+                linear-gradient(
+                    90deg,
+                    #E6F5FB 0%,
+                    #F3FAFD 100%
+                );
+        }}
+
+        .epl-round-mobile-row.is-round-champion {{
+            background:
+                linear-gradient(
+                    90deg,
+                    #FFF8E1 0%,
+                    #FFFDF5 100%
+                );
+        }}
+
+        .epl-round-mobile-row.is-current-user.is-round-champion {{
+            background:
+                linear-gradient(
+                    90deg,
+                    #E7F5FA 0%,
+                    #FFF8E2 100%
+                );
+        }}
+
+        .epl-round-mobile-main {{
+            display: grid;
+            grid-template-columns: 30px 36px minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }}
+
+        .epl-round-mobile-rank {{
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border: 1px solid #D7E1E8;
+            border-radius: 50%;
+            color: #425669;
+            background: #F2F6F9;
+            font-size: 11px;
+            font-weight: 950;
+        }}
+
+        .epl-round-mobile-row.is-rank-1
+        .epl-round-mobile-rank {{
+            color: #704B00;
+            border-color: #E9B91F;
+            background: linear-gradient(145deg,#FFE485,#F5C542);
+        }}
+
+        .epl-round-mobile-row.is-rank-2
+        .epl-round-mobile-rank {{
+            color: #344557;
+            border-color: #B7C5D1;
+            background: linear-gradient(145deg,#F1F5F9,#CBD5E1);
+        }}
+
+        .epl-round-mobile-row.is-rank-3
+        .epl-round-mobile-rank {{
+            color: #562609;
+            border-color: #B9652F;
+            background: linear-gradient(145deg,#E8A06C,#C8753D);
+        }}
+
+        .epl-round-mobile-avatar {{
+            display: inline-block;
+            width: 34px;
+            height: 34px;
+            border: 2px solid #FFFFFF;
+            border-radius: 50%;
+            background-color: #DDE7EF;
+            box-shadow: 0 2px 7px rgba(7,17,31,0.14);
+        }}
+
+        .epl-round-mobile-player {{
+            min-width: 0;
+        }}
+
+        .epl-round-mobile-name-line {{
+            display: flex;
+            align-items: center;
+            min-width: 0;
+        }}
+
+        .epl-round-mobile-name {{
+            min-width: 0;
+            overflow: hidden;
+            color: #142638;
+            font-size: 12px;
+            font-weight: 900;
+            line-height: 1.25;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }}
+
+        .epl-round-mobile-name-line
+        .round-champion-crown {{
+            margin-left: 4px;
+            font-size: 15px;
+        }}
+
+        .epl-round-mobile-name-line
+        .epl-round-you-badge {{
+            margin-left: 5px;
+            padding: 1px 5px;
+            font-size: 7px;
+        }}
+
+        .epl-round-mobile-meta {{
+            display: block;
+            margin-top: 2px;
+            color: #788A9A;
+            font-size: 9.5px;
+            font-weight: 720;
+            line-height: 1.2;
+        }}
+
+        .epl-round-mobile-score {{
+            display: flex;
             flex-direction: column;
-            gap: 3px;
-            padding: 9px 12px;
+            align-items: center;
+            justify-content: center;
+            min-width: 49px;
+            min-height: 41px;
+            padding: 4px 7px;
+            border: 1px solid #E8BD31;
+            border-radius: 10px;
+            color: #07111F;
+            background: #F8D863;
+        }}
+
+        .epl-round-mobile-score strong {{
+            font-size: 16px;
+            font-weight: 950;
+            line-height: 1;
+        }}
+
+        .epl-round-mobile-score span {{
+            margin-top: 2px;
+            font-size: 8px;
+            font-weight: 850;
+            line-height: 1;
+            text-transform: uppercase;
+        }}
+
+        .epl-round-mobile-stats {{
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            margin-top: 8px;
+            padding-top: 7px;
+            border-top: 1px solid rgba(136,157,174,0.18);
+        }}
+
+        .epl-round-mobile-stats > span {{
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            min-width: 0;
+            border-right: 1px solid rgba(136,157,174,0.17);
+        }}
+
+        .epl-round-mobile-stats > span:last-child {{
+            border-right: 0;
+        }}
+
+        .epl-round-mobile-stats small {{
+            overflow: hidden;
+            color: #758797;
+            font-size: 8.5px;
+            font-weight: 760;
+            line-height: 1;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }}
+
+        .epl-round-mobile-stats strong {{
+            color: #17324A;
+            font-size: 11px;
+            font-weight: 950;
+            line-height: 1;
+        }}
+
+        .epl-round-leaderboard-footer {{
+            justify-content: center;
+            padding: 8px 12px;
+            font-size: 10px;
+            text-align: center;
+        }}
+
+        .epl-round-leaderboard-footer > span:last-child {{
+            display: none;
         }}
     }}
     </style>
@@ -27424,6 +27736,13 @@ def render_round_leaderboard_table(
                     {''.join(table_rows)}
                 </tbody>
             </table>
+        </div>
+
+        <div
+            class="epl-round-leaderboard-mobile"
+            aria-label="Bảng xếp hạng theo vòng trên điện thoại"
+        >
+            {''.join(mobile_rows)}
         </div>
 
         <div class="epl-round-leaderboard-footer">
@@ -27486,6 +27805,37 @@ def render_round_leaderboard_table(
             border-color: #E2E8EE !important;
             background: #F4F7F9 !important;
             opacity: 1 !important;
+        }
+
+        @media (max-width: 768px) {
+            div[class*="st-key-round_leaderboard_pagination_"] {
+                max-width: 220px !important;
+                margin-top: 10px !important;
+            }
+
+            div[class*="st-key-round_leaderboard_pagination_"]
+            div[data-testid="stHorizontalBlock"] {
+                display: grid !important;
+                grid-template-columns: 38px minmax(90px, 1fr) 38px !important;
+                gap: 9px !important;
+                align-items: center !important;
+            }
+
+            div[class*="st-key-round_leaderboard_pagination_"]
+            div[data-testid="stColumn"] {
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: none !important;
+                flex: none !important;
+            }
+
+            div[class*="st-key-round_leaderboard_pagination_"]
+            .stButton > button {
+                width: 38px !important;
+                min-width: 38px !important;
+                height: 34px !important;
+                min-height: 34px !important;
+            }
         }
         </style>
         """,
@@ -27571,6 +27921,34 @@ def page_leaderboard():
     render_page_title(
         "Bảng xếp hạng",
         "Xem ai đang dẫn đầu cuộc đua dự đoán."
+    )
+
+    # Chỉ tinh chỉnh tiêu đề của trang BXH trên mobile.
+    # Không có rule desktop và khối CSS chỉ được render khi đang ở trang này.
+    st.markdown(
+        """
+        <style>
+        @media (max-width: 768px) {
+            .wc-page-title {
+                margin: 3px 0 13px 0 !important;
+            }
+
+            .wc-page-title h2 {
+                margin: 0 0 5px 0 !important;
+                font-size: 23px !important;
+                line-height: 1.12 !important;
+                letter-spacing: -0.035em !important;
+            }
+
+            .wc-page-title p {
+                margin: 0 !important;
+                font-size: 12.5px !important;
+                line-height: 1.4 !important;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
     )
 
     season_slug = get_selected_season_slug()
@@ -27821,6 +28199,7 @@ def page_leaderboard():
         )
 
     table_rows = []
+    mobile_rows = []
 
     for _, row in page_df.iterrows():
         rank_value = safe_int(row, "rank")
@@ -28012,6 +28391,72 @@ def page_leaderboard():
                     {result_prediction_rate * 100:.1f}%
                 </td>
             </tr>
+            """
+        )
+
+        champion_meta = (
+            f'<span class="epl-mobile-title-meta">'
+            f'👑 {round_champion_count} VĐ vòng'
+            f'</span>'
+            if round_champion_count > 0
+            else ""
+        )
+
+        mobile_rows.append(
+            f"""
+            <article class="epl-mobile-row {' '.join(row_classes)}">
+                <div class="epl-mobile-main">
+                    <span
+                        class="epl-mobile-rank"
+                        aria-label="Hạng {rank_value}"
+                    >
+                        {rank_value}
+                    </span>
+
+                    <span
+                        class="epl-mobile-avatar"
+                        style="{avatar_style}"
+                        aria-hidden="true"
+                    ></span>
+
+                    <div class="epl-mobile-player">
+                        <div class="epl-mobile-name-line">
+                            <span class="epl-mobile-name">
+                                {escaped_name}
+                            </span>
+                            {player_badge}
+                        </div>
+
+                        <div class="epl-mobile-meta">
+                            <span>{num_scored} trận đã chấm</span>
+                            {champion_meta}
+                        </div>
+                    </div>
+
+                    <div
+                        class="epl-mobile-score"
+                        aria-label="{total_points} điểm"
+                    >
+                        <strong>{total_points}</strong>
+                        <span>điểm</span>
+                    </div>
+                </div>
+
+                <div class="epl-mobile-stats">
+                    <span>
+                        <small>Đúng tỉ số</small>
+                        <strong>{exact_score_count}</strong>
+                    </span>
+                    <span>
+                        <small>Đúng kết quả</small>
+                        <strong>{correct_outcome_count}</strong>
+                    </span>
+                    <span>
+                        <small>Tỷ lệ đúng</small>
+                        <strong>{result_prediction_rate * 100:.1f}%</strong>
+                    </span>
+                </div>
+            </article>
             """
         )
 
@@ -28454,96 +28899,243 @@ def page_leaderboard():
         font-weight: 900;
     }}
 
+    .epl-leaderboard-mobile {{
+        display: none;
+    }}
+
     @media (max-width: 768px) {{
         .epl-leaderboard-card {{
-            border-radius: 14px;
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(7,17,31,0.07);
         }}
 
         .epl-leaderboard-toolbar {{
-            align-items: flex-start;
-            padding: 12px;
+            align-items: center;
+            padding: 10px 12px;
+            border-bottom-width: 2px;
         }}
 
         .epl-leaderboard-toolbar-left {{
-            gap: 6px;
+            gap: 7px;
+        }}
+
+        .epl-leaderboard-season {{
+            min-height: 24px;
+            padding: 3px 8px;
+            font-size: 10px;
+        }}
+
+        .epl-leaderboard-count {{
+            font-size: 10px;
         }}
 
         .epl-leaderboard-scroll-hint {{
-            max-width: 115px;
-            line-height: 1.3;
-            text-align: right;
-            white-space: normal;
-        }}
-
-        .epl-leaderboard-table {{
-            min-width: 1040px;
-            font-size: 12px;
-        }}
-
-        .epl-leaderboard-table th,
-        .epl-leaderboard-table td {{
-            height: 50px;
-            padding: 8px 9px;
-        }}
-
-        .epl-leaderboard-table thead th {{
-            height: 48px;
-            font-size: 10px;
-        }}
-
-        .epl-leaderboard-table .col-rank {{
-            width: 52px;
-            min-width: 52px;
-            max-width: 52px;
-        }}
-
-        .epl-leaderboard-table .col-player {{
-            width: 174px;
-            min-width: 174px;
-            max-width: 174px;
-        }}
-
-        .epl-leaderboard-table .sticky-player {{
-            left: 52px;
-        }}
-
-        .epl-leaderboard-table .col-breakdown {{
-            width: 176px;
-        }}
-
-        .epl-leaderboard-table .col-boosters {{
-            width: 124px;
-        }}
-
-        .breakdown-label {{
-            font-size: 8px;
-        }}
-
-        .star-balance {{
-            min-width: 50px;
-            padding: 0 5px;
-            font-size: 10px;
-        }}
-
-        .player-avatar {{
-            width: 28px;
-            height: 28px;
-            margin-right: 7px;
-        }}
-
-        .player-name {{
-            max-width: 100px;
-        }}
-
-        .epl-you-badge {{
             display: none;
         }}
 
-        .epl-leaderboard-footer {{
-            align-items: flex-start;
+        .epl-leaderboard-scroll {{
+            display: none;
+        }}
+
+        .epl-leaderboard-mobile {{
+            display: block;
+            background: #F5F8FB;
+        }}
+
+        .epl-mobile-row {{
+            padding: 11px 12px 10px;
+            border-bottom: 1px solid #E3EAF0;
+            background: #FFFFFF;
+        }}
+
+        .epl-mobile-row:nth-child(even) {{
+            background: #F8FAFC;
+        }}
+
+        .epl-mobile-row:last-child {{
+            border-bottom: 0;
+        }}
+
+        .epl-mobile-row.is-current-user {{
+            background:
+                linear-gradient(
+                    90deg,
+                    #E5F4FB 0%,
+                    #F3FAFD 100%
+                );
+        }}
+
+        .epl-mobile-main {{
+            display: grid;
+            grid-template-columns: 30px 36px minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }}
+
+        .epl-mobile-rank {{
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border: 1px solid #D7E1E8;
+            border-radius: 50%;
+            color: #425669;
+            background: #F2F6F9;
+            font-size: 11px;
+            font-weight: 950;
+        }}
+
+        .epl-mobile-row.is-rank-1 .epl-mobile-rank {{
+            color: #704B00;
+            border-color: #E9B91F;
+            background: linear-gradient(145deg,#FFE485,#F5C542);
+        }}
+
+        .epl-mobile-row.is-rank-2 .epl-mobile-rank {{
+            color: #344557;
+            border-color: #B7C5D1;
+            background: linear-gradient(145deg,#F1F5F9,#CBD5E1);
+        }}
+
+        .epl-mobile-row.is-rank-3 .epl-mobile-rank {{
+            color: #562609;
+            border-color: #B9652F;
+            background: linear-gradient(145deg,#E8A06C,#C8753D);
+        }}
+
+        .epl-mobile-avatar {{
+            display: inline-block;
+            width: 34px;
+            height: 34px;
+            border: 2px solid #FFFFFF;
+            border-radius: 50%;
+            background-color: #DDE7EF;
+            box-shadow: 0 2px 7px rgba(7,17,31,0.14);
+        }}
+
+        .epl-mobile-player {{
+            min-width: 0;
+        }}
+
+        .epl-mobile-name-line {{
+            display: flex;
+            align-items: center;
+            min-width: 0;
+        }}
+
+        .epl-mobile-name {{
+            min-width: 0;
+            overflow: hidden;
+            color: #142638;
+            font-size: 12px;
+            font-weight: 900;
+            line-height: 1.25;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }}
+
+        .epl-mobile-name-line .epl-you-badge {{
+            margin-left: 5px;
+            padding: 1px 5px;
+            font-size: 7px;
+        }}
+
+        .epl-mobile-meta {{
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+            margin-top: 2px;
+            color: #788A9A;
+            font-size: 9.5px;
+            font-weight: 720;
+            line-height: 1.2;
+            white-space: nowrap;
+        }}
+
+        .epl-mobile-title-meta {{
+            overflow: hidden;
+            color: #8B6410;
+            text-overflow: ellipsis;
+        }}
+
+        .epl-mobile-score {{
+            display: flex;
             flex-direction: column;
-            gap: 3px;
-            padding: 9px 12px;
+            align-items: center;
+            justify-content: center;
+            min-width: 49px;
+            min-height: 41px;
+            padding: 4px 7px;
+            border: 1px solid #E8BD31;
+            border-radius: 10px;
+            color: #07111F;
+            background: #F8D863;
+        }}
+
+        .epl-mobile-score strong {{
+            font-size: 16px;
+            font-weight: 950;
+            line-height: 1;
+        }}
+
+        .epl-mobile-score span {{
+            margin-top: 2px;
+            font-size: 8px;
+            font-weight: 850;
+            line-height: 1;
+            text-transform: uppercase;
+        }}
+
+        .epl-mobile-stats {{
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            margin-top: 8px;
+            padding-top: 7px;
+            border-top: 1px solid rgba(136,157,174,0.18);
+        }}
+
+        .epl-mobile-stats > span {{
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            min-width: 0;
+            border-right: 1px solid rgba(136,157,174,0.17);
+        }}
+
+        .epl-mobile-stats > span:last-child {{
+            border-right: 0;
+        }}
+
+        .epl-mobile-stats small {{
+            overflow: hidden;
+            color: #758797;
+            font-size: 8.5px;
+            font-weight: 760;
+            line-height: 1;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }}
+
+        .epl-mobile-stats strong {{
+            color: #17324A;
+            font-size: 11px;
+            font-weight: 950;
+            line-height: 1;
+        }}
+
+        .epl-leaderboard-footer {{
+            justify-content: center;
+            padding: 8px 12px;
+            font-size: 10px;
+            text-align: center;
+        }}
+
+        .epl-leaderboard-footer > span:last-child {{
+            display: none;
         }}
     }}
     </style>
@@ -28612,6 +29204,13 @@ def page_leaderboard():
                     {''.join(table_rows)}
                 </tbody>
             </table>
+        </div>
+
+        <div
+            class="epl-leaderboard-mobile"
+            aria-label="Bảng xếp hạng tổng trên điện thoại"
+        >
+            {''.join(mobile_rows)}
         </div>
 
         <div class="epl-leaderboard-footer">
@@ -28683,6 +29282,27 @@ def page_leaderboard():
         }
 
         @media (max-width: 768px) {
+            div[class*="st-key-leaderboard_pagination_"] {
+                max-width: 220px !important;
+                margin-top: 10px !important;
+            }
+
+            div[class*="st-key-leaderboard_pagination_"]
+            div[data-testid="stHorizontalBlock"] {
+                display: grid !important;
+                grid-template-columns: 38px minmax(90px, 1fr) 38px !important;
+                gap: 9px !important;
+                align-items: center !important;
+            }
+
+            div[class*="st-key-leaderboard_pagination_"]
+            div[data-testid="stColumn"] {
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: none !important;
+                flex: none !important;
+            }
+
             div[class*="st-key-leaderboard_pagination_"]
             .stButton > button {
                 width: 38px !important;
