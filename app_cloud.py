@@ -23919,29 +23919,10 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
             "D": "Hòa",
             "L": "Thua"
         }
-        form_symbols = {
-            "W": (
-                '<svg class="form-result-icon" '
-                'viewBox="0 0 16 16" '
-                'aria-hidden="true" focusable="false">'
-                '<path d="M3.25 8.1L6.4 11L12.75 4.8"/>'
-                '</svg>'
-            ),
-            "D": (
-                '<svg class="form-result-icon" '
-                'viewBox="0 0 16 16" '
-                'aria-hidden="true" focusable="false">'
-                '<path d="M3.5 8H12.5"/>'
-                '</svg>'
-            ),
-            "L": (
-                '<svg class="form-result-icon" '
-                'viewBox="0 0 16 16" '
-                'aria-hidden="true" focusable="false">'
-                '<path d="M4 4L12 12M12 4L4 12"/>'
-                '</svg>'
-            )
-        }
+        form_symbol_html = (
+            '<span class="form-result-icon" '
+            'aria-hidden="true"></span>'
+        )
         form_classes = {
             "W": "form-win",
             "D": "form-draw",
@@ -23956,7 +23937,7 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
                     'role="listitem" '
                     f'title="{form_labels[result]}" '
                     f'aria-label="{form_labels[result]}">'
-                    f'{form_symbols[result]}'
+                    f'{form_symbol_html}'
                     '</span>'
                 )
                 for result in form_results
@@ -24129,17 +24110,60 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
         line-height: 0;
     }}
     .form-result-icon {{
+        position: relative;
         display: block;
         width: 12px;
         height: 12px;
+        flex: 0 0 12px;
         margin: 0;
         padding: 0;
-        overflow: visible;
-        fill: none;
-        stroke: currentColor;
-        stroke-width: 2.25;
-        stroke-linecap: round;
-        stroke-linejoin: round;
+        overflow: hidden;
+        color: #FFFFFF;
+    }}
+    .form-result-icon::before,
+    .form-result-icon::after {{
+        content: "";
+        position: absolute;
+        display: block;
+        box-sizing: border-box;
+        background: currentColor;
+        transform-origin: center;
+    }}
+    .form-win .form-result-icon::before {{
+        left: 5%;
+        top: 58%;
+        width: 42%;
+        height: 18%;
+        transform: rotate(45deg);
+    }}
+    .form-win .form-result-icon::after {{
+        left: 30%;
+        top: 44%;
+        width: 72%;
+        height: 18%;
+        transform: rotate(-45deg);
+    }}
+    .form-draw .form-result-icon::before {{
+        left: 12%;
+        top: 41%;
+        width: 76%;
+        height: 18%;
+    }}
+    .form-draw .form-result-icon::after {{
+        display: none;
+    }}
+    .form-loss .form-result-icon::before,
+    .form-loss .form-result-icon::after {{
+        left: 7.5%;
+        top: 41%;
+        width: 85%;
+        height: 18%;
+    }}
+    .form-loss .form-result-icon::before {{
+        transform: rotate(45deg);
+    }}
+    .form-loss .form-result-icon::after {{
+        transform: rotate(-45deg);
     }}
     .form-result:last-child {{
         box-shadow:
