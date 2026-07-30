@@ -9607,17 +9607,19 @@ def get_star_radio_css(
 
 def get_prediction_action_spacing_css():
     """
-    Mỗi phần tử trong list là một rule độc lập để stylable_container
-    tự thêm scope cho TỪNG selector. Không gộp nhiều selector vào cùng
-    một chuỗi vì các selector phía sau sẽ thoát scope và ảnh hưởng toàn app.
+    CSS bố cục riêng cho cụm nút Lưu/Cập nhật/Xóa.
+
+    Mỗi selector nằm trong một CSS block độc lập để stylable_container
+    thêm scope cho chính selector đó. Tuyệt đối không gộp các selector
+    button/column vào một chuỗi CSS vì chúng có thể thoát scope.
     """
     return [
         """
         {
             width: fit-content !important;
             max-width: 100% !important;
-            margin-top: 12px !important;
-            margin-bottom: 14px !important;
+            margin-top: 14px !important;
+            margin-bottom: 16px !important;
         }
         """,
         """
@@ -9626,7 +9628,7 @@ def get_prediction_action_spacing_css():
             max-width: 100% !important;
             align-items: center !important;
             flex-wrap: nowrap !important;
-            gap: 7px !important;
+            gap: 9px !important;
         }
         """,
         """
@@ -9646,30 +9648,31 @@ def get_prediction_action_spacing_css():
 
 def get_prediction_primary_button_css():
     """
-    CSS chỉ dành cho nút Lưu/Cập nhật trong container riêng của từng trận.
+    CSS chỉ dành cho nút Lưu/Cập nhật trong đúng card trận đấu.
+    Kích thước và màu sắc bám theo ảnh UI mẫu.
     """
     return [
         """
         button {
             width: auto !important;
             min-width: 0 !important;
-            height: 34px !important;
-            min-height: 34px !important;
-            padding: 0 13px !important;
+            height: 42px !important;
+            min-height: 42px !important;
+            padding: 0 15px !important;
             display: inline-flex !important;
             align-items: center !important;
             justify-content: center !important;
-            gap: 7px !important;
+            gap: 8px !important;
             position: relative !important;
             overflow: hidden !important;
-            border: 1px solid rgba(245, 197, 66, 0.78) !important;
-            border-radius: 10px !important;
-            background: linear-gradient(135deg, #37003C 0%, #54105D 100%) !important;
+            border: 1px solid rgba(245, 197, 66, 0.82) !important;
+            border-radius: 9px !important;
+            background: linear-gradient(135deg, #37003C 0%, #53005B 100%) !important;
             color: #FFFFFF !important;
-            box-shadow: 0 4px 10px rgba(55, 0, 60, 0.15) !important;
-            font-size: 12.5px !important;
+            box-shadow: 0 4px 10px rgba(55, 0, 60, 0.17) !important;
+            font-size: 15px !important;
             font-weight: 800 !important;
-            letter-spacing: 0.005em !important;
+            letter-spacing: 0.002em !important;
             line-height: 1 !important;
             white-space: nowrap !important;
             transition:
@@ -9682,16 +9685,16 @@ def get_prediction_primary_button_css():
         """
         button::before {
             content: "✓";
-            width: 15px;
-            height: 15px;
-            min-width: 15px;
+            width: 19px;
+            height: 19px;
+            min-width: 19px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             border-radius: 999px;
             background: #00FF85;
             color: #37003C;
-            font-size: 10px;
+            font-size: 12px;
             font-weight: 950;
             line-height: 1;
         }
@@ -9710,9 +9713,9 @@ def get_prediction_primary_button_css():
         """
         button:hover {
             border-color: #F5C542 !important;
-            background: linear-gradient(135deg, #430049 0%, #65146F 100%) !important;
+            background: linear-gradient(135deg, #420048 0%, #65006E 100%) !important;
             color: #FFFFFF !important;
-            box-shadow: 0 6px 14px rgba(55, 0, 60, 0.20) !important;
+            box-shadow: 0 6px 14px rgba(55, 0, 60, 0.21) !important;
             transform: translateY(-1px) !important;
         }
         """,
@@ -9727,48 +9730,32 @@ def get_prediction_primary_button_css():
             outline: 3px solid rgba(245, 197, 66, 0.30) !important;
             outline-offset: 2px !important;
         }
-        """,
-        """
-        button:disabled {
-            border-color: rgba(148, 163, 184, 0.42) !important;
-            background: #E2E8F0 !important;
-            color: #94A3B8 !important;
-            box-shadow: none !important;
-            transform: none !important;
-            cursor: not-allowed !important;
-        }
-        """,
-        """
-        button:disabled::before {
-            background: #CBD5E1;
-            color: #94A3B8;
-        }
         """
     ]
 
 def get_prediction_delete_button_css():
     """
-    CSS chỉ dành cho nút Xóa trong container riêng của từng trận.
+    CSS chỉ dành cho nút Xóa: nút vuông nhỏ, chỉ hiển thị icon.
     """
     return [
         """
         button {
-            width: 32px !important;
-            min-width: 32px !important;
-            max-width: 32px !important;
-            height: 32px !important;
-            min-height: 32px !important;
-            max-height: 32px !important;
+            width: 42px !important;
+            min-width: 42px !important;
+            max-width: 42px !important;
+            height: 42px !important;
+            min-height: 42px !important;
+            max-height: 42px !important;
             padding: 0 !important;
             display: inline-flex !important;
             align-items: center !important;
             justify-content: center !important;
             position: relative !important;
             overflow: hidden !important;
-            border: 1px solid rgba(220, 38, 38, 0.24) !important;
-            border-radius: 10px !important;
-            background: rgba(255, 255, 255, 0.76) !important;
-            color: #DC2626 !important;
+            border: 1px solid rgba(244, 63, 94, 0.58) !important;
+            border-radius: 9px !important;
+            background: rgba(255, 255, 255, 0.72) !important;
+            color: #F43F5E !important;
             box-shadow: none !important;
             font-size: 0 !important;
             line-height: 0 !important;
@@ -9783,8 +9770,8 @@ def get_prediction_delete_button_css():
         """
         button::before {
             content: "";
-            width: 15px;
-            height: 15px;
+            width: 18px;
+            height: 18px;
             display: block;
             background: currentColor;
             -webkit-mask:
@@ -9810,10 +9797,10 @@ def get_prediction_delete_button_css():
         """,
         """
         button:hover {
-            border-color: rgba(220, 38, 38, 0.56) !important;
-            background: rgba(254, 226, 226, 0.82) !important;
-            color: #B91C1C !important;
-            box-shadow: 0 4px 10px rgba(185, 28, 28, 0.10) !important;
+            border-color: rgba(225, 29, 72, 0.78) !important;
+            background: rgba(255, 228, 230, 0.86) !important;
+            color: #E11D48 !important;
+            box-shadow: 0 4px 10px rgba(225, 29, 72, 0.12) !important;
             transform: translateY(-1px) !important;
         }
         """,
@@ -9825,7 +9812,7 @@ def get_prediction_delete_button_css():
         """,
         """
         button:focus-visible {
-            outline: 3px solid rgba(220, 38, 38, 0.16) !important;
+            outline: 3px solid rgba(244, 63, 94, 0.18) !important;
             outline-offset: 2px !important;
         }
         """
@@ -21530,7 +21517,10 @@ def render_match_card(
                     key=f"prediction_action_spacing_shell_{match_id}",
                     css_styles=get_prediction_action_spacing_css()
                 ):
-                    save_col, delete_col = st.columns([1, 1], gap="small")
+                    save_col, delete_col = st.columns(
+                        [1, 1],
+                        gap="small"
+                    )
 
                     with save_col:
                         with stylable_container(
