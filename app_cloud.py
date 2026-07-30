@@ -9648,6 +9648,91 @@ def get_prediction_action_spacing_css():
         """
     ]
 
+def inject_mobile_prediction_action_buttons_css():
+    """
+    Chỉ chỉnh bố cục cụm nút dự đoán trên mobile.
+
+    Selector được khóa bằng key riêng của cụm hành động trong từng card,
+    nên không tác động tới nút, cột hoặc form ở khu vực khác.
+    """
+    st.markdown(
+        """
+        <style>
+        @media (max-width: 768px) {
+            /*
+             * Vỏ cụm nút chiếm hết chiều ngang khả dụng để có một
+             * mép phải ổn định, nhưng các nút vẫn giữ nguyên kích thước.
+             */
+            div[class*="st-key-prediction_action_spacing_shell_"] {
+                width: 100% !important;
+                max-width: 100% !important;
+
+                display: flex !important;
+                flex-direction: column !important;
+                align-items: flex-end !important;
+
+                margin-right: 0 !important;
+                margin-left: 0 !important;
+
+                padding-right: 4px !important;
+                box-sizing: border-box !important;
+            }
+
+            /*
+             * Giữ hai nút trên cùng một hàng, neo cả hàng sang phải
+             * và tạo khoảng cách đủ rõ để chúng không chồng chéo.
+             */
+            div[class*="st-key-prediction_action_spacing_shell_"]
+            div[data-testid="stHorizontalBlock"] {
+                width: fit-content !important;
+                min-width: 0 !important;
+                max-width: 100% !important;
+
+                display: flex !important;
+                flex-direction: row !important;
+                flex-wrap: nowrap !important;
+                justify-content: flex-end !important;
+                align-items: center !important;
+
+                gap: 18px !important;
+                column-gap: 18px !important;
+
+                margin-right: 0 !important;
+                margin-left: auto !important;
+            }
+
+            /*
+             * Vô hiệu hóa kích thước responsive mặc định của st.columns
+             * chỉ trong cụm nút này.
+             */
+            div[class*="st-key-prediction_action_spacing_shell_"]
+            div[data-testid="stHorizontalBlock"]
+            > :is(
+                div[data-testid="stColumn"],
+                div[data-testid="column"]
+            ) {
+                width: auto !important;
+                min-width: 0 !important;
+                max-width: none !important;
+
+                flex: 0 0 auto !important;
+
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            div[class*="st-key-prediction_action_spacing_shell_"]
+            div[data-testid="stFormSubmitButton"] {
+                width: auto !important;
+                min-width: 0 !important;
+                margin: 0 !important;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
 def get_prediction_primary_button_css():
     """
     CSS chỉ dành cho nút Lưu/Cập nhật trong đúng card trận đấu.
@@ -31906,6 +31991,7 @@ def main():
 
             inject_mobile_prediction_score_row_css()
             inject_prediction_score_stepper_css()
+            inject_mobile_prediction_action_buttons_css()
             inject_prediction_score_readonly_script()
             inject_mobile_team_name_display_script()
 
