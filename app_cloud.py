@@ -10422,7 +10422,7 @@ def render_avatar_popover(user: dict):
 
         div[class*="st-key-top_right_avatar_popover_shell"]
         div[data-testid="stPopover"] > div > button::before {{
-            content: "Xem và đổi avatar";
+            content: "Kéo để di chuyển · Bấm để đổi avatar";
             position: absolute;
             right: 68px;
             top: 50%;
@@ -10462,6 +10462,26 @@ def render_avatar_popover(user: dict):
         div[data-testid="stPopover"] > div > button {{
             transform: scale(1.045) !important;
             transition: none !important;
+        }}
+
+        div[class*="st-key-top_right_avatar_popover_shell"]
+        .epl-avatar-boundary-blocked
+        div[data-testid="stPopover"] > button,
+
+        div[class*="st-key-top_right_avatar_popover_shell"]
+        .epl-avatar-boundary-blocked
+        div[data-testid="stPopover"] > div > button,
+
+        div[class*="st-key-top_right_avatar_popover_shell"]
+        div[data-testid="stPopover"] > button.epl-avatar-boundary-blocked,
+
+        div[class*="st-key-top_right_avatar_popover_shell"]
+        div[data-testid="stPopover"] > div > button.epl-avatar-boundary-blocked {{
+            border-color: #F5C542 !important;
+            outline-color: rgba(245, 197, 66, 1) !important;
+            box-shadow:
+                0 16px 36px rgba(7, 17, 31, 0.30),
+                0 0 0 8px rgba(245, 197, 66, 0.18) !important;
         }}
 
         div[class*="st-key-top_right_avatar_popover_shell"]
@@ -10773,6 +10793,8 @@ def render_avatar_popover(user: dict):
             __AVATAR_DRAG_STORAGE_KEY__;
 
         const edgeGap = 8;
+        const headerGap = 6;
+        const obstacleGap = 8;
         const dragThreshold = 6;
 
         let activePointer = null;
@@ -10782,12 +10804,163 @@ def render_avatar_popover(user: dict):
         let mutationObserver = null;
         let cleaned = false;
 
-        const clampPosition = (
-            proposedLeft,
-            proposedTop
+        const createBoundaryGuide = (
+            guideName
         ) => {
+            const guide =
+                document.createElement("div");
+
+            guide.dataset.eplAvatarBoundary =
+                guideName;
+
+            Object.assign(
+                guide.style,
+                {
+                    position: "fixed",
+                    pointerEvents: "none",
+                    opacity: "0",
+                    visibility: "hidden",
+                    zIndex: "999997",
+                    transition:
+                        "opacity 120ms ease"
+                }
+            );
+
+            document.body.appendChild(guide);
+
+            return guide;
+        };
+
+        const headerBoundaryGuide =
+            createBoundaryGuide("header");
+
+        const checkinBoundaryGuide =
+            createBoundaryGuide("checkin");
+
+        Object.assign(
+            headerBoundaryGuide.style,
+            {
+                height: "2px",
+                borderRadius: "999px",
+                background:
+                    "linear-gradient("
+                    + "90deg, transparent, "
+                    + "rgba(245, 197, 66, 0.92), "
+                    + "transparent)",
+                boxShadow:
+                    "0 0 12px "
+                    + "rgba(245, 197, 66, 0.30)"
+            }
+        );
+
+        Object.assign(
+            checkinBoundaryGuide.style,
+            {
+                border:
+                    "2px solid "
+                    + "rgba(245, 197, 66, 0.86)",
+                borderRadius: "999px",
+                background:
+                    "rgba(245, 197, 66, 0.06)",
+                boxShadow:
+                    "0 0 0 4px "
+                    + "rgba(245, 197, 66, 0.08)"
+            }
+        );
+
+        const getVisibleRect = (
+            element
+        ) => {
+            if (!element) {
+                return null;
+            }
+
+            const style =
+                window.getComputedStyle(element);
+
+            if (
+                style.display === "none"
+                || style.visibility === "hidden"
+            ) {
+                return null;
+            }
+
+            const rect =
+                element.getBoundingClientRect();
+
+            if (
+                rect.width <= 0
+                || rect.height <= 0
+            ) {
+                return null;
+            }
+
+            return rect;
+        };
+
+        const getHeaderRect = () => {
+            const candidates =
+                document.querySelectorAll(
+                    'header[data-testid="stHeader"], '
+                    + '[data-testid="stHeader"]'
+                );
+
+            for (const candidate of candidates) {
+                const rect =
+                    getVisibleRect(candidate);
+
+                if (rect) {
+                    return rect;
+                }
+            }
+
+            return null;
+        };
+
+        const getCheckinObstacle = () => {
+            const checkinShell =
+                document.querySelector(
+                    'div[class*="st-key-'
+                    + 'daily_checkin_shortcut_button"]'
+                );
+
+            if (!checkinShell) {
+                return null;
+            }
+
+            const checkinButton =
+                checkinShell.querySelector("button");
+
+            const rect =
+                getVisibleRect(checkinButton)
+                || getVisibleRect(checkinShell);
+
+            if (!rect) {
+                return null;
+            }
+
+            return {
+                left: rect.left - obstacleGap,
+                top: rect.top - obstacleGap,
+                right: rect.right + obstacleGap,
+                bottom: rect.bottom + obstacleGap
+            };
+        };
+
+        const getMovementBounds = () => {
             const shellRect =
                 shell.getBoundingClientRect();
+
+            const headerRect =
+                getHeaderRect();
+
+            const minimumTop =
+                headerRect
+                ? Math.ceil(
+                    headerRect.bottom
+                    + headerGap
+                )
+                : edgeGap;
 
             const maxLeft =
                 Math.max(
@@ -10806,23 +10979,491 @@ def render_avatar_popover(user: dict):
                 );
 
             return {
-                left: Math.min(
+                minLeft: edgeGap,
+                minTop: Math.min(
                     Math.max(
-                        Number(proposedLeft)
-                            || edgeGap,
-                        edgeGap
-                    ),
-                    maxLeft
-                ),
-                top: Math.min(
-                    Math.max(
-                        Number(proposedTop)
-                            || edgeGap,
-                        edgeGap
+                        edgeGap,
+                        minimumTop
                     ),
                     maxTop
-                )
+                ),
+                maxLeft,
+                maxTop,
+                shellWidth: shellRect.width,
+                shellHeight: shellRect.height,
+                headerRect
             };
+        };
+
+        const clampNumber = (
+            value,
+            minimum,
+            maximum
+        ) => Math.min(
+            Math.max(
+                Number.isFinite(Number(value))
+                    ? Number(value)
+                    : minimum,
+                minimum
+            ),
+            maximum
+        );
+
+        const clampToBounds = (
+            left,
+            top,
+            bounds
+        ) => ({
+            left: clampNumber(
+                left,
+                bounds.minLeft,
+                bounds.maxLeft
+            ),
+            top: clampNumber(
+                top,
+                bounds.minTop,
+                bounds.maxTop
+            )
+        });
+
+        const getForbiddenTopLeftRect = (
+            obstacle,
+            bounds
+        ) => {
+            if (!obstacle) {
+                return null;
+            }
+
+            return {
+                left:
+                    obstacle.left
+                    - bounds.shellWidth,
+                top:
+                    obstacle.top
+                    - bounds.shellHeight,
+                right: obstacle.right,
+                bottom: obstacle.bottom
+            };
+        };
+
+        const pointInsideRect = (
+            point,
+            rect
+        ) => (
+            point.left > rect.left
+            && point.left < rect.right
+            && point.top > rect.top
+            && point.top < rect.bottom
+        );
+
+        const sweepPointAgainstRect = (
+            start,
+            end,
+            rect
+        ) => {
+            if (
+                !start
+                || pointInsideRect(start, rect)
+            ) {
+                return null;
+            }
+
+            const deltaLeft =
+                end.left - start.left;
+
+            const deltaTop =
+                end.top - start.top;
+
+            let entryTime = 0;
+            let exitTime = 1;
+
+            const axes = [
+                {
+                    start: start.left,
+                    delta: deltaLeft,
+                    minimum: rect.left,
+                    maximum: rect.right
+                },
+                {
+                    start: start.top,
+                    delta: deltaTop,
+                    minimum: rect.top,
+                    maximum: rect.bottom
+                }
+            ];
+
+            for (const axis of axes) {
+                if (
+                    Math.abs(axis.delta)
+                    < 0.001
+                ) {
+                    if (
+                        axis.start
+                            <= axis.minimum
+                        || axis.start
+                            >= axis.maximum
+                    ) {
+                        return null;
+                    }
+
+                    continue;
+                }
+
+                const firstTime =
+                    (
+                        axis.minimum
+                        - axis.start
+                    )
+                    / axis.delta;
+
+                const secondTime =
+                    (
+                        axis.maximum
+                        - axis.start
+                    )
+                    / axis.delta;
+
+                const axisEntry =
+                    Math.min(
+                        firstTime,
+                        secondTime
+                    );
+
+                const axisExit =
+                    Math.max(
+                        firstTime,
+                        secondTime
+                    );
+
+                entryTime =
+                    Math.max(
+                        entryTime,
+                        axisEntry
+                    );
+
+                exitTime =
+                    Math.min(
+                        exitTime,
+                        axisExit
+                    );
+
+                if (entryTime > exitTime) {
+                    return null;
+                }
+            }
+
+            if (
+                entryTime < 0
+                || entryTime > 1
+            ) {
+                return null;
+            }
+
+            const probeTime =
+                Math.min(
+                    1,
+                    entryTime + 0.0001
+                );
+
+            const probePoint = {
+                left:
+                    start.left
+                    + deltaLeft * probeTime,
+                top:
+                    start.top
+                    + deltaTop * probeTime
+            };
+
+            if (
+                !pointInsideRect(
+                    probePoint,
+                    rect
+                )
+            ) {
+                return null;
+            }
+
+            return {
+                left:
+                    start.left
+                    + deltaLeft * entryTime,
+                top:
+                    start.top
+                    + deltaTop * entryTime
+            };
+        };
+
+        const moveOutsideForbiddenRect = (
+            position,
+            forbiddenRect,
+            bounds
+        ) => {
+            if (
+                !pointInsideRect(
+                    position,
+                    forbiddenRect
+                )
+            ) {
+                return position;
+            }
+
+            const candidates = [
+                {
+                    left: forbiddenRect.left,
+                    top: position.top
+                },
+                {
+                    left: forbiddenRect.right,
+                    top: position.top
+                },
+                {
+                    left: position.left,
+                    top: forbiddenRect.top
+                },
+                {
+                    left: position.left,
+                    top: forbiddenRect.bottom
+                }
+            ]
+                .map(
+                    candidate =>
+                        clampToBounds(
+                            candidate.left,
+                            candidate.top,
+                            bounds
+                        )
+                )
+                .filter(
+                    candidate =>
+                        !pointInsideRect(
+                            candidate,
+                            forbiddenRect
+                        )
+                );
+
+            if (!candidates.length) {
+                return clampToBounds(
+                    bounds.minLeft,
+                    bounds.minTop,
+                    bounds
+                );
+            }
+
+            candidates.sort(
+                (
+                    firstCandidate,
+                    secondCandidate
+                ) => {
+                    const firstDistance =
+                        Math.hypot(
+                            firstCandidate.left
+                                - position.left,
+                            firstCandidate.top
+                                - position.top
+                        );
+
+                    const secondDistance =
+                        Math.hypot(
+                            secondCandidate.left
+                                - position.left,
+                            secondCandidate.top
+                                - position.top
+                        );
+
+                    return (
+                        firstDistance
+                        - secondDistance
+                    );
+                }
+            );
+
+            return candidates[0];
+        };
+
+        const constrainPosition = (
+            proposedLeft,
+            proposedTop,
+            previousPosition = null,
+            blockCrossing = false
+        ) => {
+            const bounds =
+                getMovementBounds();
+
+            const requestedPosition = {
+                left: Number(proposedLeft),
+                top: Number(proposedTop)
+            };
+
+            let position =
+                clampToBounds(
+                    requestedPosition.left,
+                    requestedPosition.top,
+                    bounds
+                );
+
+            let blocked = (
+                position.left
+                    !== requestedPosition.left
+                || position.top
+                    !== requestedPosition.top
+            );
+
+            const obstacle =
+                getCheckinObstacle();
+
+            const forbiddenRect =
+                getForbiddenTopLeftRect(
+                    obstacle,
+                    bounds
+                );
+
+            if (forbiddenRect) {
+                const safePreviousPosition =
+                    previousPosition
+                    ? clampToBounds(
+                        previousPosition.left,
+                        previousPosition.top,
+                        bounds
+                    )
+                    : null;
+
+                const collisionPoint =
+                    blockCrossing
+                    ? sweepPointAgainstRect(
+                        safePreviousPosition,
+                        position,
+                        forbiddenRect
+                    )
+                    : null;
+
+                if (collisionPoint) {
+                    position =
+                        clampToBounds(
+                            collisionPoint.left,
+                            collisionPoint.top,
+                            bounds
+                        );
+
+                    blocked = true;
+                } else if (
+                    pointInsideRect(
+                        position,
+                        forbiddenRect
+                    )
+                ) {
+                    position =
+                        moveOutsideForbiddenRect(
+                            position,
+                            forbiddenRect,
+                            bounds
+                        );
+
+                    blocked = true;
+                }
+            }
+
+            return {
+                ...position,
+                blocked,
+                bounds,
+                obstacle
+            };
+        };
+
+        const updateBoundaryGuides = () => {
+            const bounds =
+                getMovementBounds();
+
+            const headerRect =
+                bounds.headerRect;
+
+            headerBoundaryGuide.style.left =
+                (
+                    headerRect
+                    ? Math.max(0, headerRect.left)
+                    : 0
+                )
+                + "px";
+
+            headerBoundaryGuide.style.width =
+                (
+                    headerRect
+                    ? Math.min(
+                        window.innerWidth
+                            - Math.max(
+                                0,
+                                headerRect.left
+                            ),
+                        headerRect.width
+                    )
+                    : window.innerWidth
+                )
+                + "px";
+
+            headerBoundaryGuide.style.top =
+                (bounds.minTop - 1) + "px";
+
+            const obstacle =
+                getCheckinObstacle();
+
+            if (obstacle) {
+                checkinBoundaryGuide.style.left =
+                    obstacle.left + "px";
+
+                checkinBoundaryGuide.style.top =
+                    obstacle.top + "px";
+
+                checkinBoundaryGuide.style.width =
+                    (
+                        obstacle.right
+                        - obstacle.left
+                    )
+                    + "px";
+
+                checkinBoundaryGuide.style.height =
+                    (
+                        obstacle.bottom
+                        - obstacle.top
+                    )
+                    + "px";
+            }
+
+            return Boolean(obstacle);
+        };
+
+        const showBoundaryGuides = () => {
+            const hasCheckinObstacle =
+                updateBoundaryGuides();
+
+            headerBoundaryGuide.style.visibility =
+                "visible";
+
+            headerBoundaryGuide.style.opacity =
+                "1";
+
+            checkinBoundaryGuide.style.visibility =
+                hasCheckinObstacle
+                ? "visible"
+                : "hidden";
+
+            checkinBoundaryGuide.style.opacity =
+                hasCheckinObstacle
+                ? "1"
+                : "0";
+        };
+
+        const hideBoundaryGuides = () => {
+            headerBoundaryGuide.style.opacity =
+                "0";
+
+            headerBoundaryGuide.style.visibility =
+                "hidden";
+
+            checkinBoundaryGuide.style.opacity =
+                "0";
+
+            checkinBoundaryGuide.style.visibility =
+                "hidden";
         };
 
         const savePosition = (
@@ -10851,12 +11492,16 @@ def render_avatar_popover(user: dict):
         const applyPosition = (
             proposedLeft,
             proposedTop,
-            shouldSave = false
+            shouldSave = false,
+            previousPosition = null,
+            blockCrossing = false
         ) => {
             const position =
-                clampPosition(
+                constrainPosition(
                     proposedLeft,
-                    proposedTop
+                    proposedTop,
+                    previousPosition,
+                    blockCrossing
                 );
 
             shell.style.setProperty(
@@ -10881,6 +11526,14 @@ def render_avatar_popover(user: dict):
                 "bottom",
                 "auto",
                 "important"
+            );
+
+            button.classList.toggle(
+                "epl-avatar-boundary-blocked",
+                Boolean(
+                    dragStarted
+                    && position.blocked
+                )
             );
 
             if (shouldSave) {
@@ -10976,6 +11629,12 @@ def render_avatar_popover(user: dict):
             shell.classList.remove(
                 "epl-avatar-dragging"
             );
+
+            button.classList.remove(
+                "epl-avatar-boundary-blocked"
+            );
+
+            hideBoundaryGuides();
         };
 
         const onPointerDown = (
@@ -11037,15 +11696,25 @@ def render_avatar_popover(user: dict):
                 "epl-avatar-dragging"
             );
 
+            showBoundaryGuides();
+
             event.preventDefault();
             event.stopPropagation();
+
+            const previousRect =
+                shell.getBoundingClientRect();
 
             applyPosition(
                 activePointer.startLeft
                     + deltaX,
                 activePointer.startTop
                     + deltaY,
-                false
+                false,
+                {
+                    left: previousRect.left,
+                    top: previousRect.top
+                },
+                true
             );
         };
 
@@ -11082,7 +11751,7 @@ def render_avatar_popover(user: dict):
             event.stopImmediatePropagation();
         };
 
-        const keepInsideViewport = () => {
+        const keepInsideAllowedArea = () => {
             cancelAnimationFrame(
                 resizeFrame
             );
@@ -11099,6 +11768,10 @@ def render_avatar_popover(user: dict):
                             currentRect.top,
                             true
                         );
+
+                        if (dragStarted) {
+                            showBoundaryGuides();
+                        }
                     }
                 );
         };
@@ -11145,25 +11818,29 @@ def render_avatar_popover(user: dict):
 
             window.removeEventListener(
                 "resize",
-                keepInsideViewport
+                keepInsideAllowedArea
             );
 
             if (window.visualViewport) {
                 window.visualViewport
                     .removeEventListener(
                         "resize",
-                        keepInsideViewport
+                        keepInsideAllowedArea
                     );
             }
 
             if (mutationObserver) {
                 mutationObserver.disconnect();
             }
+
+            headerBoundaryGuide.remove();
+            checkinBoundaryGuide.remove();
         };
 
         button.setAttribute(
             "title",
-            "Xem và đổi avatar"
+            "Giữ và kéo để di chuyển. "
+            + "Bấm để đổi avatar."
         );
 
         button.setAttribute(
@@ -11206,17 +11883,17 @@ def render_avatar_popover(user: dict):
 
         window.addEventListener(
             "resize",
-            keepInsideViewport,
+            keepInsideAllowedArea,
             { passive: true }
         );
 
         if (window.visualViewport) {
-            window.visualViewport
-                .addEventListener(
-                    "resize",
-                    keepInsideViewport,
-                    { passive: true }
-                );
+                window.visualViewport
+                    .addEventListener(
+                        "resize",
+                        keepInsideAllowedArea,
+                        { passive: true }
+                    );
         }
 
         mutationObserver =
@@ -11224,7 +11901,10 @@ def render_avatar_popover(user: dict):
                 () => {
                     if (!shell.isConnected) {
                         cleanup();
+                        return;
                     }
+
+                    keepInsideAllowedArea();
                 }
             );
 
