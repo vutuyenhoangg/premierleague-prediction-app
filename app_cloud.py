@@ -9618,8 +9618,10 @@ def get_prediction_action_spacing_css():
         {
             width: fit-content !important;
             max-width: 100% !important;
-            margin-top: 14px !important;
-            margin-bottom: 16px !important;
+            margin-top: 16px !important;
+            margin-right: 0 !important;
+            margin-bottom: 24px !important;
+            margin-left: auto !important;
         }
         """,
         """
@@ -9735,14 +9737,14 @@ def get_prediction_primary_button_css():
 
 def get_prediction_delete_button_css():
     """
-    CSS chỉ dành cho nút Xóa: nút vuông nhỏ, chỉ hiển thị icon.
+    CSS chỉ dành cho nút Xóa: nút icon nhỏ gọn, hơi rộng hơn chiều cao.
     """
     return [
         """
         button {
-            width: 42px !important;
-            min-width: 42px !important;
-            max-width: 42px !important;
+            width: 46px !important;
+            min-width: 46px !important;
+            max-width: 46px !important;
             height: 42px !important;
             min-height: 42px !important;
             max-height: 42px !important;
@@ -9770,15 +9772,16 @@ def get_prediction_delete_button_css():
         """
         button::before {
             content: "";
-            width: 18px;
-            height: 18px;
+            width: 19px;
+            height: 19px;
+            flex: 0 0 19px;
             display: block;
             background: currentColor;
             -webkit-mask:
-                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 3h6l1 2h4v2H4V5h4l1-2Zm-2 6h10l-1 12H8L7 9Zm3 2v8h2v-8h-2Zm4 0v8h2v-8h-2Z'/%3E%3C/svg%3E")
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h18'/%3E%3Cpath d='M8 6V4h8v2'/%3E%3Cpath d='M19 6l-1 14H6L5 6'/%3E%3Cpath d='M10 11v5'/%3E%3Cpath d='M14 11v5'/%3E%3C/svg%3E")
                 center / contain no-repeat;
             mask:
-                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 3h6l1 2h4v2H4V5h4l1-2Zm-2 6h10l-1 12H8L7 9Zm3 2v8h2v-8h-2Zm4 0v8h2v-8h-2Z'/%3E%3C/svg%3E")
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h18'/%3E%3Cpath d='M8 6V4h8v2'/%3E%3Cpath d='M19 6l-1 14H6L5 6'/%3E%3Cpath d='M10 11v5'/%3E%3Cpath d='M14 11v5'/%3E%3C/svg%3E")
                 center / contain no-repeat;
         }
         """,
