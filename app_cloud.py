@@ -4539,11 +4539,11 @@ def inject_prediction_score_stepper_css():
         ):has(
             div[class*="st-key-away_score_shell_"]
         )::after {
-            content: "-";
+            content: "——";
 
             position: absolute !important;
 
-            top: 94px !important;
+            top: 100px !important;
             left: 50% !important;
 
             color:
@@ -4659,7 +4659,7 @@ def inject_prediction_score_stepper_css():
             ):has(
                 div[class*="st-key-away_score_shell_"]
             )::after {
-                top: 88px !important;
+                top: 100px !important;
                 font-size: 23px !important;
             }
         }
