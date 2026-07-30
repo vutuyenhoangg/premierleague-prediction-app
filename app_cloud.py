@@ -9608,277 +9608,27 @@ def get_star_radio_css(
 def get_prediction_action_spacing_css():
     return """
     {
-        width: fit-content !important;
-        max-width: 100% !important;
-        margin-top: 14px !important;
-        margin-bottom: 0 !important;
-    }
-
-    [data-testid="stHorizontalBlock"] {
-        display: flex !important;
-        width: fit-content !important;
-        max-width: 100% !important;
-        align-items: center !important;
-        flex-wrap: nowrap !important;
-        gap: 8px !important;
-    }
-
-    [data-testid="column"] {
-        flex: 0 0 auto !important;
-        width: auto !important;
-        min-width: 0 !important;
-        padding: 0 !important;
-    }
-
-    @media (max-width: 768px) {
-        {
-            margin-top: 13px !important;
-            margin-bottom: 0 !important;
-        }
-
-        [data-testid="stHorizontalBlock"] {
-            gap: 7px !important;
-        }
-    }
-    """
-
-
-def get_prediction_primary_button_css():
-    return """
-    {
-        width: fit-content !important;
-        max-width: 100% !important;
-    }
-
-    [data-testid="stFormSubmitButton"] {
-        width: fit-content !important;
-        max-width: 100% !important;
+        margin-top: 16px !important;
+        margin-bottom: 18px !important;
     }
 
     button {
-        display: inline-flex !important;
-        width: auto !important;
-        min-width: 0 !important;
-        height: 36px !important;
-        min-height: 36px !important;
-        align-items: center !important;
-        justify-content: center !important;
-        gap: 7px !important;
-        padding: 0 14px !important;
-
-        color: #FFFFFF !important;
-        background:
-            linear-gradient(
-                135deg,
-                #3D005B 0%,
-                #59006D 100%
-            ) !important;
-        border: 1px solid rgba(245, 197, 66, 0.72) !important;
-        border-radius: 10px !important;
-        box-shadow: 0 4px 12px rgba(61, 0, 91, 0.16) !important;
-
-        font-size: 12.5px !important;
-        font-weight: 850 !important;
-        line-height: 1 !important;
-        letter-spacing: 0.01em !important;
         white-space: nowrap !important;
-
-        transition:
-            background 0.16s ease,
-            border-color 0.16s ease,
-            box-shadow 0.16s ease,
-            transform 0.16s ease !important;
     }
 
-    button::before {
-        content: "✓";
-        display: inline-flex !important;
-        width: 16px !important;
-        height: 16px !important;
-        align-items: center !important;
-        justify-content: center !important;
-        flex: 0 0 16px !important;
-
-        color: #3D005B !important;
-        background: #F5C542 !important;
-        border-radius: 999px !important;
-
-        font-size: 10px !important;
-        font-weight: 950 !important;
-        line-height: 1 !important;
-    }
-
-    button,
     button * {
         white-space: nowrap !important;
         word-break: keep-all !important;
         overflow-wrap: normal !important;
     }
 
-    button p {
-        margin: 0 !important;
-        color: inherit !important;
-        font: inherit !important;
-        line-height: 1 !important;
-    }
-
-    button:hover:not(:disabled) {
-        color: #FFFFFF !important;
-        background:
-            linear-gradient(
-                135deg,
-                #4A0066 0%,
-                #6A007D 100%
-            ) !important;
-        border-color: #F5C542 !important;
-        box-shadow: 0 6px 15px rgba(61, 0, 91, 0.22) !important;
-        transform: translateY(-1px) !important;
-    }
-
-    button:active:not(:disabled) {
-        transform: translateY(0) !important;
-        box-shadow: 0 3px 8px rgba(61, 0, 91, 0.18) !important;
-    }
-
-    button:focus-visible {
-        outline: none !important;
-        box-shadow:
-            0 0 0 3px rgba(245, 197, 66, 0.28),
-            0 4px 12px rgba(61, 0, 91, 0.16) !important;
-    }
-
-    button:disabled {
-        color: rgba(255, 255, 255, 0.82) !important;
-        background: #8E7897 !important;
-        border-color: rgba(255, 255, 255, 0.34) !important;
-        box-shadow: none !important;
-        cursor: not-allowed !important;
-        opacity: 0.72 !important;
-    }
-
-    button:disabled::before {
-        color: #706178 !important;
-        background: rgba(255, 255, 255, 0.74) !important;
-    }
-
-    @media (max-width: 768px) {
-        button {
-            height: 38px !important;
-            min-height: 38px !important;
-            padding: 0 13px !important;
-            border-radius: 10px !important;
-            font-size: 12px !important;
-        }
-    }
-    """
-
-
-def get_prediction_delete_button_css():
-    return """
-    {
-        width: 34px !important;
-        min-width: 34px !important;
-        max-width: 34px !important;
-    }
-
-    [data-testid="stFormSubmitButton"] {
-        width: 34px !important;
-        min-width: 34px !important;
-        max-width: 34px !important;
-    }
-
-    button {
-        display: inline-flex !important;
-        width: 34px !important;
-        min-width: 34px !important;
-        max-width: 34px !important;
-        height: 34px !important;
-        min-height: 34px !important;
-        align-items: center !important;
-        justify-content: center !important;
-        padding: 0 !important;
-
-        color: #C81E1E !important;
-        background: rgba(255, 255, 255, 0.62) !important;
-        border: 1px solid rgba(200, 30, 30, 0.30) !important;
-        border-radius: 10px !important;
-        box-shadow: none !important;
-
-        transition:
-            color 0.16s ease,
-            background 0.16s ease,
-            border-color 0.16s ease,
-            box-shadow 0.16s ease !important;
-    }
-
-    button p {
-        display: inline-flex !important;
-        width: 15px !important;
-        height: 15px !important;
-        align-items: center !important;
-        justify-content: center !important;
-        margin: 0 !important;
-        overflow: hidden !important;
-
-        color: inherit !important;
-        font-size: 0 !important;
-        line-height: 0 !important;
-    }
-
-    button p::before {
-        content: "";
-        display: block !important;
-        width: 15px !important;
-        height: 15px !important;
-        flex: 0 0 15px !important;
-        background: currentColor !important;
-
-        -webkit-mask:
-            url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M9 3h6l1 2h4v2H4V5h4l1-2Zm-2 6h10l-1 11H8L7 9Zm3 2v7h2v-7h-2Zm4 0v7h2v-7h-2Z'/%3E%3C/svg%3E")
-            center / contain no-repeat !important;
-        mask:
-            url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M9 3h6l1 2h4v2H4V5h4l1-2Zm-2 6h10l-1 11H8L7 9Zm3 2v7h2v-7h-2Zm4 0v7h2v-7h-2Z'/%3E%3C/svg%3E")
-            center / contain no-repeat !important;
-    }
-
-    button:hover:not(:disabled) {
-        color: #B91C1C !important;
-        background: rgba(254, 226, 226, 0.78) !important;
-        border-color: rgba(185, 28, 28, 0.55) !important;
-        box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.08) !important;
-        transform: none !important;
-    }
-
-    button:active:not(:disabled) {
-        color: #991B1B !important;
-        background: rgba(254, 202, 202, 0.72) !important;
-        box-shadow: none !important;
-        transform: none !important;
-    }
-
-    button:focus-visible {
-        outline: none !important;
-        box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.16) !important;
-    }
-
     @media (max-width: 768px) {
         {
-            width: 36px !important;
-            min-width: 36px !important;
-            max-width: 36px !important;
-        }
-
-        [data-testid="stFormSubmitButton"],
-        button {
-            width: 36px !important;
-            min-width: 36px !important;
-            max-width: 36px !important;
-            height: 36px !important;
-            min-height: 36px !important;
+            margin-top: 15px !important;
+            margin-bottom: 20px !important;
         }
     }
     """
-
 
 def inject_sidebar_menu_radio_css():
     st.markdown(
@@ -21579,31 +21329,50 @@ def render_match_card(
                     key=f"prediction_action_spacing_shell_{match_id}",
                     css_styles=get_prediction_action_spacing_css()
                 ):
-                    save_col, delete_col = st.columns(2)
+                    save_col, spacer_col, delete_col = st.columns([1.45, 6.8, 0.85])
 
                     with save_col:
-                        with stylable_container(
-                            key=f"prediction_primary_button_shell_{match_id}",
-                            css_styles=get_prediction_primary_button_css()
-                        ):
-                            st.form_submit_button(
-                                "Cập nhật dự đoán",
-                                help=(
-                                    "Lưu các thay đổi cho dự đoán "
-                                    "của trận này."
-                                ),
-                                on_click=handle_prediction_form_submit,
-                                kwargs=submit_callback_kwargs
-                            )
+                        st.form_submit_button(
+                            "Cập nhật dự đoán",
+                            on_click=handle_prediction_form_submit,
+                            kwargs=submit_callback_kwargs
+                        )
 
                     with delete_col:
                         with stylable_container(
                             key=f"delete_prediction_button_shell_{match_id}",
-                            css_styles=get_prediction_delete_button_css()
+                            css_styles="""
+                            button {
+                                width: 100% !important;
+                                background: rgba(255, 255, 255, 0.66) !important;
+                                color: #DC2626 !important;
+                                border: 1px solid rgba(220, 38, 38, 0.38) !important;
+                                box-shadow: none !important;
+                                font-size: 12px !important;
+                                font-weight: 750 !important;
+                                padding: 5px 9px !important;
+                                min-height: 32px !important;
+                                border-radius: 999px !important;
+                                white-space: nowrap !important;
+                            }
+
+                            button:hover {
+                                color: #B91C1C !important;
+                                border-color: rgba(185, 28, 28, 0.68) !important;
+                                background: rgba(254, 226, 226, 0.46) !important;
+                                transform: none !important;
+                                box-shadow: none !important;
+                            }
+
+                            button:active {
+                                transform: none !important;
+                                box-shadow: none !important;
+                            }
+                            """
                         ):
                             st.form_submit_button(
                                 "Xóa dự đoán",
-                                help="Xóa dự đoán",
+                                help="Xóa dự đoán đã lưu cho trận này.",
                                 on_click=handle_delete_prediction_form_submit,
                                 kwargs={
                                     "user_id": int(user_id),
@@ -21616,18 +21385,11 @@ def render_match_card(
                     key=f"prediction_action_spacing_shell_{match_id}",
                     css_styles=get_prediction_action_spacing_css()
                 ):
-                    with stylable_container(
-                        key=f"prediction_primary_button_shell_{match_id}",
-                        css_styles=get_prediction_primary_button_css()
-                    ):
-                        st.form_submit_button(
-                            "Lưu dự đoán",
-                            help=(
-                                "Lưu dự đoán cho trận này."
-                            ),
-                            on_click=handle_prediction_form_submit,
-                            kwargs=submit_callback_kwargs
-                        )
+                    st.form_submit_button(
+                        "Lưu dự đoán",
+                        on_click=handle_prediction_form_submit,
+                        kwargs=submit_callback_kwargs
+                    )
 
         render_match_venue_footer(row, match_id)
 
