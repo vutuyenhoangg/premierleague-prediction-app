@@ -81,6 +81,16 @@ COOKIE_NAME = "epl_session_token"
 SESSION_DAYS = 30
 HOPE_STARS_PER_USER = 5
 SUPER_STARS_PER_USER = 1
+
+NORMAL_MATCH_EXACT_POINTS = 3
+NORMAL_MATCH_OUTCOME_POINTS = 1
+
+BIG_MATCH_EXACT_POINTS = 4
+BIG_MATCH_OUTCOME_POINTS = 2
+
+ROUND_CHAMPION_BONUS_POINTS = 5
+EPL_MATCHES_PER_ROUND = 10
+
 CHECKIN_CYCLE_DAYS = 7
 CHECKIN_HOPE_REWARD_DAY = 5
 CHECKIN_SUPER_REWARD_DAY = 7
@@ -245,17 +255,23 @@ STAR_CONFIG = {
     STAR_TYPE_NONE: {
         "label": "Không dùng sao",
         "short_label": "Không dùng sao",
-        "multiplier": 1
+        "multiplier": 1,
+        "wrong_penalty_normal": 0,
+        "wrong_penalty_big": 0
     },
     STAR_TYPE_HOPE: {
         "label": "⭐ Ngôi sao hy vọng x2",
         "short_label": "⭐ Ngôi sao hy vọng",
-        "multiplier": 2
+        "multiplier": 2,
+        "wrong_penalty_normal": -1,
+        "wrong_penalty_big": -2
     },
     STAR_TYPE_SUPER: {
         "label": "✨ Siêu sao x3",
         "short_label": "✨ Siêu sao",
-        "multiplier": 3
+        "multiplier": 3,
+        "wrong_penalty_normal": -2,
+        "wrong_penalty_big": -4
     }
 }
 
@@ -9503,7 +9519,7 @@ def render_star_balance(user_id: int):
                 font-size: 13px;
                 margin-top: 4px;
             ">
-                Sử dụng sao để nhân điểm cho những trận bạn tự tin nhất. Có thể chọn sử dụng khi dự đoán tỉ số từng trận phía dưới. Mỗi trận chỉ được dùng tối đa 1 sao.
+                Sử dụng sao để nhân điểm khi dự đoán đúng. Nếu dự đoán sai, bạn sẽ bị trừ điểm theo loại trận và loại bổ trợ. Mỗi trận chỉ được dùng tối đa 1 sao.
             </div>
         </div>
         """,
@@ -9706,7 +9722,7 @@ def render_star_balance(user_id: int):
                     font-size:13px;
                     line-height:1.35;
                 ">
-                    x2 điểm dự đoán của trận được chọn
+                    Đúng x2 • Sai -1/-2 điểm
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -9850,7 +9866,7 @@ def render_star_balance(user_id: int):
                     font-size:13px;
                     line-height:1.35;
                 ">
-                    x3 điểm dự đoán của trận được chọn
+                    Đúng x3 • Sai -2/-4 điểm
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -9910,14 +9926,34 @@ def render_scoring_rules():
                 f"""
                 **Dự đoán tỉ số**
 
-                - Đúng hoàn toàn tỉ số: **+3 điểm**
-                - Đúng kết quả thắng/hòa/thua: **+1 điểm**
+                **Trận thường**
+
+                - Đúng hoàn toàn tỉ số: **+{NORMAL_MATCH_EXACT_POINTS} điểm**
+                - Đúng kết quả thắng/hòa/thua: **+{NORMAL_MATCH_OUTCOME_POINTS} điểm**
                 - Sai kết quả: **0 điểm**
 
-                **Bổ trợ**
+                **Big Match**
 
-                - {STAR_CONFIG[STAR_TYPE_HOPE]["short_label"]}: **x2** điểm trận đó
-                - {STAR_CONFIG[STAR_TYPE_SUPER]["short_label"]}: **x3** điểm trận đó
+                - Đúng hoàn toàn tỉ số: **+{BIG_MATCH_EXACT_POINTS} điểm**
+                - Đúng kết quả thắng/hòa/thua: **+{BIG_MATCH_OUTCOME_POINTS} điểm**
+                - Sai kết quả: **0 điểm**
+
+                **⭐ Ngôi sao hy vọng**
+
+                - Dự đoán đúng: **x2 điểm**
+                - Sai trận thường: **-1 điểm**
+                - Sai Big Match: **-2 điểm**
+
+                **✨ Siêu sao**
+
+                - Dự đoán đúng: **x3 điểm**
+                - Sai trận thường: **-2 điểm**
+                - Sai Big Match: **-4 điểm**
+
+                **Thưởng vòng đấu**
+
+                - Người có tổng điểm dự đoán cao nhất sau khi đủ {EPL_MATCHES_PER_ROUND} trận của vòng kết thúc nhận **+{ROUND_CHAMPION_BONUS_POINTS} điểm**
+                - Nếu nhiều người bằng điểm cao nhất, tất cả đều đồng vô địch và đều nhận **+{ROUND_CHAMPION_BONUS_POINTS} điểm**
                 """
             )
 
@@ -10869,7 +10905,13 @@ def get_outcome(home_score, away_score):
     return "DRAW"
 
 
-def calculate_score_points(pred_home, pred_away, actual_home, actual_away) -> int:
+def calculate_score_points(
+    pred_home,
+    pred_away,
+    actual_home,
+    actual_away,
+    is_big_match: bool = False
+) -> int:
     if pred_home is None or pred_away is None:
         return 0
 
@@ -10882,42 +10924,73 @@ def calculate_score_points(pred_home, pred_away, actual_home, actual_away) -> in
     actual_away = int(actual_away)
 
     if pred_home == actual_home and pred_away == actual_away:
-        return 3
+        return (
+            BIG_MATCH_EXACT_POINTS
+            if is_big_match
+            else NORMAL_MATCH_EXACT_POINTS
+        )
 
-    if get_outcome(pred_home, pred_away) == get_outcome(actual_home, actual_away):
-        return 1
+    if get_outcome(pred_home, pred_away) == get_outcome(
+        actual_home,
+        actual_away
+    ):
+        return (
+            BIG_MATCH_OUTCOME_POINTS
+            if is_big_match
+            else NORMAL_MATCH_OUTCOME_POINTS
+        )
 
     return 0
 
-
 def calculate_total_points(row) -> int:
-    pred_home = to_optional_int(row.get("predicted_home_score"))
-    pred_away = to_optional_int(row.get("predicted_away_score"))
+    pred_home = to_optional_int(
+        row.get("predicted_home_score")
+    )
+    pred_away = to_optional_int(
+        row.get("predicted_away_score")
+    )
 
-    actual_home = to_optional_int(row.get("home_score_for_prediction"))
-    actual_away = to_optional_int(row.get("away_score_for_prediction"))
+    actual_home = to_optional_int(
+        row.get("home_score_for_prediction")
+    )
+    actual_away = to_optional_int(
+        row.get("away_score_for_prediction")
+    )
+
+    is_big_match = is_big_six_match(
+        row.get("home_team_name"),
+        row.get("away_team_name")
+    )
 
     points = calculate_score_points(
         pred_home,
         pred_away,
         actual_home,
-        actual_away
+        actual_away,
+        is_big_match=is_big_match
     )
 
+    # Giữ lại logic knockout cũ để không làm hỏng
+    # khả năng tái sử dụng code trong tương lai.
     is_knockout = to_bool(row.get("is_knockout"))
 
     if is_knockout:
-        predicted_winner_team_id = to_optional_int(row.get("predicted_winner_team_id"))
-        actual_winner_team_id = to_optional_int(row.get("winner_team_id"))
+        predicted_winner_team_id = to_optional_int(
+            row.get("predicted_winner_team_id")
+        )
+        actual_winner_team_id = to_optional_int(
+            row.get("winner_team_id")
+        )
 
         if (
             predicted_winner_team_id is not None
             and actual_winner_team_id is not None
-            and predicted_winner_team_id == actual_winner_team_id
+            and predicted_winner_team_id
+            == actual_winner_team_id
         ):
             points += 1
 
-    return points
+    return int(points)
 
 def normalize_star_type(star_type) -> str:
     if star_type is None:
@@ -10939,20 +11012,37 @@ def get_star_multiplier(star_type) -> int:
     return int(STAR_CONFIG[star_type]["multiplier"])
 
 
-def calculate_points_with_star(base_points: int, star_type: str) -> dict:
+def calculate_points_with_star(
+    base_points: int,
+    star_type: str,
+    is_big_match: bool = False
+) -> dict:
     base_points = int(base_points or 0)
-    multiplier = get_star_multiplier(star_type)
+    star_type = normalize_star_type(star_type)
 
-    final_points = base_points * multiplier
-    bonus_points = final_points - base_points
+    star_config = STAR_CONFIG[star_type]
+    multiplier = int(star_config["multiplier"])
+
+    if base_points > 0:
+        final_points = base_points * multiplier
+    else:
+        penalty_key = (
+            "wrong_penalty_big"
+            if is_big_match
+            else "wrong_penalty_normal"
+        )
+
+        final_points = int(
+            star_config.get(penalty_key, 0)
+        )
+
+    star_bonus_points = final_points - base_points
 
     return {
-        "base_points": base_points,
-        "star_bonus_points": bonus_points,
-        "points": final_points
+        "base_points": int(base_points),
+        "star_bonus_points": int(star_bonus_points),
+        "points": int(final_points)
     }
-
-
 def format_star_short(star_type) -> str:
     star_type = normalize_star_type(star_type)
     return STAR_CONFIG[star_type]["short_label"]
@@ -11428,19 +11518,6 @@ def render_prediction_result_line(result_info):
     )
 
 def calculate_display_points_for_prediction(existing, match_row) -> dict | None:
-    """
-    Tính điểm hiển thị ngay tại card trận đấu.
-
-    Ưu tiên tính live từ:
-    - Dự đoán của user
-    - Kết quả thật của trận
-    - Bổ trợ sao đang dùng
-
-    Mục tiêu:
-    - UI luôn hiện điểm thực tế đã nhân sao.
-    - Không phụ thuộc hoàn toàn vào points đang cache/lưu trong DB.
-    - Không ghi database, không ảnh hưởng BXH/chấm điểm chính thức.
-    """
     if existing is None:
         return None
 
@@ -11462,22 +11539,49 @@ def calculate_display_points_for_prediction(existing, match_row) -> dict | None:
         }
 
     scoring_row = {
-        "predicted_home_score": existing.get("predicted_home_score"),
-        "predicted_away_score": existing.get("predicted_away_score"),
-        "predicted_winner_team_id": existing.get("predicted_winner_team_id"),
+        "predicted_home_score": existing.get(
+            "predicted_home_score"
+        ),
+        "predicted_away_score": existing.get(
+            "predicted_away_score"
+        ),
+        "predicted_winner_team_id": existing.get(
+            "predicted_winner_team_id"
+        ),
 
-        "home_score_for_prediction": match_row.get("home_score_for_prediction"),
-        "away_score_for_prediction": match_row.get("away_score_for_prediction"),
+        "home_score_for_prediction": match_row.get(
+            "home_score_for_prediction"
+        ),
+        "away_score_for_prediction": match_row.get(
+            "away_score_for_prediction"
+        ),
+
+        "home_team_name": match_row.get(
+            "home_team_name"
+        ),
+        "away_team_name": match_row.get(
+            "away_team_name"
+        ),
 
         "is_knockout": match_row.get("is_knockout"),
-        "winner_team_id": match_row.get("winner_team_id")
+        "winner_team_id": match_row.get(
+            "winner_team_id"
+        )
     }
 
-    base_points = calculate_total_points(scoring_row)
+    is_big_match = is_big_six_match(
+        match_row.get("home_team_name"),
+        match_row.get("away_team_name")
+    )
+
+    base_points = calculate_total_points(
+        scoring_row
+    )
 
     return calculate_points_with_star(
         base_points=base_points,
-        star_type=existing.get("star_type")
+        star_type=existing.get("star_type"),
+        is_big_match=is_big_match
     )
 
 def render_prediction_result_and_score_row(result_info, existing, match_row=None):
@@ -11548,7 +11652,11 @@ def render_prediction_result_and_score_row(result_info, existing, match_row=None
             score_text = "#9A3412"
             score_border = "rgba(251,146,60,0.45)"
 
-        score_title = f"Điểm gốc: {base_points} | Thưởng sao: {star_bonus_points} | Tổng điểm: {final_points}"
+        score_title = (
+            f"Điểm gốc: {base_points} | "
+            f"Điểm bổ trợ: {star_bonus_points} | "
+            f"Tổng điểm trận: {final_points}"
+        )
 
         score_html = (
             '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
@@ -16613,6 +16721,8 @@ def score_all_predictions(
         "is_finished",
         "home_score_for_prediction",
         "away_score_for_prediction",
+        "home_team_name",
+        "away_team_name",
         "is_knockout",
         "winner_team_id"
     ]
@@ -16677,8 +16787,49 @@ def score_all_predictions(
         )
     )
 
-    new_base_points = correct_outcome.astype(int)
-    new_base_points.loc[exact_score] = 3
+    home_big_six_key = scored[
+        "home_team_name"
+    ].map(canonicalize_big_six_team_name)
+
+    away_big_six_key = scored[
+        "away_team_name"
+    ].map(canonicalize_big_six_team_name)
+
+    is_big_match = (
+        home_big_six_key.isin(
+            BIG_SIX_CANONICAL_TEAMS
+        )
+        & away_big_six_key.isin(
+            BIG_SIX_CANONICAL_TEAMS
+        )
+        & home_big_six_key.ne(
+            away_big_six_key
+        )
+    )
+
+    new_base_points = pd.Series(
+        0,
+        index=scored.index,
+        dtype="int64"
+    )
+
+    # Đúng kết quả nhưng chưa xét đúng hoàn toàn tỉ số.
+    new_base_points.loc[
+        correct_outcome & ~is_big_match
+    ] = NORMAL_MATCH_OUTCOME_POINTS
+
+    new_base_points.loc[
+        correct_outcome & is_big_match
+    ] = BIG_MATCH_OUTCOME_POINTS
+
+    # Đúng hoàn toàn tỉ số phải ghi đè mức đúng kết quả.
+    new_base_points.loc[
+        exact_score & ~is_big_match
+    ] = NORMAL_MATCH_EXACT_POINTS
+
+    new_base_points.loc[
+        exact_score & is_big_match
+    ] = BIG_MATCH_EXACT_POINTS
 
     is_knockout = scored["is_knockout"].map(to_bool)
     predicted_winner = pd.to_numeric(
@@ -16722,11 +16873,59 @@ def score_all_predictions(
         .astype(int)
     )
 
+    # Mặc định: dự đoán đúng thì nhân điểm.
     new_star_bonus_points = (
         new_base_points * (multipliers - 1)
     ).astype(int)
+
+    # Sai kết quả thì không nhân 0 mà áp dụng điểm phạt.
+    wrong_result = (
+        valid_prediction
+        & ~correct_outcome
+    )
+
+    normal_wrong_penalties = (
+        normalized_stars
+        .map({
+            star_type: int(
+                config["wrong_penalty_normal"]
+            )
+            for star_type, config
+            in STAR_CONFIG.items()
+        })
+        .fillna(0)
+        .astype(int)
+    )
+
+    big_wrong_penalties = (
+        normalized_stars
+        .map({
+            star_type: int(
+                config["wrong_penalty_big"]
+            )
+            for star_type, config
+            in STAR_CONFIG.items()
+        })
+        .fillna(0)
+        .astype(int)
+    )
+
+    wrong_penalties = (
+        normal_wrong_penalties.where(
+            ~is_big_match,
+            big_wrong_penalties
+        )
+    )
+
+    new_star_bonus_points.loc[
+        wrong_result
+    ] = wrong_penalties.loc[
+        wrong_result
+    ]
+
     new_points = (
-        new_base_points * multipliers
+        new_base_points
+        + new_star_bonus_points
     ).astype(int)
 
     current_base_points = pd.to_numeric(
@@ -20476,7 +20675,7 @@ def page_my_predictions():
         "Điểm gốc": df["base_points"].apply(
             lambda x: "" if pd.isna(x) else str(int(round(float(x))))
         ),
-        "Thưởng sao": df["star_bonus_points"].apply(
+        "Điểm bổ trợ": df["star_bonus_points"].apply(
             lambda x: "" if pd.isna(x) else str(int(round(float(x))))
         ),
         "Điểm": df["points"].apply(
@@ -20501,13 +20700,30 @@ def page_my_predictions():
     ]
 
     if current_user_summary.empty:
-        total_points = int(
+        prediction_points = int(
             pd.to_numeric(df["points"], errors="coerce").fillna(0).sum()
         )
+        round_champion_bonus_points = 0
+        round_champion_count = 0
+        total_points = prediction_points
         current_rank = "-"
     else:
-        total_points = int(current_user_summary.iloc[0]["total_points"])
-        current_rank = int(current_user_summary.iloc[0]["rank"])
+        user_summary_row = current_user_summary.iloc[0]
+        prediction_points = int(
+            user_summary_row["prediction_points"]
+        )
+        round_champion_bonus_points = int(
+            user_summary_row["round_champion_bonus_points"]
+        )
+        round_champion_count = int(
+            user_summary_row["round_champion_count"]
+        )
+        total_points = int(
+            user_summary_row["total_points"]
+        )
+        current_rank = int(
+            user_summary_row["rank"]
+        )
 
     rank_display = "-" if current_rank == "-" else f"#{current_rank}"
 
@@ -20517,7 +20733,10 @@ def page_my_predictions():
     if scored_match_count == 0:
         avg_points_per_scored_match = 0.0
     else:
-        avg_points_per_scored_match = total_points / scored_match_count
+        avg_points_per_scored_match = (
+            prediction_points
+            / scored_match_count
+        )
 
     avg_points_display = f"{avg_points_per_scored_match:.1f}"
 
@@ -20615,7 +20834,266 @@ def page_my_predictions():
                 unsafe_allow_html=True
             )
 
+        st.caption(
+            f"Điểm dự đoán: {prediction_points} • "
+            f"Thưởng vòng: +{round_champion_bonus_points} • "
+            f"Vô địch vòng: {round_champion_count}"
+        )
+
         st.markdown("<div style='height: 24px;'></div>", unsafe_allow_html=True)
+
+def build_round_champion_bonus_df(
+    predictions: pd.DataFrame,
+    matches: pd.DataFrame
+) -> pd.DataFrame:
+    result_columns = [
+        "user_id",
+        "round_champion_count",
+        "round_champion_bonus_points"
+    ]
+
+    if predictions.empty or matches.empty:
+        return pd.DataFrame(
+            columns=result_columns
+        )
+
+    required_match_columns = {
+        "match_id",
+        "round_name",
+        "is_finished",
+        "home_score_for_prediction",
+        "away_score_for_prediction"
+    }
+
+    if not required_match_columns.issubset(
+        matches.columns
+    ):
+        return pd.DataFrame(
+            columns=result_columns
+        )
+
+    round_matches = (
+        matches[
+            [
+                "match_id",
+                "round_name",
+                "is_finished",
+                "home_score_for_prediction",
+                "away_score_for_prediction"
+            ]
+        ]
+        .drop_duplicates(
+            subset=["match_id"]
+        )
+        .copy()
+    )
+
+    round_matches["round_name"] = (
+        round_matches["round_name"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+    )
+
+    round_matches = round_matches[
+        round_matches["round_name"].ne("")
+    ].copy()
+
+    if round_matches.empty:
+        return pd.DataFrame(
+            columns=result_columns
+        )
+
+    actual_home = pd.to_numeric(
+        round_matches[
+            "home_score_for_prediction"
+        ],
+        errors="coerce"
+    )
+
+    actual_away = pd.to_numeric(
+        round_matches[
+            "away_score_for_prediction"
+        ],
+        errors="coerce"
+    )
+
+    round_matches["is_complete"] = (
+        round_matches["is_finished"].map(
+            to_bool
+        )
+        & actual_home.notna()
+        & actual_away.notna()
+    )
+
+    round_status = (
+        round_matches
+        .groupby(
+            "round_name",
+            as_index=False
+        )
+        .agg(
+            match_count=(
+                "match_id",
+                "nunique"
+            ),
+            completed_match_count=(
+                "is_complete",
+                "sum"
+            )
+        )
+    )
+
+    # Chỉ chốt vô địch khi:
+    # - database đã có đủ 10 trận của vòng;
+    # - cả 10 trận đều đã có kết quả hợp lệ.
+    eligible_round_names = round_status.loc[
+        (
+            round_status["match_count"]
+            .eq(EPL_MATCHES_PER_ROUND)
+        )
+        & (
+            round_status[
+                "completed_match_count"
+            ].eq(
+                round_status["match_count"]
+            )
+        ),
+        "round_name"
+    ]
+
+    if eligible_round_names.empty:
+        return pd.DataFrame(
+            columns=result_columns
+        )
+
+    eligible_matches = round_matches.loc[
+        round_matches["round_name"].isin(
+            eligible_round_names
+        ),
+        [
+            "match_id",
+            "round_name"
+        ]
+    ]
+
+    round_predictions = (
+        predictions[
+            [
+                "prediction_id",
+                "user_id",
+                "match_id",
+                "points"
+            ]
+        ]
+        .merge(
+            eligible_matches,
+            on="match_id",
+            how="inner"
+        )
+    )
+
+    round_predictions["points"] = pd.to_numeric(
+        round_predictions["points"],
+        errors="coerce"
+    )
+
+    # Chỉ xét người thực sự tham gia vòng,
+    # tức có ít nhất một dự đoán đã được chấm.
+    round_predictions = round_predictions[
+        round_predictions["points"].notna()
+    ].copy()
+
+    if round_predictions.empty:
+        return pd.DataFrame(
+            columns=result_columns
+        )
+
+    round_totals = (
+        round_predictions
+        .groupby(
+            [
+                "round_name",
+                "user_id"
+            ],
+            as_index=False
+        )
+        .agg(
+            round_points=(
+                "points",
+                "sum"
+            ),
+            prediction_count=(
+                "prediction_id",
+                "nunique"
+            )
+        )
+    )
+
+    round_totals = round_totals[
+        round_totals[
+            "prediction_count"
+        ].gt(0)
+    ].copy()
+
+    if round_totals.empty:
+        return pd.DataFrame(
+            columns=result_columns
+        )
+
+    round_totals["top_round_points"] = (
+        round_totals
+        .groupby("round_name")[
+            "round_points"
+        ]
+        .transform("max")
+    )
+
+    # Không dùng rank hoặc drop_duplicates:
+    # tất cả người bằng điểm cao nhất đều là đồng vô địch.
+    champions = round_totals[
+        round_totals["round_points"].eq(
+            round_totals[
+                "top_round_points"
+            ]
+        )
+    ].copy()
+
+    champion_summary = (
+        champions
+        .groupby(
+            "user_id",
+            as_index=False
+        )
+        .agg(
+            round_champion_count=(
+                "round_name",
+                "nunique"
+            )
+        )
+    )
+
+    champion_summary[
+        "round_champion_count"
+    ] = (
+        champion_summary[
+            "round_champion_count"
+        ]
+        .astype(int)
+    )
+
+    champion_summary[
+        "round_champion_bonus_points"
+    ] = (
+        champion_summary[
+            "round_champion_count"
+        ]
+        * ROUND_CHAMPION_BONUS_POINTS
+    )
+
+    return champion_summary[
+        result_columns
+    ]
 
 @st.cache_data(
     ttl=10,
@@ -20633,6 +21111,9 @@ def build_leaderboard_df(season_slug: str | None = None):
 
     if predictions.empty:
         result = users.copy()
+        result["prediction_points"] = 0
+        result["round_champion_count"] = 0
+        result["round_champion_bonus_points"] = 0
         result["total_points"] = 0
         result["base_points"] = 0
         result["star_bonus_points"] = 0
@@ -20803,7 +21284,7 @@ def build_leaderboard_df(season_slug: str | None = None):
             as_index=False
         )
         .agg(
-            total_points=("points", "sum"),
+            prediction_points=("points", "sum"),
             base_points=("base_points", "sum"),
             star_bonus_points=("star_bonus_points", "sum"),
             hope_stars_used=("hope_star_used", "sum"),
@@ -20817,11 +21298,24 @@ def build_leaderboard_df(season_slug: str | None = None):
         )
     )
 
+    round_champion_bonus = (
+        build_round_champion_bonus_df(
+            predictions=predictions,
+            matches=matches
+        )
+    )
+
     # Left join từ users để người chơi chưa dự đoán vẫn xuất hiện trên BXH
     # với toàn bộ chỉ số bằng 0. Bản cũ làm họ biến mất khi đã có ít nhất
     # một người chơi khác gửi dự đoán.
     summary = users.merge(
         summary,
+        on="user_id",
+        how="left"
+    )
+
+    summary = summary.merge(
+        round_champion_bonus,
         on="user_id",
         how="left"
     )
@@ -20835,7 +21329,9 @@ def build_leaderboard_df(season_slug: str | None = None):
         )
 
     numeric_cols = [
-        "total_points",
+        "prediction_points",
+        "round_champion_count",
+        "round_champion_bonus_points",
         "base_points",
         "star_bonus_points",
         "hope_stars_used",
@@ -20850,6 +21346,11 @@ def build_leaderboard_df(season_slug: str | None = None):
 
     for col in numeric_cols:
         summary[col] = summary[col].fillna(0).astype(int)
+
+    summary["total_points"] = (
+        summary["prediction_points"]
+        + summary["round_champion_bonus_points"]
+    ).astype(int)
 
     summary["exact_score_rate"] = (
         summary["exact_score_count"].astype(float)
@@ -24680,6 +25181,8 @@ def page_leaderboard():
             "total_points",
             "base_points",
             "star_bonus_points",
+            "round_champion_bonus_points",
+            "round_champion_count",
             "hope_star_display",
             "super_star_display",
             "num_predictions",
@@ -24696,7 +25199,9 @@ def page_leaderboard():
         "display_name": "Người chơi",
         "total_points": "Điểm",
         "base_points": "Điểm gốc",
-        "star_bonus_points": "Thưởng sao",
+        "star_bonus_points": "Điểm bổ trợ",
+        "round_champion_bonus_points": "Thưởng vòng",
+        "round_champion_count": "VĐ vòng",
         "hope_star_display": "⭐",
         "super_star_display": "✨",
         "num_predictions": "Số dự đoán",
@@ -24875,10 +25380,17 @@ def page_leaderboard():
                     "color: #07111F !important; "
                 )
 
-            if col == "Thưởng sao":
+            if col == "Điểm bổ trợ":
                 style += (
                     "font-weight: 900 !important; "
                     "color: #B45309 !important; "
+                )
+
+            if col in ["Thưởng vòng", "VĐ vòng"]:
+                style += (
+                    "font-weight: 900 !important; "
+                    "color: #2563EB !important; "
+                    "text-align: center !important; "
                 )
 
             if col in ["⭐", "✨"]:
@@ -24928,10 +25440,18 @@ def page_leaderboard():
             }
         )
         .set_properties(
-            subset=["Thưởng sao"],
+            subset=["Điểm bổ trợ"],
             **{
                 "font-weight": "900 !important",
                 "color": "#B45309 !important"
+            }
+        )
+        .set_properties(
+            subset=["Thưởng vòng", "VĐ vòng"],
+            **{
+                "text-align": "center !important",
+                "font-weight": "900 !important",
+                "color": "#2563EB !important"
             }
         )
         .set_properties(
@@ -24956,14 +25476,14 @@ def page_leaderboard():
                     ]
                 },
                 {
-                    "selector": "thead th:nth-child(6)",
+                    "selector": "thead th:nth-child(8)",
                     "props": [
                         ("text-align", "center"),
                         ("font-size", "18px")
                     ]
                 },
                 {
-                    "selector": "thead th:nth-child(7)",
+                    "selector": "thead th:nth-child(9)",
                     "props": [
                         ("text-align", "center"),
                         ("font-size", "18px")
@@ -24983,7 +25503,7 @@ def page_leaderboard():
                     ]
                 },
                 {
-                    "selector": "tbody td:nth-child(6)",
+                    "selector": "tbody td:nth-child(8)",
                     "props": [
                         ("text-align", "center"),
                         ("font-weight", "900"),
@@ -24991,7 +25511,7 @@ def page_leaderboard():
                     ]
                 },
                 {
-                    "selector": "tbody td:nth-child(7)",
+                    "selector": "tbody td:nth-child(9)",
                     "props": [
                         ("text-align", "center"),
                         ("font-weight", "900"),
@@ -25100,10 +25620,25 @@ def page_dashboard():
     # =========================
     # Charts
     # =========================
-    score_max = int(leaderboard["total_points"].max())
+    total_score_values = pd.to_numeric(
+        leaderboard["total_points"],
+        errors="coerce"
+    ).fillna(0)
 
-    if score_max <= 0:
-        score_max = 1
+    score_min = int(total_score_values.min())
+    score_max = int(total_score_values.max())
+    score_axis_min = min(0.0, score_min * 1.16)
+    score_axis_max = max(1.0, score_max * 1.16)
+    score_color_min = min(0, score_min)
+    score_color_max = max(1, score_max)
+
+    # Plotly không cho phép kích thước điểm âm. Dịch toàn bộ miền điểm
+    # sang số dương nhưng vẫn giữ nguyên thứ tự lớn/nhỏ giữa người chơi.
+    leaderboard["score_bubble_size"] = (
+        total_score_values
+        - score_min
+        + 1
+    ).astype(float)
 
     custom_score_scale = [
         [0.00, "#DC2626"],   # đỏ
@@ -25179,8 +25714,11 @@ def page_dashboard():
         text="total_points",
         custom_data=[
             "rank",
+            "prediction_points",
             "base_points",
             "star_bonus_points",
+            "round_champion_bonus_points",
+            "round_champion_count",
             "hope_stars_used",
             "super_stars_used"
         ]
@@ -25199,10 +25737,13 @@ def page_dashboard():
         hovertemplate=(
             "<b>#%{customdata[0]} %{y}</b><br>"
             "Tổng điểm = %{x}<br>"
-            "Điểm gốc = %{customdata[1]}<br>"
-            "Thưởng sao = %{customdata[2]}<br>"
-            "⭐ Ngôi sao hy vọng đã dùng = %{customdata[3]}<br>"
-            "✨ Siêu sao đã dùng = %{customdata[4]}"
+            "Điểm dự đoán = %{customdata[1]}<br>"
+            "Điểm gốc = %{customdata[2]}<br>"
+            "Điểm bổ trợ = %{customdata[3]}<br>"
+            "Thưởng vòng = %{customdata[4]} "
+            "(%{customdata[5]} lần VĐ vòng)<br>"
+            "⭐ Ngôi sao hy vọng đã dùng = %{customdata[6]}<br>"
+            "✨ Siêu sao đã dùng = %{customdata[7]}"
             "<extra></extra>"
         )
     )
@@ -25238,7 +25779,7 @@ def page_dashboard():
         showgrid=True,
         gridcolor="rgba(15,23,42,0.08)",
         zeroline=False,
-        range=[0, max(1, score_max * 1.16)]
+        range=[score_axis_min, score_axis_max]
     )
     
     fig_points.update_yaxes(
@@ -25281,12 +25822,15 @@ def page_dashboard():
         leaderboard,
         x="result_prediction_rate",
         y="exact_score_rate",
-        size="total_points",
+        size="score_bubble_size",
         hover_name="display_name",
         custom_data=[
             "total_points",
+            "prediction_points",
             "base_points",
             "star_bonus_points",
+            "round_champion_bonus_points",
+            "round_champion_count",
             "hope_stars_used",
             "super_stars_used"
         ],
@@ -25294,11 +25838,12 @@ def page_dashboard():
         labels={
             "result_prediction_rate": "% Đúng kết quả",
             "exact_score_rate": "% Đúng hoàn toàn tỉ số",
-            "total_points": "Điểm"
+            "total_points": "Điểm",
+            "score_bubble_size": "Quy mô điểm"
         },
         color="total_points",
         color_continuous_scale=custom_score_scale,
-        range_color=(0, score_max)
+        range_color=(score_color_min, score_color_max)
     )
 
     fig_accuracy.update_xaxes(tickformat=".1%")
@@ -25310,10 +25855,13 @@ def page_dashboard():
             "% Đúng kết quả = %{x:.1%}<br>"
             "% Đúng hoàn toàn tỉ số = %{y:.1%}<br>"
             "Tổng điểm = %{customdata[0]}<br>"
-            "Điểm gốc = %{customdata[1]}<br>"
-            "Thưởng sao = %{customdata[2]}<br>"
-            "⭐ Ngôi sao hy vọng đã dùng = %{customdata[3]}<br>"
-            "✨ Siêu sao đã dùng = %{customdata[4]}"
+            "Điểm dự đoán = %{customdata[1]}<br>"
+            "Điểm gốc = %{customdata[2]}<br>"
+            "Điểm bổ trợ = %{customdata[3]}<br>"
+            "Thưởng vòng = %{customdata[4]} "
+            "(%{customdata[5]} lần VĐ vòng)<br>"
+            "⭐ Ngôi sao hy vọng đã dùng = %{customdata[6]}<br>"
+            "✨ Siêu sao đã dùng = %{customdata[7]}"
             "<extra></extra>"
         ),
         marker=dict(
@@ -25576,8 +26124,14 @@ def page_admin():
     st.markdown("---")
 
     if st.button("Chấm điểm lại toàn bộ dự đoán", use_container_width=True):
-        score_all_predictions(get_selected_season_slug())
-        st.success("Đã chấm điểm lại toàn bộ dự đoán.")
+        score_all_predictions.clear()
+        score_all_predictions(
+            get_selected_season_slug()
+        )
+        build_leaderboard_df.clear()
+        st.success(
+            "Đã chấm lại toàn bộ dự đoán theo luật mới."
+        )
 
 
 def render_footer():
