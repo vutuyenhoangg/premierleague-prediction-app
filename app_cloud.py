@@ -9606,285 +9606,230 @@ def get_star_radio_css(
     return css
 
 def get_prediction_action_spacing_css():
-    return """
-    {
-        width: fit-content !important;
-        max-width: 100% !important;
-        margin-top: 12px !important;
-        margin-bottom: 14px !important;
-    }
-
-    div[data-testid="stHorizontalBlock"] {
-        width: fit-content !important;
-        max-width: 100% !important;
-        align-items: center !important;
-        flex-wrap: nowrap !important;
-        gap: 7px !important;
-    }
-
-    div[data-testid="stColumn"] {
-        flex: 0 0 auto !important;
-        width: auto !important;
-        min-width: 0 !important;
-    }
-
-    div[data-testid="stFormSubmitButton"] {
-        width: auto !important;
-        margin: 0 !important;
-    }
-
-    @media (max-width: 768px) {
-        {
-            margin-top: 11px !important;
-            margin-bottom: 15px !important;
-        }
-
-        div[data-testid="stHorizontalBlock"] {
-            gap: 6px !important;
-        }
-    }
     """
+    Mỗi phần tử trong list là một rule độc lập để stylable_container
+    tự thêm scope cho TỪNG selector. Không gộp nhiều selector vào cùng
+    một chuỗi vì các selector phía sau sẽ thoát scope và ảnh hưởng toàn app.
+    """
+    return [
+        """
+        {
+            width: fit-content !important;
+            max-width: 100% !important;
+            margin-top: 12px !important;
+            margin-bottom: 14px !important;
+        }
+        """,
+        """
+        div[data-testid="stHorizontalBlock"] {
+            width: fit-content !important;
+            max-width: 100% !important;
+            align-items: center !important;
+            flex-wrap: nowrap !important;
+            gap: 7px !important;
+        }
+        """,
+        """
+        div[data-testid="stColumn"] {
+            flex: 0 0 auto !important;
+            width: auto !important;
+            min-width: 0 !important;
+        }
+        """,
+        """
+        div[data-testid="stFormSubmitButton"] {
+            width: auto !important;
+            margin: 0 !important;
+        }
+        """
+    ]
 
 def get_prediction_primary_button_css():
     """
-    Nút hành động chính của form dự đoán.
-    CSS được bọc trong stylable_container riêng cho từng trận.
+    CSS chỉ dành cho nút Lưu/Cập nhật trong container riêng của từng trận.
     """
-    return """
-    button {
-        width: auto !important;
-        min-width: 0 !important;
-        height: 34px !important;
-        min-height: 34px !important;
-        padding: 0 13px !important;
-
-        display: inline-flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        gap: 7px !important;
-
-        position: relative !important;
-        overflow: hidden !important;
-
-        border: 1px solid rgba(245, 197, 66, 0.78) !important;
-        border-radius: 10px !important;
-        background:
-            linear-gradient(
-                135deg,
-                #37003C 0%,
-                #54105D 100%
-            ) !important;
-
-        color: #FFFFFF !important;
-        box-shadow:
-            0 4px 10px rgba(55, 0, 60, 0.15) !important;
-
-        font-size: 12.5px !important;
-        font-weight: 800 !important;
-        letter-spacing: 0.005em !important;
-        line-height: 1 !important;
-        white-space: nowrap !important;
-
-        transition:
-            background 0.16s ease,
-            border-color 0.16s ease,
-            box-shadow 0.16s ease,
-            transform 0.16s ease !important;
-    }
-
-    button::before {
-        content: "✓";
-
-        width: 15px;
-        height: 15px;
-        min-width: 15px;
-
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-
-        border-radius: 999px;
-        background: #00FF85;
-        color: #37003C;
-
-        font-size: 10px;
-        font-weight: 950;
-        line-height: 1;
-    }
-
-    button *,
-    button p {
-        color: inherit !important;
-        font: inherit !important;
-        line-height: 1 !important;
-        white-space: nowrap !important;
-        word-break: keep-all !important;
-        overflow-wrap: normal !important;
-    }
-
-    button:hover {
-        border-color: #F5C542 !important;
-        background:
-            linear-gradient(
-                135deg,
-                #430049 0%,
-                #65146F 100%
-            ) !important;
-        color: #FFFFFF !important;
-        box-shadow:
-            0 6px 14px rgba(55, 0, 60, 0.20) !important;
-        transform: translateY(-1px) !important;
-    }
-
-    button:active {
-        box-shadow:
-            0 2px 6px rgba(55, 0, 60, 0.16) !important;
-        transform: translateY(0) !important;
-    }
-
-    button:focus-visible {
-        outline: 3px solid rgba(245, 197, 66, 0.30) !important;
-        outline-offset: 2px !important;
-    }
-
-    button:disabled,
-    button:disabled:hover {
-        border-color: rgba(148, 163, 184, 0.42) !important;
-        background: #E2E8F0 !important;
-        color: #94A3B8 !important;
-        box-shadow: none !important;
-        transform: none !important;
-        cursor: not-allowed !important;
-    }
-
-    button:disabled::before {
-        background: #CBD5E1;
-        color: #94A3B8;
-    }
-
-    @media (max-width: 768px) {
+    return [
+        """
         button {
-            height: 36px !important;
-            min-height: 36px !important;
-            padding: 0 12px !important;
-            gap: 6px !important;
+            width: auto !important;
+            min-width: 0 !important;
+            height: 34px !important;
+            min-height: 34px !important;
+            padding: 0 13px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 7px !important;
+            position: relative !important;
+            overflow: hidden !important;
+            border: 1px solid rgba(245, 197, 66, 0.78) !important;
             border-radius: 10px !important;
-            font-size: 12px !important;
+            background: linear-gradient(135deg, #37003C 0%, #54105D 100%) !important;
+            color: #FFFFFF !important;
+            box-shadow: 0 4px 10px rgba(55, 0, 60, 0.15) !important;
+            font-size: 12.5px !important;
+            font-weight: 800 !important;
+            letter-spacing: 0.005em !important;
+            line-height: 1 !important;
+            white-space: nowrap !important;
+            transition:
+                background 0.16s ease,
+                border-color 0.16s ease,
+                box-shadow 0.16s ease,
+                transform 0.16s ease !important;
         }
-
+        """,
+        """
         button::before {
-            width: 14px;
-            height: 14px;
-            min-width: 14px;
-            font-size: 9px;
+            content: "✓";
+            width: 15px;
+            height: 15px;
+            min-width: 15px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            background: #00FF85;
+            color: #37003C;
+            font-size: 10px;
+            font-weight: 950;
+            line-height: 1;
         }
-    }
-    """
+        """,
+        """
+        button p {
+            margin: 0 !important;
+            color: inherit !important;
+            font: inherit !important;
+            line-height: 1 !important;
+            white-space: nowrap !important;
+            word-break: keep-all !important;
+            overflow-wrap: normal !important;
+        }
+        """,
+        """
+        button:hover {
+            border-color: #F5C542 !important;
+            background: linear-gradient(135deg, #430049 0%, #65146F 100%) !important;
+            color: #FFFFFF !important;
+            box-shadow: 0 6px 14px rgba(55, 0, 60, 0.20) !important;
+            transform: translateY(-1px) !important;
+        }
+        """,
+        """
+        button:active {
+            box-shadow: 0 2px 6px rgba(55, 0, 60, 0.16) !important;
+            transform: translateY(0) !important;
+        }
+        """,
+        """
+        button:focus-visible {
+            outline: 3px solid rgba(245, 197, 66, 0.30) !important;
+            outline-offset: 2px !important;
+        }
+        """,
+        """
+        button:disabled {
+            border-color: rgba(148, 163, 184, 0.42) !important;
+            background: #E2E8F0 !important;
+            color: #94A3B8 !important;
+            box-shadow: none !important;
+            transform: none !important;
+            cursor: not-allowed !important;
+        }
+        """,
+        """
+        button:disabled::before {
+            background: #CBD5E1;
+            color: #94A3B8;
+        }
+        """
+    ]
 
 def get_prediction_delete_button_css():
     """
-    Nút xóa dạng icon siêu gọn.
-    Nhãn thật vẫn nằm trong DOM; tooltip giải thích đầy đủ hành động.
+    CSS chỉ dành cho nút Xóa trong container riêng của từng trận.
     """
-    return """
-    button {
-        width: 32px !important;
-        min-width: 32px !important;
-        max-width: 32px !important;
-        height: 32px !important;
-        min-height: 32px !important;
-        max-height: 32px !important;
-        padding: 0 !important;
-
-        display: inline-flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-
-        position: relative !important;
-        overflow: hidden !important;
-
-        border: 1px solid rgba(220, 38, 38, 0.24) !important;
-        border-radius: 10px !important;
-        background: rgba(255, 255, 255, 0.72) !important;
-        color: #DC2626 !important;
-        box-shadow: none !important;
-
-        font-size: 0 !important;
-        line-height: 0 !important;
-
-        transition:
-            background 0.16s ease,
-            border-color 0.16s ease,
-            color 0.16s ease,
-            box-shadow 0.16s ease,
-            transform 0.16s ease !important;
-    }
-
-    button::before {
-        content: "";
-
-        width: 15px;
-        height: 15px;
-
-        display: block;
-        background: currentColor;
-
-        -webkit-mask:
-            url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 3h6l1 2h4v2H4V5h4l1-2Zm-2 6h10l-1 12H8L7 9Zm3 2v8h2v-8h-2Zm4 0v8h2v-8h-2Z'/%3E%3C/svg%3E")
-            center / contain no-repeat;
-        mask:
-            url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 3h6l1 2h4v2H4V5h4l1-2Zm-2 6h10l-1 12H8L7 9Zm3 2v8h2v-8h-2Zm4 0v8h2v-8h-2Z'/%3E%3C/svg%3E")
-            center / contain no-repeat;
-    }
-
-    button *,
-    button p {
-        position: absolute !important;
-        width: 1px !important;
-        height: 1px !important;
-        padding: 0 !important;
-        margin: -1px !important;
-        overflow: hidden !important;
-        clip: rect(0, 0, 0, 0) !important;
-        white-space: nowrap !important;
-        border: 0 !important;
-    }
-
-    button:hover {
-        border-color: rgba(220, 38, 38, 0.56) !important;
-        background: rgba(254, 226, 226, 0.78) !important;
-        color: #B91C1C !important;
-        box-shadow:
-            0 4px 10px rgba(185, 28, 28, 0.10) !important;
-        transform: translateY(-1px) !important;
-    }
-
-    button:active {
-        box-shadow: none !important;
-        transform: scale(0.96) !important;
-    }
-
-    button:focus-visible {
-        outline: 3px solid rgba(220, 38, 38, 0.16) !important;
-        outline-offset: 2px !important;
-    }
-
-    @media (max-width: 768px) {
+    return [
+        """
         button {
-            width: 34px !important;
-            min-width: 34px !important;
-            max-width: 34px !important;
-            height: 34px !important;
-            min-height: 34px !important;
-            max-height: 34px !important;
+            width: 32px !important;
+            min-width: 32px !important;
+            max-width: 32px !important;
+            height: 32px !important;
+            min-height: 32px !important;
+            max-height: 32px !important;
+            padding: 0 !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            position: relative !important;
+            overflow: hidden !important;
+            border: 1px solid rgba(220, 38, 38, 0.24) !important;
+            border-radius: 10px !important;
+            background: rgba(255, 255, 255, 0.76) !important;
+            color: #DC2626 !important;
+            box-shadow: none !important;
+            font-size: 0 !important;
+            line-height: 0 !important;
+            transition:
+                background 0.16s ease,
+                border-color 0.16s ease,
+                color 0.16s ease,
+                box-shadow 0.16s ease,
+                transform 0.16s ease !important;
         }
-
+        """,
+        """
         button::before {
+            content: "";
             width: 15px;
             height: 15px;
+            display: block;
+            background: currentColor;
+            -webkit-mask:
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 3h6l1 2h4v2H4V5h4l1-2Zm-2 6h10l-1 12H8L7 9Zm3 2v8h2v-8h-2Zm4 0v8h2v-8h-2Z'/%3E%3C/svg%3E")
+                center / contain no-repeat;
+            mask:
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 3h6l1 2h4v2H4V5h4l1-2Zm-2 6h10l-1 12H8L7 9Zm3 2v8h2v-8h-2Zm4 0v8h2v-8h-2Z'/%3E%3C/svg%3E")
+                center / contain no-repeat;
         }
-    }
-    """
+        """,
+        """
+        button > div {
+            position: absolute !important;
+            width: 1px !important;
+            height: 1px !important;
+            padding: 0 !important;
+            margin: -1px !important;
+            overflow: hidden !important;
+            clip: rect(0, 0, 0, 0) !important;
+            white-space: nowrap !important;
+            border: 0 !important;
+        }
+        """,
+        """
+        button:hover {
+            border-color: rgba(220, 38, 38, 0.56) !important;
+            background: rgba(254, 226, 226, 0.82) !important;
+            color: #B91C1C !important;
+            box-shadow: 0 4px 10px rgba(185, 28, 28, 0.10) !important;
+            transform: translateY(-1px) !important;
+        }
+        """,
+        """
+        button:active {
+            box-shadow: none !important;
+            transform: scale(0.96) !important;
+        }
+        """,
+        """
+        button:focus-visible {
+            outline: 3px solid rgba(220, 38, 38, 0.16) !important;
+            outline-offset: 2px !important;
+        }
+        """
+    ]
 
 def inject_sidebar_menu_radio_css():
     st.markdown(
