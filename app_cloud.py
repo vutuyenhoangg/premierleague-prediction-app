@@ -9142,6 +9142,65 @@ def inject_sidebar_menu_radio_css():
     st.markdown(
         """
         <style>
+        /*
+         * Nút đóng/mở sidebar phải luôn có cả biểu tượng và chữ "Menu".
+         *
+         * Chỉ dùng các ancestor/test-id dành riêng cho sidebar; tuyệt đối
+         * không dùng :first-of-type hoặc selector button toàn cục vì các
+         * selector đó có thể bắt nhầm Share, Favorite và Edit trên header.
+        */
+        div[data-testid="stSidebarCollapsedControl"] button,
+        div[data-testid="stSidebarCollapseButton"] button,
+        button[data-testid="stSidebarCollapsedControl"],
+        button[data-testid="stSidebarCollapseButton"],
+        section[data-testid="stSidebar"]
+        button[data-testid="stBaseButton-headerNoPadding"],
+        section[data-testid="stSidebar"]
+        button[kind="headerNoPadding"],
+        section[data-testid="stSidebar"]
+        button[aria-label*="sidebar" i] {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 8px !important;
+            width: auto !important;
+            min-width: 88px !important;
+            height: 38px !important;
+            min-height: 38px !important;
+            padding: 0 12px !important;
+            overflow: visible !important;
+            white-space: nowrap !important;
+        }
+
+        div[data-testid="stSidebarCollapsedControl"] button::after,
+        div[data-testid="stSidebarCollapseButton"] button::after,
+        button[data-testid="stSidebarCollapsedControl"]::after,
+        button[data-testid="stSidebarCollapseButton"]::after,
+        section[data-testid="stSidebar"]
+        button[data-testid="stBaseButton-headerNoPadding"]::after,
+        section[data-testid="stSidebar"]
+        button[kind="headerNoPadding"]::after,
+        section[data-testid="stSidebar"]
+        button[aria-label*="sidebar" i]::after {
+            content: "Menu" !important;
+            display: inline-block !important;
+            color: #0D2940 !important;
+            font-size: 13px !important;
+            font-weight: 850 !important;
+            line-height: 1 !important;
+            letter-spacing: 0.01em !important;
+            white-space: nowrap !important;
+        }
+
+        section[data-testid="stSidebar"]
+        button[data-testid="stBaseButton-headerNoPadding"]::after,
+        section[data-testid="stSidebar"]
+        button[kind="headerNoPadding"]::after,
+        section[data-testid="stSidebar"]
+        button[aria-label*="sidebar" i]::after {
+            color: #F8FAFC !important;
+        }
+
         section[data-testid="stSidebar"] div[class*="st-key-selected_page"] label[data-baseweb="radio"] {
             display: inline-flex !important;
             align-items: center !important;
