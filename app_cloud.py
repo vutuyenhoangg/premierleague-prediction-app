@@ -26071,10 +26071,11 @@ def page_leaderboard():
     </div>
     """
 
-    st.markdown(
-        table_html,
-        unsafe_allow_html=True
-    )
+    # Đây là một cây HTML lồng nhiều cấp và có các dòng thụt lề.
+    # st.markdown() có thể kết thúc HTML block tại dòng trống rồi hiểu
+    # phần còn lại là Markdown code block, khiến mã <div>/<table> bị
+    # in thẳng ra màn hình. st.html() render toàn bộ cây HTML trực tiếp.
+    st.html(table_html)
 
     with stylable_container(
         key=(
