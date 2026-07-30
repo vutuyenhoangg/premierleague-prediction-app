@@ -9935,42 +9935,235 @@ def render_scoring_rules():
         }
         """
     ):
-        with st.expander("Cách tính điểm", expanded=False):
-            st.markdown(
-                f"""
-                **Dự đoán tỉ số**
-
-                **Trận thường**
-
-                - Đúng hoàn toàn tỉ số: **+{NORMAL_MATCH_EXACT_POINTS} điểm**
-                - Đúng kết quả thắng/hòa/thua: **+{NORMAL_MATCH_OUTCOME_POINTS} điểm**
-                - Sai kết quả: **0 điểm**
-
-                **Big Match**
-
-                - Đúng hoàn toàn tỉ số: **+{BIG_MATCH_EXACT_POINTS} điểm**
-                - Đúng kết quả thắng/hòa/thua: **+{BIG_MATCH_OUTCOME_POINTS} điểm**
-                - Sai kết quả: **0 điểm**
-
-                **⭐ Ngôi sao hy vọng**
-
-                - Dự đoán đúng: **x2 điểm**
-                - Sai trận thường: **-1 điểm**
-                - Sai Big Match: **-2 điểm**
-
-                **✨ Siêu sao**
-
-                - Dự đoán đúng: **x3 điểm**
-                - Sai trận thường: **-2 điểm**
-                - Sai Big Match: **-4 điểm**
-
-                **Thưởng vòng đấu**
-
-                - Người có tổng điểm dự đoán cao nhất sau khi đủ {EPL_MATCHES_PER_ROUND} trận của vòng kết thúc nhận **+{ROUND_CHAMPION_BONUS_POINTS} điểm**
-                - Nếu nhiều người bằng điểm cao nhất, tất cả đều đồng vô địch và đều nhận **+{ROUND_CHAMPION_BONUS_POINTS} điểm**
-                """
-            )
-
+        with st.expander("Luật chơi", expanded=False):
+            rules_html = f"""
+            <style>
+            .epl-scoring-rules {{
+                display: flex;
+                flex-direction: column;
+                gap: 14px;
+                padding: 4px 2px 8px;
+                color: #334155;
+                font-size: 14px;
+                line-height: 1.45;
+            }}
+        
+            .epl-scoring-rules .rules-heading {{
+                margin-bottom: 8px;
+                color: #07111F;
+                font-size: 15px;
+                font-weight: 900;
+            }}
+        
+            .epl-scoring-rules .rules-grid {{
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 10px;
+            }}
+        
+            .epl-scoring-rules .rules-card {{
+                padding: 11px 12px;
+                border: 1px solid rgba(15, 23, 42, 0.08);
+                border-radius: 12px;
+                background: rgba(255, 255, 255, 0.72);
+            }}
+        
+            .epl-scoring-rules .rules-card-title {{
+                margin-bottom: 7px;
+                color: #0D2940;
+                font-weight: 900;
+            }}
+        
+            .epl-scoring-rules .rules-row {{
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 10px;
+                margin-top: 6px;
+            }}
+        
+            .epl-scoring-rules .rules-values {{
+                display: flex;
+                align-items: center;
+                justify-content: flex-end;
+                flex-wrap: wrap;
+                gap: 5px;
+            }}
+        
+            .epl-scoring-rules .rule-pill {{
+                display: inline-flex;
+                align-items: center;
+                min-height: 25px;
+                padding: 2px 8px;
+                border-radius: 999px;
+                font-weight: 900;
+                white-space: nowrap;
+            }}
+        
+            .epl-scoring-rules .rule-positive {{
+                color: #15803D;
+                background: #DCFCE7;
+            }}
+        
+            .epl-scoring-rules .rule-negative {{
+                color: #B91C1C;
+                background: #FEE2E2;
+            }}
+        
+            .epl-scoring-rules .rule-neutral {{
+                color: #64748B;
+                background: #F1F5F9;
+            }}
+        
+            .epl-scoring-rules .rules-note {{
+                margin-top: 7px;
+                color: #64748B;
+                font-size: 12px;
+            }}
+        
+            .epl-scoring-rules .round-rule {{
+                padding: 11px 12px;
+                border-radius: 12px;
+                background: rgba(245, 197, 66, 0.12);
+            }}
+        
+            @media (max-width: 640px) {{
+                .epl-scoring-rules .rules-grid {{
+                    grid-template-columns: 1fr;
+                }}
+        
+                .epl-scoring-rules .rules-row {{
+                    align-items: flex-start;
+                }}
+            }}
+            </style>
+        
+            <div class="epl-scoring-rules">
+        
+                <div>
+                    <div class="rules-heading">Dự đoán tỉ số</div>
+        
+                    <div class="rules-grid">
+                        <div class="rules-card">
+                            <div class="rules-card-title">Trận thường</div>
+        
+                            <div class="rules-row">
+                                <span>Đúng tỉ số</span>
+                                <span class="rule-pill rule-positive">
+                                    +{NORMAL_MATCH_EXACT_POINTS}
+                                </span>
+                            </div>
+        
+                            <div class="rules-row">
+                                <span>Đúng kết quả</span>
+                                <span class="rule-pill rule-positive">
+                                    +{NORMAL_MATCH_OUTCOME_POINTS}
+                                </span>
+                            </div>
+        
+                            <div class="rules-row">
+                                <span>Sai</span>
+                                <span class="rule-pill rule-neutral">0</span>
+                            </div>
+                        </div>
+        
+                        <div class="rules-card">
+                            <div class="rules-card-title">
+                                Big Match
+                            </div>
+        
+                            <div class="rules-row">
+                                <span>Đúng tỉ số</span>
+                                <span class="rule-pill rule-positive">
+                                    +{BIG_MATCH_EXACT_POINTS}
+                                </span>
+                            </div>
+        
+                            <div class="rules-row">
+                                <span>Đúng kết quả</span>
+                                <span class="rule-pill rule-positive">
+                                    +{BIG_MATCH_OUTCOME_POINTS}
+                                </span>
+                            </div>
+        
+                            <div class="rules-row">
+                                <span>Sai</span>
+                                <span class="rule-pill rule-neutral">0</span>
+                            </div>
+                        </div>
+                    </div>
+        
+                    <div class="rules-note">
+                        Đúng kết quả = đúng thắng/hòa/thua nhưng không khớp
+                        chính xác tỉ số. Big Match là trận giữa hai đội Big 6.
+                    </div>
+                </div>
+        
+                <div class="rules-grid">
+                    <div class="rules-card">
+                        <div class="rules-card-title">
+                            ⭐ Ngôi sao hy vọng
+                        </div>
+        
+                        <div class="rules-row">
+                            <span>Đúng tỉ số/kết quả</span>
+                            <span class="rule-pill rule-positive">×2 điểm</span>
+                        </div>
+        
+                        <div class="rules-row">
+                            <span>Sai</span>
+                            <span class="rules-values">
+                                <span class="rule-pill rule-negative">
+                                    −1 thường
+                                </span>
+                                <span class="rule-pill rule-negative">
+                                    −2 Big Match
+                                </span>
+                            </span>
+                        </div>
+                    </div>
+        
+                    <div class="rules-card">
+                        <div class="rules-card-title">
+                            ✨ Siêu sao
+                        </div>
+        
+                        <div class="rules-row">
+                            <span>Đúng tỉ số/kết quả</span>
+                            <span class="rule-pill rule-positive">×3 điểm</span>
+                        </div>
+        
+                        <div class="rules-row">
+                            <span>Sai</span>
+                            <span class="rules-values">
+                                <span class="rule-pill rule-negative">
+                                    −2 thường
+                                </span>
+                                <span class="rule-pill rule-negative">
+                                    −4 Big Match
+                                </span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+        
+                <div class="round-rule">
+                    <div class="rules-card-title">👑 Thưởng vòng</div>
+        
+                    Dẫn đầu sau đủ {EPL_MATCHES_PER_ROUND} trận:
+                    <span class="rule-pill rule-positive">
+                        +{ROUND_CHAMPION_BONUS_POINTS} điểm
+                    </span>
+        
+                    <div class="rules-note">
+                        Đồng điểm cao nhất: tất cả cùng nhận thưởng.
+                    </div>
+                </div>
+        
+            </div>
+            """
+        
+            st.html(rules_html)
 def render_sidebar_star_balance(user_id: int):
     usage = get_user_star_usage(user_id)
 
