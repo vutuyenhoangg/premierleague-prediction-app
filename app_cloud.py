@@ -23149,7 +23149,19 @@ def build_leaderboard_df(season_slug: str | None = None):
     return summary
 
 def build_epl_standings_df(matches: pd.DataFrame) -> pd.DataFrame:
-    columns = ["Logo", "Đội bóng", "Trận", "Thắng", "Hòa", "Thua", "Bàn thắng", "Bàn thua", "Hiệu số", "Điểm"]
+    columns = [
+        "Logo",
+        "Đội bóng",
+        "Trận",
+        "Thắng",
+        "Hòa",
+        "Thua",
+        "Bàn thắng",
+        "Bàn thua",
+        "Hiệu số",
+        "Điểm",
+        "Phong độ"
+    ]
 
     if matches.empty:
         return pd.DataFrame(columns=columns)
@@ -23171,7 +23183,8 @@ def build_epl_standings_df(matches: pd.DataFrame) -> pd.DataFrame:
                 "Bàn thắng": 0,
                 "Bàn thua": 0,
                 "Hiệu số": 0,
-                "Điểm": 0
+                "Điểm": 0,
+                "Phong độ": []
             }
         elif not table[team_key]["Logo"] and logo_path and not pd.isna(logo_path):
             table[team_key]["Logo"] = str(logo_path).strip()
@@ -23185,7 +23198,37 @@ def build_epl_standings_df(matches: pd.DataFrame) -> pd.DataFrame:
         if pd.notna(row.get("away_team_name")):
             ensure_team(row.get("away_team_id"), row.get("away_team_name"), row.get("away_team_logo_path"))
 
-    for _, row in matches.iterrows():
+    ordered_matches = matches.copy()
+    ordered_matches["_form_source_order"] = range(
+        len(ordered_matches)
+    )
+
+    if "kickoff_time_utc_dt" in ordered_matches.columns:
+        ordered_matches["_form_kickoff"] = pd.to_datetime(
+            ordered_matches["kickoff_time_utc_dt"],
+            utc=True,
+            errors="coerce"
+        )
+    elif "kickoff_time_utc" in ordered_matches.columns:
+        ordered_matches["_form_kickoff"] = pd.to_datetime(
+            ordered_matches["kickoff_time_utc"],
+            utc=True,
+            errors="coerce"
+        )
+    else:
+        ordered_matches["_form_kickoff"] = pd.NaT
+
+    ordered_matches = ordered_matches.sort_values(
+        by=[
+            "_form_kickoff",
+            "_form_source_order"
+        ],
+        ascending=[True, True],
+        na_position="last",
+        kind="mergesort"
+    )
+
+    for _, row in ordered_matches.iterrows():
         if not to_bool(row.get("is_finished")):
             continue
 
@@ -23209,15 +23252,26 @@ def build_epl_standings_df(matches: pd.DataFrame) -> pd.DataFrame:
             home_team["Thắng"] += 1
             away_team["Thua"] += 1
             home_team["Điểm"] += 3
+            home_team["Phong độ"].append("W")
+            away_team["Phong độ"].append("L")
         elif away_goals > home_goals:
             away_team["Thắng"] += 1
             home_team["Thua"] += 1
             away_team["Điểm"] += 3
+            home_team["Phong độ"].append("L")
+            away_team["Phong độ"].append("W")
         else:
             home_team["Hòa"] += 1
             away_team["Hòa"] += 1
             home_team["Điểm"] += 1
             away_team["Điểm"] += 1
+            home_team["Phong độ"].append("D")
+            away_team["Phong độ"].append("D")
+
+    for team_stats in table.values():
+        team_stats["Phong độ"] = (
+            team_stats["Phong độ"][-5:]
+        )
 
     standings = pd.DataFrame(table.values())
 
@@ -23848,6 +23902,69 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
                 f'</td>'
             )
 
+        raw_form = row.get("Phong độ", [])
+
+        if isinstance(raw_form, (list, tuple)):
+            form_results = [
+                str(result).strip().upper()
+                for result in raw_form
+                if str(result).strip().upper()
+                in {"W", "D", "L"}
+            ][-5:]
+        else:
+            form_results = []
+
+        form_labels = {
+            "W": "Thắng",
+            "D": "Hòa",
+            "L": "Thua"
+        }
+        form_symbols = {
+            "W": "&#10003;",
+            "D": "&minus;",
+            "L": "&times;"
+        }
+        form_classes = {
+            "W": "form-win",
+            "D": "form-draw",
+            "L": "form-loss"
+        }
+
+        if form_results:
+            form_items_html = "".join(
+                (
+                    '<span '
+                    f'class="form-result {form_classes[result]}" '
+                    'role="listitem" '
+                    f'title="{form_labels[result]}" '
+                    f'aria-label="{form_labels[result]}">'
+                    f'{form_symbols[result]}'
+                    '</span>'
+                )
+                for result in form_results
+            )
+
+            form_summary = ", ".join(
+                form_labels[result]
+                for result in form_results
+            )
+
+            form_html = (
+                '<div class="form-sequence" '
+                'role="list" '
+                f'aria-label="Phong độ gần nhất: '
+                f'{html.escape(form_summary, quote=True)}">'
+                f'{form_items_html}'
+                '</div>'
+            )
+        else:
+            form_html = (
+                '<span class="form-empty" '
+                'aria-label="Chưa có dữ liệu phong độ">'
+                '&mdash;'
+                '</span>'
+            )
+
         rows_html.append(
             f"""
             <tr>
@@ -23867,6 +23984,9 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
                     </div>
                 </td>
                 {''.join(cells_html)}
+                <td data-col="form" class="form-cell">
+                    {form_html}
+                </td>
             </tr>
             """
         )
@@ -23888,7 +24008,7 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
     }}
     .epl-standings-table {{
         width: 100%;
-        min-width: 900px;
+        min-width: 1040px;
         border-collapse: collapse;
         font-size: 14px;
         color: #0F172A;
@@ -23957,6 +24077,60 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
         color: #07111F;
         background: rgba(245, 197, 66, 0.22) !important;
     }}
+    .epl-standings-table th[data-col="form"] {{
+        width: 150px;
+        min-width: 150px;
+    }}
+    .form-cell {{
+        width: 150px;
+        min-width: 150px;
+        padding-left: 14px !important;
+        padding-right: 14px !important;
+    }}
+    .form-sequence {{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-width: 118px;
+        white-space: nowrap;
+        vertical-align: middle;
+    }}
+    .form-result {{
+        --form-color: #94A3B8;
+        display: inline-flex;
+        width: 19px;
+        height: 19px;
+        flex: 0 0 19px;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        border-radius: 50%;
+        background: var(--form-color);
+        color: #FFFFFF;
+        font-size: 13px;
+        font-weight: 950;
+        line-height: 1;
+    }}
+    .form-result:last-child {{
+        box-shadow:
+            0 0 0 2px #FFFFFF,
+            0 0 0 3px var(--form-color);
+    }}
+    .form-win {{
+        --form-color: #2FA663;
+    }}
+    .form-draw {{
+        --form-color: #9CA3AF;
+    }}
+    .form-loss {{
+        --form-color: #EF4444;
+    }}
+    .form-empty {{
+        color: #94A3B8;
+        font-size: 17px;
+        font-weight: 700;
+    }}
     .positive {{
         color: #047857;
         font-weight: 400;
@@ -24018,15 +24192,18 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
     
             --goal-width:
                 44px;
+
+            --form-width:
+                128px;
     
             width:
                 calc(
-                    var(--team-width) + 374px
+                    var(--team-width) + 502px
                 );
     
             min-width:
                 calc(
-                    var(--team-width) + 374px
+                    var(--team-width) + 502px
                 );
     
             table-layout:
@@ -24165,6 +24342,48 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
     
             max-width:
                 var(--goal-width) !important;
+        }}
+
+        .epl-standings-table
+        [data-col="form"] {{
+            width:
+                var(--form-width) !important;
+
+            min-width:
+                var(--form-width) !important;
+
+            max-width:
+                var(--form-width) !important;
+        }}
+
+        .epl-standings-table
+        .form-cell {{
+            padding:
+                7px 6px !important;
+        }}
+
+        .epl-standings-table
+        .form-sequence {{
+            min-width:
+                108px;
+
+            gap:
+                5px;
+        }}
+
+        .epl-standings-table
+        .form-result {{
+            width:
+                17px;
+
+            height:
+                17px;
+
+            flex-basis:
+                17px;
+
+            font-size:
+                11.5px;
         }}
     
         /* =========================
@@ -24360,6 +24579,7 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
                         <th data-col="ga" title="Bàn thua">GA</th>
                         <th data-col="gd" title="Hiệu số">GD</th>
                         <th data-col="points" title="Điểm">PTS</th>
+                        <th data-col="form" title="Phong độ 5 trận gần nhất">FORM</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -24389,7 +24609,8 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
             "gf",
             "ga",
             "gd",
-            "points"
+            "points",
+            "form"
         ];
     
         const mobileColumnOrder = [
@@ -24402,7 +24623,8 @@ def render_epl_standings_table(standings_df: pd.DataFrame):
             "draws",
             "losses",
             "gf",
-            "ga"
+            "ga",
+            "form"
         ];
     
         const reorderColumns = (
