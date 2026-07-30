@@ -2136,26 +2136,48 @@ def inject_epl_theme():
         }}
 
         /*
-         * Fix nút Đăng xuất trong sidebar:
-         * nền trắng nhưng chữ không bị trắng theo sidebar.
+         * Chỉ style đúng nút Đăng xuất bằng key riêng.
+         * Không dùng selector vị trí như :first-of-type vì có thể bắt nhầm
+         * các nút hệ thống của Streamlit trên vùng header.
          */
         section[data-testid="stSidebar"]
+        div[class*="st-key-sidebar_logout_button"],
+        section[data-testid="stSidebar"]
+        div[class*="st-key-sidebar_logout_button"] .stButton {{
+            width: 100% !important;
+        }}
+
+        section[data-testid="stSidebar"]
+        div[class*="st-key-sidebar_logout_button"]
         .stButton > button {{
+            width: 100% !important;
+            min-height: 40px !important;
+            padding: 0 16px !important;
             background: rgba(255, 255, 255, 0.96) !important;
             color: #07111F !important;
             border: 1px solid rgba(245, 197, 66, 0.35) !important;
+            border-radius: 12px !important;
+            box-shadow: none !important;
+            white-space: nowrap !important;
         }}
 
         section[data-testid="stSidebar"]
-        .stButton > button * {{
+        div[class*="st-key-sidebar_logout_button"]
+        .stButton > button *,
+        section[data-testid="stSidebar"]
+        div[class*="st-key-sidebar_logout_button"]
+        .stButton > button p {{
             color: #07111F !important;
+            white-space: nowrap !important;
         }}
 
         section[data-testid="stSidebar"]
+        div[class*="st-key-sidebar_logout_button"]
         .stButton > button:hover {{
             background: #F5C542 !important;
             color: #07111F !important;
             border-color: #F5C542 !important;
+            transform: none !important;
         }}
 
         .stSelectbox div[data-baseweb="select"] > div,
@@ -2176,78 +2198,6 @@ def inject_epl_theme():
             color: #123C69;
             font-weight: 800;
             text-decoration: none;
-        }}
-
-        /* =====================================================
-           NÚT MENU SIDEBAR
-           ===================================================== */
-
-        button[data-testid="stBaseButton-headerNoPadding"]:first-of-type,
-        button[kind="headerNoPadding"]:first-of-type {{
-            width: auto !important;
-            min-width: 88px !important;
-            height: 38px !important;
-            min-height: 38px !important;
-            padding: 0 12px !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            justify-content: flex-start !important;
-            gap: 8px !important;
-            border-radius: 999px !important;
-            background: transparent !important;
-            box-shadow: none !important;
-            border: none !important;
-        }}
-
-        button[data-testid="stBaseButton-headerNoPadding"]:first-of-type::after,
-        button[kind="headerNoPadding"]:first-of-type::after {{
-            content: "MENU";
-            display: inline-block;
-            color: #07111F;
-            font-size: 14px;
-            font-weight: 900;
-            letter-spacing: 0.01em;
-            line-height: 1;
-            margin-left: 4px;
-        }}
-
-        /*
-         * Khi sidebar mở, nút nằm trên nền xanh đậm
-         * nên chữ Menu chuyển sang trắng.
-         */
-        section[data-testid="stSidebar"]
-        button[data-testid="stBaseButton-headerNoPadding"]:first-of-type::after,
-        section[data-testid="stSidebar"]
-        button[kind="headerNoPadding"]:first-of-type::after {{
-            color: #F8FAFC !important;
-        }}
-
-        section[data-testid="stSidebar"]
-        button[data-testid="stBaseButton-headerNoPadding"]:first-of-type svg,
-        section[data-testid="stSidebar"]
-        button[kind="headerNoPadding"]:first-of-type svg {{
-            color: #F8FAFC !important;
-            stroke: #F8FAFC !important;
-        }}
-
-        section[data-testid="stSidebar"]
-        button[data-testid="stBaseButton-headerNoPadding"]:first-of-type:hover,
-        section[data-testid="stSidebar"]
-        button[kind="headerNoPadding"]:first-of-type:hover {{
-            background: rgba(255, 255, 255, 0.08) !important;
-        }}
-
-        button[data-testid="stBaseButton-headerNoPadding"]:first-of-type:hover,
-        button[kind="headerNoPadding"]:first-of-type:hover {{
-            background: rgba(15, 23, 42, 0.05) !important;
-        }}
-
-        button[data-testid="stBaseButton-headerNoPadding"]:first-of-type svg,
-        button[kind="headerNoPadding"]:first-of-type svg {{
-            width: 20px !important;
-            height: 20px !important;
-            color: #64748B !important;
-            stroke: #64748B !important;
         }}
 
         /* =====================================================
@@ -25434,21 +25384,9 @@ def page_leaderboard():
             row,
             "correct_outcome_count"
         )
-        wrong_prediction_count = safe_int(
-            row,
-            "wrong_prediction_count"
-        )
-        exact_score_rate = safe_float(
-            row,
-            "exact_score_rate"
-        )
         result_prediction_rate = safe_float(
             row,
             "result_prediction_rate"
-        )
-        wrong_prediction_rate = safe_float(
-            row,
-            "wrong_prediction_rate"
         )
 
         star_bonus_class = (
@@ -25501,45 +25439,58 @@ def page_leaderboard():
                 <td class="col-score">
                     <span class="total-score-badge">{total_points}</span>
                 </td>
-                <td>{base_points}</td>
-                <td>
-                    <span class="bonus-value {star_bonus_class}">
-                        {format_signed(star_bonus_points)}
-                    </span>
+                <td class="col-breakdown">
+                    <div
+                        class="score-breakdown"
+                        title="Điểm gốc: {base_points} • Thưởng sao: {format_signed(star_bonus_points)} • Thưởng vòng: {format_signed(round_bonus_points)}"
+                    >
+                        <span class="breakdown-item">
+                            <span class="breakdown-label">Gốc</span>
+                            <strong>{base_points}</strong>
+                        </span>
+                        <span class="breakdown-item">
+                            <span class="breakdown-label">Sao</span>
+                            <strong class="bonus-value {star_bonus_class}">
+                                {format_signed(star_bonus_points)}
+                            </strong>
+                        </span>
+                        <span class="breakdown-item">
+                            <span class="breakdown-label">Vòng</span>
+                            <strong class="round-bonus-value">
+                                {format_signed(round_bonus_points)}
+                            </strong>
+                        </span>
+                    </div>
                 </td>
-                <td>
-                    <span class="round-bonus-value">
-                        {format_signed(round_bonus_points)}
-                    </span>
-                </td>
-                <td>
+                <td class="col-round-titles">
                     <span class="round-title-count">
                         {round_champion_count}
                     </span>
                 </td>
-                <td>
-                    <span class="star-balance hope-star">
-                        {escaped_hope_display}
-                    </span>
+                <td class="col-boosters">
+                    <div class="boosters-cell">
+                        <span
+                            class="star-balance hope-star"
+                            title="Ngôi sao hy vọng còn lại"
+                        >
+                            ⭐ {escaped_hope_display}
+                        </span>
+                        <span
+                            class="star-balance super-star"
+                            title="Siêu sao còn lại"
+                        >
+                            ✨ {escaped_super_display}
+                        </span>
+                    </div>
                 </td>
-                <td>
-                    <span class="star-balance super-star">
-                        {escaped_super_display}
-                    </span>
+                <td class="col-matches">{num_scored}</td>
+                <td class="col-average average-value">
+                    {average_points:.1f}
                 </td>
-                <td>{num_scored}</td>
-                <td class="average-value">{average_points:.1f}</td>
-                <td>{exact_score_count}</td>
-                <td>{correct_outcome_count}</td>
-                <td>{wrong_prediction_count}</td>
-                <td class="percentage-value">
-                    {exact_score_rate * 100:.1f}%
-                </td>
-                <td class="percentage-value">
+                <td class="col-exact">{exact_score_count}</td>
+                <td class="col-outcome">{correct_outcome_count}</td>
+                <td class="col-rate percentage-value">
                     {result_prediction_rate * 100:.1f}%
-                </td>
-                <td class="percentage-value wrong-rate">
-                    {wrong_prediction_rate * 100:.1f}%
                 </td>
             </tr>
             """
@@ -25642,7 +25593,7 @@ def page_leaderboard():
 
     .epl-leaderboard-table {{
         width: 100%;
-        min-width: 1900px;
+        min-width: 1160px;
         border-spacing: 0;
         border-collapse: separate;
         table-layout: fixed;
@@ -25655,16 +25606,12 @@ def page_leaderboard():
     .epl-leaderboard-table td {{
         height: 54px;
         padding: 9px 11px;
-        border-right: 1px solid #E5ECF2;
+        border-left: 0 !important;
+        border-right: 0 !important;
         border-bottom: 1px solid #E5ECF2;
         text-align: center;
         vertical-align: middle;
         white-space: nowrap;
-    }}
-
-    .epl-leaderboard-table th:last-child,
-    .epl-leaderboard-table td:last-child {{
-        border-right: 0;
     }}
 
     .epl-leaderboard-table thead th {{
@@ -25724,6 +25671,38 @@ def page_leaderboard():
     }}
 
     .epl-leaderboard-table .col-score {{
+        width: 76px;
+    }}
+
+    .epl-leaderboard-table .col-breakdown {{
+        width: 190px;
+    }}
+
+    .epl-leaderboard-table .col-round-titles {{
+        width: 78px;
+    }}
+
+    .epl-leaderboard-table .col-boosters {{
+        width: 132px;
+    }}
+
+    .epl-leaderboard-table .col-matches {{
+        width: 64px;
+    }}
+
+    .epl-leaderboard-table .col-average {{
+        width: 82px;
+    }}
+
+    .epl-leaderboard-table .col-exact {{
+        width: 82px;
+    }}
+
+    .epl-leaderboard-table .col-outcome {{
+        width: 96px;
+    }}
+
+    .epl-leaderboard-table .col-rate {{
         width: 82px;
     }}
 
@@ -25737,8 +25716,6 @@ def page_leaderboard():
         position: sticky;
         left: 64px;
         z-index: 3;
-        box-shadow:
-            7px 0 12px -12px rgba(7,17,31,0.58);
     }}
 
     .epl-leaderboard-table thead .sticky-rank,
@@ -25852,6 +25829,30 @@ def page_leaderboard():
         font-weight: 950;
     }}
 
+    .score-breakdown {{
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        align-items: center;
+        gap: 5px;
+        width: 100%;
+    }}
+
+    .breakdown-item {{
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        min-width: 0;
+    }}
+
+    .breakdown-label {{
+        color: #7A8C9C;
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+    }}
+
     .bonus-value,
     .round-bonus-value,
     .round-title-count {{
@@ -25875,13 +25876,20 @@ def page_leaderboard():
         color: #1763B6;
     }}
 
+    .boosters-cell {{
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+    }}
+
     .star-balance {{
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-width: 43px;
+        min-width: 54px;
         height: 27px;
-        padding: 0 7px;
+        padding: 0 6px;
         border-radius: 999px;
         font-size: 11px;
         font-weight: 950;
@@ -25907,10 +25915,6 @@ def page_leaderboard():
     .percentage-value {{
         color: #445A6D;
         font-variant-numeric: tabular-nums;
-    }}
-
-    .wrong-rate {{
-        color: #9E4444;
     }}
 
     .epl-leaderboard-footer {{
@@ -25953,7 +25957,7 @@ def page_leaderboard():
         }}
 
         .epl-leaderboard-table {{
-            min-width: 1780px;
+            min-width: 1040px;
             font-size: 12px;
         }}
 
@@ -25982,6 +25986,24 @@ def page_leaderboard():
 
         .epl-leaderboard-table .sticky-player {{
             left: 52px;
+        }}
+
+        .epl-leaderboard-table .col-breakdown {{
+            width: 176px;
+        }}
+
+        .epl-leaderboard-table .col-boosters {{
+            width: 124px;
+        }}
+
+        .breakdown-label {{
+            font-size: 8px;
+        }}
+
+        .star-balance {{
+            min-width: 50px;
+            padding: 0 5px;
+            font-size: 10px;
         }}
 
         .player-avatar {{
@@ -26018,7 +26040,7 @@ def page_leaderboard():
                 </span>
             </div>
             <span class="epl-leaderboard-scroll-hint">
-                ↔ Kéo ngang để xem đầy đủ
+                ↔ Cuộn ngang trên màn hình nhỏ
             </span>
         </div>
 
@@ -26034,20 +26056,37 @@ def page_leaderboard():
                             class="col-player sticky-player"
                         >Người chơi</th>
                         <th class="col-score">Điểm</th>
-                        <th>Điểm gốc</th>
-                        <th>Thưởng sao</th>
-                        <th>Thưởng vòng</th>
-                        <th>Vô địch vòng</th>
-                        <th title="Số Ngôi sao hy vọng còn lại">⭐</th>
-                        <th title="Số Siêu sao còn lại">✨</th>
-                        <th title="Số trận đã chấm">Trận</th>
-                        <th>Điểm TB/trận</th>
-                        <th>Đúng tỉ số</th>
-                        <th>Đúng kết quả</th>
-                        <th>Sai</th>
-                        <th>% Đúng tỉ số</th>
-                        <th>% Đúng kết quả</th>
-                        <th>% Sai</th>
+                        <th
+                            class="col-breakdown"
+                            title="Điểm gốc, thưởng sao và thưởng vô địch vòng"
+                        >Chi tiết điểm</th>
+                        <th
+                            class="col-round-titles"
+                            title="Số lần vô địch vòng"
+                        >VĐ vòng</th>
+                        <th
+                            class="col-boosters"
+                            title="Số Ngôi sao hy vọng và Siêu sao còn lại"
+                        >Bổ trợ</th>
+                        <th
+                            class="col-matches"
+                            title="Số trận đã chấm"
+                        >Trận</th>
+                        <th
+                            class="col-average"
+                            title="Điểm dự đoán trung bình mỗi trận đã chấm, không gồm thưởng vòng"
+                        >Điểm TB</th>
+                        <th
+                            class="col-exact"
+                        >Đúng tỉ số</th>
+                        <th
+                            class="col-outcome"
+                            title="Số dự đoán đúng kết quả, gồm cả dự đoán đúng tỉ số"
+                        >Đúng kết quả</th>
+                        <th
+                            class="col-rate"
+                            title="Tỷ lệ dự đoán đúng kết quả trên tổng số trận đã chấm"
+                        >Tỷ lệ đúng</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -26936,7 +26975,11 @@ def main():
         st.markdown(f"Xin chào, **{user['display_name']}**")
         render_sidebar_star_balance(user["user_id"])
 
-        if st.button("Đăng xuất", use_container_width=True):
+        if st.button(
+            "Đăng xuất",
+            key="sidebar_logout_button",
+            use_container_width=True
+        ):
             logout_user()
 
         st.markdown("---")
