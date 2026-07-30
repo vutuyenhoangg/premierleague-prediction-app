@@ -25157,6 +25157,2075 @@ def page_competition_stats():
         standings
     )
 
+def normalize_prediction_round_name(value) -> str:
+    """
+    Chuẩn hóa tên vòng để dữ liệu "Vòng 1" và "Matchday 1"
+    được gom vào cùng một lựa chọn.
+    """
+    if value is None or pd.isna(value):
+        return ""
+
+    round_text = str(value).strip()
+
+    if not round_text:
+        return ""
+
+    round_number_match = re.search(
+        r"\d+",
+        round_text
+    )
+
+    if round_number_match:
+        return (
+            f"Vòng {int(round_number_match.group(0))}"
+        )
+
+    return round_text
+
+
+def get_prediction_round_sort_key(
+    round_name: str
+) -> tuple:
+    round_number_match = re.search(
+        r"\d+",
+        str(round_name)
+    )
+
+    if round_number_match:
+        return (
+            0,
+            int(round_number_match.group(0)),
+            str(round_name).casefold()
+        )
+
+    return (
+        1,
+        10**9,
+        str(round_name).casefold()
+    )
+
+
+def get_available_prediction_rounds(
+    matches: pd.DataFrame
+) -> list[str]:
+    if (
+        matches.empty
+        or "round_name" not in matches.columns
+    ):
+        return []
+
+    normalized_rounds = (
+        matches["round_name"]
+        .map(normalize_prediction_round_name)
+    )
+
+    return sorted(
+        {
+            round_name
+            for round_name in normalized_rounds
+            if round_name
+        },
+        key=get_prediction_round_sort_key
+    )
+
+
+def get_default_prediction_round(
+    matches: pd.DataFrame,
+    round_names: list[str]
+) -> str | None:
+    """
+    Mặc định:
+    - vòng chưa hoàn tất gần nhất đã bắt đầu;
+    - nếu mùa chưa bắt đầu, chọn vòng đầu tiên;
+    - nếu mùa đã kết thúc, chọn vòng cuối cùng.
+    """
+    if not round_names:
+        return None
+
+    if matches.empty:
+        return round_names[0]
+
+    working_matches = matches.copy()
+    working_matches["_round_key"] = (
+        working_matches["round_name"]
+        .map(normalize_prediction_round_name)
+    )
+
+    kickoff_source = (
+        working_matches["kickoff_time_utc_dt"]
+        if "kickoff_time_utc_dt" in working_matches.columns
+        else working_matches.get(
+            "kickoff_time_utc",
+            pd.Series(
+                pd.NaT,
+                index=working_matches.index
+            )
+        )
+    )
+
+    working_matches["_kickoff"] = pd.to_datetime(
+        kickoff_source,
+        utc=True,
+        errors="coerce"
+    )
+
+    actual_home = pd.to_numeric(
+        working_matches.get(
+            "home_score_for_prediction",
+            pd.Series(
+                pd.NA,
+                index=working_matches.index
+            )
+        ),
+        errors="coerce"
+    )
+
+    actual_away = pd.to_numeric(
+        working_matches.get(
+            "away_score_for_prediction",
+            pd.Series(
+                pd.NA,
+                index=working_matches.index
+            )
+        ),
+        errors="coerce"
+    )
+
+    finished_source = working_matches.get(
+        "is_finished",
+        pd.Series(
+            False,
+            index=working_matches.index
+        )
+    )
+
+    working_matches["_is_complete"] = (
+        finished_source.map(to_bool)
+        & actual_home.notna()
+        & actual_away.notna()
+    )
+
+    round_status = (
+        working_matches[
+            working_matches["_round_key"].isin(
+                round_names
+            )
+        ]
+        .groupby(
+            "_round_key",
+            as_index=False
+        )
+        .agg(
+            match_count=(
+                "match_id",
+                "nunique"
+            ),
+            completed_match_count=(
+                "_is_complete",
+                "sum"
+            ),
+            first_kickoff=(
+                "_kickoff",
+                "min"
+            )
+        )
+        .set_index("_round_key")
+    )
+
+    now_utc = pd.Timestamp.now(tz="UTC")
+    started_incomplete_rounds = []
+    future_incomplete_rounds = []
+
+    for round_name in round_names:
+        if round_name not in round_status.index:
+            continue
+
+        status_row = round_status.loc[round_name]
+        match_count = int(
+            status_row["match_count"]
+        )
+        completed_match_count = int(
+            status_row["completed_match_count"]
+        )
+        is_complete = (
+            match_count == EPL_MATCHES_PER_ROUND
+            and completed_match_count == match_count
+        )
+
+        if is_complete:
+            continue
+
+        first_kickoff = status_row["first_kickoff"]
+
+        if (
+            pd.notna(first_kickoff)
+            and first_kickoff <= now_utc
+        ):
+            started_incomplete_rounds.append(
+                round_name
+            )
+        else:
+            future_incomplete_rounds.append(
+                round_name
+            )
+
+    if started_incomplete_rounds:
+        return started_incomplete_rounds[-1]
+
+    if future_incomplete_rounds:
+        return future_incomplete_rounds[0]
+
+    return round_names[-1]
+
+
+def render_prediction_leaderboard_view_switcher() -> str:
+    """
+    Bộ chọn đầu trang giữa BXH tổng và BXH theo vòng.
+    CSS được khóa trong key riêng để không tác động nút header/menu.
+    """
+    valid_views = {
+        "overall",
+        "round"
+    }
+
+    active_view = st.session_state.get(
+        "prediction_leaderboard_view",
+        "overall"
+    )
+
+    if active_view not in valid_views:
+        active_view = "overall"
+        st.session_state[
+            "prediction_leaderboard_view"
+        ] = active_view
+
+    st.markdown(
+        """
+        <style>
+        div[class*="st-key-prediction_leaderboard_tabs"] {
+            width: min(450px, 100%) !important;
+            margin: 0 0 18px 0 !important;
+            padding: 5px !important;
+            border: 1px solid rgba(7,17,31,0.12) !important;
+            border-radius: 14px !important;
+            background: rgba(255,255,255,0.90) !important;
+            box-shadow:
+                0 10px 28px rgba(7,17,31,0.07),
+                inset 0 1px 0 rgba(255,255,255,0.94)
+                !important;
+            backdrop-filter: blur(10px);
+        }
+
+        div[class*="st-key-prediction_leaderboard_tabs"]
+        div[data-testid="stHorizontalBlock"] {
+            gap: 5px !important;
+        }
+
+        div[class*="st-key-prediction_leaderboard_tabs"]
+        div[data-testid="stColumn"] {
+            min-width: 0 !important;
+            padding: 0 !important;
+        }
+
+        div[class*="st-key-prediction_leaderboard_tabs"]
+        div[class*="st-key-prediction_leaderboard_tab_"] {
+            width: 100% !important;
+            margin: 0 !important;
+        }
+
+        div[class*="st-key-prediction_leaderboard_tabs"]
+        div[class*="st-key-prediction_leaderboard_tab_"]
+        button {
+            position: relative !important;
+            width: 100% !important;
+            min-height: 42px !important;
+            padding: 0 15px !important;
+            border: 1px solid transparent !important;
+            border-radius: 10px !important;
+            background: transparent !important;
+            color: #536679 !important;
+            box-shadow: none !important;
+            font-size: 13.5px !important;
+            font-weight: 850 !important;
+            line-height: 1 !important;
+            opacity: 1 !important;
+            transform: none !important;
+        }
+
+        div[class*="st-key-prediction_leaderboard_tabs"]
+        div[class*="st-key-prediction_leaderboard_tab_"]
+        button:not(:disabled):hover {
+            border-color: rgba(7,17,31,0.10) !important;
+            background: rgba(7,17,31,0.05) !important;
+            color: #07111F !important;
+            transform: none !important;
+        }
+
+        div[class*="st-key-prediction_leaderboard_tabs"]
+        div[class*="st-key-prediction_leaderboard_tab_"]
+        button:disabled {
+            border-color: #0B263C !important;
+            background:
+                linear-gradient(
+                    135deg,
+                    #07111F 0%,
+                    #12324B 100%
+                )
+                !important;
+            color: #FFFFFF !important;
+            box-shadow:
+                0 7px 18px rgba(7,17,31,0.18),
+                inset 0 1px 0 rgba(255,255,255,0.12)
+                !important;
+            cursor: default !important;
+            opacity: 1 !important;
+        }
+
+        div[class*="st-key-prediction_leaderboard_tabs"]
+        div[class*="st-key-prediction_leaderboard_tab_"]
+        button:disabled * {
+            color: #FFFFFF !important;
+            opacity: 1 !important;
+        }
+
+        div[class*="st-key-prediction_leaderboard_tabs"]
+        div[class*="st-key-prediction_leaderboard_tab_"]
+        button:disabled::after {
+            content: "";
+            position: absolute;
+            left: 34%;
+            right: 34%;
+            bottom: 0;
+            height: 2px;
+            border-radius: 2px 2px 0 0;
+            background: #F5C542;
+            box-shadow:
+                0 -1px 5px rgba(245,197,66,0.28);
+        }
+
+        @media (max-width: 768px) {
+            div[class*="st-key-prediction_leaderboard_tabs"] {
+                width: 100% !important;
+                margin-bottom: 15px !important;
+                border-radius: 13px !important;
+            }
+
+            div[class*="st-key-prediction_leaderboard_tabs"]
+            div[class*="st-key-prediction_leaderboard_tab_"]
+            button {
+                min-height: 40px !important;
+                padding: 0 10px !important;
+                font-size: 12.5px !important;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    with st.container(
+        key="prediction_leaderboard_tabs"
+    ):
+        overall_column, round_column = st.columns(2)
+
+        with overall_column:
+            if st.button(
+                "BXH tổng",
+                key="prediction_leaderboard_tab_overall",
+                use_container_width=True,
+                disabled=active_view == "overall"
+            ):
+                st.session_state[
+                    "prediction_leaderboard_view"
+                ] = "overall"
+                st.rerun()
+
+        with round_column:
+            if st.button(
+                "BXH theo vòng",
+                key="prediction_leaderboard_tab_round",
+                use_container_width=True,
+                disabled=active_view == "round"
+            ):
+                st.session_state[
+                    "prediction_leaderboard_view"
+                ] = "round"
+                st.rerun()
+
+    return active_view
+
+
+def render_prediction_round_filter(
+    matches: pd.DataFrame,
+    season_slug: str
+) -> str | None:
+    round_names = get_available_prediction_rounds(
+        matches
+    )
+
+    if not round_names:
+        return None
+
+    select_state_key = (
+        "round_leaderboard_select_"
+        + season_slug.replace("-", "_")
+    )
+
+    selected_round = st.session_state.get(
+        select_state_key
+    )
+
+    if selected_round not in round_names:
+        selected_round = get_default_prediction_round(
+            matches,
+            round_names
+        )
+        st.session_state[
+            select_state_key
+        ] = selected_round
+
+    selected_index = round_names.index(
+        selected_round
+    )
+    container_suffix = season_slug.replace(
+        "-",
+        "_"
+    )
+
+    st.markdown(
+        """
+        <style>
+        div[class*="st-key-round_leaderboard_filter_"] {
+            width: min(520px, 100%) !important;
+            margin: -2px 0 18px 0 !important;
+            padding: 10px 12px 11px !important;
+            border: 1px solid rgba(7,17,31,0.10) !important;
+            border-radius: 14px !important;
+            background: rgba(255,255,255,0.90) !important;
+            box-shadow: 0 9px 24px rgba(7,17,31,0.055) !important;
+        }
+
+        div[class*="st-key-round_leaderboard_filter_"]
+        div[data-testid="stHorizontalBlock"] {
+            gap: 8px !important;
+            align-items: flex-end !important;
+        }
+
+        div[class*="st-key-round_leaderboard_filter_"]
+        div[data-testid="stColumn"] {
+            min-width: 0 !important;
+            padding: 0 !important;
+        }
+
+        div[class*="st-key-round_leaderboard_filter_"]
+        div[data-testid="stSelectbox"] label {
+            color: #526579 !important;
+            font-size: 11px !important;
+            font-weight: 900 !important;
+            letter-spacing: 0.055em !important;
+            text-transform: uppercase !important;
+        }
+
+        div[class*="st-key-round_leaderboard_filter_"]
+        div[data-baseweb="select"] > div {
+            min-height: 40px !important;
+            border-color: rgba(7,17,31,0.16) !important;
+            border-radius: 10px !important;
+            background: #FFFFFF !important;
+            box-shadow: none !important;
+        }
+
+        div[class*="st-key-round_leaderboard_filter_"]
+        div[class*="st-key-round_leaderboard_arrow_"]
+        button {
+            width: 40px !important;
+            min-width: 40px !important;
+            height: 40px !important;
+            min-height: 40px !important;
+            padding: 0 !important;
+            border: 1px solid rgba(7,17,31,0.16) !important;
+            border-radius: 10px !important;
+            background: #FFFFFF !important;
+            color: #0D2940 !important;
+            box-shadow: none !important;
+            font-size: 21px !important;
+            font-weight: 900 !important;
+            line-height: 1 !important;
+            transform: none !important;
+        }
+
+        div[class*="st-key-round_leaderboard_filter_"]
+        div[class*="st-key-round_leaderboard_arrow_"]
+        button:hover:not(:disabled) {
+            border-color: #E0AE15 !important;
+            background: #F8D863 !important;
+            color: #07111F !important;
+            transform: none !important;
+        }
+
+        div[class*="st-key-round_leaderboard_filter_"]
+        div[class*="st-key-round_leaderboard_arrow_"]
+        button:disabled {
+            border-color: #E2E8EE !important;
+            background: #F4F7F9 !important;
+            color: #AEBAC4 !important;
+            opacity: 1 !important;
+        }
+
+        @media (max-width: 768px) {
+            div[class*="st-key-round_leaderboard_filter_"] {
+                width: 100% !important;
+                padding: 9px 10px 10px !important;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    with st.container(
+        key=(
+            "round_leaderboard_filter_"
+            + container_suffix
+        )
+    ):
+        previous_column, select_column, next_column = (
+            st.columns(
+                [0.7, 4.6, 0.7]
+            )
+        )
+
+        with previous_column:
+            with st.container(
+                key=(
+                    "round_leaderboard_arrow_previous_"
+                    + container_suffix
+                )
+            ):
+                previous_clicked = st.button(
+                    "‹",
+                    key=(
+                        "round_leaderboard_previous_"
+                        + container_suffix
+                    ),
+                    help="Vòng trước",
+                    disabled=selected_index <= 0
+                )
+
+        with next_column:
+            with st.container(
+                key=(
+                    "round_leaderboard_arrow_next_"
+                    + container_suffix
+                )
+            ):
+                next_clicked = st.button(
+                    "›",
+                    key=(
+                        "round_leaderboard_next_"
+                        + container_suffix
+                    ),
+                    help="Vòng sau",
+                    disabled=(
+                        selected_index
+                        >= len(round_names) - 1
+                    )
+                )
+
+        # Hai nút mũi tên được xử lý trước khi selectbox được tạo.
+        # Streamlit không cho phép sửa session_state của một widget
+        # sau khi widget đó đã xuất hiện trong cùng một lượt chạy.
+        if previous_clicked:
+            st.session_state[
+                select_state_key
+            ] = round_names[
+                selected_index - 1
+            ]
+            st.rerun()
+
+        if next_clicked:
+            st.session_state[
+                select_state_key
+            ] = round_names[
+                selected_index + 1
+            ]
+            st.rerun()
+
+        with select_column:
+            selected_round = st.selectbox(
+                "Vòng đấu",
+                options=round_names,
+                key=select_state_key
+            )
+
+    return selected_round
+
+
+def build_round_leaderboard_df(
+    season_slug: str,
+    round_name: str
+) -> pd.DataFrame:
+    """
+    Tính BXH riêng cho một vòng.
+
+    Điểm vòng là tổng points sau bổ trợ của các trận trong vòng.
+    Khoản +5 thưởng vô địch vòng không được cộng vào đây để tránh
+    dùng chính phần thưởng làm thay đổi người vô địch.
+    """
+    users = load_users()
+    matches = load_matches(season_slug)
+    predictions = load_predictions(season_slug)
+
+    if users.empty:
+        return pd.DataFrame()
+
+    normalized_round_name = (
+        normalize_prediction_round_name(
+            round_name
+        )
+    )
+
+    if (
+        matches.empty
+        or not normalized_round_name
+        or "round_name" not in matches.columns
+    ):
+        return pd.DataFrame()
+
+    round_keys = matches["round_name"].map(
+        normalize_prediction_round_name
+    )
+
+    round_matches = matches.loc[
+        round_keys.eq(normalized_round_name)
+    ].copy()
+
+    if round_matches.empty:
+        return pd.DataFrame()
+
+    actual_home = pd.to_numeric(
+        round_matches[
+            "home_score_for_prediction"
+        ],
+        errors="coerce"
+    )
+    actual_away = pd.to_numeric(
+        round_matches[
+            "away_score_for_prediction"
+        ],
+        errors="coerce"
+    )
+
+    round_matches["_is_complete"] = (
+        round_matches["is_finished"].map(
+            to_bool
+        )
+        & actual_home.notna()
+        & actual_away.notna()
+    )
+
+    round_match_count = int(
+        round_matches["match_id"].nunique()
+    )
+    completed_match_count = int(
+        round_matches["_is_complete"].sum()
+    )
+    is_round_complete = (
+        round_match_count == EPL_MATCHES_PER_ROUND
+        and completed_match_count == round_match_count
+    )
+
+    summary = users.copy()
+    numeric_defaults = [
+        "round_points",
+        "base_points",
+        "star_bonus_points",
+        "hope_stars_used",
+        "super_stars_used",
+        "num_predictions",
+        "num_scored",
+        "exact_score_count",
+        "correct_outcome_count"
+    ]
+
+    if not predictions.empty:
+        match_columns = [
+            "match_id",
+            "home_score_for_prediction",
+            "away_score_for_prediction",
+            "is_finished",
+            "kickoff_time_utc"
+        ]
+
+        round_predictions = predictions.merge(
+            round_matches[match_columns],
+            on="match_id",
+            how="inner"
+        )
+
+        if not round_predictions.empty:
+            pred_home = pd.to_numeric(
+                round_predictions[
+                    "predicted_home_score"
+                ],
+                errors="coerce"
+            )
+            pred_away = pd.to_numeric(
+                round_predictions[
+                    "predicted_away_score"
+                ],
+                errors="coerce"
+            )
+            actual_home = pd.to_numeric(
+                round_predictions[
+                    "home_score_for_prediction"
+                ],
+                errors="coerce"
+            )
+            actual_away = pd.to_numeric(
+                round_predictions[
+                    "away_score_for_prediction"
+                ],
+                errors="coerce"
+            )
+            is_finished = (
+                round_predictions[
+                    "is_finished"
+                ].map(to_bool)
+            )
+
+            round_predictions["is_scored"] = (
+                pred_home.notna()
+                & pred_away.notna()
+                & actual_home.notna()
+                & actual_away.notna()
+                & is_finished
+            )
+
+            round_predictions["exact_score"] = (
+                round_predictions["is_scored"]
+                & pred_home.eq(actual_home)
+                & pred_away.eq(actual_away)
+            )
+
+            round_predictions[
+                "correct_outcome"
+            ] = (
+                round_predictions["is_scored"]
+                & (
+                    (
+                        pred_home.gt(pred_away)
+                        & actual_home.gt(actual_away)
+                    )
+                    | (
+                        pred_home.lt(pred_away)
+                        & actual_home.lt(actual_away)
+                    )
+                    | (
+                        pred_home.eq(pred_away)
+                        & actual_home.eq(actual_away)
+                    )
+                )
+            )
+
+            round_predictions["points"] = (
+                pd.to_numeric(
+                    round_predictions["points"],
+                    errors="coerce"
+                )
+            )
+            round_predictions[
+                "base_points"
+            ] = pd.to_numeric(
+                round_predictions["base_points"],
+                errors="coerce"
+            ).fillna(0)
+            round_predictions[
+                "star_bonus_points"
+            ] = pd.to_numeric(
+                round_predictions[
+                    "star_bonus_points"
+                ],
+                errors="coerce"
+            ).fillna(0)
+
+            normalized_stars = (
+                round_predictions["star_type"]
+                .fillna(STAR_TYPE_NONE)
+                .astype(str)
+                .str.strip()
+                .str.lower()
+            )
+            round_predictions["star_type"] = (
+                normalized_stars.where(
+                    normalized_stars.isin(
+                        STAR_CONFIG
+                    ),
+                    STAR_TYPE_NONE
+                )
+            )
+
+            kickoff_time = pd.to_datetime(
+                round_predictions[
+                    "kickoff_time_utc"
+                ],
+                utc=True,
+                errors="coerce"
+            )
+            is_star_locked = (
+                is_finished
+                | kickoff_time.isna()
+                | kickoff_time.le(
+                    pd.Timestamp.now(tz="UTC")
+                )
+            )
+            round_predictions[
+                "hope_star_used"
+            ] = (
+                round_predictions[
+                    "star_type"
+                ].eq(STAR_TYPE_HOPE)
+                & is_star_locked
+            )
+            round_predictions[
+                "super_star_used"
+            ] = (
+                round_predictions[
+                    "star_type"
+                ].eq(STAR_TYPE_SUPER)
+                & is_star_locked
+            )
+
+            round_summary = (
+                round_predictions
+                .groupby(
+                    "user_id",
+                    as_index=False
+                )
+                .agg(
+                    round_points=(
+                        "points",
+                        lambda values: (
+                            pd.to_numeric(
+                                values,
+                                errors="coerce"
+                            )
+                            .fillna(0)
+                            .sum()
+                        )
+                    ),
+                    base_points=(
+                        "base_points",
+                        "sum"
+                    ),
+                    star_bonus_points=(
+                        "star_bonus_points",
+                        "sum"
+                    ),
+                    hope_stars_used=(
+                        "hope_star_used",
+                        "sum"
+                    ),
+                    super_stars_used=(
+                        "super_star_used",
+                        "sum"
+                    ),
+                    num_predictions=(
+                        "prediction_id",
+                        "nunique"
+                    ),
+                    num_scored=(
+                        "is_scored",
+                        "sum"
+                    ),
+                    exact_score_count=(
+                        "exact_score",
+                        "sum"
+                    ),
+                    correct_outcome_count=(
+                        "correct_outcome",
+                        "sum"
+                    )
+                )
+            )
+
+            summary = summary.merge(
+                round_summary,
+                on="user_id",
+                how="left"
+            )
+
+    for column_name in numeric_defaults:
+        if column_name not in summary.columns:
+            summary[column_name] = 0
+
+        summary[column_name] = (
+            pd.to_numeric(
+                summary[column_name],
+                errors="coerce"
+            )
+            .fillna(0)
+            .round()
+            .astype(int)
+        )
+
+    if "avatar_key" not in summary.columns:
+        summary["avatar_key"] = (
+            DEFAULT_AVATAR_KEY
+        )
+    else:
+        summary["avatar_key"] = (
+            summary["avatar_key"]
+            .fillna(DEFAULT_AVATAR_KEY)
+        )
+
+    summary[
+        "average_points_per_scored_match"
+    ] = (
+        summary["round_points"]
+        .astype(float)
+        .div(
+            summary["num_scored"]
+            .astype(float)
+            .where(
+                summary["num_scored"].ne(0)
+            )
+        )
+        .fillna(0.0)
+    )
+
+    summary["result_prediction_rate"] = (
+        summary["correct_outcome_count"]
+        .astype(float)
+        .div(
+            summary["num_scored"]
+            .astype(float)
+            .where(
+                summary["num_scored"].ne(0)
+            )
+        )
+        .fillna(0.0)
+    )
+
+    summary["is_champion"] = False
+
+    if is_round_complete:
+        participating_mask = (
+            summary["num_scored"].gt(0)
+        )
+
+        if bool(participating_mask.any()):
+            top_round_points = int(
+                summary.loc[
+                    participating_mask,
+                    "round_points"
+                ].max()
+            )
+            summary["is_champion"] = (
+                participating_mask
+                & summary["round_points"].eq(
+                    top_round_points
+                )
+            )
+
+    summary["round_match_count"] = (
+        round_match_count
+    )
+    summary[
+        "completed_match_count"
+    ] = completed_match_count
+    summary["is_round_complete"] = (
+        is_round_complete
+    )
+
+    summary = summary.sort_values(
+        [
+            "round_points",
+            "exact_score_count",
+            "correct_outcome_count",
+            "display_name"
+        ],
+        ascending=[
+            False,
+            False,
+            False,
+            True
+        ]
+    ).reset_index(drop=True)
+
+    summary["rank"] = (
+        summary["round_points"]
+        .rank(
+            method="min",
+            ascending=False
+        )
+        .astype(int)
+    )
+
+    return summary
+
+
+def render_round_leaderboard_table(
+    leaderboard: pd.DataFrame,
+    season_slug: str,
+    season_label: str,
+    round_name: str,
+    current_user_id: int | None,
+    current_display_name: str
+):
+    total_players = len(leaderboard)
+    round_token = re.sub(
+        r"[^0-9A-Za-z]+",
+        "_",
+        str(round_name)
+    ).strip("_").lower() or "round"
+    season_token = season_slug.replace(
+        "-",
+        "_"
+    )
+    pagination_token = (
+        f"{season_token}_{round_token}"
+    )
+
+    total_pages = max(
+        1,
+        (
+            total_players
+            + LEADERBOARD_PAGE_SIZE
+            - 1
+        )
+        // LEADERBOARD_PAGE_SIZE
+    )
+    page_state_key = (
+        "round_leaderboard_page_"
+        + pagination_token
+    )
+    current_page = to_optional_int(
+        st.session_state.get(page_state_key)
+    )
+
+    if current_page is None:
+        current_page = 1
+
+    current_page = min(
+        max(current_page, 1),
+        total_pages
+    )
+    st.session_state[
+        page_state_key
+    ] = current_page
+
+    page_start = (
+        current_page - 1
+    ) * LEADERBOARD_PAGE_SIZE
+    page_end = min(
+        page_start + LEADERBOARD_PAGE_SIZE,
+        total_players
+    )
+    page_df = (
+        leaderboard
+        .iloc[page_start:page_end]
+        .copy()
+        .reset_index(drop=True)
+    )
+
+    available_avatar_keys = load_avatar_catalog()
+    sprite_src, sprite_columns, sprite_rows = (
+        build_avatar_sprite_payload()
+    )
+
+    def safe_int(row, column_name):
+        value = pd.to_numeric(
+            pd.Series(
+                [row.get(column_name)]
+            ),
+            errors="coerce"
+        ).iloc[0]
+
+        if pd.isna(value):
+            return 0
+
+        return int(round(float(value)))
+
+    def safe_float(row, column_name):
+        value = pd.to_numeric(
+            pd.Series(
+                [row.get(column_name)]
+            ),
+            errors="coerce"
+        ).iloc[0]
+
+        if pd.isna(value):
+            return 0.0
+
+        return float(value)
+
+    def format_signed(value):
+        value = int(value)
+        return f"+{value}" if value > 0 else str(value)
+
+    def build_avatar_style(avatar_key):
+        normalized_avatar_key = normalize_avatar_key(
+            avatar_key,
+            avatar_keys=list(
+                available_avatar_keys
+            )
+        )
+
+        if (
+            sprite_src
+            and sprite_columns > 0
+            and sprite_rows > 0
+        ):
+            sprite_position = (
+                get_avatar_sprite_position(
+                    normalized_avatar_key,
+                    avatar_keys=(
+                        available_avatar_keys
+                    )
+                )
+            )
+
+            if sprite_position is not None:
+                x_position, y_position = (
+                    sprite_position
+                )
+
+                return (
+                    "background-image:url('"
+                    f"{html.escape(sprite_src, quote=True)}"
+                    "');"
+                    "background-size:"
+                    f"{sprite_columns * 100}% "
+                    f"{sprite_rows * 100}%;"
+                    "background-position:"
+                    f"{x_position:.6f}% "
+                    f"{y_position:.6f}%;"
+                    "background-repeat:no-repeat;"
+                )
+
+        avatar_src = get_avatar_src(
+            normalized_avatar_key,
+            avatar_keys=list(
+                available_avatar_keys
+            )
+        )
+
+        if not avatar_src:
+            return ""
+
+        return (
+            "background-image:url('"
+            f"{html.escape(avatar_src, quote=True)}"
+            "');"
+            "background-size:cover;"
+            "background-position:center;"
+            "background-repeat:no-repeat;"
+        )
+
+    table_rows = []
+
+    for _, row in page_df.iterrows():
+        rank_value = safe_int(
+            row,
+            "rank"
+        )
+        row_user_id = to_optional_int(
+            row.get("user_id")
+        )
+        display_name = str(
+            row.get(
+                "display_name",
+                ""
+            )
+        ).strip()
+        is_current_user = (
+            (
+                current_user_id is not None
+                and row_user_id == current_user_id
+            )
+            or (
+                current_user_id is None
+                and display_name
+                == current_display_name
+            )
+        )
+        is_champion = to_bool(
+            row.get("is_champion")
+        )
+        row_classes = [
+            "epl-round-leaderboard-row"
+        ]
+
+        if is_current_user:
+            row_classes.append(
+                "is-current-user"
+            )
+
+        if is_champion:
+            row_classes.append(
+                "is-round-champion"
+            )
+
+        if rank_value in [1, 2, 3]:
+            row_classes.append(
+                f"is-rank-{rank_value}"
+            )
+
+        player_badge = (
+            '<span class="epl-round-you-badge">'
+            'Bạn'
+            '</span>'
+            if is_current_user
+            else ""
+        )
+        champion_crown = (
+            '<span '
+            'class="round-champion-crown" '
+            f'title="Vô địch {html.escape(str(round_name), quote=True)}" '
+            f'aria-label="Vô địch {html.escape(str(round_name), quote=True)}">'
+            '👑'
+            '</span>'
+            if is_champion
+            else ""
+        )
+        avatar_style = build_avatar_style(
+            row.get(
+                "avatar_key",
+                DEFAULT_AVATAR_KEY
+            )
+        )
+        round_points = safe_int(
+            row,
+            "round_points"
+        )
+        base_points = safe_int(
+            row,
+            "base_points"
+        )
+        star_bonus_points = safe_int(
+            row,
+            "star_bonus_points"
+        )
+        hope_stars_used = safe_int(
+            row,
+            "hope_stars_used"
+        )
+        super_stars_used = safe_int(
+            row,
+            "super_stars_used"
+        )
+        num_scored = safe_int(
+            row,
+            "num_scored"
+        )
+        average_points = safe_float(
+            row,
+            "average_points_per_scored_match"
+        )
+        exact_score_count = safe_int(
+            row,
+            "exact_score_count"
+        )
+        correct_outcome_count = safe_int(
+            row,
+            "correct_outcome_count"
+        )
+        result_prediction_rate = safe_float(
+            row,
+            "result_prediction_rate"
+        )
+        star_bonus_class = (
+            "is-negative"
+            if star_bonus_points < 0
+            else (
+                "is-positive"
+                if star_bonus_points > 0
+                else "is-zero"
+            )
+        )
+        escaped_name = html.escape(
+            display_name
+        )
+
+        table_rows.append(
+            f"""
+            <tr class="{' '.join(row_classes)}">
+                <td class="col-rank sticky-rank">
+                    <span class="rank-badge">{rank_value}</span>
+                </td>
+                <td class="col-player sticky-player">
+                    <div class="player-cell">
+                        <span
+                            class="player-avatar"
+                            style="{avatar_style}"
+                            aria-hidden="true"
+                        ></span>
+                        <span class="player-name">{escaped_name}</span>
+                        {champion_crown}
+                        {player_badge}
+                    </div>
+                </td>
+                <td class="col-score">
+                    <span class="round-score-badge">
+                        {round_points}
+                    </span>
+                </td>
+                <td class="col-breakdown">
+                    <div
+                        class="score-breakdown"
+                        title="Điểm gốc: {base_points} • Điểm bổ trợ: {format_signed(star_bonus_points)}"
+                    >
+                        <span class="breakdown-item">
+                            <span class="breakdown-label">Gốc</span>
+                            <strong>{base_points}</strong>
+                        </span>
+                        <span class="breakdown-item">
+                            <span class="breakdown-label">Sao</span>
+                            <strong class="bonus-value {star_bonus_class}">
+                                {format_signed(star_bonus_points)}
+                            </strong>
+                        </span>
+                    </div>
+                </td>
+                <td class="col-boosters">
+                    <div class="boosters-cell">
+                        <span
+                            class="star-used hope-star"
+                            title="Ngôi sao hy vọng đã dùng trong vòng"
+                        >
+                            ⭐ {hope_stars_used}
+                        </span>
+                        <span
+                            class="star-used super-star"
+                            title="Siêu sao đã dùng trong vòng"
+                        >
+                            ✨ {super_stars_used}
+                        </span>
+                    </div>
+                </td>
+                <td class="col-matches">{num_scored}</td>
+                <td class="col-average average-value">
+                    {average_points:.1f}
+                </td>
+                <td class="col-exact">{exact_score_count}</td>
+                <td class="col-outcome">
+                    {correct_outcome_count}
+                </td>
+                <td class="col-rate percentage-value">
+                    {result_prediction_rate * 100:.1f}%
+                </td>
+            </tr>
+            """
+        )
+
+    first_row = leaderboard.iloc[0]
+    round_match_count = safe_int(
+        first_row,
+        "round_match_count"
+    )
+    completed_match_count = safe_int(
+        first_row,
+        "completed_match_count"
+    )
+    is_round_complete = to_bool(
+        first_row.get("is_round_complete")
+    )
+
+    if is_round_complete:
+        status_label = "Đã chốt"
+        status_class = "is-complete"
+    elif completed_match_count > 0:
+        status_label = "Đang diễn ra"
+        status_class = "is-live"
+    else:
+        status_label = "Chưa có kết quả"
+        status_class = "is-upcoming"
+
+    table_html = f"""
+    <style>
+    .epl-round-leaderboard-card {{
+        overflow: hidden;
+        border: 1px solid rgba(7,17,31,0.10);
+        border-radius: 18px;
+        background: #FFFFFF;
+        box-shadow: 0 12px 30px rgba(7,17,31,0.07);
+    }}
+
+    .epl-round-leaderboard-toolbar {{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 13px 16px;
+        color: #EAF2F8;
+        border-bottom: 3px solid #F5C542;
+        background:
+            linear-gradient(
+                105deg,
+                #07111F 0%,
+                #0A2136 62%,
+                #12324B 100%
+            );
+    }}
+
+    .epl-round-leaderboard-toolbar-left,
+    .epl-round-leaderboard-toolbar-right {{
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 7px;
+        min-width: 0;
+    }}
+
+    .epl-round-chip {{
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        padding: 4px 10px;
+        border: 1px solid rgba(245,197,66,0.42);
+        border-radius: 999px;
+        color: #F8DA78;
+        background: rgba(245,197,66,0.10);
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 0.025em;
+        white-space: nowrap;
+    }}
+
+    .epl-round-progress {{
+        color: rgba(234,242,248,0.76);
+        font-size: 12px;
+        font-weight: 750;
+        white-space: nowrap;
+    }}
+
+    .epl-round-status {{
+        display: inline-flex;
+        align-items: center;
+        min-height: 25px;
+        padding: 3px 8px;
+        border: 1px solid transparent;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 900;
+        letter-spacing: 0.035em;
+        white-space: nowrap;
+    }}
+
+    .epl-round-status.is-complete {{
+        color: #CFF9DA;
+        border-color: rgba(86,205,126,0.28);
+        background: rgba(43,151,80,0.16);
+    }}
+
+    .epl-round-status.is-live {{
+        color: #FFE49A;
+        border-color: rgba(245,197,66,0.30);
+        background: rgba(245,197,66,0.13);
+    }}
+
+    .epl-round-status.is-upcoming {{
+        color: #D6E4EF;
+        border-color: rgba(214,228,239,0.20);
+        background: rgba(214,228,239,0.08);
+    }}
+
+    .epl-round-scroll-hint {{
+        color: rgba(234,242,248,0.68);
+        font-size: 10px;
+        font-weight: 750;
+        white-space: nowrap;
+    }}
+
+    .epl-round-leaderboard-scroll {{
+        width: 100%;
+        overflow-x: auto;
+        overflow-y: hidden;
+        overscroll-behavior-inline: contain;
+        scrollbar-color: #A9BAC8 #EEF3F7;
+        scrollbar-width: thin;
+    }}
+
+    .epl-round-leaderboard-scroll::-webkit-scrollbar {{
+        height: 8px;
+    }}
+
+    .epl-round-leaderboard-scroll::-webkit-scrollbar-track {{
+        background: #EEF3F7;
+    }}
+
+    .epl-round-leaderboard-scroll::-webkit-scrollbar-thumb {{
+        border: 2px solid #EEF3F7;
+        border-radius: 999px;
+        background: #A9BAC8;
+    }}
+
+    .epl-round-leaderboard-table {{
+        width: 100%;
+        min-width: 1080px;
+        border-spacing: 0;
+        border-collapse: separate;
+        table-layout: fixed;
+        color: #162536;
+        background: #FFFFFF;
+        font-size: 13px;
+    }}
+
+    .epl-round-leaderboard-table th,
+    .epl-round-leaderboard-table td {{
+        height: 54px;
+        padding: 9px 11px;
+        border-left: 0 !important;
+        border-right: 0 !important;
+        border-bottom: 1px solid #E5ECF2;
+        text-align: center;
+        vertical-align: middle;
+        white-space: nowrap;
+    }}
+
+    .epl-round-leaderboard-table thead th {{
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        height: 52px;
+        color: #EAF2F8;
+        background: #091827;
+        font-size: 11px;
+        font-weight: 850;
+        line-height: 1.25;
+    }}
+
+    .epl-round-leaderboard-table tbody td {{
+        background: #FFFFFF;
+        font-weight: 720;
+        transition: background-color 140ms ease;
+    }}
+
+    .epl-round-leaderboard-table tbody tr:nth-child(even) td {{
+        background: #F7FAFC;
+    }}
+
+    .epl-round-leaderboard-table tbody tr:hover td {{
+        background: #F1F7FB;
+    }}
+
+    .epl-round-leaderboard-table tbody tr:last-child td {{
+        border-bottom: 0;
+    }}
+
+    .epl-round-leaderboard-table tbody tr.is-current-user td {{
+        color: #07111F;
+        background: #E5F4FB;
+        font-weight: 820;
+    }}
+
+    .epl-round-leaderboard-table tbody tr.is-round-champion td {{
+        background: #FFF9E8;
+    }}
+
+    .epl-round-leaderboard-table
+    tbody tr.is-round-champion.is-current-user td {{
+        background:
+            linear-gradient(
+                90deg,
+                #E5F4FB,
+                #FFF9E8
+            );
+    }}
+
+    .epl-round-leaderboard-table .col-rank {{
+        width: 64px;
+        min-width: 64px;
+        max-width: 64px;
+    }}
+
+    .epl-round-leaderboard-table .col-player {{
+        width: 226px;
+        min-width: 226px;
+        max-width: 226px;
+        text-align: left;
+    }}
+
+    .epl-round-leaderboard-table .col-score {{ width: 86px; }}
+    .epl-round-leaderboard-table .col-breakdown {{ width: 150px; }}
+    .epl-round-leaderboard-table .col-boosters {{ width: 126px; }}
+    .epl-round-leaderboard-table .col-matches {{ width: 66px; }}
+    .epl-round-leaderboard-table .col-average {{ width: 82px; }}
+    .epl-round-leaderboard-table .col-exact {{ width: 84px; }}
+    .epl-round-leaderboard-table .col-outcome {{ width: 98px; }}
+    .epl-round-leaderboard-table .col-rate {{ width: 86px; }}
+
+    .epl-round-leaderboard-table .sticky-rank {{
+        position: sticky;
+        left: 0;
+        z-index: 3;
+    }}
+
+    .epl-round-leaderboard-table .sticky-player {{
+        position: sticky;
+        left: 64px;
+        z-index: 3;
+    }}
+
+    .epl-round-leaderboard-table thead .sticky-rank,
+    .epl-round-leaderboard-table thead .sticky-player {{
+        z-index: 8;
+        background: #07111F;
+    }}
+
+    .epl-round-leaderboard-card .rank-badge {{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        border: 1px solid #D9E3EA;
+        border-radius: 50%;
+        color: #405467;
+        background: #F4F7FA;
+        font-size: 12px;
+        font-weight: 950;
+    }}
+
+    .epl-round-leaderboard-card .is-rank-1 .rank-badge {{
+        color: #704B00;
+        border-color: #E9B91F;
+        background: linear-gradient(145deg,#FFE485,#F5C542);
+    }}
+
+    .epl-round-leaderboard-card .is-rank-2 .rank-badge {{
+        color: #344557;
+        border-color: #B7C5D1;
+        background: linear-gradient(145deg,#F1F5F9,#CBD5E1);
+    }}
+
+    .epl-round-leaderboard-card .is-rank-3 .rank-badge {{
+        color: #562609;
+        border-color: #B9652F;
+        background: linear-gradient(145deg,#E8A06C,#C8753D);
+    }}
+
+    .epl-round-leaderboard-card .player-cell {{
+        display: flex;
+        align-items: center;
+        min-width: 0;
+    }}
+
+    .epl-round-leaderboard-card .player-avatar {{
+        flex: 0 0 auto;
+        display: inline-block;
+        width: 32px;
+        height: 32px;
+        margin-right: 9px;
+        border: 2px solid #FFFFFF;
+        border-radius: 50%;
+        background-color: #DDE7EF;
+        box-shadow: 0 2px 7px rgba(7,17,31,0.16);
+    }}
+
+    .epl-round-leaderboard-card .player-name {{
+        min-width: 0;
+        overflow: hidden;
+        color: #152638;
+        font-weight: 850;
+        text-overflow: ellipsis;
+    }}
+
+    .round-champion-crown {{
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: 6px;
+        font-size: 17px;
+        line-height: 1;
+        filter: drop-shadow(0 1px 2px rgba(142,94,0,0.22));
+    }}
+
+    .epl-round-you-badge {{
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        margin-left: 7px;
+        padding: 2px 6px;
+        color: #0A5274;
+        border: 1px solid rgba(14,116,144,0.25);
+        border-radius: 999px;
+        background: rgba(14,116,144,0.08);
+        font-size: 9px;
+        font-weight: 950;
+        text-transform: uppercase;
+    }}
+
+    .round-score-badge {{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 42px;
+        height: 30px;
+        padding: 0 9px;
+        color: #07111F;
+        border: 1px solid #E8BD31;
+        border-radius: 9px;
+        background: #F8D863;
+        font-size: 14px;
+        font-weight: 950;
+    }}
+
+    .epl-round-leaderboard-card .score-breakdown {{
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        align-items: center;
+        gap: 7px;
+        width: 100%;
+    }}
+
+    .epl-round-leaderboard-card .breakdown-item {{
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        min-width: 0;
+    }}
+
+    .epl-round-leaderboard-card .breakdown-label {{
+        color: #7A8C9C;
+        font-size: 9px;
+        font-weight: 800;
+        text-transform: uppercase;
+    }}
+
+    .epl-round-leaderboard-card .bonus-value {{
+        font-weight: 900;
+    }}
+
+    .epl-round-leaderboard-card .bonus-value.is-positive {{
+        color: #A65B08;
+    }}
+
+    .epl-round-leaderboard-card .bonus-value.is-negative {{
+        color: #C73535;
+    }}
+
+    .epl-round-leaderboard-card .bonus-value.is-zero {{
+        color: #738496;
+    }}
+
+    .epl-round-leaderboard-card .boosters-cell {{
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+    }}
+
+    .star-used {{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 48px;
+        height: 27px;
+        padding: 0 6px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 950;
+    }}
+
+    .star-used.hope-star {{
+        color: #805500;
+        border: 1px solid rgba(222,174,24,0.35);
+        background: rgba(245,197,66,0.15);
+    }}
+
+    .star-used.super-star {{
+        color: #50418F;
+        border: 1px solid rgba(107,88,190,0.24);
+        background: rgba(124,105,210,0.10);
+    }}
+
+    .epl-round-leaderboard-card .average-value {{
+        color: #0E7490;
+        font-weight: 900 !important;
+    }}
+
+    .epl-round-leaderboard-card .percentage-value {{
+        color: #445A6D;
+        font-variant-numeric: tabular-nums;
+    }}
+
+    .epl-round-leaderboard-footer {{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 16px;
+        color: #66798B;
+        border-top: 1px solid #E5ECF2;
+        background: #F8FAFC;
+        font-size: 11px;
+        font-weight: 700;
+    }}
+
+    .epl-round-leaderboard-footer strong {{
+        color: #1C3348;
+        font-weight: 900;
+    }}
+
+    @media (max-width: 768px) {{
+        .epl-round-leaderboard-card {{
+            border-radius: 14px;
+        }}
+
+        .epl-round-leaderboard-toolbar {{
+            align-items: flex-start;
+            padding: 12px;
+        }}
+
+        .epl-round-leaderboard-toolbar-right {{
+            justify-content: flex-end;
+        }}
+
+        .epl-round-scroll-hint {{
+            display: none;
+        }}
+
+        .epl-round-leaderboard-table {{
+            min-width: 1000px;
+            font-size: 12px;
+        }}
+
+        .epl-round-leaderboard-table th,
+        .epl-round-leaderboard-table td {{
+            height: 50px;
+            padding: 8px 9px;
+        }}
+
+        .epl-round-leaderboard-table .col-rank {{
+            width: 52px;
+            min-width: 52px;
+            max-width: 52px;
+        }}
+
+        .epl-round-leaderboard-table .col-player {{
+            width: 184px;
+            min-width: 184px;
+            max-width: 184px;
+        }}
+
+        .epl-round-leaderboard-table .sticky-player {{
+            left: 52px;
+        }}
+
+        .epl-round-leaderboard-card .player-avatar {{
+            width: 28px;
+            height: 28px;
+            margin-right: 7px;
+        }}
+
+        .epl-round-leaderboard-card .player-name {{
+            max-width: 100px;
+        }}
+
+        .epl-round-you-badge {{
+            display: none;
+        }}
+
+        .epl-round-leaderboard-footer {{
+            align-items: flex-start;
+            flex-direction: column;
+            gap: 3px;
+            padding: 9px 12px;
+        }}
+    }}
+    </style>
+
+    <div class="epl-round-leaderboard-card">
+        <div class="epl-round-leaderboard-toolbar">
+            <div class="epl-round-leaderboard-toolbar-left">
+                <span class="epl-round-chip">
+                    Mùa {html.escape(str(season_label))}
+                </span>
+                <span class="epl-round-chip">
+                    {html.escape(str(round_name))}
+                </span>
+                <span class="epl-round-progress">
+                    {completed_match_count}/{round_match_count}
+                    trận kết thúc
+                </span>
+            </div>
+            <div class="epl-round-leaderboard-toolbar-right">
+                <span class="epl-round-status {status_class}">
+                    {status_label}
+                </span>
+                <span class="epl-round-scroll-hint">
+                    ↔ Cuộn ngang trên màn hình nhỏ
+                </span>
+            </div>
+        </div>
+
+        <div class="epl-round-leaderboard-scroll">
+            <table class="epl-round-leaderboard-table">
+                <thead>
+                    <tr>
+                        <th class="col-rank sticky-rank" title="Hạng trong vòng">#</th>
+                        <th class="col-player sticky-player">Người chơi</th>
+                        <th class="col-score" title="Tổng điểm dự đoán trong vòng, chưa gồm thưởng vô địch vòng">Điểm vòng</th>
+                        <th class="col-breakdown" title="Điểm gốc và điểm bổ trợ trong vòng">Chi tiết điểm</th>
+                        <th class="col-boosters" title="Số bổ trợ đã dùng trong vòng">Bổ trợ</th>
+                        <th class="col-matches" title="Số trận đã chấm trong vòng">Trận</th>
+                        <th class="col-average" title="Điểm trung bình mỗi trận đã chấm">Điểm TB</th>
+                        <th class="col-exact">Đúng tỉ số</th>
+                        <th class="col-outcome" title="Gồm cả dự đoán đúng tỉ số">Đúng kết quả</th>
+                        <th class="col-rate" title="Tỷ lệ đúng kết quả trong vòng">Tỷ lệ đúng</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {''.join(table_rows)}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="epl-round-leaderboard-footer">
+            <span>
+                Hiển thị
+                <strong>{page_start + 1}–{page_end}</strong>
+                trong
+                <strong>{total_players}</strong>
+                người chơi
+            </span>
+            <span>
+                Điểm vòng không gồm
+                +{ROUND_CHAMPION_BONUS_POINTS}
+                điểm thưởng vô địch vòng
+            </span>
+        </div>
+    </div>
+    """
+
+    st.html(table_html)
+
+    st.markdown(
+        """
+        <style>
+        div[class*="st-key-round_leaderboard_pagination_"] {
+            width: 100% !important;
+            max-width: 240px !important;
+            margin: 12px auto 0 !important;
+        }
+
+        div[class*="st-key-round_leaderboard_pagination_"]
+        .stButton > button {
+            width: 40px !important;
+            min-width: 40px !important;
+            height: 36px !important;
+            min-height: 36px !important;
+            padding: 0 !important;
+            color: #0D2940 !important;
+            border: 1px solid rgba(13,41,64,0.18) !important;
+            border-radius: 10px !important;
+            background: rgba(255,255,255,0.96) !important;
+            box-shadow: none !important;
+            font-size: 22px !important;
+            font-weight: 850 !important;
+            line-height: 1 !important;
+            transform: none !important;
+        }
+
+        div[class*="st-key-round_leaderboard_pagination_"]
+        .stButton > button:hover:not(:disabled) {
+            color: #07111F !important;
+            border-color: #E0AE15 !important;
+            background: #F8D863 !important;
+            transform: none !important;
+        }
+
+        div[class*="st-key-round_leaderboard_pagination_"]
+        .stButton > button:disabled {
+            color: #AEBAC4 !important;
+            border-color: #E2E8EE !important;
+            background: #F4F7F9 !important;
+            opacity: 1 !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    with st.container(
+        key=(
+            "round_leaderboard_pagination_"
+            + pagination_token
+        )
+    ):
+        (
+            previous_column,
+            page_column,
+            next_column
+        ) = st.columns(
+            [1, 1.8, 1]
+        )
+
+        with previous_column:
+            previous_clicked = st.button(
+                "‹",
+                key=(
+                    "round_leaderboard_page_previous_"
+                    + pagination_token
+                ),
+                help="Trang trước",
+                disabled=current_page <= 1
+            )
+
+        with page_column:
+            st.markdown(
+                f"""
+                <div style="
+                    min-height:36px;
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    gap:4px;
+                    color:#6A7D8F;
+                    font-size:12px;
+                    font-weight:800;
+                    white-space:nowrap;
+                ">
+                    Trang
+                    <span style="
+                        color:#07111F;
+                        font-size:14px;
+                        font-weight:950;
+                    ">{current_page}</span>
+                    / {total_pages}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        with next_column:
+            next_clicked = st.button(
+                "›",
+                key=(
+                    "round_leaderboard_page_next_"
+                    + pagination_token
+                ),
+                help="Trang sau",
+                disabled=current_page >= total_pages
+            )
+
+    if previous_clicked:
+        st.session_state[page_state_key] = (
+            current_page - 1
+        )
+        st.rerun()
+
+    if next_clicked:
+        st.session_state[page_state_key] = (
+            current_page + 1
+        )
+        st.rerun()
+
+
 def page_leaderboard():
     render_page_title(
         "Bảng xếp hạng",
@@ -25171,11 +27240,9 @@ def page_leaderboard():
 
     score_all_predictions(season_slug)
 
-    leaderboard = build_leaderboard_df(season_slug)
-
-    if leaderboard.empty:
-        st.info("Chưa có dữ liệu người chơi.")
-        return
+    active_leaderboard_view = (
+        render_prediction_leaderboard_view_switcher()
+    )
 
     current_user = st.session_state["user"]
     current_user_id = to_optional_int(
@@ -25184,6 +27251,54 @@ def page_leaderboard():
     current_display_name = str(
         current_user.get("display_name", "")
     ).strip()
+
+    if active_leaderboard_view == "round":
+        matches = load_matches(season_slug)
+        selected_round = (
+            render_prediction_round_filter(
+                matches=matches,
+                season_slug=season_slug
+            )
+        )
+
+        if selected_round is None:
+            st.info(
+                "Chưa có dữ liệu vòng đấu "
+                "cho mùa giải này."
+            )
+            return
+
+        round_leaderboard = (
+            build_round_leaderboard_df(
+                season_slug=season_slug,
+                round_name=selected_round
+            )
+        )
+
+        if round_leaderboard.empty:
+            st.info(
+                "Chưa có dữ liệu để tính "
+                "bảng xếp hạng vòng."
+            )
+            return
+
+        render_round_leaderboard_table(
+            leaderboard=round_leaderboard,
+            season_slug=season_slug,
+            season_label=season_label,
+            round_name=selected_round,
+            current_user_id=current_user_id,
+            current_display_name=(
+                current_display_name
+            )
+        )
+        return
+
+    leaderboard = build_leaderboard_df(season_slug)
+
+    if leaderboard.empty:
+        st.info("Chưa có dữ liệu người chơi.")
+        return
 
     if "avatar_key" not in leaderboard.columns:
         leaderboard["avatar_key"] = DEFAULT_AVATAR_KEY
