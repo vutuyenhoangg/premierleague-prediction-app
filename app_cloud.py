@@ -26116,19 +26116,21 @@ def page_leaderboard():
     # in thẳng ra màn hình. st.html() render toàn bộ cây HTML trực tiếp.
     st.html(table_html)
 
-    with stylable_container(
-        key=(
-            "leaderboard_pagination_"
-            + season_slug.replace("-", "_")
-        ),
-        css_styles="""
-        {
-            width: 100%;
-            max-width: 240px;
-            margin: 12px auto 0;
+    # Không dùng selector trần `button` trong stylable_container.
+    # Ở một số phiên bản streamlit-extras, selector đó có thể bị áp
+    # sang các nút hệ thống trên header và nút đóng/mở sidebar.
+    # Mọi rule dưới đây chỉ được phép tác động tới container phân trang.
+    st.markdown(
+        """
+        <style>
+        div[class*="st-key-leaderboard_pagination_"] {
+            width: 100% !important;
+            max-width: 240px !important;
+            margin: 12px auto 0 !important;
         }
 
-        button {
+        div[class*="st-key-leaderboard_pagination_"]
+        .stButton > button {
             width: 40px !important;
             min-width: 40px !important;
             height: 36px !important;
@@ -26142,15 +26144,19 @@ def page_leaderboard():
             font-size: 22px !important;
             font-weight: 850 !important;
             line-height: 1 !important;
+            transform: none !important;
         }
 
-        button:hover:not(:disabled) {
+        div[class*="st-key-leaderboard_pagination_"]
+        .stButton > button:hover:not(:disabled) {
             color: #07111F !important;
             border-color: #E0AE15 !important;
             background: #F8D863 !important;
+            transform: none !important;
         }
 
-        button:disabled {
+        div[class*="st-key-leaderboard_pagination_"]
+        .stButton > button:disabled {
             color: #AEBAC4 !important;
             border-color: #E2E8EE !important;
             background: #F4F7F9 !important;
@@ -26158,14 +26164,24 @@ def page_leaderboard():
         }
 
         @media (max-width: 768px) {
-            button {
+            div[class*="st-key-leaderboard_pagination_"]
+            .stButton > button {
                 width: 38px !important;
                 min-width: 38px !important;
                 height: 34px !important;
                 min-height: 34px !important;
             }
         }
-        """
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    with st.container(
+        key=(
+            "leaderboard_pagination_"
+            + season_slug.replace("-", "_")
+        )
     ):
         (
             previous_column,
