@@ -8300,7 +8300,8 @@ def maybe_render_final_poster_popup(user_id: int) -> bool:
 
 def render_daily_checkin_shortcut_button(user_id: int):
     """
-    Nút tròn nhỏ dưới avatar để mở lại popup điểm danh.
+    Nút điểm danh dạng float độc lập để mở lại popup điểm danh.
+    Có thể kéo nút trong vùng nội dung; vị trí không được lưu qua lần tải trang.
     Chỉ gọi hàm này ở trang Lịch thi đấu & dự đoán.
     """
     user_id = int(user_id)
@@ -8346,6 +8347,11 @@ def render_daily_checkin_shortcut_button(user_id: int):
             padding: 0 !important;
             margin: 0 !important;
             overflow: visible !important;
+            cursor: grab !important;
+            touch-action: none !important;
+            user-select: none !important;
+            -webkit-user-select: none !important;
+            will-change: left, top;
         }}
 
         div[class*="st-key-daily_checkin_shortcut_button"] button {{
@@ -8379,11 +8385,13 @@ def render_daily_checkin_shortcut_button(user_id: int):
             align-items: center !important;
             justify-content: center !important;
 
-            cursor: pointer !important;
+            cursor: grab !important;
             overflow: visible !important;
+            touch-action: none !important;
+            user-select: none !important;
+            -webkit-user-select: none !important;
 
             transition:
-                transform 0.18s ease,
                 box-shadow 0.18s ease,
                 background 0.18s ease !important;
         }}
@@ -8432,7 +8440,6 @@ def render_daily_checkin_shortcut_button(user_id: int):
         }}
 
         div[class*="st-key-daily_checkin_shortcut_button"] button:hover {{
-            transform: translateY(-1px) scale(1.045) !important;
             background: #FFFFFF !important;
 
             box-shadow:
@@ -8446,7 +8453,20 @@ def render_daily_checkin_shortcut_button(user_id: int):
         }}
 
         div[class*="st-key-daily_checkin_shortcut_button"] button:active {{
-            transform: translateY(0) scale(0.98) !important;
+            cursor: grabbing !important;
+        }}
+
+        div[class*="st-key-daily_checkin_shortcut_button"].epl-checkin-dragging,
+        div[class*="st-key-daily_checkin_shortcut_button"].epl-checkin-dragging * {{
+            cursor: grabbing !important;
+        }}
+
+        div[class*="st-key-daily_checkin_shortcut_button"].epl-checkin-dragging
+        button {{
+            transition: none !important;
+            box-shadow:
+                0 16px 34px rgba(7, 17, 31, 0.22),
+                0 0 0 5px rgba(245, 197, 66, 0.14) !important;
         }}
 
         div[class*="st-key-daily_checkin_shortcut_button"] button * {{
@@ -8500,6 +8520,478 @@ def render_daily_checkin_shortcut_button(user_id: int):
         "Mở điểm danh",
         key="daily_checkin_shortcut_button",
         help="Xem điểm danh hàng ngày"
+    )
+
+    checkin_drag_script = """
+    <script>
+    (() => {
+        const controllerName =
+            "__eplCheckinDragController";
+
+        const oldController =
+            window[controllerName];
+
+        if (
+            oldController
+            && typeof oldController.cleanup
+                === "function"
+        ) {
+            oldController.cleanup();
+        }
+
+        const shell =
+            document.querySelector(
+                'div[class*="st-key-'
+                + 'daily_checkin_shortcut_button"]'
+            );
+
+        if (!shell) {
+            return;
+        }
+
+        const button =
+            shell.querySelector("button");
+
+        if (!button) {
+            return;
+        }
+
+        const edgeGap = 8;
+        const headerGap = 6;
+        const dragThreshold = 6;
+
+        let activePointer = null;
+        let dragStarted = false;
+        let suppressClickUntil = 0;
+        let resizeFrame = 0;
+        let cleaned = false;
+
+        const getVisibleRect = (
+            element
+        ) => {
+            if (!element) {
+                return null;
+            }
+
+            const style =
+                window.getComputedStyle(element);
+
+            if (
+                style.display === "none"
+                || style.visibility === "hidden"
+            ) {
+                return null;
+            }
+
+            const rect =
+                element.getBoundingClientRect();
+
+            if (
+                rect.width <= 0
+                || rect.height <= 0
+            ) {
+                return null;
+            }
+
+            return rect;
+        };
+
+        const getHeaderRect = () => {
+            const candidates =
+                document.querySelectorAll(
+                    'header[data-testid="stHeader"], '
+                    + '[data-testid="stHeader"]'
+                );
+
+            for (const candidate of candidates) {
+                const rect =
+                    getVisibleRect(candidate);
+
+                if (rect) {
+                    return rect;
+                }
+            }
+
+            return null;
+        };
+
+        const getMovementBounds = () => {
+            const shellRect =
+                shell.getBoundingClientRect();
+
+            const headerRect =
+                getHeaderRect();
+
+            const minimumTop =
+                headerRect
+                ? Math.ceil(
+                    headerRect.bottom
+                    + headerGap
+                )
+                : edgeGap;
+
+            const maxLeft =
+                Math.max(
+                    edgeGap,
+                    window.innerWidth
+                    - shellRect.width
+                    - edgeGap
+                );
+
+            const maxTop =
+                Math.max(
+                    edgeGap,
+                    window.innerHeight
+                    - shellRect.height
+                    - edgeGap
+                );
+
+            return {
+                minLeft: edgeGap,
+                minTop: Math.min(
+                    Math.max(
+                        edgeGap,
+                        minimumTop
+                    ),
+                    maxTop
+                ),
+                maxLeft,
+                maxTop
+            };
+        };
+
+        const clampNumber = (
+            value,
+            minimum,
+            maximum
+        ) => Math.min(
+            Math.max(
+                Number.isFinite(Number(value))
+                    ? Number(value)
+                    : minimum,
+                minimum
+            ),
+            maximum
+        );
+
+        const applyPosition = (
+            proposedLeft,
+            proposedTop
+        ) => {
+            const bounds =
+                getMovementBounds();
+
+            const left =
+                clampNumber(
+                    proposedLeft,
+                    bounds.minLeft,
+                    bounds.maxLeft
+                );
+
+            const top =
+                clampNumber(
+                    proposedTop,
+                    bounds.minTop,
+                    bounds.maxTop
+                );
+
+            shell.style.setProperty(
+                "left",
+                left + "px",
+                "important"
+            );
+
+            shell.style.setProperty(
+                "top",
+                top + "px",
+                "important"
+            );
+
+            shell.style.setProperty(
+                "right",
+                "auto",
+                "important"
+            );
+
+            shell.style.setProperty(
+                "bottom",
+                "auto",
+                "important"
+            );
+        };
+
+        const stopDragging = (
+            event
+        ) => {
+            if (!activePointer) {
+                return;
+            }
+
+            if (
+                event
+                && event.pointerId
+                    !== activePointer.pointerId
+            ) {
+                return;
+            }
+
+            if (dragStarted) {
+                suppressClickUntil =
+                    Date.now() + 500;
+
+                if (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+            }
+
+            activePointer = null;
+            dragStarted = false;
+
+            shell.classList.remove(
+                "epl-checkin-dragging"
+            );
+        };
+
+        const onPointerDown = (
+            event
+        ) => {
+            if (
+                event.button !== undefined
+                && event.button !== 0
+            ) {
+                return;
+            }
+
+            const shellRect =
+                shell.getBoundingClientRect();
+
+            activePointer = {
+                pointerId: event.pointerId,
+                startX: event.clientX,
+                startY: event.clientY,
+                startLeft: shellRect.left,
+                startTop: shellRect.top
+            };
+
+            dragStarted = false;
+        };
+
+        const onPointerMove = (
+            event
+        ) => {
+            if (
+                !activePointer
+                || event.pointerId
+                    !== activePointer.pointerId
+            ) {
+                return;
+            }
+
+            const deltaX =
+                event.clientX
+                - activePointer.startX;
+
+            const deltaY =
+                event.clientY
+                - activePointer.startY;
+
+            if (
+                !dragStarted
+                && Math.hypot(
+                    deltaX,
+                    deltaY
+                ) < dragThreshold
+            ) {
+                return;
+            }
+
+            dragStarted = true;
+
+            shell.classList.add(
+                "epl-checkin-dragging"
+            );
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            applyPosition(
+                activePointer.startLeft
+                    + deltaX,
+                activePointer.startTop
+                    + deltaY
+            );
+        };
+
+        const onPointerUp = (
+            event
+        ) => {
+            stopDragging(event);
+        };
+
+        const onPointerCancel = (
+            event
+        ) => {
+            stopDragging(event);
+        };
+
+        const onClickCapture = (
+            event
+        ) => {
+            if (
+                Date.now()
+                >= suppressClickUntil
+            ) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+        };
+
+        const keepInsideAllowedArea = () => {
+            cancelAnimationFrame(
+                resizeFrame
+            );
+
+            resizeFrame =
+                requestAnimationFrame(
+                    () => {
+                        const currentRect =
+                            shell
+                                .getBoundingClientRect();
+
+                        applyPosition(
+                            currentRect.left,
+                            currentRect.top
+                        );
+                    }
+                );
+        };
+
+        const cleanup = () => {
+            if (cleaned) {
+                return;
+            }
+
+            cleaned = true;
+
+            cancelAnimationFrame(
+                resizeFrame
+            );
+
+            button.removeEventListener(
+                "pointerdown",
+                onPointerDown
+            );
+
+            document.removeEventListener(
+                "pointermove",
+                onPointerMove,
+                true
+            );
+
+            document.removeEventListener(
+                "pointerup",
+                onPointerUp,
+                true
+            );
+
+            document.removeEventListener(
+                "pointercancel",
+                onPointerCancel,
+                true
+            );
+
+            shell.removeEventListener(
+                "click",
+                onClickCapture,
+                true
+            );
+
+            window.removeEventListener(
+                "resize",
+                keepInsideAllowedArea
+            );
+
+            if (window.visualViewport) {
+                window.visualViewport
+                    .removeEventListener(
+                        "resize",
+                        keepInsideAllowedArea
+                    );
+            }
+        };
+
+        button.setAttribute(
+            "title",
+            "Xem điểm danh"
+        );
+
+        button.setAttribute(
+            "aria-label",
+            "Xem điểm danh; giữ và kéo "
+            + "để di chuyển nút"
+        );
+
+        button.addEventListener(
+            "pointerdown",
+            onPointerDown
+        );
+
+        document.addEventListener(
+            "pointermove",
+            onPointerMove,
+            {
+                capture: true,
+                passive: false
+            }
+        );
+
+        document.addEventListener(
+            "pointerup",
+            onPointerUp,
+            true
+        );
+
+        document.addEventListener(
+            "pointercancel",
+            onPointerCancel,
+            true
+        );
+
+        shell.addEventListener(
+            "click",
+            onClickCapture,
+            true
+        );
+
+        window.addEventListener(
+            "resize",
+            keepInsideAllowedArea,
+            { passive: true }
+        );
+
+        if (window.visualViewport) {
+            window.visualViewport
+                .addEventListener(
+                    "resize",
+                    keepInsideAllowedArea,
+                    { passive: true }
+                );
+        }
+
+        window[controllerName] = {
+            cleanup
+        };
+    })();
+    </script>
+    """
+
+    st.html(
+        checkin_drag_script,
+        unsafe_allow_javascript=True
     )
     
     if shortcut_clicked:
@@ -10199,7 +10691,7 @@ def render_avatar_popover(user: dict):
     Cập nhật UI:
     - Avatar chính có viền vàng nhẹ và badge bút chì nhỏ ở chính giữa mép dưới.
     - Có thể kéo avatar tới vị trí bất kỳ trong vùng nhìn thấy của trình duyệt.
-    - Vị trí được lưu riêng theo user_id trên từng trình duyệt/thiết bị.
+    - Mỗi lần tải lại app, avatar trở về vị trí mặc định.
     - Popup desktop: 4 avatar mỗi hàng.
     - Popup mobile: 2 avatar mỗi hàng, card cao hơn, ảnh avatar lớn hơn để dễ nhìn.
     - Người dùng chọn avatar bằng cách bấm trực tiếp vào khung avatar.
@@ -10422,7 +10914,7 @@ def render_avatar_popover(user: dict):
 
         div[class*="st-key-top_right_avatar_popover_shell"]
         div[data-testid="stPopover"] > div > button::before {{
-            content: "Kéo để di chuyển · Bấm để đổi avatar";
+            content: "Xem và đổi avatar";
             position: absolute;
             right: 68px;
             top: 50%;
@@ -10744,11 +11236,6 @@ def render_avatar_popover(user: dict):
                 render_avatar_grid()
                 st.markdown("</div>", unsafe_allow_html=True)
 
-    avatar_drag_storage_key = (
-        "epl-avatar-floating-position-v1:"
-        f"{int(user['user_id'])}"
-    )
-
     avatar_drag_script = """
     <script>
     (() => {
@@ -10789,12 +11276,8 @@ def render_avatar_popover(user: dict):
             return;
         }
 
-        const storageKey =
-            __AVATAR_DRAG_STORAGE_KEY__;
-
         const edgeGap = 8;
         const headerGap = 6;
-        const obstacleGap = 8;
         const dragThreshold = 6;
 
         let activePointer = null;
@@ -10834,9 +11317,6 @@ def render_avatar_popover(user: dict):
         const headerBoundaryGuide =
             createBoundaryGuide("header");
 
-        const checkinBoundaryGuide =
-            createBoundaryGuide("checkin");
-
         Object.assign(
             headerBoundaryGuide.style,
             {
@@ -10850,21 +11330,6 @@ def render_avatar_popover(user: dict):
                 boxShadow:
                     "0 0 12px "
                     + "rgba(245, 197, 66, 0.30)"
-            }
-        );
-
-        Object.assign(
-            checkinBoundaryGuide.style,
-            {
-                border:
-                    "2px solid "
-                    + "rgba(245, 197, 66, 0.86)",
-                borderRadius: "999px",
-                background:
-                    "rgba(245, 197, 66, 0.06)",
-                boxShadow:
-                    "0 0 0 4px "
-                    + "rgba(245, 197, 66, 0.08)"
             }
         );
 
@@ -10915,36 +11380,6 @@ def render_avatar_popover(user: dict):
             }
 
             return null;
-        };
-
-        const getCheckinObstacle = () => {
-            const checkinShell =
-                document.querySelector(
-                    'div[class*="st-key-'
-                    + 'daily_checkin_shortcut_button"]'
-                );
-
-            if (!checkinShell) {
-                return null;
-            }
-
-            const checkinButton =
-                checkinShell.querySelector("button");
-
-            const rect =
-                getVisibleRect(checkinButton)
-                || getVisibleRect(checkinShell);
-
-            if (!rect) {
-                return null;
-            }
-
-            return {
-                left: rect.left - obstacleGap,
-                top: rect.top - obstacleGap,
-                right: rect.right + obstacleGap,
-                bottom: rect.bottom + obstacleGap
-            };
         };
 
         const getMovementBounds = () => {
@@ -11026,265 +11461,9 @@ def render_avatar_popover(user: dict):
             )
         });
 
-        const getForbiddenTopLeftRect = (
-            obstacle,
-            bounds
-        ) => {
-            if (!obstacle) {
-                return null;
-            }
-
-            return {
-                left:
-                    obstacle.left
-                    - bounds.shellWidth,
-                top:
-                    obstacle.top
-                    - bounds.shellHeight,
-                right: obstacle.right,
-                bottom: obstacle.bottom
-            };
-        };
-
-        const pointInsideRect = (
-            point,
-            rect
-        ) => (
-            point.left > rect.left
-            && point.left < rect.right
-            && point.top > rect.top
-            && point.top < rect.bottom
-        );
-
-        const sweepPointAgainstRect = (
-            start,
-            end,
-            rect
-        ) => {
-            if (
-                !start
-                || pointInsideRect(start, rect)
-            ) {
-                return null;
-            }
-
-            const deltaLeft =
-                end.left - start.left;
-
-            const deltaTop =
-                end.top - start.top;
-
-            let entryTime = 0;
-            let exitTime = 1;
-
-            const axes = [
-                {
-                    start: start.left,
-                    delta: deltaLeft,
-                    minimum: rect.left,
-                    maximum: rect.right
-                },
-                {
-                    start: start.top,
-                    delta: deltaTop,
-                    minimum: rect.top,
-                    maximum: rect.bottom
-                }
-            ];
-
-            for (const axis of axes) {
-                if (
-                    Math.abs(axis.delta)
-                    < 0.001
-                ) {
-                    if (
-                        axis.start
-                            <= axis.minimum
-                        || axis.start
-                            >= axis.maximum
-                    ) {
-                        return null;
-                    }
-
-                    continue;
-                }
-
-                const firstTime =
-                    (
-                        axis.minimum
-                        - axis.start
-                    )
-                    / axis.delta;
-
-                const secondTime =
-                    (
-                        axis.maximum
-                        - axis.start
-                    )
-                    / axis.delta;
-
-                const axisEntry =
-                    Math.min(
-                        firstTime,
-                        secondTime
-                    );
-
-                const axisExit =
-                    Math.max(
-                        firstTime,
-                        secondTime
-                    );
-
-                entryTime =
-                    Math.max(
-                        entryTime,
-                        axisEntry
-                    );
-
-                exitTime =
-                    Math.min(
-                        exitTime,
-                        axisExit
-                    );
-
-                if (entryTime > exitTime) {
-                    return null;
-                }
-            }
-
-            if (
-                entryTime < 0
-                || entryTime > 1
-            ) {
-                return null;
-            }
-
-            const probeTime =
-                Math.min(
-                    1,
-                    entryTime + 0.0001
-                );
-
-            const probePoint = {
-                left:
-                    start.left
-                    + deltaLeft * probeTime,
-                top:
-                    start.top
-                    + deltaTop * probeTime
-            };
-
-            if (
-                !pointInsideRect(
-                    probePoint,
-                    rect
-                )
-            ) {
-                return null;
-            }
-
-            return {
-                left:
-                    start.left
-                    + deltaLeft * entryTime,
-                top:
-                    start.top
-                    + deltaTop * entryTime
-            };
-        };
-
-        const moveOutsideForbiddenRect = (
-            position,
-            forbiddenRect,
-            bounds
-        ) => {
-            if (
-                !pointInsideRect(
-                    position,
-                    forbiddenRect
-                )
-            ) {
-                return position;
-            }
-
-            const candidates = [
-                {
-                    left: forbiddenRect.left,
-                    top: position.top
-                },
-                {
-                    left: forbiddenRect.right,
-                    top: position.top
-                },
-                {
-                    left: position.left,
-                    top: forbiddenRect.top
-                },
-                {
-                    left: position.left,
-                    top: forbiddenRect.bottom
-                }
-            ]
-                .map(
-                    candidate =>
-                        clampToBounds(
-                            candidate.left,
-                            candidate.top,
-                            bounds
-                        )
-                )
-                .filter(
-                    candidate =>
-                        !pointInsideRect(
-                            candidate,
-                            forbiddenRect
-                        )
-                );
-
-            if (!candidates.length) {
-                return clampToBounds(
-                    bounds.minLeft,
-                    bounds.minTop,
-                    bounds
-                );
-            }
-
-            candidates.sort(
-                (
-                    firstCandidate,
-                    secondCandidate
-                ) => {
-                    const firstDistance =
-                        Math.hypot(
-                            firstCandidate.left
-                                - position.left,
-                            firstCandidate.top
-                                - position.top
-                        );
-
-                    const secondDistance =
-                        Math.hypot(
-                            secondCandidate.left
-                                - position.left,
-                            secondCandidate.top
-                                - position.top
-                        );
-
-                    return (
-                        firstDistance
-                        - secondDistance
-                    );
-                }
-            );
-
-            return candidates[0];
-        };
-
         const constrainPosition = (
             proposedLeft,
-            proposedTop,
-            previousPosition = null,
-            blockCrossing = false
+            proposedTop
         ) => {
             const bounds =
                 getMovementBounds();
@@ -11308,65 +11487,10 @@ def render_avatar_popover(user: dict):
                     !== requestedPosition.top
             );
 
-            const obstacle =
-                getCheckinObstacle();
-
-            const forbiddenRect =
-                getForbiddenTopLeftRect(
-                    obstacle,
-                    bounds
-                );
-
-            if (forbiddenRect) {
-                const safePreviousPosition =
-                    previousPosition
-                    ? clampToBounds(
-                        previousPosition.left,
-                        previousPosition.top,
-                        bounds
-                    )
-                    : null;
-
-                const collisionPoint =
-                    blockCrossing
-                    ? sweepPointAgainstRect(
-                        safePreviousPosition,
-                        position,
-                        forbiddenRect
-                    )
-                    : null;
-
-                if (collisionPoint) {
-                    position =
-                        clampToBounds(
-                            collisionPoint.left,
-                            collisionPoint.top,
-                            bounds
-                        );
-
-                    blocked = true;
-                } else if (
-                    pointInsideRect(
-                        position,
-                        forbiddenRect
-                    )
-                ) {
-                    position =
-                        moveOutsideForbiddenRect(
-                            position,
-                            forbiddenRect,
-                            bounds
-                        );
-
-                    blocked = true;
-                }
-            }
-
             return {
                 ...position,
                 blocked,
-                bounds,
-                obstacle
+                bounds
             };
         };
 
@@ -11402,54 +11526,16 @@ def render_avatar_popover(user: dict):
 
             headerBoundaryGuide.style.top =
                 (bounds.minTop - 1) + "px";
-
-            const obstacle =
-                getCheckinObstacle();
-
-            if (obstacle) {
-                checkinBoundaryGuide.style.left =
-                    obstacle.left + "px";
-
-                checkinBoundaryGuide.style.top =
-                    obstacle.top + "px";
-
-                checkinBoundaryGuide.style.width =
-                    (
-                        obstacle.right
-                        - obstacle.left
-                    )
-                    + "px";
-
-                checkinBoundaryGuide.style.height =
-                    (
-                        obstacle.bottom
-                        - obstacle.top
-                    )
-                    + "px";
-            }
-
-            return Boolean(obstacle);
         };
 
         const showBoundaryGuides = () => {
-            const hasCheckinObstacle =
-                updateBoundaryGuides();
+            updateBoundaryGuides();
 
             headerBoundaryGuide.style.visibility =
                 "visible";
 
             headerBoundaryGuide.style.opacity =
                 "1";
-
-            checkinBoundaryGuide.style.visibility =
-                hasCheckinObstacle
-                ? "visible"
-                : "hidden";
-
-            checkinBoundaryGuide.style.opacity =
-                hasCheckinObstacle
-                ? "1"
-                : "0";
         };
 
         const hideBoundaryGuides = () => {
@@ -11458,50 +11544,16 @@ def render_avatar_popover(user: dict):
 
             headerBoundaryGuide.style.visibility =
                 "hidden";
-
-            checkinBoundaryGuide.style.opacity =
-                "0";
-
-            checkinBoundaryGuide.style.visibility =
-                "hidden";
-        };
-
-        const savePosition = (
-            position
-        ) => {
-            try {
-                window.localStorage.setItem(
-                    storageKey,
-                    JSON.stringify({
-                        left: Math.round(
-                            position.left
-                        ),
-                        top: Math.round(
-                            position.top
-                        )
-                    })
-                );
-            } catch (error) {
-                /*
-                 * Trình duyệt có thể chặn localStorage.
-                 * Nút vẫn kéo được trong phiên hiện tại.
-                 */
-            }
         };
 
         const applyPosition = (
             proposedLeft,
-            proposedTop,
-            shouldSave = false,
-            previousPosition = null,
-            blockCrossing = false
+            proposedTop
         ) => {
             const position =
                 constrainPosition(
                     proposedLeft,
-                    proposedTop,
-                    previousPosition,
-                    blockCrossing
+                    proposedTop
                 );
 
             shell.style.setProperty(
@@ -11536,58 +11588,21 @@ def render_avatar_popover(user: dict):
                 )
             );
 
-            if (shouldSave) {
-                savePosition(position);
-            }
-
             return position;
         };
 
-        const restorePosition = () => {
-            let storedPosition = null;
-
-            try {
-                storedPosition = JSON.parse(
-                    window.localStorage.getItem(
-                        storageKey
-                    )
-                    || "null"
-                );
-            } catch (error) {
-                storedPosition = null;
-            }
-
-            if (
-                storedPosition
-                && Number.isFinite(
-                    Number(storedPosition.left)
-                )
-                && Number.isFinite(
-                    Number(storedPosition.top)
-                )
-            ) {
-                applyPosition(
-                    Number(storedPosition.left),
-                    Number(storedPosition.top),
-                    false
-                );
-
-                return;
-            }
-
+        const useDefaultPosition = () => {
             const initialRect =
                 shell.getBoundingClientRect();
 
             applyPosition(
                 initialRect.left,
-                initialRect.top,
-                false
+                initialRect.top
             );
         };
 
         const stopDragging = (
-            event,
-            persistPosition
+            event
         ) => {
             if (!activePointer) {
                 return;
@@ -11601,19 +11616,7 @@ def render_avatar_popover(user: dict):
                 return;
             }
 
-            if (
-                persistPosition
-                && dragStarted
-            ) {
-                const finalRect =
-                    shell.getBoundingClientRect();
-
-                applyPosition(
-                    finalRect.left,
-                    finalRect.top,
-                    true
-                );
-
+            if (dragStarted) {
                 suppressClickUntil =
                     Date.now() + 500;
 
@@ -11721,19 +11724,13 @@ def render_avatar_popover(user: dict):
         const onPointerUp = (
             event
         ) => {
-            stopDragging(
-                event,
-                true
-            );
+            stopDragging(event);
         };
 
         const onPointerCancel = (
             event
         ) => {
-            stopDragging(
-                event,
-                dragStarted
-            );
+            stopDragging(event);
         };
 
         const onClickCapture = (
@@ -11765,8 +11762,7 @@ def render_avatar_popover(user: dict):
 
                         applyPosition(
                             currentRect.left,
-                            currentRect.top,
-                            true
+                            currentRect.top
                         );
 
                         if (dragStarted) {
@@ -11834,18 +11830,16 @@ def render_avatar_popover(user: dict):
             }
 
             headerBoundaryGuide.remove();
-            checkinBoundaryGuide.remove();
         };
 
         button.setAttribute(
             "title",
-            "Giữ và kéo để di chuyển. "
-            + "Bấm để đổi avatar."
+            "Xem và đổi avatar"
         );
 
         button.setAttribute(
             "aria-label",
-            "Đổi avatar; giữ và kéo "
+            "Xem và đổi avatar; giữ và kéo "
             + "để di chuyển nút"
         );
 
@@ -11916,19 +11910,14 @@ def render_avatar_popover(user: dict):
             }
         );
 
-        restorePosition();
+        useDefaultPosition();
 
         window[controllerName] = {
             cleanup
         };
     })();
     </script>
-    """.replace(
-        "__AVATAR_DRAG_STORAGE_KEY__",
-        json.dumps(
-            avatar_drag_storage_key
-        )
-    )
+    """
 
     st.html(
         avatar_drag_script,
