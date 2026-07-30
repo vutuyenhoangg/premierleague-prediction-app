@@ -90,6 +90,7 @@ BIG_MATCH_OUTCOME_POINTS = 2
 
 ROUND_CHAMPION_BONUS_POINTS = 5
 EPL_MATCHES_PER_ROUND = 10
+LEADERBOARD_PAGE_SIZE = 10
 
 CHECKIN_CYCLE_DAYS = 7
 CHECKIN_HOPE_REWARD_DAY = 5
@@ -21127,6 +21128,9 @@ def build_leaderboard_df(season_slug: str | None = None):
         result["knockout_winner_correct"] = 0
         result["exact_score_rate"] = 0.0
         result["outcome_rate"] = 0.0
+        result["wrong_prediction_count"] = 0
+        result["wrong_prediction_rate"] = 0.0
+        result["average_points_per_scored_match"] = 0.0
         result["knockout_winner_rate"] = 0.0
         result["result_prediction_checkable"] = 0
         result["result_prediction_correct"] = 0
@@ -21383,6 +21387,39 @@ def build_leaderboard_df(season_slug: str | None = None):
 
     summary["outcome_rate"] = (
         summary["result_prediction_rate"]
+    )
+
+    summary["wrong_prediction_count"] = (
+        summary["num_scored"]
+        - summary["correct_outcome_count"]
+    ).clip(lower=0).astype(int)
+
+    summary["wrong_prediction_rate"] = (
+        summary["wrong_prediction_count"]
+        .astype(float)
+        .div(
+            summary["num_scored"]
+            .astype(float)
+            .where(
+                summary["num_scored"].ne(0)
+            )
+        )
+        .fillna(0.0)
+    )
+
+    # Điểm trung bình chỉ dùng điểm của các trận đã chấm.
+    # Thưởng vô địch vòng không được chia ngược vào từng trận.
+    summary["average_points_per_scored_match"] = (
+        summary["prediction_points"]
+        .astype(float)
+        .div(
+            summary["num_scored"]
+            .astype(float)
+            .where(
+                summary["num_scored"].ne(0)
+            )
+        )
+        .fillna(0.0)
     )
 
     summary["knockout_winner_rate"] = (
@@ -25113,15 +25150,27 @@ def page_leaderboard():
         "Xem ai đang dẫn đầu cuộc đua dự đoán."
     )
 
-    score_all_predictions(get_selected_season_slug())
+    season_slug = get_selected_season_slug()
+    season_label = SEASON_LABEL_BY_SLUG.get(
+        season_slug,
+        season_slug
+    )
 
-    leaderboard = build_leaderboard_df(get_selected_season_slug())
+    score_all_predictions(season_slug)
+
+    leaderboard = build_leaderboard_df(season_slug)
 
     if leaderboard.empty:
         st.info("Chưa có dữ liệu người chơi.")
         return
 
-    current_display_name = str(st.session_state["user"]["display_name"]).strip()
+    current_user = st.session_state["user"]
+    current_user_id = to_optional_int(
+        current_user.get("user_id")
+    )
+    current_display_name = str(
+        current_user.get("display_name", "")
+    ).strip()
 
     if "avatar_key" not in leaderboard.columns:
         leaderboard["avatar_key"] = DEFAULT_AVATAR_KEY
@@ -25174,363 +25223,977 @@ def page_leaderboard():
         + "/"
         + super_totals.astype(str)
     )
-    display_df = leaderboard[
-        [
-            "rank",
-            "display_name",
-            "total_points",
-            "base_points",
-            "star_bonus_points",
-            "round_champion_bonus_points",
-            "round_champion_count",
-            "hope_star_display",
-            "super_star_display",
-            "num_predictions",
-            "num_scored",
-            "exact_score_count",
-            "correct_outcome_count",
-            "exact_score_rate",
-            "result_prediction_rate"
-        ]
-    ].copy()
 
-    display_df = display_df.rename(columns={
-        "rank": "Hạng",
-        "display_name": "Người chơi",
-        "total_points": "Điểm",
-        "base_points": "Điểm gốc",
-        "star_bonus_points": "Điểm bổ trợ",
-        "round_champion_bonus_points": "Thưởng vòng",
-        "round_champion_count": "VĐ vòng",
-        "hope_star_display": "⭐",
-        "super_star_display": "✨",
-        "num_predictions": "Số dự đoán",
-        "num_scored": "Số trận đã chấm",
-        "exact_score_count": "Đúng tỉ số",
-        "correct_outcome_count": "Đúng kết quả",
-        "exact_score_rate": "% Đúng tỉ số",
-        "result_prediction_rate": "% Đúng kết quả"
-    })
+    total_players = len(leaderboard)
+    total_pages = max(
+        1,
+        (
+            total_players
+            + LEADERBOARD_PAGE_SIZE
+            - 1
+        )
+        // LEADERBOARD_PAGE_SIZE
+    )
 
-    percent_cols = [
-        "% Đúng tỉ số",
-        "% Đúng kết quả"
-    ]
+    page_state_key = (
+        f"leaderboard_page_{season_slug}"
+    )
 
-    for col in percent_cols:
-        display_df[col] = display_df[col].apply(lambda x: f"{x * 100:.1f}%")
+    current_page = to_optional_int(
+        st.session_state.get(page_state_key)
+    )
 
-    avatar_row_styles = []
+    if current_page is None:
+        current_page = 1
+
+    current_page = min(
+        max(current_page, 1),
+        total_pages
+    )
+    st.session_state[page_state_key] = current_page
+
+    page_start = (
+        current_page - 1
+    ) * LEADERBOARD_PAGE_SIZE
+    page_end = min(
+        page_start + LEADERBOARD_PAGE_SIZE,
+        total_players
+    )
+
+    page_df = (
+        leaderboard
+        .iloc[page_start:page_end]
+        .copy()
+        .reset_index(drop=True)
+    )
+
     available_avatar_keys = load_avatar_catalog()
     sprite_src, sprite_columns, sprite_rows = (
         build_avatar_sprite_payload()
     )
 
-    if (
-        available_avatar_keys
-        and sprite_src
-        and sprite_columns > 0
-        and sprite_rows > 0
-    ):
-        # Ảnh sprite chỉ xuất hiện đúng một lần trong CSS của bảng.
-        # Mỗi dòng sau đó chỉ cần một background-position rất nhỏ.
-        avatar_row_styles.append(
-            {
-                "selector": "tbody td:nth-child(2)::before",
-                "props": [
-                    ("content", '""'),
-                    ("display", "inline-block"),
-                    ("width", "28px"),
-                    ("height", "28px"),
-                    ("border-radius", "999px"),
-                    (
-                        "background-image",
-                        "var(--epl-avatar-sprite-image)"
-                    ),
-                    (
-                        "background-size",
-                        (
-                            f"{sprite_columns * 100}% "
-                            f"{sprite_rows * 100}%"
-                        )
-                    ),
-                    ("background-repeat", "no-repeat"),
-                    ("vertical-align", "middle"),
-                    ("margin-right", "10px"),
-                    ("border", "2px solid #FFFFFF"),
-                    (
-                        "box-shadow",
-                        "0 3px 8px rgba(15,23,42,0.16)"
-                    )
-                ]
-            }
-        )
+    def safe_int(row, column_name):
+        value = pd.to_numeric(
+            pd.Series([row.get(column_name)]),
+            errors="coerce"
+        ).iloc[0]
 
-    for row_position, avatar_key in enumerate(
-        leaderboard["avatar_key"].tolist(),
-        start=1
-    ):
+        if pd.isna(value):
+            return 0
+
+        return int(round(float(value)))
+
+    def safe_float(row, column_name):
+        value = pd.to_numeric(
+            pd.Series([row.get(column_name)]),
+            errors="coerce"
+        ).iloc[0]
+
+        if pd.isna(value):
+            return 0.0
+
+        return float(value)
+
+    def format_signed(value):
+        value = int(value)
+
+        if value > 0:
+            return f"+{value}"
+
+        return str(value)
+
+    def build_avatar_style(avatar_key):
         normalized_avatar_key = normalize_avatar_key(
             avatar_key,
             avatar_keys=list(available_avatar_keys)
         )
-        sprite_position = get_avatar_sprite_position(
-            normalized_avatar_key,
-            avatar_keys=available_avatar_keys
-        )
 
-        if not sprite_src:
-            avatar_src = get_avatar_src(
+        if (
+            sprite_src
+            and sprite_columns > 0
+            and sprite_rows > 0
+        ):
+            sprite_position = get_avatar_sprite_position(
                 normalized_avatar_key,
-                avatar_keys=list(
-                    available_avatar_keys
-                )
+                avatar_keys=available_avatar_keys
             )
 
-            if avatar_src:
-                avatar_row_styles.append(
-                    {
-                        "selector": (
-                            "tbody tr:nth-child("
-                            f"{row_position}"
-                            ") td:nth-child(2)::before"
-                        ),
-                        "props": [
-                            ("content", '""'),
-                            ("display", "inline-block"),
-                            ("width", "28px"),
-                            ("height", "28px"),
-                            ("border-radius", "999px"),
-                            (
-                                "background-image",
-                                f'url("{avatar_src}")'
-                            ),
-                            ("background-size", "cover"),
-                            (
-                                "background-position",
-                                "center"
-                            ),
-                            (
-                                "background-repeat",
-                                "no-repeat"
-                            ),
-                            (
-                                "vertical-align",
-                                "middle"
-                            ),
-                            (
-                                "margin-right",
-                                "10px"
-                            ),
-                            (
-                                "border",
-                                "2px solid #FFFFFF"
-                            ),
-                            (
-                                "box-shadow",
-                                (
-                                    "0 3px 8px "
-                                    "rgba(15,23,42,0.16)"
-                                )
-                            )
-                        ]
-                    }
+            if sprite_position is not None:
+                x_position, y_position = sprite_position
+
+                return (
+                    "background-image:url('"
+                    f"{html.escape(sprite_src, quote=True)}"
+                    "');"
+                    "background-size:"
+                    f"{sprite_columns * 100}% "
+                    f"{sprite_rows * 100}%;"
+                    "background-position:"
+                    f"{x_position:.6f}% "
+                    f"{y_position:.6f}%;"
+                    "background-repeat:no-repeat;"
                 )
 
-            continue
-
-        if sprite_position is None:
-            continue
-
-        x_position, y_position = sprite_position
-
-        avatar_row_styles.append(
-            {
-                "selector": f"tbody tr:nth-child({row_position}) td:nth-child(2)::before",
-                "props": [
-                    (
-                        "background-position",
-                        (
-                            f"{x_position:.6f}% "
-                            f"{y_position:.6f}%"
-                        )
-                    )
-                ]
-            }
+        avatar_src = get_avatar_src(
+            normalized_avatar_key,
+            avatar_keys=list(available_avatar_keys)
         )
 
-    def style_leaderboard_row(row):
-        styles = []
+        if not avatar_src:
+            return ""
 
-        is_current_user = str(row["Người chơi"]).strip() == current_display_name
-        rank_value = int(row["Hạng"])
-
-        for col in row.index:
-            style = ""
-
-            if is_current_user:
-                style += (
-                    "background-color: #E0F2FE !important; "
-                    "font-weight: 800 !important; "
-                )
-
-            if col == "Điểm":
-                style += (
-                    "font-weight: 1390 !important; "
-                    "color: #07111F !important; "
-                )
-
-            if col == "Điểm bổ trợ":
-                style += (
-                    "font-weight: 900 !important; "
-                    "color: #B45309 !important; "
-                )
-
-            if col in ["Thưởng vòng", "VĐ vòng"]:
-                style += (
-                    "font-weight: 900 !important; "
-                    "color: #2563EB !important; "
-                    "text-align: center !important; "
-                )
-
-            if col in ["⭐", "✨"]:
-                style += (
-                    "text-align: center !important; "
-                    "font-weight: 900 !important; "
-                    "color: #78350F !important; "
-                )
-
-            if col == "Hạng":
-                style += (
-                    "font-weight: 950 !important; "
-                    "text-align: center !important; "
-                )
-
-                if rank_value == 1:
-                    style += (
-                        "background-color: #F5C542 !important; "
-                        "color: #78350F !important; "
-                    )
-
-                elif rank_value == 2:
-                    style += (
-                        "background-color: #CBD5E1 !important; "
-                        "color: #334155 !important; "
-                    )
-
-                elif rank_value == 3:
-                    style += (
-                        "background-color: #CD7F32 !important; "
-                        "color: #431407 !important; "
-                    )
-
-            styles.append(style)
-
-        return styles
-
-    styled_df = (
-        display_df
-        .style
-        .apply(style_leaderboard_row, axis=1)
-        .set_properties(
-            subset=["Điểm"],
-            **{
-                "font-weight": "1390 !important",
-                "color": "#07111F !important"
-            }
+        return (
+            "background-image:url('"
+            f"{html.escape(avatar_src, quote=True)}"
+            "');"
+            "background-size:cover;"
+            "background-position:center;"
+            "background-repeat:no-repeat;"
         )
-        .set_properties(
-            subset=["Điểm bổ trợ"],
-            **{
-                "font-weight": "900 !important",
-                "color": "#B45309 !important"
-            }
+
+    table_rows = []
+
+    for _, row in page_df.iterrows():
+        rank_value = safe_int(row, "rank")
+        row_user_id = to_optional_int(
+            row.get("user_id")
         )
-        .set_properties(
-            subset=["Thưởng vòng", "VĐ vòng"],
-            **{
-                "text-align": "center !important",
-                "font-weight": "900 !important",
-                "color": "#2563EB !important"
-            }
+        display_name = str(
+            row.get("display_name", "")
+        ).strip()
+
+        is_current_user = (
+            (
+                current_user_id is not None
+                and row_user_id == current_user_id
+            )
+            or (
+                current_user_id is None
+                and display_name == current_display_name
+            )
         )
-        .set_properties(
-            subset=["⭐", "✨"],
-            **{
-                "text-align": "center !important",
-                "font-weight": "900 !important",
-                "color": "#78350F !important"
-            }
+
+        row_classes = [
+            "epl-leaderboard-row"
+        ]
+
+        if is_current_user:
+            row_classes.append("is-current-user")
+
+        if rank_value in [1, 2, 3]:
+            row_classes.append(
+                f"is-rank-{rank_value}"
+            )
+
+        player_badge = (
+            '<span class="epl-you-badge">Bạn</span>'
+            if is_current_user
+            else ""
         )
-        .set_table_styles(
-            [
-                {
-                    "selector": "thead th",
-                    "props": [
-                        ("background-color", "#07111F"),
-                        ("color", "#F8FAFC"),
-                        ("font-weight", "900"),
-                        ("text-align", "left"),
-                        ("border-bottom", "1px solid rgba(255,255,255,0.16)"),
-                        ("padding", "11px 12px")
-                    ]
-                },
-                {
-                    "selector": "thead th:nth-child(8)",
-                    "props": [
-                        ("text-align", "center"),
-                        ("font-size", "18px")
-                    ]
-                },
-                {
-                    "selector": "thead th:nth-child(9)",
-                    "props": [
-                        ("text-align", "center"),
-                        ("font-size", "18px")
-                    ]
-                },
-                {
-                    "selector": "tbody td",
-                    "props": [
-                        ("border-bottom", "1px solid rgba(15,23,42,0.08)"),
-                        ("padding", "10px 12px")
-                    ]
-                },
-                {
-                    "selector": "tbody td:nth-child(2)",
-                    "props": [
-                        ("white-space", "nowrap")
-                    ]
-                },
-                {
-                    "selector": "tbody td:nth-child(8)",
-                    "props": [
-                        ("text-align", "center"),
-                        ("font-weight", "900"),
-                        ("color", "#78350F")
-                    ]
-                },
-                {
-                    "selector": "tbody td:nth-child(9)",
-                    "props": [
-                        ("text-align", "center"),
-                        ("font-weight", "900"),
-                        ("color", "#78350F")
-                    ]
-                },
-                {
-                    "selector": "table",
-                    "props": [
-                        ("width", "100%"),
-                        ("border-collapse", "collapse"),
-                        ("font-size", "14px")
-                    ]
-                }
-            ] + avatar_row_styles
+
+        avatar_style = build_avatar_style(
+            row.get(
+                "avatar_key",
+                DEFAULT_AVATAR_KEY
+            )
         )
+
+        total_points = safe_int(
+            row,
+            "total_points"
+        )
+        base_points = safe_int(
+            row,
+            "base_points"
+        )
+        star_bonus_points = safe_int(
+            row,
+            "star_bonus_points"
+        )
+        round_bonus_points = safe_int(
+            row,
+            "round_champion_bonus_points"
+        )
+        round_champion_count = safe_int(
+            row,
+            "round_champion_count"
+        )
+        num_scored = safe_int(
+            row,
+            "num_scored"
+        )
+        average_points = safe_float(
+            row,
+            "average_points_per_scored_match"
+        )
+        exact_score_count = safe_int(
+            row,
+            "exact_score_count"
+        )
+        correct_outcome_count = safe_int(
+            row,
+            "correct_outcome_count"
+        )
+        wrong_prediction_count = safe_int(
+            row,
+            "wrong_prediction_count"
+        )
+        exact_score_rate = safe_float(
+            row,
+            "exact_score_rate"
+        )
+        result_prediction_rate = safe_float(
+            row,
+            "result_prediction_rate"
+        )
+        wrong_prediction_rate = safe_float(
+            row,
+            "wrong_prediction_rate"
+        )
+
+        star_bonus_class = (
+            "is-negative"
+            if star_bonus_points < 0
+            else (
+                "is-positive"
+                if star_bonus_points > 0
+                else "is-zero"
+            )
+        )
+
+        escaped_name = html.escape(
+            display_name
+        )
+        escaped_hope_display = html.escape(
+            str(
+                row.get(
+                    "hope_star_display",
+                    "0/0"
+                )
+            )
+        )
+        escaped_super_display = html.escape(
+            str(
+                row.get(
+                    "super_star_display",
+                    "0/0"
+                )
+            )
+        )
+
+        table_rows.append(
+            f"""
+            <tr class="{' '.join(row_classes)}">
+                <td class="col-rank sticky-rank">
+                    <span class="rank-badge">{rank_value}</span>
+                </td>
+                <td class="col-player sticky-player">
+                    <div class="player-cell">
+                        <span
+                            class="player-avatar"
+                            style="{avatar_style}"
+                            aria-hidden="true"
+                        ></span>
+                        <span class="player-name">{escaped_name}</span>
+                        {player_badge}
+                    </div>
+                </td>
+                <td class="col-score">
+                    <span class="total-score-badge">{total_points}</span>
+                </td>
+                <td>{base_points}</td>
+                <td>
+                    <span class="bonus-value {star_bonus_class}">
+                        {format_signed(star_bonus_points)}
+                    </span>
+                </td>
+                <td>
+                    <span class="round-bonus-value">
+                        {format_signed(round_bonus_points)}
+                    </span>
+                </td>
+                <td>
+                    <span class="round-title-count">
+                        {round_champion_count}
+                    </span>
+                </td>
+                <td>
+                    <span class="star-balance hope-star">
+                        {escaped_hope_display}
+                    </span>
+                </td>
+                <td>
+                    <span class="star-balance super-star">
+                        {escaped_super_display}
+                    </span>
+                </td>
+                <td>{num_scored}</td>
+                <td class="average-value">{average_points:.1f}</td>
+                <td>{exact_score_count}</td>
+                <td>{correct_outcome_count}</td>
+                <td>{wrong_prediction_count}</td>
+                <td class="percentage-value">
+                    {exact_score_rate * 100:.1f}%
+                </td>
+                <td class="percentage-value">
+                    {result_prediction_rate * 100:.1f}%
+                </td>
+                <td class="percentage-value wrong-rate">
+                    {wrong_prediction_rate * 100:.1f}%
+                </td>
+            </tr>
+            """
+        )
+
+    table_html = f"""
+    <style>
+    .epl-leaderboard-card {{
+        overflow: hidden;
+        background:
+            linear-gradient(
+                135deg,
+                rgba(255,255,255,0.99),
+                rgba(248,250,252,0.97)
+            );
+        border: 1px solid rgba(7,17,31,0.10);
+        border-radius: 18px;
+        box-shadow:
+            0 12px 30px rgba(7,17,31,0.07);
+    }}
+
+    .epl-leaderboard-toolbar {{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px 16px;
+        color: #EAF2F8;
+        background:
+            linear-gradient(
+                105deg,
+                #07111F 0%,
+                #0A2136 62%,
+                #12324B 100%
+            );
+        border-bottom:
+            3px solid #F5C542;
+    }}
+
+    .epl-leaderboard-toolbar-left {{
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        min-width: 0;
+    }}
+
+    .epl-leaderboard-season {{
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        padding: 4px 10px;
+        border: 1px solid rgba(245,197,66,0.42);
+        border-radius: 999px;
+        color: #F8DA78;
+        background: rgba(245,197,66,0.10);
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 0.035em;
+        white-space: nowrap;
+    }}
+
+    .epl-leaderboard-count {{
+        color: rgba(234,242,248,0.76);
+        font-size: 12px;
+        font-weight: 700;
+        white-space: nowrap;
+    }}
+
+    .epl-leaderboard-scroll-hint {{
+        color: rgba(234,242,248,0.72);
+        font-size: 11px;
+        font-weight: 700;
+        white-space: nowrap;
+    }}
+
+    .epl-leaderboard-scroll {{
+        position: relative;
+        width: 100%;
+        overflow-x: auto;
+        overflow-y: hidden;
+        overscroll-behavior-inline: contain;
+        scrollbar-color: #A9BAC8 #EEF3F7;
+        scrollbar-width: thin;
+    }}
+
+    .epl-leaderboard-scroll::-webkit-scrollbar {{
+        height: 8px;
+    }}
+
+    .epl-leaderboard-scroll::-webkit-scrollbar-track {{
+        background: #EEF3F7;
+    }}
+
+    .epl-leaderboard-scroll::-webkit-scrollbar-thumb {{
+        background: #A9BAC8;
+        border: 2px solid #EEF3F7;
+        border-radius: 999px;
+    }}
+
+    .epl-leaderboard-table {{
+        width: 100%;
+        min-width: 1900px;
+        border-spacing: 0;
+        border-collapse: separate;
+        table-layout: fixed;
+        color: #162536;
+        background: #FFFFFF;
+        font-size: 13px;
+    }}
+
+    .epl-leaderboard-table th,
+    .epl-leaderboard-table td {{
+        height: 54px;
+        padding: 9px 11px;
+        border-right: 1px solid #E5ECF2;
+        border-bottom: 1px solid #E5ECF2;
+        text-align: center;
+        vertical-align: middle;
+        white-space: nowrap;
+    }}
+
+    .epl-leaderboard-table th:last-child,
+    .epl-leaderboard-table td:last-child {{
+        border-right: 0;
+    }}
+
+    .epl-leaderboard-table thead th {{
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        height: 52px;
+        color: #EAF2F8;
+        background: #091827;
+        font-size: 11px;
+        font-weight: 850;
+        line-height: 1.25;
+        letter-spacing: 0.015em;
+    }}
+
+    .epl-leaderboard-table tbody tr:last-child td {{
+        border-bottom: 0;
+    }}
+
+    .epl-leaderboard-table tbody td {{
+        background: #FFFFFF;
+        font-weight: 720;
+        transition:
+            background-color 140ms ease,
+            color 140ms ease;
+    }}
+
+    .epl-leaderboard-table tbody tr:nth-child(even) td {{
+        background: #F7FAFC;
+    }}
+
+    .epl-leaderboard-table tbody tr:hover td {{
+        background: #F1F7FB;
+    }}
+
+    .epl-leaderboard-table tbody tr.is-current-user td {{
+        background: #E5F4FB;
+        color: #07111F;
+        font-weight: 820;
+    }}
+
+    .epl-leaderboard-table tbody tr.is-current-user:hover td {{
+        background: #DCEFF8;
+    }}
+
+    .epl-leaderboard-table .col-rank {{
+        width: 64px;
+        min-width: 64px;
+        max-width: 64px;
+    }}
+
+    .epl-leaderboard-table .col-player {{
+        width: 220px;
+        min-width: 220px;
+        max-width: 220px;
+        text-align: left;
+    }}
+
+    .epl-leaderboard-table .col-score {{
+        width: 82px;
+    }}
+
+    .epl-leaderboard-table .sticky-rank {{
+        position: sticky;
+        left: 0;
+        z-index: 3;
+    }}
+
+    .epl-leaderboard-table .sticky-player {{
+        position: sticky;
+        left: 64px;
+        z-index: 3;
+        box-shadow:
+            7px 0 12px -12px rgba(7,17,31,0.58);
+    }}
+
+    .epl-leaderboard-table thead .sticky-rank,
+    .epl-leaderboard-table thead .sticky-player {{
+        z-index: 8;
+        background: #07111F;
+    }}
+
+    .rank-badge {{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        border: 1px solid #D9E3EA;
+        border-radius: 50%;
+        color: #405467;
+        background: #F4F7FA;
+        font-size: 12px;
+        font-weight: 950;
+    }}
+
+    .is-rank-1 .rank-badge {{
+        color: #704B00;
+        border-color: #E9B91F;
+        background:
+            linear-gradient(
+                145deg,
+                #FFE485,
+                #F5C542
+            );
+    }}
+
+    .is-rank-2 .rank-badge {{
+        color: #344557;
+        border-color: #B7C5D1;
+        background:
+            linear-gradient(
+                145deg,
+                #F1F5F9,
+                #CBD5E1
+            );
+    }}
+
+    .is-rank-3 .rank-badge {{
+        color: #562609;
+        border-color: #B9652F;
+        background:
+            linear-gradient(
+                145deg,
+                #E8A06C,
+                #C8753D
+            );
+    }}
+
+    .player-cell {{
+        display: flex;
+        align-items: center;
+        min-width: 0;
+    }}
+
+    .player-avatar {{
+        flex: 0 0 auto;
+        display: inline-block;
+        width: 32px;
+        height: 32px;
+        margin-right: 9px;
+        border: 2px solid #FFFFFF;
+        border-radius: 50%;
+        background-color: #DDE7EF;
+        box-shadow:
+            0 2px 7px rgba(7,17,31,0.16);
+    }}
+
+    .player-name {{
+        min-width: 0;
+        overflow: hidden;
+        color: #152638;
+        font-weight: 850;
+        text-overflow: ellipsis;
+    }}
+
+    .epl-you-badge {{
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        margin-left: 7px;
+        padding: 2px 6px;
+        color: #0A5274;
+        border: 1px solid rgba(14,116,144,0.25);
+        border-radius: 999px;
+        background: rgba(14,116,144,0.08);
+        font-size: 9px;
+        font-weight: 950;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }}
+
+    .total-score-badge {{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 42px;
+        height: 30px;
+        padding: 0 9px;
+        color: #07111F;
+        border: 1px solid #E8BD31;
+        border-radius: 9px;
+        background: #F8D863;
+        font-size: 14px;
+        font-weight: 950;
+    }}
+
+    .bonus-value,
+    .round-bonus-value,
+    .round-title-count {{
+        font-weight: 900;
+    }}
+
+    .bonus-value.is-positive {{
+        color: #A65B08;
+    }}
+
+    .bonus-value.is-negative {{
+        color: #C73535;
+    }}
+
+    .bonus-value.is-zero {{
+        color: #738496;
+    }}
+
+    .round-bonus-value,
+    .round-title-count {{
+        color: #1763B6;
+    }}
+
+    .star-balance {{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 43px;
+        height: 27px;
+        padding: 0 7px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 950;
+    }}
+
+    .hope-star {{
+        color: #805500;
+        border: 1px solid rgba(222,174,24,0.35);
+        background: rgba(245,197,66,0.15);
+    }}
+
+    .super-star {{
+        color: #50418F;
+        border: 1px solid rgba(107,88,190,0.24);
+        background: rgba(124,105,210,0.10);
+    }}
+
+    .average-value {{
+        color: #0E7490;
+        font-weight: 900 !important;
+    }}
+
+    .percentage-value {{
+        color: #445A6D;
+        font-variant-numeric: tabular-nums;
+    }}
+
+    .wrong-rate {{
+        color: #9E4444;
+    }}
+
+    .epl-leaderboard-footer {{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 16px;
+        color: #66798B;
+        background: #F8FAFC;
+        border-top: 1px solid #E5ECF2;
+        font-size: 11px;
+        font-weight: 700;
+    }}
+
+    .epl-leaderboard-footer strong {{
+        color: #1C3348;
+        font-weight: 900;
+    }}
+
+    @media (max-width: 768px) {{
+        .epl-leaderboard-card {{
+            border-radius: 14px;
+        }}
+
+        .epl-leaderboard-toolbar {{
+            align-items: flex-start;
+            padding: 12px;
+        }}
+
+        .epl-leaderboard-toolbar-left {{
+            gap: 6px;
+        }}
+
+        .epl-leaderboard-scroll-hint {{
+            max-width: 115px;
+            line-height: 1.3;
+            text-align: right;
+            white-space: normal;
+        }}
+
+        .epl-leaderboard-table {{
+            min-width: 1780px;
+            font-size: 12px;
+        }}
+
+        .epl-leaderboard-table th,
+        .epl-leaderboard-table td {{
+            height: 50px;
+            padding: 8px 9px;
+        }}
+
+        .epl-leaderboard-table thead th {{
+            height: 48px;
+            font-size: 10px;
+        }}
+
+        .epl-leaderboard-table .col-rank {{
+            width: 52px;
+            min-width: 52px;
+            max-width: 52px;
+        }}
+
+        .epl-leaderboard-table .col-player {{
+            width: 174px;
+            min-width: 174px;
+            max-width: 174px;
+        }}
+
+        .epl-leaderboard-table .sticky-player {{
+            left: 52px;
+        }}
+
+        .player-avatar {{
+            width: 28px;
+            height: 28px;
+            margin-right: 7px;
+        }}
+
+        .player-name {{
+            max-width: 100px;
+        }}
+
+        .epl-you-badge {{
+            display: none;
+        }}
+
+        .epl-leaderboard-footer {{
+            align-items: flex-start;
+            flex-direction: column;
+            gap: 3px;
+            padding: 9px 12px;
+        }}
+    }}
+    </style>
+
+    <div class="epl-leaderboard-card">
+        <div class="epl-leaderboard-toolbar">
+            <div class="epl-leaderboard-toolbar-left">
+                <span class="epl-leaderboard-season">
+                    Mùa {html.escape(str(season_label))}
+                </span>
+                <span class="epl-leaderboard-count">
+                    {total_players} người chơi
+                </span>
+            </div>
+            <span class="epl-leaderboard-scroll-hint">
+                ↔ Kéo ngang để xem đầy đủ
+            </span>
+        </div>
+
+        <div class="epl-leaderboard-scroll">
+            <table class="epl-leaderboard-table">
+                <thead>
+                    <tr>
+                        <th
+                            class="col-rank sticky-rank"
+                            title="Hạng"
+                        >#</th>
+                        <th
+                            class="col-player sticky-player"
+                        >Người chơi</th>
+                        <th class="col-score">Điểm</th>
+                        <th>Điểm gốc</th>
+                        <th>Thưởng sao</th>
+                        <th>Thưởng vòng</th>
+                        <th>Vô địch vòng</th>
+                        <th title="Số Ngôi sao hy vọng còn lại">⭐</th>
+                        <th title="Số Siêu sao còn lại">✨</th>
+                        <th title="Số trận đã chấm">Trận</th>
+                        <th>Điểm TB/trận</th>
+                        <th>Đúng tỉ số</th>
+                        <th>Đúng kết quả</th>
+                        <th>Sai</th>
+                        <th>% Đúng tỉ số</th>
+                        <th>% Đúng kết quả</th>
+                        <th>% Sai</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {''.join(table_rows)}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="epl-leaderboard-footer">
+            <span>
+                Hiển thị
+                <strong>{page_start + 1}–{page_end}</strong>
+                trong
+                <strong>{total_players}</strong>
+                người chơi
+            </span>
+            <span>
+                Điểm TB/trận không bao gồm thưởng vô địch vòng
+            </span>
+        </div>
+    </div>
+    """
+
+    st.markdown(
+        table_html,
+        unsafe_allow_html=True
     )
 
-    st.table(styled_df)
+    with stylable_container(
+        key=(
+            "leaderboard_pagination_"
+            + season_slug.replace("-", "_")
+        ),
+        css_styles="""
+        {
+            width: 100%;
+            max-width: 240px;
+            margin: 12px auto 0;
+        }
+
+        button {
+            width: 40px !important;
+            min-width: 40px !important;
+            height: 36px !important;
+            min-height: 36px !important;
+            padding: 0 !important;
+            color: #0D2940 !important;
+            border: 1px solid rgba(13,41,64,0.18) !important;
+            border-radius: 10px !important;
+            background: rgba(255,255,255,0.96) !important;
+            box-shadow: none !important;
+            font-size: 22px !important;
+            font-weight: 850 !important;
+            line-height: 1 !important;
+        }
+
+        button:hover:not(:disabled) {
+            color: #07111F !important;
+            border-color: #E0AE15 !important;
+            background: #F8D863 !important;
+        }
+
+        button:disabled {
+            color: #AEBAC4 !important;
+            border-color: #E2E8EE !important;
+            background: #F4F7F9 !important;
+            opacity: 1 !important;
+        }
+
+        @media (max-width: 768px) {
+            button {
+                width: 38px !important;
+                min-width: 38px !important;
+                height: 34px !important;
+                min-height: 34px !important;
+            }
+        }
+        """
+    ):
+        (
+            previous_column,
+            page_column,
+            next_column
+        ) = st.columns(
+            [1, 1.8, 1]
+        )
+
+        with previous_column:
+            previous_clicked = st.button(
+                "‹",
+                key=(
+                    "leaderboard_previous_"
+                    + season_slug
+                ),
+                help="Trang trước",
+                disabled=current_page <= 1
+            )
+
+        with page_column:
+            st.markdown(
+                f"""
+                <div style="
+                    min-height:36px;
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    gap:4px;
+                    color:#6A7D8F;
+                    font-size:12px;
+                    font-weight:800;
+                    white-space:nowrap;
+                ">
+                    Trang
+                    <span style="
+                        color:#07111F;
+                        font-size:14px;
+                        font-weight:950;
+                    ">{current_page}</span>
+                    / {total_pages}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        with next_column:
+            next_clicked = st.button(
+                "›",
+                key=(
+                    "leaderboard_next_"
+                    + season_slug
+                ),
+                help="Trang sau",
+                disabled=current_page >= total_pages
+            )
+
+    if previous_clicked:
+        st.session_state[page_state_key] = (
+            current_page - 1
+        )
+        st.rerun()
+
+    if next_clicked:
+        st.session_state[page_state_key] = (
+            current_page + 1
+        )
+        st.rerun()
 
 def page_dashboard():
     import plotly.express as px
