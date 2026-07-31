@@ -2340,6 +2340,56 @@ def inject_epl_theme():
                 );
             }}
         }}
+
+        /* =====================================================
+           MOBILE: CÂN LẠI NỘI DUNG POSTER ĐẦU APP
+           Chỉ dịch phần nội dung xuống dưới, không đổi desktop.
+           ===================================================== */
+
+        @media (max-width: 768px) {{
+            .wc-hero {{
+                box-sizing: border-box !important;
+
+                padding:
+                    34px 32px 30px 32px !important;
+            }}
+
+            .wc-hero-grid {{
+                width: 100% !important;
+                min-width: 0 !important;
+
+                align-items: center !important;
+
+                transform:
+                    translateY(16px) !important;
+            }}
+
+            .wc-eyebrow {{
+                margin-top: 0 !important;
+                margin-bottom: 16px !important;
+            }}
+
+            .wc-hero-title {{
+                margin-top: 0 !important;
+                margin-bottom: 16px !important;
+            }}
+
+            .wc-hero-subtitle {{
+                margin-top: 0 !important;
+            }}
+        }}
+
+        @media (max-width: 390px) {{
+            .wc-hero {{
+                padding:
+                    32px 28px 28px 28px !important;
+            }}
+
+            .wc-hero-grid {{
+                transform:
+                    translateY(14px) !important;
+            }}
+        }}
         </style>
         """,
         unsafe_allow_html=True
@@ -6462,491 +6512,162 @@ def inject_mobile_team_name_display_script():
     render_parent_script(script_html)
 
 def inject_match_datepicker_calendar_theme(match_dates):
-    today = today_vietnam_date()
+    """
+    Khôi phục đúng cách đánh dấu lịch của bản cũ:
 
-    english_month_names = [
-        "January",
-        "February",
-        "March",
-        "April",
-        "May",
-        "June",
-        "July",
-        "August",
-        "September",
-        "October",
-        "November",
-        "December"
-    ]
+    - Ngày có trận đấu: chữ đậm.
+    - Ngày hôm nay: vòng tròn xám nhạt.
+    - Ngày đang chọn: vòng tròn xanh đậm, chữ trắng.
+    - Ngày bị vô hiệu hóa: chữ xám mờ.
+    - Ô nhập ngày chỉ đọc, nhưng vẫn bấm để mở lịch.
 
-    today_month_en = english_month_names[today.month - 1]
-    today_day = today.day
-    today_year = today.year
+    Riêng controller của lịch tiếp tục chạy bằng components.html như bản cũ.
+    Trên Streamlit 1.58, đây là cách đáng tin cậy nhất để JavaScript truy cập
+    DOM của cửa sổ cha. Iframe có chiều cao 0 nên không tạo khoảng trống.
+    """
+    today_iso = today_vietnam_date().isoformat()
+
     match_date_iso_values = sorted({
         pd.Timestamp(date_value).date().isoformat()
         for date_value in match_dates
         if date_value is not None and not pd.isna(date_value)
     })
 
-    match_date_iso_js = (
-        "["
-        + ",".join(
-            f'"{date_value}"'
-            for date_value in match_date_iso_values
-        )
-        + "]"
+    match_dates_json = json.dumps(
+        match_date_iso_values,
+        ensure_ascii=False
     )
 
     st.markdown(
-        f"""
+        """
         <style>
         /* =====================================================
-           PHẠM VI ÁP DỤNG
-           Chỉ áp dụng khi widget filter_date có mặt trên trang
+           DATE PICKER: RESET CHUNG
            ===================================================== */
 
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"] {{
+        [role="gridcell"] {
             position: relative !important;
             isolation: isolate !important;
 
             color: #0F172A !important;
+            -webkit-text-fill-color: #0F172A !important;
             font-weight: 400 !important;
 
             background: transparent !important;
-            border: none !important;
-            outline: none !important;
-            box-shadow: none !important;
-
+            border: 0 !important;
             border-radius: 999px !important;
-        }}
+            outline: 0 !important;
+            box-shadow: none !important;
+        }
 
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"] * {{
+        [role="gridcell"] * {
             position: relative !important;
             z-index: 2 !important;
 
-            font-weight: 400 !important;
-            box-shadow: none !important;
-        }}
+            color: inherit !important;
+            -webkit-text-fill-color: inherit !important;
+            font-weight: inherit !important;
 
-        /* Reset pseudo-element mặc định của từng ngày */
+            background: transparent !important;
+            border-color: transparent !important;
+            outline: 0 !important;
+            box-shadow: none !important;
+        }
+
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"]::before {{
+        [role="gridcell"]::before {
             content: "" !important;
 
             position: absolute !important;
             left: 50% !important;
             top: 50% !important;
+            z-index: 0 !important;
 
             width: 0 !important;
             height: 0 !important;
 
             transform: translate(-50%, -50%) !important;
 
-            border: none !important;
+            border: 0 !important;
             border-radius: 999px !important;
-
             background: transparent !important;
             box-shadow: none !important;
 
-            z-index: 0 !important;
             pointer-events: none !important;
 
             transition:
-                width 0.15s ease,
-                height 0.15s ease,
-                background 0.15s ease !important;
-        }}
+                width 0.14s ease,
+                height 0.14s ease,
+                background-color 0.14s ease !important;
+        }
 
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"]::after {{
+        [role="gridcell"]::after {
             content: none !important;
             display: none !important;
-
-            background: transparent !important;
-            border: none !important;
-            box-shadow: none !important;
-        }}
+        }
 
         /* =====================================================
-           HOVER
+           NGÀY CÓ TRẬN
+           Chỉ in đậm, không tự tạo vòng tròn.
            ===================================================== */
 
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"]:not([aria-disabled="true"]):hover::before {{
-            width: 28px !important;
-            height: 28px !important;
-
-            background: rgba(18, 60, 105, 0.08) !important;
-        }}
+        [role="gridcell"].epl-calendar-has-match,
 
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"]:not([aria-disabled="true"]):hover,
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:not([aria-disabled="true"]):hover * {{
-            color: #0F172A !important;
-            font-weight: 400 !important;
-        }}
+        [role="gridcell"].epl-calendar-has-match * {
+            font-weight: 800 !important;
+        }
 
         /* =====================================================
            NGÀY HÔM NAY
-           Luôn có ô tròn xám nhạt khi chưa được chọn
            ===================================================== */
 
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"]
-        [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"] {{
-            font-weight: 400 !important;
-        }}
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]
-        )::before {{
+        [role="gridcell"].epl-calendar-today::before {
             width: 28px !important;
             height: 28px !important;
-
             background: #E5E7EB !important;
-
-            border: none !important;
-            border-radius: 999px !important;
-
-            box-shadow: none !important;
-        }}
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"],
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"] *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]
-        ),
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]
-        ) * {{
-            color: #0F172A !important;
-            font-weight: 400 !important;
-        }}
+        }
 
         /* =====================================================
-           RESET NGÀY ĐƯỢC CHỌN
-           Xóa toàn bộ nền/vòng tròn đỏ mặc định ở các lớp con
+           NGÀY ĐANG CHỌN
+           Luôn ưu tiên cao hơn hôm nay và ngày có trận.
            ===================================================== */
 
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-selected="true"],
+        [role="gridcell"].epl-calendar-selected {
+            color: #FFFFFF !important;
+            -webkit-text-fill-color: #FFFFFF !important;
+            font-weight: 800 !important;
+        }
 
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][data-selected="true"],
+        [role="gridcell"].epl-calendar-selected * {
+            color: #FFFFFF !important;
+            -webkit-text-fill-color: #FFFFFF !important;
+            font-weight: 800 !important;
+        }
 
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="Selected"],
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has([aria-selected="true"]),
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has([data-selected="true"]) {{
-            background: transparent !important;
-
-            border: none !important;
-            outline: none !important;
-
-            box-shadow: none !important;
-            filter: none !important;
-        }}
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-selected="true"] *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][data-selected="true"] *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="Selected"] *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has([aria-selected="true"]) *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has([data-selected="true"]) * {{
-            background: transparent !important;
-
-            border-color: transparent !important;
-            outline: none !important;
-
-            box-shadow: none !important;
-            filter: none !important;
-        }}
-
-        /* Xóa pseudo-element đỏ nằm trên các phần tử con */
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-selected="true"] > *::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-selected="true"] > *::after,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][data-selected="true"] > *::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][data-selected="true"] > *::after,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="Selected"] > *::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="Selected"] > *::after,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has([aria-selected="true"]) > *::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has([aria-selected="true"]) > *::after {{
-            content: none !important;
-            display: none !important;
-
-            background: transparent !important;
-            border: none !important;
-            outline: none !important;
-
-            box-shadow: none !important;
-            filter: none !important;
-        }}
-
-        /* =====================================================
-           NGÀY ĐƯỢC CHỌN
-           ===================================================== */
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-selected="true"]::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][data-selected="true"]::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="Selected"]::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has([aria-selected="true"])::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has([data-selected="true"])::before {{
-            content: "" !important;
-            display: block !important;
-
+        [role="gridcell"].epl-calendar-selected::before {
             width: 28px !important;
             height: 28px !important;
-
             background: #123C69 !important;
-
-            border: none !important;
-            border-radius: 999px !important;
-
-            outline: none !important;
-            box-shadow: none !important;
-            filter: none !important;
-        }}
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-selected="true"],
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-selected="true"] *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][data-selected="true"],
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][data-selected="true"] *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="Selected"],
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="Selected"] *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has([aria-selected="true"]),
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has([aria-selected="true"]) *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has([data-selected="true"]),
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has([data-selected="true"]) * {{
-            color: #FFFFFF !important;
-            font-weight: 400 !important;
-        }}
-
-        /* =====================================================
-           HÔM NAY + ĐANG ĐƯỢC CHỌN
-           ===================================================== */
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"]::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][data-selected="true"]::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-label*="Selected"]::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]:has(
-            [aria-selected="true"]
-        )::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]:has(
-            [data-selected="true"]
-        )::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"]
-        )::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][data-selected="true"]
-        )::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-label*="Selected"]
-        )::before {{
-            width: 28px !important;
-            height: 28px !important;
-
-            background: #123C69 !important;
-
-            border: none !important;
-            border-radius: 999px !important;
-
-            box-shadow: none !important;
-        }}
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"],
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"] *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][data-selected="true"],
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][data-selected="true"] *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]:has(
-            [aria-selected="true"]
-        ),
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]:has(
-            [aria-selected="true"]
-        ) *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"]
-        ),
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"]
-        ) *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][data-selected="true"]
-        ),
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][data-selected="true"]
-        ) * {{
-            color: #FFFFFF !important;
-            font-weight: 400 !important;
-        }}
+        }
 
         /* =====================================================
            NGÀY KHÔNG KHẢ DỤNG
@@ -6954,428 +6675,919 @@ def inject_match_datepicker_calendar_theme(match_dates):
 
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-disabled="true"],
+        [role="gridcell"].epl-calendar-disabled,
 
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-disabled="true"] * {{
+        [role="gridcell"].epl-calendar-disabled * {
             color: #A8B1C2 !important;
-            font-weight: 400 !important;
+            -webkit-text-fill-color: #A8B1C2 !important;
             opacity: 0.72 !important;
-        }}
-
-        /* =====================================================
-           FIX CUỐI: HÔM NAY KHI ĐƯỢC CHỌN
-           Ép số ngày thành màu trắng
-           ===================================================== */
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"],
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"] *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][data-selected="true"],
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][data-selected="true"] *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-label*="Selected"],
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-label*="Selected"] *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"]
-            [aria-label*="{today_year}"]
-            [aria-selected="true"]
-        ),
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"]
-            [aria-label*="{today_year}"]
-            [aria-selected="true"]
-        ) *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"]
-            [aria-label*="{today_year}"]
-            [data-selected="true"]
-        ),
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"]
-            [aria-label*="{today_year}"]
-            [data-selected="true"]
-        ) *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"]
-            [aria-label*="{today_year}"]
-            [aria-label*="Selected"]
-        ),
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"]
-            [aria-label*="{today_year}"]
-            [aria-label*="Selected"]
-        ) * {{
-            color: #FFFFFF !important;
-            -webkit-text-fill-color: #FFFFFF !important;
-            fill: #FFFFFF !important;
             font-weight: 400 !important;
-        }}
+        }
+
         /* =====================================================
-           Ô ngày chỉ đọc
+           HOVER
            ===================================================== */
 
-        div[class*="st-key-filter_date"] input[readonly] {{
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        [role="gridcell"]:not(.epl-calendar-selected):not(.epl-calendar-disabled):hover::before {
+            width: 28px !important;
+            height: 28px !important;
+            background: rgba(18, 60, 105, 0.08) !important;
+        }
+
+        /*
+         * BaseWeb có thể đặt nền selected ở phần tử con.
+         * Xóa nền đó để chỉ còn vòng tròn do ::before kiểm soát.
+         */
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        [role="gridcell"][aria-selected="true"],
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        [role="gridcell"][data-selected="true"],
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        [role="gridcell"]:has([aria-selected="true"]),
+
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        [role="gridcell"]:has([data-selected="true"]) {
+            background: transparent !important;
+            border: 0 !important;
+            outline: 0 !important;
+            box-shadow: none !important;
+        }
+
+        /* Ô nhập ngày chỉ đọc nhưng vẫn có thể bấm mở calendar. */
+        div[class*="st-key-filter_date"] input[readonly] {
             cursor: pointer !important;
             caret-color: transparent !important;
 
             user-select: none !important;
             -webkit-user-select: none !important;
             -webkit-touch-callout: none !important;
-        }}
+        }
         </style>
         """,
         unsafe_allow_html=True
     )
-    render_parent_script("""
-        <script>
-        (() => {
-            const parentWindow = window.parent;
-            const parentDocument = parentWindow.document;
+
+    calendar_script = r"""
+    <script>
+    (() => {
+        const parentWindow = window.parent;
+        const parentDocument = parentWindow.document;
+
+        const controllerKey =
+            "__eplLegacyMatchCalendarControllerV8";
+
+        const previousController =
+            parentWindow[controllerKey];
+
+        if (
+            previousController
+            && typeof previousController.cleanup === "function"
+        ) {
+            try {
+                previousController.cleanup();
+            } catch (error) {
+                console.warn(
+                    "Could not clean up the previous calendar controller.",
+                    error
+                );
+            }
+        }
+
+        /*
+         * Dọn các observer/controller từ những bản sửa trước để chỉ còn
+         * duy nhất một nơi được quyền gắn trạng thái cho ô ngày.
+         */
+        const legacyKeys = [
+            "__wcMatchDateBoldObserver",
+            "__wcFilterDateReadonlyObserver",
+            "__wcFilterDateExactControllerV5",
+            "__eplFilterDateRuntimeV4",
+            "__eplFilterDateRuntimeV6",
+            "__eplFilterDateControllerV7"
+        ];
+
+        for (const key of legacyKeys) {
+            const value = parentWindow[key];
+
+            try {
+                if (value && typeof value.cleanup === "function") {
+                    value.cleanup();
+                } else if (
+                    value
+                    && typeof value.disconnect === "function"
+                ) {
+                    value.disconnect();
+                }
+            } catch (error) {
+                console.warn(
+                    "Could not clean up legacy calendar state:",
+                    key,
+                    error
+                );
+            }
+
+            try {
+                delete parentWindow[key];
+            } catch (error) {
+                parentWindow[key] = null;
+            }
+        }
+
+        const matchDates = new Set(
+            __EPL_MATCH_DATES__
+        );
+
+        const todayIso =
+            "__EPL_TODAY_ISO__";
+
+        const monthNumbers = {
+            january: "01",
+            jan: "01",
+            february: "02",
+            feb: "02",
+            march: "03",
+            mar: "03",
+            april: "04",
+            apr: "04",
+            may: "05",
+            june: "06",
+            jun: "06",
+            july: "07",
+            jul: "07",
+            august: "08",
+            aug: "08",
+            september: "09",
+            sep: "09",
+            sept: "09",
+            october: "10",
+            oct: "10",
+            november: "11",
+            nov: "11",
+            december: "12",
+            dec: "12"
+        };
+
+        const managedClasses = [
+            "epl-calendar-has-match",
+            "epl-calendar-today",
+            "epl-calendar-selected",
+            "epl-calendar-disabled"
+        ];
+
+        const inputSelector =
+            'div[class*="st-key-filter_date"] input';
+
+        const calendarSelector =
+            'div[data-baseweb="calendar"]';
+
+        const cellSelector =
+            '[role="gridcell"]';
+
+        let frameId = 0;
+        let bodyObserver = null;
+        let calendarObserver = null;
+        let observedCalendar = null;
+        const timers = new Set();
+
+        const pad2 = (value) => {
+            return String(Number(value)).padStart(2, "0");
+        };
+
+        const buildIso = (
+            year,
+            month,
+            day
+        ) => {
+            if (
+                !year
+                || !month
+                || !day
+            ) {
+                return null;
+            }
+
+            const numericDay = Number(day);
+            const numericYear = Number(year);
+
+            if (
+                !Number.isInteger(numericDay)
+                || numericDay < 1
+                || numericDay > 31
+                || !Number.isInteger(numericYear)
+            ) {
+                return null;
+            }
+
+            return (
+                String(numericYear)
+                + "-"
+                + String(month).padStart(2, "0")
+                + "-"
+                + pad2(numericDay)
+            );
+        };
+
+        const parseDateText = (rawValue) => {
+            const value = String(rawValue || "")
+                .replace(/\u00a0/g, " ")
+                .replace(/\s+/g, " ")
+                .trim();
+
+            if (!value) {
+                return null;
+            }
 
             /*
-             * Danh sách ngày có trận, được truyền trực tiếp từ
-             * matches["kickoff_date_filter"].
+             * ISO hoặc dạng số: 2026-08-22 / 2026/08/22
              */
-            const matchDates = new Set(
-                __WC_MATCH_DATES__
+            const isoMatch = value.match(
+                /\b(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})\b/
             );
 
-            const monthNumbers = {
-                january: "01",
-                february: "02",
-                march: "03",
-                april: "04",
-                may: "05",
-                june: "06",
-                july: "07",
-                august: "08",
-                september: "09",
-                october: "10",
-                november: "11",
-                december: "12"
-            };
-
-            const inputSelector =
-                'div[class*="st-key-filter_date"] input';
+            if (isoMatch) {
+                return buildIso(
+                    isoMatch[1],
+                    pad2(isoMatch[2]),
+                    isoMatch[3]
+                );
+            }
 
             /*
-             * Giữ nguyên logic readonly hiện tại.
+             * Dạng BaseWeb tiếng Anh:
+             * Saturday, August 22, 2026
+             * August 22nd, 2026
              */
-            const makeInputReadonly = (input) => {
-                if (
-                    !input
-                    || !(input instanceof parentWindow.HTMLInputElement)
-                ) {
-                    return;
-                }
+            const monthFirstMatch = value.match(
+                /\b(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,)?\s+(\d{4})\b/i
+            );
 
-                input.readOnly = true;
-
-                input.setAttribute("readonly", "");
-                input.setAttribute("aria-readonly", "true");
-                input.setAttribute("inputmode", "none");
-                input.setAttribute("autocomplete", "off");
-                input.setAttribute("spellcheck", "false");
-
-                if (input.dataset.wcDateReadonlyBound === "1") {
-                    return;
-                }
-
-                const preventManualEditing = (event) => {
-                    event.preventDefault();
-                };
-
-                input.addEventListener(
-                    "beforeinput",
-                    preventManualEditing
+            if (monthFirstMatch) {
+                return buildIso(
+                    monthFirstMatch[3],
+                    monthNumbers[
+                        monthFirstMatch[1].toLowerCase()
+                    ],
+                    monthFirstMatch[2]
                 );
-
-                input.addEventListener(
-                    "paste",
-                    preventManualEditing
-                );
-
-                input.addEventListener(
-                    "drop",
-                    preventManualEditing
-                );
-
-                input.dataset.wcDateReadonlyBound = "1";
-            };
+            }
 
             /*
-             * Lấy ngày thật từ aria-label của ô lịch.
-             * Hỗ trợ cả aria-label nằm trên gridcell
-             * và aria-label nằm trong phần tử con.
+             * Dạng đảo: 22 August 2026
              */
-            const extractDateIso = (cell) => {
-                const labelledElements = [];
+            const dayFirstMatch = value.match(
+                /\b(\d{1,2})(?:st|nd|rd|th)?\s+(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)(?:,)?\s+(\d{4})\b/i
+            );
 
-                if (cell.hasAttribute("aria-label")) {
-                    labelledElements.push(cell);
-                }
+            if (dayFirstMatch) {
+                return buildIso(
+                    dayFirstMatch[3],
+                    monthNumbers[
+                        dayFirstMatch[2].toLowerCase()
+                    ],
+                    dayFirstMatch[1]
+                );
+            }
 
-                cell
-                    .querySelectorAll("[aria-label]")
-                    .forEach((element) => {
-                        labelledElements.push(element);
-                    });
+            return null;
+        };
 
-                for (const element of labelledElements) {
-                    const ariaLabel =
-                        element.getAttribute("aria-label") || "";
-
-                    const dateMatch = ariaLabel.match(
-                        /\\b(January|February|March|April|May|June|July|August|September|October|November|December)\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,)?\\s+(\\d{4})\\b/i
-                    );
-
-                    if (!dateMatch) {
-                        continue;
-                    }
-
-                    const month =
-                        monthNumbers[
-                            dateMatch[1].toLowerCase()
-                        ];
-
-                    const day = String(
-                        Number(dateMatch[2])
-                    ).padStart(2, "0");
-
-                    return `${dateMatch[3]}-${month}-${day}`;
-                }
-
+        const getCalendarMonthYear = (calendar) => {
+            if (!calendar) {
                 return null;
-            };
+            }
 
-            /*
-             * Gán font-weight dưới dạng inline !important.
-             *
-             * Inline !important sẽ không bị các rule hover,
-             * selected hoặc today trong CSS ghi đè.
-             */
-            const setImportantFontWeight = (
-                element,
-                fontWeight
-            ) => {
+            const calendarText = String(
+                calendar.textContent || ""
+            )
+                .replace(/\s+/g, " ")
+                .trim();
+
+            const monthMatch = calendarText.match(
+                /\b(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\b/i
+            );
+
+            const yearMatch = calendarText.match(
+                /\b(20\d{2})\b/
+            );
+
+            if (
+                !monthMatch
+                || !yearMatch
+            ) {
+                return null;
+            }
+
+            return {
+                month:
+                    monthNumbers[
+                        monthMatch[1].toLowerCase()
+                    ],
+                year: yearMatch[1]
+            };
+        };
+
+        const extractDateIso = (cell) => {
+            const candidates = [];
+
+            const pushAttributes = (element) => {
                 if (!element) {
                     return;
                 }
 
-                const currentValue =
-                    element.style.getPropertyValue(
-                        "font-weight"
-                    );
-
-                const currentPriority =
-                    element.style.getPropertyPriority(
-                        "font-weight"
-                    );
-
-                if (
-                    currentValue === fontWeight
-                    && currentPriority === "important"
-                ) {
-                    return;
-                }
-
-                element.style.setProperty(
-                    "font-weight",
-                    fontWeight,
-                    "important"
-                );
-            };
-
-            const applyDateCellWeight = (cell) => {
-                const dateIso = extractDateIso(cell);
-
-                const isMatchDate = Boolean(
-                    dateIso
-                    && matchDates.has(dateIso)
-                );
-
-                const fontWeight = (
-                    isMatchDate
-                    ? "800"
-                    : "400"
-                );
-
-                /*
-                 * Xóa class từ cách triển khai cũ,
-                 * tránh CSS cũ còn sót gây xung đột.
-                 */
-                if (
-                    cell.classList.contains(
-                        "wc-match-date"
-                    )
-                ) {
-                    cell.classList.remove(
-                        "wc-match-date"
-                    );
-                }
-
-                cell.dataset.wcHasMatch = (
-                    isMatchDate
-                    ? "true"
-                    : "false"
-                );
-
-                /*
-                 * Áp trực tiếp lên cả ô ngày và phần tử chứa số.
-                 */
-                setImportantFontWeight(
-                    cell,
-                    fontWeight
-                );
-
-                cell
-                    .querySelectorAll("*")
-                    .forEach((element) => {
-                        setImportantFontWeight(
-                            element,
-                            fontWeight
+                [
+                    "aria-label",
+                    "data-date",
+                    "data-day",
+                    "data-value",
+                    "value",
+                    "title"
+                ].forEach((attributeName) => {
+                    const attributeValue =
+                        element.getAttribute?.(
+                            attributeName
                         );
-                    });
-            };
 
-            const applyCalendarEnhancements = () => {
-                parentDocument
-                    .querySelectorAll(inputSelector)
-                    .forEach(makeInputReadonly);
-
-                /*
-                 * Chỉ xử lý calendar khi widget filter_date
-                 * đang tồn tại trên trang.
-                 */
-                const filterDateWidget =
-                    parentDocument.querySelector(
-                        'div[class*="st-key-filter_date"]'
-                    );
-
-                if (!filterDateWidget) {
-                    return;
-                }
-
-                parentDocument
-                    .querySelectorAll(
-                        'div[data-baseweb="calendar"] div[role="gridcell"]'
-                    )
-                    .forEach(applyDateCellWeight);
-            };
-
-            /*
-             * Gom nhiều mutation liên tiếp vào một lần cập nhật.
-             */
-            let updateScheduled = false;
-
-            const scheduleCalendarUpdate = () => {
-                if (updateScheduled) {
-                    return;
-                }
-
-                updateScheduled = true;
-
-                parentWindow.requestAnimationFrame(() => {
-                    updateScheduled = false;
-                    applyCalendarEnhancements();
+                    if (attributeValue) {
+                        candidates.push(
+                            attributeValue
+                        );
+                    }
                 });
             };
 
-            /*
-             * Dọn observer của cách triển khai cũ.
-             */
-            const legacyObserver =
-                parentWindow.__wcMatchDateBoldObserver;
+            pushAttributes(cell);
 
-            if (legacyObserver) {
-                legacyObserver.disconnect();
+            cell
+                .querySelectorAll(
+                    "[aria-label],"
+                    + "[data-date],"
+                    + "[data-day],"
+                    + "[data-value],"
+                    + "[title]"
+                )
+                .forEach(pushAttributes);
 
-                try {
-                    delete parentWindow.__wcMatchDateBoldObserver;
-                } catch (error) {
-                    parentWindow.__wcMatchDateBoldObserver = null;
+            for (const candidate of candidates) {
+                const parsed = parseDateText(
+                    candidate
+                );
+
+                if (parsed) {
+                    return parsed;
                 }
             }
 
             /*
-             * Ngắt observer hiện tại trước khi tạo observer mới,
-             * tránh observer bị nhân đôi sau mỗi Streamlit rerun.
+             * Fallback cho DOM chỉ hiển thị số ngày:
+             * lấy tháng/năm từ phần header của chính calendar.
              */
-            const observerKey =
-                "__wcFilterDateReadonlyObserver";
+            const calendar = cell.closest(
+                calendarSelector
+            );
 
-            const oldObserver =
-                parentWindow[observerKey];
+            const monthYear =
+                getCalendarMonthYear(calendar);
 
-            if (oldObserver) {
-                oldObserver.disconnect();
+            const dayText = String(
+                cell.textContent || ""
+            ).trim();
+
+            const dayMatch = dayText.match(
+                /^\d{1,2}$/
+            );
+
+            if (
+                monthYear
+                && dayMatch
+            ) {
+                return buildIso(
+                    monthYear.year,
+                    monthYear.month,
+                    dayMatch[0]
+                );
             }
 
-            applyCalendarEnhancements();
+            return null;
+        };
 
-            /*
-             * Theo dõi cả việc Streamlit/BaseWeb:
-             * - Mở calendar
-             * - Đổi tháng
-             * - Render lại ngày
-             * - Thay đổi trạng thái hover/selected
-             */
-            const observer =
-                new parentWindow.MutationObserver(
-                    scheduleCalendarUpdate
+        const hasTruthyState = (
+            element,
+            attributeName
+        ) => {
+            if (!element) {
+                return false;
+            }
+
+            const directValue =
+                element.getAttribute(
+                    attributeName
                 );
 
-            observer.observe(
-                parentDocument.body,
-                {
-                    childList: true,
-                    subtree: true
+            if (
+                String(directValue).toLowerCase()
+                === "true"
+            ) {
+                return true;
+            }
+
+            return Boolean(
+                element.querySelector(
+                    `[${attributeName}="true"]`
+                )
+            );
+        };
+
+        const isSelectedCell = (cell) => {
+            if (
+                hasTruthyState(
+                    cell,
+                    "aria-selected"
+                )
+                || hasTruthyState(
+                    cell,
+                    "data-selected"
+                )
+            ) {
+                return true;
+            }
+
+            const allLabels = [
+                cell.getAttribute("aria-label") || "",
+                ...Array.from(
+                    cell.querySelectorAll(
+                        "[aria-label]"
+                    )
+                ).map((element) => {
+                    return (
+                        element.getAttribute(
+                            "aria-label"
+                        ) || ""
+                    );
+                })
+            ].join(" ");
+
+            return /\bselected\b/i.test(
+                allLabels
+            );
+        };
+
+        const isDisabledCell = (cell) => {
+            return (
+                hasTruthyState(
+                    cell,
+                    "aria-disabled"
+                )
+                || Boolean(
+                    cell.querySelector(
+                        ":disabled"
+                    )
+                )
+            );
+        };
+
+        const clearLegacyInlineStyles = (cell) => {
+            [
+                cell,
+                ...cell.querySelectorAll("*")
+            ].forEach((element) => {
+                element.style.removeProperty(
+                    "font-weight"
+                );
+
+                element.style.removeProperty(
+                    "-webkit-text-fill-color"
+                );
+            });
+        };
+
+        const applyCellState = (cell) => {
+            if (
+                !cell
+                || !(cell instanceof parentWindow.HTMLElement)
+            ) {
+                return;
+            }
+
+            managedClasses.forEach(
+                (className) => {
+                    cell.classList.remove(
+                        className
+                    );
                 }
             );
 
-            parentWindow[observerKey] = observer;
-        })();
-        </script>
-        """.replace(
-            "__WC_MATCH_DATES__",
-            match_date_iso_js
-        ))
+            clearLegacyInlineStyles(cell);
 
+            const dateIso =
+                extractDateIso(cell);
+
+            if (dateIso) {
+                cell.dataset.eplDateIso =
+                    dateIso;
+            } else {
+                delete cell.dataset.eplDateIso;
+            }
+
+            const isMatchDate = Boolean(
+                dateIso
+                && matchDates.has(dateIso)
+            );
+
+            const isToday = Boolean(
+                dateIso
+                && dateIso === todayIso
+            );
+
+            const isSelected =
+                isSelectedCell(cell);
+
+            const isDisabled =
+                isDisabledCell(cell);
+
+            cell.classList.toggle(
+                "epl-calendar-has-match",
+                isMatchDate
+            );
+
+            cell.classList.toggle(
+                "epl-calendar-today",
+                isToday && !isSelected
+            );
+
+            cell.classList.toggle(
+                "epl-calendar-selected",
+                isSelected
+            );
+
+            cell.classList.toggle(
+                "epl-calendar-disabled",
+                isDisabled
+            );
+        };
+
+        const makeInputReadonly = (input) => {
+            if (
+                !input
+                || !(input instanceof parentWindow.HTMLInputElement)
+            ) {
+                return;
+            }
+
+            input.readOnly = true;
+            input.setAttribute(
+                "readonly",
+                ""
+            );
+            input.setAttribute(
+                "aria-readonly",
+                "true"
+            );
+            input.setAttribute(
+                "inputmode",
+                "none"
+            );
+            input.setAttribute(
+                "autocomplete",
+                "off"
+            );
+            input.setAttribute(
+                "spellcheck",
+                "false"
+            );
+
+            if (
+                input.dataset
+                    .eplCalendarReadonlyBound
+                === "1"
+            ) {
+                return;
+            }
+
+            const preventManualEditing = (
+                event
+            ) => {
+                event.preventDefault();
+            };
+
+            input.addEventListener(
+                "beforeinput",
+                preventManualEditing
+            );
+
+            input.addEventListener(
+                "paste",
+                preventManualEditing
+            );
+
+            input.addEventListener(
+                "drop",
+                preventManualEditing
+            );
+
+            input.dataset
+                .eplCalendarReadonlyBound = "1";
+        };
+
+        const applyCalendarState = () => {
+            parentDocument
+                .querySelectorAll(
+                    inputSelector
+                )
+                .forEach(
+                    makeInputReadonly
+                );
+
+            const filterDateWidget =
+                parentDocument.querySelector(
+                    'div[class*="st-key-filter_date"]'
+                );
+
+            if (!filterDateWidget) {
+                return;
+            }
+
+            const calendar =
+                parentDocument.querySelector(
+                    calendarSelector
+                );
+
+            if (!calendar) {
+                if (
+                    calendarObserver
+                    && observedCalendar
+                ) {
+                    calendarObserver.disconnect();
+                    calendarObserver = null;
+                    observedCalendar = null;
+                }
+
+                return;
+            }
+
+            calendar
+                .querySelectorAll(
+                    cellSelector
+                )
+                .forEach(
+                    applyCellState
+                );
+
+            if (
+                calendar !== observedCalendar
+            ) {
+                if (calendarObserver) {
+                    calendarObserver.disconnect();
+                }
+
+                observedCalendar = calendar;
+
+                calendarObserver =
+                    new parentWindow
+                        .MutationObserver(
+                            scheduleApply
+                        );
+
+                calendarObserver.observe(
+                    calendar,
+                    {
+                        childList: true,
+                        subtree: true,
+                        attributes: true,
+                        attributeFilter: [
+                            "aria-selected",
+                            "data-selected",
+                            "aria-disabled",
+                            "aria-label",
+                            "data-date",
+                            "data-day",
+                            "data-value"
+                        ]
+                    }
+                );
+            }
+        };
+
+        const scheduleApply = () => {
+            if (frameId) {
+                return;
+            }
+
+            frameId =
+                parentWindow
+                    .requestAnimationFrame(
+                        () => {
+                            frameId = 0;
+                            applyCalendarState();
+                        }
+                    );
+        };
+
+        const scheduleBurst = () => {
+            scheduleApply();
+
+            for (
+                const delay
+                of [40, 100, 180, 320]
+            ) {
+                const timer =
+                    parentWindow.setTimeout(
+                        () => {
+                            timers.delete(
+                                timer
+                            );
+                            scheduleApply();
+                        },
+                        delay
+                    );
+
+                timers.add(timer);
+            }
+        };
+
+        const isCalendarRelatedNode = (
+            node
+        ) => {
+            if (
+                !node
+                || node.nodeType
+                    !== parentWindow.Node
+                        .ELEMENT_NODE
+            ) {
+                return false;
+            }
+
+            return Boolean(
+                node.matches?.(
+                    calendarSelector
+                    + ", "
+                    + inputSelector
+                )
+                || node.querySelector?.(
+                    calendarSelector
+                    + ", "
+                    + inputSelector
+                )
+            );
+        };
+
+        bodyObserver =
+            new parentWindow
+                .MutationObserver(
+                    (mutations) => {
+                        for (
+                            const mutation
+                            of mutations
+                        ) {
+                            for (
+                                const addedNode
+                                of mutation
+                                    .addedNodes
+                            ) {
+                                if (
+                                    isCalendarRelatedNode(
+                                        addedNode
+                                    )
+                                ) {
+                                    scheduleBurst();
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                );
+
+        bodyObserver.observe(
+            parentDocument.body,
+            {
+                childList: true,
+                subtree: true
+            }
+        );
+
+        const handleDocumentClick = (
+            event
+        ) => {
+            const target =
+                event.target;
+
+            if (
+                !(target instanceof
+                    parentWindow.Element)
+            ) {
+                return;
+            }
+
+            if (
+                target.closest(
+                    'div[class*="st-key-filter_date"],'
+                    + 'div[data-baseweb="calendar"]'
+                )
+            ) {
+                scheduleBurst();
+            }
+        };
+
+        const handleDocumentFocus = (
+            event
+        ) => {
+            const target =
+                event.target;
+
+            if (
+                target
+                && target.matches?.(
+                    inputSelector
+                )
+            ) {
+                scheduleBurst();
+            }
+        };
+
+        parentDocument.addEventListener(
+            "click",
+            handleDocumentClick,
+            true
+        );
+
+        parentDocument.addEventListener(
+            "focusin",
+            handleDocumentFocus,
+            true
+        );
+
+        const cleanup = () => {
+            parentWindow
+                .cancelAnimationFrame(
+                    frameId
+                );
+
+            frameId = 0;
+
+            timers.forEach(
+                (timer) => {
+                    parentWindow
+                        .clearTimeout(
+                            timer
+                        );
+                }
+            );
+
+            timers.clear();
+
+            bodyObserver?.disconnect();
+            calendarObserver?.disconnect();
+
+            parentDocument
+                .removeEventListener(
+                    "click",
+                    handleDocumentClick,
+                    true
+                );
+
+            parentDocument
+                .removeEventListener(
+                    "focusin",
+                    handleDocumentFocus,
+                    true
+                );
+        };
+
+        parentWindow[controllerKey] = {
+            cleanup
+        };
+
+        scheduleBurst();
+    })();
+    </script>
+    """
+
+    calendar_script = (
+        calendar_script
+        .replace(
+            "__EPL_MATCH_DATES__",
+            match_dates_json
+        )
+        .replace(
+            "__EPL_TODAY_ISO__",
+            today_iso
+        )
+    )
+
+    components.html(
+        calendar_script,
+        height=0,
+        scrolling=False
+    )
 
 def inject_mobile_match_title_css():
     """
@@ -34575,17 +34787,26 @@ def _build_epl_news_ticker_document(
                 const sidebarRect = getSidebarRect();
                 const menuRect = getMenuRect();
 
-                const fallbackHeight = isMobile
-                    ? 56
-                    : 60;
+                const fallbackHeight = 60;
+
+                /*
+                 * Dùng đúng chiều cao hình học của header.
+                 * Math.ceil tránh hụt 1px do Safari trả về số thập phân.
+                 * Trên mobile giữ mức tối thiểu 60px để ticker không còn
+                 * ngắn hơn dải header trắng bên dưới.
+                 */
+                const measuredHeaderHeight = (
+                    headerRect
+                    ? Math.ceil(
+                        headerRect.bottom
+                        - headerRect.top
+                    )
+                    : fallbackHeight
+                );
 
                 const headerHeight = Math.max(
-                    48,
-                    Math.round(
-                        headerRect
-                            ? headerRect.height
-                            : fallbackHeight
-                    )
+                    isMobile ? 60 : 48,
+                    measuredHeaderHeight
                 );
 
                 const headerTop = Math.max(
@@ -34783,6 +35004,88 @@ def _build_epl_news_ticker_document(
                 });
             }
 
+            /*
+             * Streamlit có thể thay nút Menu sau rerun và sidebar mobile
+             * thường mở/đóng bằng transform, nên ResizeObserver không phải
+             * lúc nào cũng nhận được chuyển động. Dùng event delegation và
+             * một burst ngắn sau thao tác để mép trái ticker bám đúng sidebar.
+             */
+            const sidebarToggleSelector = [
+                '[data-testid="stExpandSidebarButton"]',
+                '[data-testid="stSidebarCollapsedControl"]',
+                '[data-testid="stSidebarCollapseButton"]',
+                'section[data-testid="stSidebar"]',
+                'button[data-testid="stBaseButton-headerNoPadding"]',
+                'button[kind="headerNoPadding"]'
+            ].join(",");
+
+            const handleSidebarToggleClick = (
+                event
+            ) => {
+                const target = event.target;
+
+                if (
+                    !(target instanceof
+                        parentWindow.Element)
+                ) {
+                    return;
+                }
+
+                if (
+                    target.closest(
+                        sidebarToggleSelector
+                    )
+                ) {
+                    scheduleSyncBurst();
+
+                    for (
+                        const delay
+                        of [60, 180, 300, 480]
+                    ) {
+                        const timer =
+                            parentWindow.setTimeout(
+                                () => {
+                                    delayedTimers.delete(
+                                        timer
+                                    );
+                                    scheduleSync();
+                                },
+                                delay
+                            );
+
+                        delayedTimers.add(timer);
+                    }
+                }
+            };
+
+            const handleSidebarTransitionEnd = (
+                event
+            ) => {
+                const target = event.target;
+
+                if (
+                    target instanceof
+                        parentWindow.Element
+                    && target.closest(
+                        'section[data-testid="stSidebar"]'
+                    )
+                ) {
+                    scheduleSync();
+                }
+            };
+
+            parentDocument.addEventListener(
+                "click",
+                handleSidebarToggleClick,
+                true
+            );
+
+            parentDocument.addEventListener(
+                "transitionend",
+                handleSidebarTransitionEnd,
+                true
+            );
+
             parentWindow.addEventListener(
                 "resize",
                 scheduleSyncBurst,
@@ -34830,6 +35133,18 @@ def _build_epl_news_ticker_document(
                 parentWindow.removeEventListener(
                     "orientationchange",
                     scheduleSyncBurst
+                );
+
+                parentDocument.removeEventListener(
+                    "click",
+                    handleSidebarToggleClick,
+                    true
+                );
+
+                parentDocument.removeEventListener(
+                    "transitionend",
+                    handleSidebarTransitionEnd,
+                    true
                 );
 
             };
@@ -35010,7 +35325,12 @@ def _render_epl_news_ticker_content():
 
     @media (max-width: 768px) {
         :root {
-            --epl-news-ticker-header-height: 56px;
+            /*
+             * Header mobile của Streamlit 1.58 cao khoảng 60px.
+             * Controller bên trong iframe vẫn đo lại kích thước thực tế
+             * và ghi đè biến này khi header đã render xong.
+             */
+            --epl-news-ticker-header-height: 60px;
             --epl-news-ticker-left: 108px;
         }
     }
