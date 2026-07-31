@@ -26,29 +26,17 @@ LOGGER = logging.getLogger("epl_news_ticker")
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
 # Cố định đúng model theo yêu cầu.
+# Script không đọc GEMINI_NEWS_MODEL để tránh workflow cũ ghi đè.
 MODEL_NAME = "gemini-2.5-flash"
 
-# Số lượng tin trong mỗi lần tạo
 MIN_ITEMS = 12
 MAX_ITEMS = 15
 
-# Độ dài mục tiêu của mỗi tin, tính cả dấu cách.
-# Đây chỉ là định hướng biên tập cho Gemini, không phải điều kiện từ chối.
-TARGET_MIN_ITEM_LENGTH = 170
-TARGET_MAX_ITEM_LENGTH = 280
+MIN_ITEM_LENGTH = 130
+MAX_ITEM_LENGTH = 260
 
-# Cho Gemini thêm cơ hội sửa nếu JSON hoặc nội dung chưa đạt yêu cầu
-MAX_CONTENT_ATTEMPTS = 3
-
-# Tăng ngân sách đầu ra vì số lượng tin và độ dài đều tăng
+MAX_CONTENT_ATTEMPTS = 2
 MAX_OUTPUT_TOKENS = 8192
-
-# Số tin cũ dùng để kiểm tra trùng lặp
-MAX_PREVIOUS_ITEMS = 20
-
-# Mức khuyến nghị cho tin chuyển nhượng chưa chính thức.
-# Vượt mức này chỉ tạo cảnh báo, không làm hỏng cả bản tin.
-TARGET_MAX_UNCONFIRMED_TRANSFERS = 4
 
 CURRENT_ITEM_SIMILARITY_LIMIT = 0.84
 PREVIOUS_ITEM_SIMILARITY_LIMIT = 0.97
@@ -213,7 +201,7 @@ def load_previous_items(engine: Engine) -> list[str]:
         if item_text:
             previous_items.append(item_text)
 
-    return previous_items[:MAX_PREVIOUS_ITEMS]
+    return previous_items[:MAX_ITEMS]
 
 
 # ============================================================
@@ -263,9 +251,7 @@ CÁCH XÁC ĐỊNH TIN MỚI
 - So sánh ngày và giờ công bố hoặc cập nhật giữa các nguồn.
 - Ưu tiên thông tin vừa được công bố hoặc vừa có diễn biến mới.
 - Ưu tiên các tin trong vòng 24 giờ gần nhất.
-- Nếu chưa đủ {MIN_ITEMS} tin nổi bật trong 24 giờ gần nhất, mở rộng lần lượt sang 48 giờ và tối đa 96 giờ.
-- Khi mở rộng thời gian, chỉ chọn những sự kiện vẫn còn ảnh hưởng trực tiếp đến lực lượng, lịch thi đấu, đội hình, huấn luyện viên hoặc chuyển nhượng của câu lạc bộ Premier League.
-- Không dùng các bài tổng hợp cũ hoặc tin không có diễn biến mới chỉ để đủ số lượng.
+- Nếu chưa đủ {MIN_ITEMS} tin nổi bật trong 24 giờ gần nhất, có thể mở rộng phạm vi tìm kiếm đến 72 giờ nhưng phải xếp các diễn biến mới nhất lên trước.
 - Không lấy bài viết cũ rồi mô tả như một diễn biến mới.
 - Nếu nhiều bài cùng nói về một sự kiện, chỉ chọn thông tin mới nhất, đầy đủ nhất và đáng tin cậy nhất.
 - Không chọn tin chỉ vì bài viết mới đăng lại nhưng nội dung thực tế đã cũ.
@@ -301,24 +287,9 @@ Mỗi tin phải là một câu tiếng Việt hoàn chỉnh theo phong cách b�
 
 Mỗi câu phải có đủ:
 
-- Chủ thể rõ ràng, chẳng hạn cầu thủ, huấn luyện viên hoặc câu lạc bộ.
-- Diễn biến chính đang xảy ra.
-- Bối cảnh cần thiết để người đọc hiểu vì sao thông tin này đáng chú ý.
-- Trạng thái xác nhận của thông tin.
-- Tác động cụ thể đến lực lượng, kế hoạch thi đấu, đội hình dự kiến hoặc khả năng dự đoán kết quả trận đấu.
-
-Mỗi tin nên có từ hai đến ba vế câu liên kết tự nhiên, nhưng vẫn phải là một câu hoàn chỉnh.
-
-Khi nguồn tin có thông tin đáng tin cậy, hãy ưu tiên bổ sung các chi tiết như:
-
-- Thời điểm cầu thủ dự kiến trở lại.
-- Trận đấu hoặc giai đoạn cầu thủ có thể vắng mặt.
-- Nguyên nhân của thay đổi lực lượng.
-- Phát biểu hoặc kết luận chính từ huấn luyện viên.
-- Tác động đến vị trí thi đấu hoặc phương án thay thế.
-- Trạng thái hiện tại của thương vụ hoặc quá trình kiểm tra y tế.
-
-Không thêm chi tiết nếu nguồn không xác nhận.
+- Chủ thể rõ ràng.
+- Diễn biến hoặc thông tin chính.
+- Bối cảnh, trạng thái xác nhận hoặc tác động đến đội bóng hay trận đấu.
 
 Không viết kiểu headline cụt như:
 
@@ -331,10 +302,7 @@ Hãy viết thành câu đầy đủ, tự nhiên và dễ đọc khi chạy nga
 QUY TẮC BIÊN TẬP
 
 - Viết hoàn toàn bằng tiếng Việt tự nhiên.
-- Mỗi tin nên hướng tới độ dài từ {TARGET_MIN_ITEM_LENGTH} đến {TARGET_MAX_ITEM_LENGTH} ký tự, tính cả dấu cách.
-- Đây là độ dài định hướng, không phải điều kiện bắt buộc.
-- Một tin ngắn hơn vẫn hoàn toàn hợp lệ nếu đã truyền tải đầy đủ chủ thể, diễn biến chính, trạng thái xác nhận và tác động đáng chú ý.
-- Không kéo dài câu bằng thông tin thừa chỉ để đạt số ký tự.
+- Mỗi tin dài từ {MIN_ITEM_LENGTH} đến {MAX_ITEM_LENGTH} ký tự, tính cả dấu cách.
 - Không dùng emoji, hashtag, markdown hoặc URL.
 - Không thêm tiêu đề riêng cho từng tin.
 - Không ghi URL hoặc tên nguồn trong câu ticker.
@@ -344,8 +312,7 @@ QUY TẮC BIÊN TẬP
 - Không biến tin đồn thành thông tin chính thức.
 - Không viết hai tin khác nhau về cùng một sự kiện.
 - Không để một câu lạc bộ chiếm phần lớn bản tin.
-- Cố gắng không để tin chuyển nhượng chưa hoàn tất chiếm quá {TARGET_MAX_UNCONFIRMED_TRANSFERS} tin.
-- Nếu thị trường chuyển nhượng đang có nhiều diễn biến lớn, có thể vượt mức trên nhưng vẫn phải bảo đảm bản tin đa dạng và không lặp ý.
+- Tin chuyển nhượng chưa hoàn tất không được chiếm quá ba tin.
 - Ưu tiên tin có ảnh hưởng trực tiếp đến lực lượng, phong độ hoặc kết quả trận đấu.
 
 BẢN TIN HIỆN ĐANG HIỂN THỊ
@@ -386,9 +353,7 @@ Trước khi trả kết quả, tự kiểm tra:
 
 - Có từ {MIN_ITEMS} đến {MAX_ITEMS} tin.
 - Các tin là những diễn biến mới và nổi bật nhất tại thời điểm tìm kiếm.
-- Mỗi tin ưu tiên nằm trong khoảng {TARGET_MIN_ITEM_LENGTH}-{TARGET_MAX_ITEM_LENGTH} ký tự.
-- Tin ngắn hơn vẫn được chấp nhận nếu nội dung đã đầy đủ và rõ ràng.
-- Không thêm thông tin thừa chỉ để kéo dài câu.
+- Mỗi tin dài từ {MIN_ITEM_LENGTH} đến {MAX_ITEM_LENGTH} ký tự.
 - Không có hai tin trùng ý.
 - Không có tin nào thiếu chủ thể.
 - Không có URL, markdown hoặc emoji.
@@ -511,40 +476,6 @@ def text_similarity(first_text: str, second_text: str) -> float:
     ).ratio()
 
 
-def ensure_uncertainty_language(
-    ticker_text: str,
-    information_status: str,
-) -> str:
-    """Bổ sung cách diễn đạt thận trọng cho tin chưa được xác nhận.
-
-    Thiếu một cụm từ cảnh báo không nên khiến toàn bộ bản tin bị hủy.
-    Hàm chỉ thêm cách diễn đạt trung tính, không thay đổi nội dung sự kiện.
-    """
-    ticker_text = normalize_text(ticker_text)
-
-    if not ticker_text or information_status == "confirmed":
-        return ticker_text
-
-    lowered_text = ticker_text.casefold()
-
-    if any(marker in lowered_text for marker in UNCERTAIN_MARKERS):
-        return ticker_text
-
-    if information_status == "reported":
-        return normalize_text(
-            f"Theo truyền thông Anh, {ticker_text}"
-        )
-
-    if information_status == "monitoring":
-        base_text = ticker_text.rstrip(".!?; ")
-
-        return normalize_text(
-            f"{base_text}; tình trạng này vẫn đang được theo dõi."
-        )
-
-    return ticker_text
-
-
 def validate_ticker_items(
     payload: dict[str, Any],
     previous_items: list[str],
@@ -555,7 +486,6 @@ def validate_ticker_items(
         raise TickerValidationError("items phải là một array.")
 
     validation_errors: list[str] = []
-    soft_warnings: list[str] = []
 
     if not MIN_ITEMS <= len(raw_items) <= MAX_ITEMS:
         validation_errors.append(
@@ -577,68 +507,17 @@ def validate_ticker_items(
             raw_item.get("information_status")
         ).casefold()
 
+        ticker_length = len(ticker_text)
+
         if not ticker_text:
             validation_errors.append(
                 f"Tin {index} không có nội dung."
             )
-            continue
 
-        if category not in ALLOWED_CATEGORIES:
+        if not MIN_ITEM_LENGTH <= ticker_length <= MAX_ITEM_LENGTH:
             validation_errors.append(
-                f"Tin {index} có category không hợp lệ: "
-                f"{category or '(trống)'}."
-            )
-
-        if information_status not in ALLOWED_INFORMATION_STATUSES:
-            validation_errors.append(
-                f"Tin {index} có information_status không hợp lệ: "
-                f"{information_status or '(trống)'}."
-            )
-        else:
-            ticker_text = ensure_uncertainty_language(
-                ticker_text,
-                information_status,
-            )
-
-        ticker_length = len(ticker_text)
-
-        # Độ dài chỉ dùng để theo dõi chất lượng. Tin ngắn hoặc dài hơn
-        # mục tiêu vẫn được chấp nhận nếu vượt qua các kiểm tra nội dung khác.
-        if not (
-            TARGET_MIN_ITEM_LENGTH
-            <= ticker_length
-            <= TARGET_MAX_ITEM_LENGTH
-        ):
-            soft_warnings.append(
                 f"Tin {index} dài {ticker_length} ký tự, "
-                "nằm ngoài khoảng định hướng "
-                f"{TARGET_MIN_ITEM_LENGTH}-"
-                f"{TARGET_MAX_ITEM_LENGTH} nhưng vẫn được chấp nhận."
-            )
-
-        sentence_detail_markers = (
-            ",",
-            " nhưng ",
-            " trong khi ",
-            " sau khi ",
-            " trước khi ",
-            " khiến ",
-            " qua đó ",
-            " đồng nghĩa ",
-            " vì vậy ",
-            " dự kiến ",
-        )
-
-        if (
-            ticker_length >= 200
-            and not any(
-                marker in ticker_text.casefold()
-                for marker in sentence_detail_markers
-            )
-        ):
-            soft_warnings.append(
-                f"Tin {index} khá dài nhưng chưa thể hiện rõ "
-                "bối cảnh hoặc tác động; vẫn được chấp nhận."
+                f"yêu cầu từ {MIN_ITEM_LENGTH} đến {MAX_ITEM_LENGTH}."
             )
 
         if URL_PATTERN.search(ticker_text):
@@ -649,6 +528,29 @@ def validate_ticker_items(
 
         if EMOJI_PATTERN.search(ticker_text):
             validation_errors.append(f"Tin {index} chứa emoji.")
+
+        if category not in ALLOWED_CATEGORIES:
+            validation_errors.append(
+                f"Tin {index} có category không hợp lệ: {category or '(trống)'}."
+            )
+
+        if information_status not in ALLOWED_INFORMATION_STATUSES:
+            validation_errors.append(
+                "Tin "
+                f"{index} có information_status không hợp lệ: "
+                f"{information_status or '(trống)'}."
+            )
+
+        if information_status in {"reported", "monitoring"}:
+            lowered_text = ticker_text.casefold()
+
+            if not any(
+                marker in lowered_text for marker in UNCERTAIN_MARKERS
+            ):
+                validation_errors.append(
+                    f"Tin {index} chưa được xác nhận nhưng thiếu "
+                    "cách diễn đạt thận trọng."
+                )
 
         normalized_items.append(
             {
@@ -698,25 +600,16 @@ def validate_ticker_items(
         and item["information_status"] != "confirmed"
     )
 
-    if unconfirmed_transfers > TARGET_MAX_UNCONFIRMED_TRANSFERS:
-        soft_warnings.append(
-            "Có "
-            f"{unconfirmed_transfers} "
-            "tin chuyển nhượng chưa được xác nhận, cao hơn mức "
-            f"khuyến nghị {TARGET_MAX_UNCONFIRMED_TRANSFERS}; "
-            "bản tin vẫn được chấp nhận."
-        )
-
-    if soft_warnings:
-        LOGGER.warning(
-            "Ticker accepted with soft warnings: %s",
-            " | ".join(soft_warnings),
+    if unconfirmed_transfers > 3:
+        validation_errors.append(
+            "Có quá ba tin chuyển nhượng chưa được xác nhận."
         )
 
     if validation_errors:
         raise TickerValidationError("\n".join(validation_errors))
 
     return normalized_items
+
 
 def validation_error_lines(error: Exception) -> list[str]:
     return [
