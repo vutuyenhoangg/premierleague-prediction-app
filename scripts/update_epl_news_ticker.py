@@ -31,7 +31,7 @@ VN_TZ = ZoneInfo(
 
 MODEL_NAME = os.getenv(
     "GEMINI_NEWS_MODEL",
-    "gemini-2.5-flash"
+    "gemini-3.6-flash"
 ).strip()
 
 ALLOWED_CATEGORIES = {
