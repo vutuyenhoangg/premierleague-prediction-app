@@ -11,8 +11,8 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from google import genai
+from google.genai import errors
 from google.genai import types
-
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
@@ -21,18 +21,23 @@ from sqlalchemy.engine import Engine
 # CONFIG
 # ============================================================
 
-LOGGER = logging.getLogger(
-    "epl_news_ticker"
-)
+LOGGER = logging.getLogger("epl_news_ticker")
 
-VN_TZ = ZoneInfo(
-    "Asia/Ho_Chi_Minh"
-)
+VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
-MODEL_NAME = os.getenv(
-    "GEMINI_NEWS_MODEL",
-    "gemini-2.5-flash"
-).strip()
+# Cố định đúng model theo yêu cầu.
+# Script không đọc GEMINI_NEWS_MODEL để tránh workflow cũ ghi đè.
+MODEL_NAME = "gemini-2.5-flash"
+
+MIN_ITEMS = 8
+MAX_ITEMS = 10
+MIN_ITEM_LENGTH = 130
+MAX_ITEM_LENGTH = 220
+MAX_CONTENT_ATTEMPTS = 2
+MAX_OUTPUT_TOKENS = 4096
+
+CURRENT_ITEM_SIMILARITY_LIMIT = 0.84
+PREVIOUS_ITEM_SIMILARITY_LIMIT = 0.97
 
 ALLOWED_CATEGORIES = {
     "injury",
@@ -50,70 +55,95 @@ ALLOWED_INFORMATION_STATUSES = {
     "monitoring",
 }
 
+UNCERTAIN_MARKERS = (
+    "được cho là",
+    "theo truyền thông anh",
+    "đang được theo dõi",
+    "chưa được xác nhận",
+    "chưa có xác nhận",
+    "có thể",
+    "nhiều khả năng",
+)
+
+URL_PATTERN = re.compile(
+    r"https?://|www\.",
+    flags=re.IGNORECASE,
+)
+
+MARKDOWN_PATTERN = re.compile(
+    r"```|^\s*[*#>]",
+    flags=re.MULTILINE,
+)
+
+EMOJI_PATTERN = re.compile(
+    "["
+    "\U0001F1E6-\U0001F1FF"
+    "\U0001F300-\U0001F5FF"
+    "\U0001F600-\U0001F64F"
+    "\U0001F680-\U0001F6FF"
+    "\U0001F700-\U0001F77F"
+    "\U0001F780-\U0001F7FF"
+    "\U0001F800-\U0001F8FF"
+    "\U0001F900-\U0001F9FF"
+    "\U0001FA00-\U0001FAFF"
+    "\U00002700-\U000027BF"
+    "\U00002600-\U000026FF"
+    "]+",
+    flags=re.UNICODE,
+)
+
 
 class TickerValidationError(ValueError):
-    pass
+    """Gemini đã trả lời nhưng nội dung chưa đạt yêu cầu."""
 
 
 # ============================================================
 # ENVIRONMENT
 # ============================================================
 
+
 def require_environment() -> tuple[str, str]:
-    gemini_api_key = os.getenv(
-        "GEMINI_API_KEY",
-        ""
-    ).strip()
+    gemini_api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    database_url = os.getenv("DATABASE_URL", "").strip()
 
-    database_url = os.getenv(
-        "DATABASE_URL",
-        ""
-    ).strip()
-
-    missing_variables = []
+    missing_variables: list[str] = []
 
     if not gemini_api_key:
-        missing_variables.append(
-            "GEMINI_API_KEY"
-        )
+        missing_variables.append("GEMINI_API_KEY")
 
     if not database_url:
-        missing_variables.append(
-            "DATABASE_URL"
-        )
+        missing_variables.append("DATABASE_URL")
 
     if missing_variables:
         raise RuntimeError(
-            "Thiếu biến môi trường: "
-            + ", ".join(
-                missing_variables
-            )
+            "Thiếu biến môi trường: " + ", ".join(missing_variables)
         )
 
-    return (
-        gemini_api_key,
-        database_url,
-    )
+    return gemini_api_key, normalize_database_url(database_url)
+
+
+def normalize_database_url(database_url: str) -> str:
+    """Chuẩn hóa URL cũ của Heroku/Supabase nếu bắt đầu bằng postgres://."""
+
+    if database_url.startswith("postgres://"):
+        return "postgresql://" + database_url[len("postgres://") :]
+
+    return database_url
 
 
 # ============================================================
 # DATABASE
 # ============================================================
 
-def build_engine(
-    database_url: str
-) -> Engine:
 
+def build_engine(database_url: str) -> Engine:
     return create_engine(
         database_url,
-
         pool_pre_ping=True,
         pool_recycle=1800,
-
         pool_size=1,
         max_overflow=1,
         pool_timeout=20,
-
         connect_args={
             "connect_timeout": 15,
             "options": (
@@ -124,34 +154,22 @@ def build_engine(
     )
 
 
-def normalize_text(
-    value: Any
-) -> str:
-
-    return re.sub(
-        r"\s+",
-        " ",
-        str(value or "")
-    ).strip()
+def normalize_text(value: Any) -> str:
+    return re.sub(r"\s+", " ", str(value or "")).strip()
 
 
-def load_previous_items(
-    engine: Engine
-) -> list[str]:
-
+def load_previous_items(engine: Engine) -> list[str]:
     query = text(
         """
         SELECT items
-        FROM epl_news_ticker
+        FROM public.epl_news_ticker
         WHERE id = 1
         LIMIT 1
         """
     )
 
     with engine.connect() as connection:
-        row = connection.execute(
-            query
-        ).mappings().fetchone()
+        row = connection.execute(query).mappings().fetchone()
 
     if row is None:
         return []
@@ -160,52 +178,46 @@ def load_previous_items(
 
     if isinstance(raw_items, str):
         try:
-            raw_items = json.loads(
-                raw_items
-            )
+            raw_items = json.loads(raw_items)
         except json.JSONDecodeError:
+            LOGGER.warning(
+                "Không đọc được JSON bản tin trước. Tiếp tục với danh sách rỗng."
+            )
             return []
 
     if not isinstance(raw_items, list):
         return []
 
-    previous_items = []
+    previous_items: list[str] = []
 
     for raw_item in raw_items:
         if not isinstance(raw_item, dict):
             continue
 
-        item_text = normalize_text(
-            raw_item.get("text")
-        )
+        item_text = normalize_text(raw_item.get("text"))
 
         if item_text:
-            previous_items.append(
-                item_text
-            )
+            previous_items.append(item_text)
 
-    return previous_items[:10]
+    return previous_items[:MAX_ITEMS]
 
 
 # ============================================================
 # PROMPT
 # ============================================================
 
+
 def build_prompt(
     run_time_vietnam: datetime,
     previous_items: list[str],
     validation_feedback: list[str] | None = None,
 ) -> str:
-
     if previous_items:
         previous_items_text = "\n".join(
-            f"- {item}"
-            for item in previous_items
+            f"- {item}" for item in previous_items
         )
     else:
-        previous_items_text = (
-            "Chưa có bản tin trước."
-        )
+        previous_items_text = "Chưa có bản tin trước."
 
     feedback_text = ""
 
@@ -214,37 +226,34 @@ def build_prompt(
             "\n\nCÁC LỖI CẦN SỬA\n"
             "Lần trả lời trước không hợp lệ. "
             "Hãy tạo lại toàn bộ JSON và sửa các lỗi sau:\n"
-            + "\n".join(
-                f"- {error}"
-                for error in validation_feedback
-            )
+            + "\n".join(f"- {error}" for error in validation_feedback)
         )
 
     return f"""
-Bạn là biên tập viên ticker cho ứng dụng dự đoán Premier League.
+Bạn là biên tập viên ticker cho một ứng dụng dự đoán Premier League.
 
 THỜI ĐIỂM CẬP NHẬT
 
-- Thời điểm chạy hệ thống tại Việt Nam: {run_time_vietnam.isoformat()}
+- Thời điểm hệ thống bắt đầu thu thập tin tại Việt Nam: {run_time_vietnam.isoformat()}
 
 MỤC TIÊU
 
 Bắt buộc sử dụng Google Search trước khi viết.
 
-Hãy tìm kiếm, kiểm tra và tổng hợp từ 8 đến 10 tin tức nổi bật, mới nhất liên quan trực tiếp đến Premier League tại thời điểm hiện tại.
+Hãy tìm kiếm, đối chiếu và tổng hợp từ {MIN_ITEMS} đến {MAX_ITEMS} tin tức nổi bật, mới nhất liên quan trực tiếp đến Premier League tại thời điểm tìm kiếm.
 
-Mục tiêu quan trọng nhất là nội dung phải mới, đáng chú ý và có giá trị đối với người theo dõi Premier League.
+Mục tiêu quan trọng nhất là nội dung phải mới, đáng chú ý, đáng tin cậy và hữu ích cho người theo dõi Premier League, đặc biệt là người chơi dự đoán kết quả trận đấu.
 
 CÁCH XÁC ĐỊNH TIN MỚI
 
-- So sánh ngày và giờ công bố hoặc cập nhật của các nguồn.
+- So sánh ngày và giờ công bố hoặc cập nhật giữa các nguồn.
 - Ưu tiên thông tin vừa được công bố hoặc vừa có diễn biến mới.
 - Ưu tiên các tin trong vòng 24 giờ gần nhất.
-- Có thể mở rộng phạm vi tìm kiếm nếu trong 24 giờ chưa có đủ tin đáng chú ý.
+- Nếu chưa đủ {MIN_ITEMS} tin nổi bật trong 24 giờ gần nhất, có thể mở rộng phạm vi tìm kiếm đến 72 giờ nhưng phải xếp các diễn biến mới nhất lên trước.
 - Không lấy bài viết cũ rồi mô tả như một diễn biến mới.
-- Nếu nhiều bài cùng nói về một sự kiện, chỉ chọn thông tin mới nhất và đầy đủ nhất.
+- Nếu nhiều bài cùng nói về một sự kiện, chỉ chọn thông tin mới nhất, đầy đủ nhất và đáng tin cậy nhất.
 - Không chọn tin chỉ vì bài viết mới đăng lại nhưng nội dung thực tế đã cũ.
-- Không cố tạo đủ số lượng bằng các tin nhỏ, thiếu giá trị hoặc không còn mới.
+- Không dùng các tin nhỏ, ít giá trị chỉ để làm đủ số lượng.
 
 PHẠM VI NỘI DUNG
 
@@ -255,7 +264,7 @@ PHẠM VI NỘI DUNG
 3. Treo giò, án phạt và thay đổi danh sách thi đấu.
 4. Xác nhận mới từ huấn luyện viên hoặc câu lạc bộ.
 5. Thay đổi lịch thi đấu, giờ thi đấu hoặc sân đấu.
-6. Thay đổi huấn luyện viên hoặc tình hình nội bộ ảnh hưởng đến đội bóng.
+6. Thay đổi huấn luyện viên hoặc tình hình nội bộ ảnh hưởng trực tiếp đến đội bóng.
 7. Chuyển nhượng đã được xác nhận hoặc được nhiều nguồn uy tín tại Anh cùng đưa tin.
 8. Các diễn biến đáng chú ý khác liên quan trực tiếp đến Premier League.
 
@@ -263,15 +272,16 @@ YÊU CẦU TÌM KIẾM
 
 - Chỉ chọn tin liên quan trực tiếp đến Premier League hoặc các câu lạc bộ đang thi đấu tại Premier League.
 - Ưu tiên nguồn chính thức của Premier League, câu lạc bộ và huấn luyện viên.
-- Ưu tiên các hãng truyền thông thể thao uy tín.
+- Ưu tiên các hãng truyền thông thể thao uy tín tại Anh và quốc tế.
 - Không sử dụng bài đăng mạng xã hội chưa được xác minh làm nguồn duy nhất.
 - Không bịa phát biểu, chấn thương, thời gian, con số hoặc trạng thái thương vụ.
 - Không đưa tin về giải đấu khác nếu không có liên hệ trực tiếp đến một câu lạc bộ Premier League.
 - Nếu thông tin chưa được xác nhận, phải thể hiện rõ trạng thái chưa chắc chắn.
+- Không đưa tỷ lệ cược, nội dung cá cược hoặc quảng bá nhà cái.
 
 PHONG CÁCH TICKER
 
-Mỗi tin phải là một câu tiếng Việt hoàn chỉnh theo phong cách ticker của bản tin thể thao truyền hình.
+Mỗi tin phải là một câu tiếng Việt hoàn chỉnh theo phong cách bản tin thể thao truyền hình.
 
 Mỗi câu phải có đủ:
 
@@ -289,14 +299,14 @@ Hãy viết thành câu đầy đủ, tự nhiên và dễ đọc khi chạy nga
 
 QUY TẮC BIÊN TẬP
 
-- Viết hoàn toàn bằng tiếng Việt.
-- Mỗi tin dài từ 130 đến 220 ký tự, tính cả dấu cách.
+- Viết hoàn toàn bằng tiếng Việt tự nhiên.
+- Mỗi tin dài từ {MIN_ITEM_LENGTH} đến {MAX_ITEM_LENGTH} ký tự, tính cả dấu cách.
 - Không dùng emoji, hashtag, markdown hoặc URL.
 - Không thêm tiêu đề riêng cho từng tin.
 - Không ghi URL hoặc tên nguồn trong câu ticker.
 - Không giật tít hoặc suy đoán quá mức.
 - Không mở đầu rườm rà bằng các cụm như “Theo thông tin mới nhất”.
-- Nếu tin chưa được xác nhận, dùng các cụm như “được cho là”, “theo truyền thông Anh”, “đang được theo dõi” hoặc “chưa được xác nhận”.
+- Nếu tin chưa được xác nhận, dùng các cụm như “được cho là”, “theo truyền thông Anh”, “đang được theo dõi”, “có thể” hoặc “chưa được xác nhận”.
 - Không biến tin đồn thành thông tin chính thức.
 - Không viết hai tin khác nhau về cùng một sự kiện.
 - Không để một câu lạc bộ chiếm phần lớn bản tin.
@@ -307,14 +317,9 @@ BẢN TIN HIỆN ĐANG HIỂN THỊ
 
 {previous_items_text}
 
-Hãy dùng danh sách trên để nhận biết những sự kiện đã cũ.
+Hãy dùng danh sách trên để nhận biết những sự kiện đã được đề cập.
 
-Ưu tiên diễn biến mới hơn bản tin hiện tại.
-
-Một sự kiện cũ chỉ được đưa lại khi:
-
-- Vẫn là một trong những tin quan trọng nhất tại thời điểm hiện tại; hoặc
-- Đã có diễn biến mới như kết quả kiểm tra, xác nhận của huấn luyện viên, cầu thủ trở lại tập luyện, thương vụ hoàn tất hoặc lịch đấu thay đổi.
+Ưu tiên diễn biến mới hơn bản tin hiện tại. Một sự kiện cũ chỉ được đưa lại khi vẫn là tin lớn tại thời điểm hiện tại hoặc đã có cập nhật đáng kể, chẳng hạn kết quả kiểm tra chấn thương, xác nhận của huấn luyện viên, cầu thủ trở lại tập luyện, thương vụ hoàn tất hoặc lịch đấu thay đổi.
 
 ĐẦU RA
 
@@ -336,11 +341,17 @@ Cấu trúc bắt buộc:
   ]
 }}
 
+Ý nghĩa information_status:
+
+- confirmed: Đã được Premier League, câu lạc bộ, huấn luyện viên hoặc nguồn chính thức xác nhận.
+- reported: Được truyền thông uy tín đưa tin nhưng chưa có xác nhận chính thức.
+- monitoring: Tình trạng đang được theo dõi, chưa có kết luận cuối cùng.
+
 Trước khi trả kết quả, tự kiểm tra:
 
-- Có từ 8 đến 10 tin.
+- Có từ {MIN_ITEMS} đến {MAX_ITEMS} tin.
 - Các tin là những diễn biến mới và nổi bật nhất tại thời điểm tìm kiếm.
-- Mỗi tin dài từ 130 đến 220 ký tự.
+- Mỗi tin dài từ {MIN_ITEM_LENGTH} đến {MAX_ITEM_LENGTH} ký tự.
 - Không có hai tin trùng ý.
 - Không có tin nào thiếu chủ thể.
 - Không có URL, markdown hoặc emoji.
@@ -354,21 +365,16 @@ Trước khi trả kết quả, tự kiểm tra:
 # GEMINI
 # ============================================================
 
-def generate_with_google_search(
-    client: genai.Client,
-    prompt: str
-):
 
+def generate_with_google_search(client: genai.Client, prompt: str):
     google_search_tool = types.Tool(
         google_search=types.GoogleSearch()
     )
 
     config = types.GenerateContentConfig(
-        tools=[
-            google_search_tool
-        ],
+        tools=[google_search_tool],
         temperature=0.2,
-        max_output_tokens=8192,
+        max_output_tokens=MAX_OUTPUT_TOKENS,
     )
 
     return client.models.generate_content(
@@ -378,27 +384,32 @@ def generate_with_google_search(
     )
 
 
-def response_used_google_search(
-    response
-) -> bool:
-
-    candidates = (
-        getattr(
-            response,
-            "candidates",
-            None
-        )
-        or []
-    )
+def response_used_google_search(response: Any) -> bool:
+    candidates = getattr(response, "candidates", None) or []
 
     for candidate in candidates:
         grounding_metadata = getattr(
             candidate,
             "grounding_metadata",
-            None
+            None,
         )
 
-        if grounding_metadata is not None:
+        if grounding_metadata is None:
+            continue
+
+        web_search_queries = getattr(
+            grounding_metadata,
+            "web_search_queries",
+            None,
+        )
+
+        grounding_chunks = getattr(
+            grounding_metadata,
+            "grounding_chunks",
+            None,
+        )
+
+        if web_search_queries or grounding_chunks:
             return True
 
     return False
@@ -408,13 +419,9 @@ def response_used_google_search(
 # PARSE JSON
 # ============================================================
 
-def extract_json_payload(
-    response_text: str
-) -> dict:
 
-    cleaned_text = str(
-        response_text or ""
-    ).strip()
+def extract_json_payload(response_text: str) -> dict[str, Any]:
+    cleaned_text = str(response_text or "").strip()
 
     cleaned_text = re.sub(
         r"^```(?:json)?\s*",
@@ -429,31 +436,18 @@ def extract_json_payload(
         cleaned_text,
     )
 
-    first_brace = cleaned_text.find(
-        "{"
-    )
+    first_brace = cleaned_text.find("{")
+    last_brace = cleaned_text.rfind("}")
 
-    last_brace = cleaned_text.rfind(
-        "}"
-    )
-
-    if (
-        first_brace < 0
-        or last_brace <= first_brace
-    ):
+    if first_brace < 0 or last_brace <= first_brace:
         raise TickerValidationError(
-            "Không tìm thấy JSON object."
+            "Không tìm thấy JSON object trong phản hồi."
         )
 
-    json_text = cleaned_text[
-        first_brace:last_brace + 1
-    ]
+    json_text = cleaned_text[first_brace : last_brace + 1]
 
     try:
-        payload = json.loads(
-            json_text
-        )
-
+        payload = json.loads(json_text)
     except json.JSONDecodeError as error:
         raise TickerValidationError(
             f"JSON không hợp lệ: {error}"
@@ -461,7 +455,7 @@ def extract_json_payload(
 
     if not isinstance(payload, dict):
         raise TickerValidationError(
-            "Kết quả gốc phải là JSON object."
+            "Kết quả gốc phải là một JSON object."
         )
 
     return payload
@@ -471,11 +465,8 @@ def extract_json_payload(
 # VALIDATE
 # ============================================================
 
-def text_similarity(
-    first_text: str,
-    second_text: str
-) -> float:
 
+def text_similarity(first_text: str, second_text: str) -> float:
     return SequenceMatcher(
         None,
         first_text.casefold(),
@@ -484,154 +475,141 @@ def text_similarity(
 
 
 def validate_ticker_items(
-    payload: dict
-) -> list[dict]:
-
-    raw_items = payload.get(
-        "items"
-    )
+    payload: dict[str, Any],
+    previous_items: list[str],
+) -> list[dict[str, Any]]:
+    raw_items = payload.get("items")
 
     if not isinstance(raw_items, list):
-        raise TickerValidationError(
-            "items phải là một array."
+        raise TickerValidationError("items phải là một array.")
+
+    validation_errors: list[str] = []
+
+    if not MIN_ITEMS <= len(raw_items) <= MAX_ITEMS:
+        validation_errors.append(
+            f"Bản tin phải có từ {MIN_ITEMS} đến {MAX_ITEMS} tin."
         )
 
-    errors = []
+    normalized_items: list[dict[str, Any]] = []
 
-    if not 8 <= len(raw_items) <= 10:
-        errors.append(
-            "Bản tin phải có từ 8 đến 10 tin."
-        )
-
-    normalized_items = []
-
-    for index, raw_item in enumerate(
-        raw_items,
-        start=1
-    ):
+    for index, raw_item in enumerate(raw_items, start=1):
         if not isinstance(raw_item, dict):
-            errors.append(
-                f"Tin {index} không phải object."
+            validation_errors.append(
+                f"Tin {index} không phải JSON object."
             )
             continue
 
-        ticker_text = normalize_text(
-            raw_item.get("text")
-        )
-
-        category = normalize_text(
-            raw_item.get("category")
-        ).casefold()
-
+        ticker_text = normalize_text(raw_item.get("text"))
+        category = normalize_text(raw_item.get("category")).casefold()
         information_status = normalize_text(
-            raw_item.get(
-                "information_status"
-            )
+            raw_item.get("information_status")
         ).casefold()
 
-        ticker_length = len(
-            ticker_text
-        )
+        ticker_length = len(ticker_text)
 
-        if not 130 <= ticker_length <= 220:
-            errors.append(
-                f"Tin {index} dài "
-                f"{ticker_length} ký tự, "
-                "yêu cầu từ 130 đến 220."
+        if not ticker_text:
+            validation_errors.append(
+                f"Tin {index} không có nội dung."
             )
 
-        if re.search(
-            r"https?://|www\.",
-            ticker_text,
-            flags=re.IGNORECASE,
-        ):
-            errors.append(
-                f"Tin {index} chứa URL."
+        if not MIN_ITEM_LENGTH <= ticker_length <= MAX_ITEM_LENGTH:
+            validation_errors.append(
+                f"Tin {index} dài {ticker_length} ký tự, "
+                f"yêu cầu từ {MIN_ITEM_LENGTH} đến {MAX_ITEM_LENGTH}."
             )
 
-        if re.search(
-            r"```|^\s*[*#>]",
-            ticker_text,
-            flags=re.MULTILINE,
-        ):
-            errors.append(
-                f"Tin {index} chứa markdown."
-            )
+        if URL_PATTERN.search(ticker_text):
+            validation_errors.append(f"Tin {index} chứa URL.")
+
+        if MARKDOWN_PATTERN.search(ticker_text):
+            validation_errors.append(f"Tin {index} chứa markdown.")
+
+        if EMOJI_PATTERN.search(ticker_text):
+            validation_errors.append(f"Tin {index} chứa emoji.")
 
         if category not in ALLOWED_CATEGORIES:
-            errors.append(
-                f"Tin {index} có category "
-                f"không hợp lệ: {category}."
+            validation_errors.append(
+                f"Tin {index} có category không hợp lệ: {category or '(trống)'}."
             )
 
-        if (
-            information_status
-            not in ALLOWED_INFORMATION_STATUSES
-        ):
-            errors.append(
-                f"Tin {index} có "
-                "information_status không hợp lệ."
+        if information_status not in ALLOWED_INFORMATION_STATUSES:
+            validation_errors.append(
+                "Tin "
+                f"{index} có information_status không hợp lệ: "
+                f"{information_status or '(trống)'}."
             )
 
-        normalized_items.append({
-            "priority": index,
-            "text": ticker_text,
-            "category": category,
-            "information_status": (
-                information_status
-            ),
-        })
+        if information_status in {"reported", "monitoring"}:
+            lowered_text = ticker_text.casefold()
 
-    for first_index, first_item in enumerate(
-        normalized_items
-    ):
+            if not any(
+                marker in lowered_text for marker in UNCERTAIN_MARKERS
+            ):
+                validation_errors.append(
+                    f"Tin {index} chưa được xác nhận nhưng thiếu "
+                    "cách diễn đạt thận trọng."
+                )
+
+        normalized_items.append(
+            {
+                "priority": index,
+                "text": ticker_text,
+                "category": category,
+                "information_status": information_status,
+            }
+        )
+
+    for first_index, first_item in enumerate(normalized_items):
         for second_index in range(
             first_index + 1,
-            len(normalized_items)
+            len(normalized_items),
         ):
+            second_item = normalized_items[second_index]
+
             similarity_score = text_similarity(
                 first_item["text"],
-                normalized_items[
-                    second_index
-                ]["text"],
+                second_item["text"],
             )
 
-            if similarity_score >= 0.84:
-                errors.append(
-                    f"Tin {first_index + 1} và "
-                    f"tin {second_index + 1} "
+            if similarity_score >= CURRENT_ITEM_SIMILARITY_LIMIT:
+                validation_errors.append(
+                    f"Tin {first_index + 1} và tin {second_index + 1} "
                     "quá giống nhau."
                 )
+
+    for item_index, item in enumerate(normalized_items, start=1):
+        for previous_text in previous_items:
+            similarity_score = text_similarity(
+                item["text"],
+                previous_text,
+            )
+
+            if similarity_score >= PREVIOUS_ITEM_SIMILARITY_LIMIT:
+                validation_errors.append(
+                    f"Tin {item_index} gần như lặp nguyên văn "
+                    "bản tin trước."
+                )
+                break
 
     unconfirmed_transfers = sum(
         1
         for item in normalized_items
-        if (
-            item["category"] == "transfer"
-            and item[
-                "information_status"
-            ] != "confirmed"
-        )
+        if item["category"] == "transfer"
+        and item["information_status"] != "confirmed"
     )
 
     if unconfirmed_transfers > 3:
-        errors.append(
-            "Có quá ba tin chuyển nhượng "
-            "chưa được xác nhận."
+        validation_errors.append(
+            "Có quá ba tin chuyển nhượng chưa được xác nhận."
         )
 
-    if errors:
-        raise TickerValidationError(
-            "\n".join(errors)
-        )
+    if validation_errors:
+        raise TickerValidationError("\n".join(validation_errors))
 
     return normalized_items
 
 
-def validation_error_lines(
-    error: Exception
-) -> list[str]:
-
+def validation_error_lines(error: Exception) -> list[str]:
     return [
         line.strip()
         for line in str(error).splitlines()
@@ -643,25 +621,24 @@ def validation_error_lines(
 # PUBLISH
 # ============================================================
 
+
 def publish_ticker(
     engine: Engine,
     generated_at: datetime,
-    items: list[dict],
-):
+    items: list[dict[str, Any]],
+) -> None:
+    published_at_utc = datetime.now(timezone.utc)
 
     items_json = json.dumps(
         items,
-        ensure_ascii=False
+        ensure_ascii=False,
     )
 
-    ticker_text = "   ◆   ".join(
-        item["text"]
-        for item in items
-    )
+    ticker_text = "   ◆   ".join(item["text"] for item in items)
 
     query = text(
         """
-        INSERT INTO epl_news_ticker (
+        INSERT INTO public.epl_news_ticker (
             id,
             generated_at,
             previous_items,
@@ -679,168 +656,161 @@ def publish_ticker(
             :model_name,
             :updated_at
         )
-
         ON CONFLICT (id)
         DO UPDATE SET
-            previous_items =
-                epl_news_ticker.items,
-
-            generated_at =
-                EXCLUDED.generated_at,
-
-            items =
-                EXCLUDED.items,
-
-            ticker_text =
-                EXCLUDED.ticker_text,
-
-            model_name =
-                EXCLUDED.model_name,
-
-            updated_at =
-                EXCLUDED.updated_at
+            previous_items = public.epl_news_ticker.items,
+            generated_at = EXCLUDED.generated_at,
+            items = EXCLUDED.items,
+            ticker_text = EXCLUDED.ticker_text,
+            model_name = EXCLUDED.model_name,
+            updated_at = EXCLUDED.updated_at
         """
     )
 
     params = {
-        "generated_at": (
-            generated_at.astimezone(
-                timezone.utc
-            )
-        ),
-
+        "generated_at": generated_at.astimezone(timezone.utc),
         "items_json": items_json,
-
         "ticker_text": ticker_text,
-
         "model_name": MODEL_NAME,
-
-        "updated_at": (
-            generated_at.astimezone(
-                timezone.utc
-            )
-        ),
+        "updated_at": published_at_utc,
     }
 
     with engine.begin() as connection:
-        connection.execute(
-            query,
-            params,
-        )
+        connection.execute(query, params)
+
+
+# ============================================================
+# ERROR HELPERS
+# ============================================================
+
+
+def get_api_error_code(error: errors.APIError) -> str:
+    code = getattr(error, "code", None)
+    return str(code) if code is not None else "unknown"
+
+
+def get_api_error_message(error: errors.APIError) -> str:
+    message = getattr(error, "message", None)
+
+    if message:
+        return normalize_text(message)
+
+    return normalize_text(str(error))
 
 
 # ============================================================
 # MAIN
 # ============================================================
 
+
 def main() -> int:
     logging.basicConfig(
         level=logging.INFO,
-        format=(
-            "%(asctime)s | "
-            "%(levelname)s | "
-            "%(message)s"
-        ),
+        format="%(asctime)s | %(levelname)s | %(message)s",
     )
 
-    (
-        gemini_api_key,
-        database_url,
-    ) = require_environment()
+    gemini_api_key, database_url = require_environment()
 
-    run_time_vietnam = datetime.now(
-        VN_TZ
-    )
+    run_time_vietnam = datetime.now(VN_TZ)
 
     LOGGER.info(
         "Generating EPL ticker at %s",
-        run_time_vietnam.isoformat()
+        run_time_vietnam.isoformat(),
     )
 
-    engine = build_engine(
-        database_url
+    LOGGER.info(
+        "Using Gemini model: %s",
+        MODEL_NAME,
     )
 
-    client = genai.Client(
-        api_key=gemini_api_key
-    )
+    engine = build_engine(database_url)
+    client = genai.Client(api_key=gemini_api_key)
 
     try:
-        previous_items = load_previous_items(
-            engine
+        previous_items = load_previous_items(engine)
+
+        LOGGER.info(
+            "Loaded %s previous ticker items.",
+            len(previous_items),
         )
 
-        final_items = None
-        validation_feedback = None
-        last_error = None
+        final_items: list[dict[str, Any]] | None = None
+        validation_feedback: list[str] | None = None
+        last_validation_error: Exception | None = None
 
-        for attempt in range(1, 3):
+        for attempt in range(1, MAX_CONTENT_ATTEMPTS + 1):
             LOGGER.info(
-                "Gemini attempt %s/2",
-                attempt
+                "Gemini content attempt %s/%s",
+                attempt,
+                MAX_CONTENT_ATTEMPTS,
             )
 
             prompt = build_prompt(
                 run_time_vietnam=run_time_vietnam,
                 previous_items=previous_items,
-                validation_feedback=(
-                    validation_feedback
-                ),
+                validation_feedback=validation_feedback,
             )
 
             try:
-                response = (
-                    generate_with_google_search(
-                        client,
-                        prompt,
-                    )
+                response = generate_with_google_search(
+                    client,
+                    prompt,
                 )
 
-                if not response_used_google_search(
-                    response
-                ):
-                    raise RuntimeError(
-                        "Gemini không trả về "
-                        "Google Search grounding metadata."
+                if not response_used_google_search(response):
+                    raise TickerValidationError(
+                        "Phản hồi không có dữ liệu Google Search grounding."
                     )
 
-                payload = extract_json_payload(
-                    getattr(
-                        response,
-                        "text",
-                        "",
+                response_text = getattr(response, "text", "") or ""
+
+                if not response_text.strip():
+                    raise TickerValidationError(
+                        "Gemini không trả về nội dung văn bản."
                     )
-                )
+
+                payload = extract_json_payload(response_text)
 
                 final_items = validate_ticker_items(
-                    payload
+                    payload,
+                    previous_items,
                 )
 
                 break
 
-            except Exception as error:
-                last_error = error
+            except errors.APIError as error:
+                api_code = get_api_error_code(error)
+                api_message = get_api_error_message(error)
 
-                validation_feedback = (
-                    validation_error_lines(
-                        error
-                    )
-                )
+                raise RuntimeError(
+                    "Gemini API request thất bại. "
+                    f"HTTP {api_code}: {api_message}. "
+                    "Ticker cũ được giữ nguyên."
+                ) from error
+
+            except TickerValidationError as error:
+                last_validation_error = error
+                validation_feedback = validation_error_lines(error)
 
                 LOGGER.warning(
-                    "Attempt %s failed: %s",
+                    "Content validation attempt %s failed: %s",
                     attempt,
-                    " | ".join(
-                        validation_feedback
-                    ),
+                    " | ".join(validation_feedback),
                 )
+
+            except Exception as error:
+                raise RuntimeError(
+                    "Ticker generation gặp lỗi không mong đợi. "
+                    "Ticker cũ được giữ nguyên. "
+                    f"Chi tiết: {error}"
+                ) from error
 
         if final_items is None:
             raise RuntimeError(
-                "Không tạo được bản tin hợp lệ "
-                "sau hai lần. "
+                "Không tạo được bản tin hợp lệ sau "
+                f"{MAX_CONTENT_ATTEMPTS} lần. "
                 "Ticker cũ được giữ nguyên. "
-                f"Lỗi cuối: {last_error}"
+                f"Lỗi cuối: {last_validation_error}"
             )
 
         publish_ticker(
@@ -851,7 +821,7 @@ def main() -> int:
 
         LOGGER.info(
             "Published ticker with %s items.",
-            len(final_items)
+            len(final_items),
         )
 
         return 0
@@ -859,8 +829,11 @@ def main() -> int:
     finally:
         engine.dispose()
 
+        close_client = getattr(client, "close", None)
+
+        if callable(close_client):
+            close_client()
+
 
 if __name__ == "__main__":
-    raise SystemExit(
-        main()
-    )
+    raise SystemExit(main())
