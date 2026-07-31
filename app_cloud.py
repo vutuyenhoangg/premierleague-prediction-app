@@ -5,12 +5,12 @@
 # Database input: Supabase via DATABASE_URL
 # ============================================================
 
-import streamlit.components.v1 as components
 import html
 import json
 import os
 import logging
 import threading
+from collections import OrderedDict
 import hmac
 import hashlib
 import base64
@@ -118,6 +118,26 @@ NEWS_TICKER_REFRESH_INTERVAL = "10m"
 # đầu và cập nhật theo các full rerun do thao tác của người dùng, nhưng không
 # tạo auto-rerun nền có thể tích lũy timer trên Safari mobile.
 NEWS_TICKER_FRAGMENT_RUN_EVERY = None
+
+# ============================================================
+# PERFORMANCE POLICIES
+# ============================================================
+# Keep shared caches bounded. Revision-based keys are useful for correctness,
+# but without limits they can retain obsolete DataFrames after many writes.
+CACHE_MAX_ALL_PREDICTIONS = 8
+CACHE_MAX_USER_PREDICTIONS = 64
+CACHE_MAX_GOAL_SCORERS = 96
+CACHE_MAX_STAR_USAGE = 128
+CACHE_MAX_SCORING_RUNS = 32
+CACHE_MAX_DAILY_CHECKIN = 128
+PREDICTION_REVISION_MAX_USERS = 1024
+
+# Prefer same-origin static URLs. This avoids repeatedly sending large Base64
+# strings through Streamlit deltas on every rerun. The resolver keeps a Base64
+# fallback, so the app still works if static serving has not been enabled yet.
+STATIC_URL_PREFIX = "/app/static"
+STATIC_DIR = BASE_DIR / "static"
+DATA_STATIC_DIR = BASE_DIR / "data" / "static"
 
 MOBILE_TEAM_NAME_OVERRIDES = {
     "arsenal fc": "Arsenal",
@@ -317,7 +337,19 @@ FINAL_POSTER_END_DATE = date(2026, 7, 20)
 FOOTER_PROJECT_URL = ""
 
 @st.cache_resource(show_spinner=False, max_entries=128)
+@st.cache_resource(show_spinner=False, max_entries=128)
 def resolve_asset_src(asset_path: str) -> str:
+    """Resolve an asset without inflating every Streamlit rerun.
+
+    Resolution order:
+    1. External/data URLs are returned unchanged.
+    2. Files in ``./static`` use Streamlit's same-origin static URL.
+    3. Legacy ``data/static`` files fall back to a cached Base64 data URI.
+
+    With ``server.enableStaticServing=true`` and assets mirrored into
+    ``./static``, hero images, logos and backgrounds are browser-cacheable and
+    no longer travel inside every websocket delta.
+    """
     if not asset_path:
         return ""
 
@@ -326,33 +358,61 @@ def resolve_asset_src(asset_path: str) -> str:
     if asset_path.startswith(("http://", "https://", "data:", "/app/static/")):
         return asset_path
 
-    normalized_path = asset_path.replace("\\", "/")
-
-    candidate_paths = []
-
+    normalized_path = asset_path.replace("\\", "/").lstrip("./")
     raw_path = Path(normalized_path)
+
+    candidate_paths: list[Path] = []
 
     if raw_path.is_absolute():
         candidate_paths.append(raw_path)
     else:
+        # Direct path relative to the app.
         candidate_paths.append(BASE_DIR / raw_path)
 
+        # Map both legacy layouts to ./static for browser-cacheable delivery.
         if normalized_path.startswith("data/static/"):
-            candidate_paths.append(BASE_DIR / normalized_path.replace("data/static/", "static/", 1))
+            relative_static = normalized_path[len("data/static/"):]
+            candidate_paths.insert(0, STATIC_DIR / relative_static)
+            candidate_paths.append(DATA_STATIC_DIR / relative_static)
+        elif normalized_path.startswith("static/"):
+            relative_static = normalized_path[len("static/"):]
+            candidate_paths.insert(0, STATIC_DIR / relative_static)
+            candidate_paths.append(DATA_STATIC_DIR / relative_static)
+        else:
+            candidate_paths.append(STATIC_DIR / raw_path.name)
+            candidate_paths.append(DATA_STATIC_DIR / raw_path.name)
 
-        # Nếu notebook/app đang chạy trong folder data, ảnh thường nằm ở BASE_DIR/static/
-        candidate_paths.append(BASE_DIR / "static" / raw_path.name)
+    # De-duplicate paths while keeping priority order.
+    unique_candidates: list[Path] = []
+    seen: set[str] = set()
+    for candidate in candidate_paths:
+        key = str(candidate)
+        if key not in seen:
+            seen.add(key)
+            unique_candidates.append(candidate)
 
-    for candidate_path in candidate_paths:
-        if candidate_path.exists() and candidate_path.is_file():
-            mime_type, _ = mimetypes.guess_type(str(candidate_path))
-            mime_type = mime_type or "image/png"
+    for candidate_path in unique_candidates:
+        if not candidate_path.exists() or not candidate_path.is_file():
+            continue
 
-            encoded = base64.b64encode(candidate_path.read_bytes()).decode("utf-8")
-            return f"data:{mime_type};base64,{encoded}"
+        try:
+            relative_to_static = candidate_path.resolve().relative_to(
+                STATIC_DIR.resolve()
+            )
+        except (OSError, ValueError):
+            relative_to_static = None
 
-    # Fallback để dễ debug nếu file không tồn tại
+        if relative_to_static is not None:
+            return f"{STATIC_URL_PREFIX}/{relative_to_static.as_posix()}"
+
+        # Compatibility fallback for legacy data/static repositories.
+        mime_type, _ = mimetypes.guess_type(str(candidate_path))
+        mime_type = mime_type or "image/png"
+        encoded = base64.b64encode(candidate_path.read_bytes()).decode("ascii")
+        return f"data:{mime_type};base64,{encoded}"
+
     return asset_path
+
 
 
 def get_selected_season_slug() -> str:
@@ -1272,20 +1332,15 @@ def load_avatar_catalog() -> tuple[str, ...]:
 
 
 @st.cache_resource(show_spinner=False, max_entries=2)
+@st.cache_resource(show_spinner=False, max_entries=2)
 def build_avatar_sprite_payload() -> tuple[str, int, int]:
-    """
-    Tạo một sprite WebP dùng chung cho toàn bộ avatar.
+    """Build one avatar sprite and prefer a static, browser-cached URL.
 
-    Trả về:
-    - data URI của sprite;
-    - số cột;
-    - số hàng.
-
-    Hàm chạy một lần cho mỗi app process. Khi deploy bộ ảnh mới, process mới
-    sẽ tự tạo sprite mới; không giữ 80 ảnh Base64 độc lập trong cache.
+    A versioned filename prevents stale browser caches after avatar updates.
+    If the static directory is not writable, the previous Base64 fallback is
+    retained, so this optimization cannot disable the avatar picker.
     """
     avatar_keys = load_avatar_catalog()
-
     if not avatar_keys:
         return "", AVATAR_SPRITE_COLUMNS, 0
 
@@ -1293,51 +1348,36 @@ def build_avatar_sprite_payload() -> tuple[str, int, int]:
         from io import BytesIO
         from PIL import Image, ImageOps
 
-        columns = min(
-            AVATAR_SPRITE_COLUMNS,
-            len(avatar_keys)
-        )
-        rows = (
-            len(avatar_keys)
-            + columns
-            - 1
-        ) // columns
-
+        columns = min(AVATAR_SPRITE_COLUMNS, len(avatar_keys))
+        rows = (len(avatar_keys) + columns - 1) // columns
         sprite = Image.new(
             "RGB",
-            (
-                columns * AVATAR_SPRITE_CELL_PX,
-                rows * AVATAR_SPRITE_CELL_PX
-            ),
+            (columns * AVATAR_SPRITE_CELL_PX, rows * AVATAR_SPRITE_CELL_PX),
             color=(255, 255, 255)
         )
-
         avatar_dir = get_avatar_dir()
+        version_parts: list[str] = []
 
         for index, avatar_key in enumerate(avatar_keys):
             avatar_path = avatar_dir / avatar_key
-
             if not avatar_path.exists() or not avatar_path.is_file():
                 continue
 
-            with Image.open(avatar_path) as source_image:
-                avatar_image = ImageOps.exif_transpose(
-                    source_image
-                ).convert("RGB")
+            stat = avatar_path.stat()
+            version_parts.append(
+                f"{avatar_key}:{stat.st_mtime_ns}:{stat.st_size}"
+            )
 
+            with Image.open(avatar_path) as source_image:
+                avatar_image = ImageOps.exif_transpose(source_image).convert("RGB")
                 avatar_image = ImageOps.fit(
                     avatar_image,
-                    (
-                        AVATAR_SPRITE_CELL_PX,
-                        AVATAR_SPRITE_CELL_PX
-                    ),
+                    (AVATAR_SPRITE_CELL_PX, AVATAR_SPRITE_CELL_PX),
                     method=Image.Resampling.LANCZOS,
                     centering=(0.5, 0.5)
                 )
-
                 column_index = index % columns
                 row_index = index // columns
-
                 sprite.paste(
                     avatar_image,
                     (
@@ -1348,6 +1388,7 @@ def build_avatar_sprite_payload() -> tuple[str, int, int]:
 
         output_buffer = BytesIO()
         output_mime_type = "image/webp"
+        output_suffix = ".webp"
 
         try:
             sprite.save(
@@ -1357,36 +1398,56 @@ def build_avatar_sprite_payload() -> tuple[str, int, int]:
                 lossless=False,
                 method=4
             )
-
         except Exception:
-            # Một số bản Pillow không có codec WebP.
             output_buffer = BytesIO()
             output_mime_type = "image/png"
-            sprite.save(
-                output_buffer,
-                format="PNG",
-                optimize=True
+            output_suffix = ".png"
+            sprite.save(output_buffer, format="PNG", optimize=True)
+
+        payload = output_buffer.getvalue()
+        version_hash = hashlib.sha256(
+            ("|".join(version_parts)).encode("utf-8") + payload[:2048]
+        ).hexdigest()[:16]
+
+        try:
+            generated_dir = STATIC_DIR / "generated"
+            generated_dir.mkdir(parents=True, exist_ok=True)
+            generated_name = f"epl-avatar-sprite-{version_hash}{output_suffix}"
+            generated_path = generated_dir / generated_name
+
+            if not generated_path.exists() or generated_path.stat().st_size != len(payload):
+                temporary_path = generated_path.with_suffix(generated_path.suffix + ".tmp")
+                temporary_path.write_bytes(payload)
+                temporary_path.replace(generated_path)
+
+            # Remove only obsolete generated avatar sprites, never user assets.
+            for old_path in generated_dir.glob("epl-avatar-sprite-*"):
+                if old_path != generated_path:
+                    try:
+                        old_path.unlink()
+                    except OSError:
+                        pass
+
+            return (
+                f"{STATIC_URL_PREFIX}/generated/{generated_name}",
+                columns,
+                rows
+            )
+        except OSError:
+            encoded = base64.b64encode(payload).decode("ascii")
+            return (
+                f"data:{output_mime_type};base64,{encoded}",
+                columns,
+                rows
             )
 
-        encoded = base64.b64encode(
-            output_buffer.getvalue()
-        ).decode("ascii")
-
-        return (
-            f"data:{output_mime_type};base64,{encoded}",
-            columns,
-            rows
-        )
-
     except Exception:
-        # Fallback an toàn: vẫn giữ app hoạt động nếu Pillow/WebP gặp lỗi.
-        # Chỉ dùng ảnh hiện tại ở nút avatar; grid sẽ không có ảnh nền thay
-        # vì làm sập toàn bộ ứng dụng.
         LOGGER.warning(
             "Could not build avatar sprite; using image fallback.",
             exc_info=True
         )
         return "", AVATAR_SPRITE_COLUMNS, 0
+
 
 
 def get_avatar_sprite_position(
@@ -6008,17 +6069,24 @@ def inject_prediction_score_stepper_css():
     )
 
 def inject_prediction_score_readonly_script():
-    """
-    Khóa thao tác nhập trực tiếp vào hai ô tỉ số dự đoán.
+    """Prevent manual score editing with one delegated controller.
 
-    Nút tăng/giảm native của Streamlit vẫn hoạt động bình thường.
-    Không tác động đến number_input ở trang Admin.
+    The old implementation attached listeners to every input and watched the
+    whole main DOM with MutationObserver. Event delegation keeps the native
+    Streamlit +/- buttons intact while using a constant number of listeners.
     """
-    render_parent_script("""
+    render_parent_script(
+        r"""
         <script>
         (() => {
             const parentWindow = window.parent;
             const parentDocument = parentWindow.document;
+            const controllerKey = "__eplPredictionScoreReadonlyControllerV2";
+            const previous = parentWindow[controllerKey];
+
+            if (previous && typeof previous.cleanup === "function") {
+                try { previous.cleanup(); } catch (error) {}
+            }
 
             const inputSelector = [
                 'div[class*="st-key-prediction_score_row_"]',
@@ -6028,127 +6096,73 @@ def inject_prediction_score_readonly_script():
                 ') input'
             ].join(" ");
 
-            const lockScoreInput = (input) => {
-                if (
-                    !input
-                    || !(input instanceof parentWindow.HTMLInputElement)
-                ) {
-                    return;
+            const asScoreInput = (target) => {
+                if (!(target instanceof parentWindow.HTMLInputElement)) {
+                    return null;
                 }
+                return target.matches(inputSelector) ? target : null;
+            };
 
+            const markReadonly = (input) => {
+                if (!input) return;
                 input.readOnly = true;
-
                 input.setAttribute("readonly", "");
                 input.setAttribute("aria-readonly", "true");
                 input.setAttribute("inputmode", "none");
                 input.setAttribute("autocomplete", "off");
                 input.setAttribute("spellcheck", "false");
+            };
 
-                if (
-                    input.dataset.eplScoreReadonlyBound === "1"
-                ) {
-                    return;
-                }
+            const block = (event) => {
+                const input = asScoreInput(event.target);
+                if (!input) return;
+                markReadonly(input);
+                event.preventDefault();
+            };
 
-                const preventEditing = (event) => {
+            const onKeydown = (event) => {
+                const input = asScoreInput(event.target);
+                if (!input) return;
+                markReadonly(input);
+
+                const blockedKeys = new Set([
+                    "Backspace", "Delete", "ArrowUp", "ArrowDown",
+                    "PageUp", "PageDown", "Home", "End"
+                ]);
+
+                if (event.key.length === 1 || blockedKeys.has(event.key)) {
                     event.preventDefault();
-                };
-
-                input.addEventListener(
-                    "beforeinput",
-                    preventEditing
-                );
-
-                input.addEventListener(
-                    "paste",
-                    preventEditing
-                );
-
-                input.addEventListener(
-                    "drop",
-                    preventEditing
-                );
-
-                input.addEventListener(
-                    "wheel",
-                    preventEditing,
-                    { passive: false }
-                );
-
-                input.addEventListener(
-                    "keydown",
-                    (event) => {
-                        const blockedKeys = new Set([
-                            "Backspace",
-                            "Delete",
-                            "ArrowUp",
-                            "ArrowDown",
-                            "PageUp",
-                            "PageDown",
-                            "Home",
-                            "End"
-                        ]);
-
-                        if (
-                            event.key.length === 1
-                            || blockedKeys.has(event.key)
-                        ) {
-                            event.preventDefault();
-                        }
-                    }
-                );
-
-                input.dataset.eplScoreReadonlyBound = "1";
-            };
-
-            const applyReadonly = () => {
-                parentDocument
-                    .querySelectorAll(inputSelector)
-                    .forEach(lockScoreInput);
-            };
-
-            let updateScheduled = false;
-
-            const scheduleUpdate = () => {
-                if (updateScheduled) {
-                    return;
                 }
-
-                updateScheduled = true;
-
-                parentWindow.requestAnimationFrame(() => {
-                    updateScheduled = false;
-                    applyReadonly();
-                });
             };
 
-            const observerKey =
-                "__eplPredictionScoreReadonlyObserver";
+            const onFocusIn = (event) => {
+                markReadonly(asScoreInput(event.target));
+            };
 
-            if (parentWindow[observerKey]) {
-                parentWindow[observerKey].disconnect();
-            }
+            parentDocument.querySelectorAll(inputSelector).forEach(markReadonly);
 
-            applyReadonly();
+            parentDocument.addEventListener("beforeinput", block, true);
+            parentDocument.addEventListener("paste", block, true);
+            parentDocument.addEventListener("drop", block, true);
+            parentDocument.addEventListener("wheel", block, {capture: true, passive: false});
+            parentDocument.addEventListener("keydown", onKeydown, true);
+            parentDocument.addEventListener("focusin", onFocusIn, true);
 
-            const observer =
-                new parentWindow.MutationObserver(
-                    scheduleUpdate
-                );
+            const cleanup = () => {
+                parentDocument.removeEventListener("beforeinput", block, true);
+                parentDocument.removeEventListener("paste", block, true);
+                parentDocument.removeEventListener("drop", block, true);
+                parentDocument.removeEventListener("wheel", block, true);
+                parentDocument.removeEventListener("keydown", onKeydown, true);
+                parentDocument.removeEventListener("focusin", onFocusIn, true);
+            };
 
-            observer.observe(
-                parentDocument.querySelector('[data-testid="stMain"]')
-                    || parentDocument.body,
-                {
-                    childList: true,
-                    subtree: true
-                }
-            );
-
-            parentWindow[observerKey] = observer;
+            parentWindow[controllerKey] = {cleanup};
         })();
         </script>
-        """)
+        """
+    )
+
 
 def inject_mobile_team_name_display_script():
     """
@@ -6382,7 +6396,8 @@ def inject_mobile_team_name_display_script():
 
         const applyAll = () => {
             updateSubtree(
-                parentDocument.body,
+                parentDocument.querySelector('[data-testid="stMain"]')
+                    || parentDocument.body,
                 mobileQuery.matches
             );
         };
@@ -6394,16 +6409,6 @@ def inject_mobile_team_name_display_script():
                 }
 
                 for (const mutation of mutations) {
-                    if (
-                        mutation.type === "characterData"
-                    ) {
-                        updateTextNode(
-                            mutation.target,
-                            true
-                        );
-                        continue;
-                    }
-
                     for (
                         const addedNode
                         of mutation.addedNodes
@@ -6448,7 +6453,6 @@ def inject_mobile_team_name_display_script():
             parentDocument.body,
             {
                 childList: true,
-                characterData: true,
                 subtree: true
             }
         );
@@ -7061,320 +7065,137 @@ def inject_match_datepicker_calendar_theme(match_dates):
         """,
         unsafe_allow_html=True
     )
-    render_parent_script("""
+    render_parent_script(
+        r"""
         <script>
         (() => {
             const parentWindow = window.parent;
             const parentDocument = parentWindow.document;
+            const controllerKey = "__wcFilterDateRuntimeV3";
+            const previous = parentWindow[controllerKey];
 
-            /*
-             * Danh sách ngày có trận, được truyền trực tiếp từ
-             * matches["kickoff_date_filter"].
-             */
-            const matchDates = new Set(
-                __WC_MATCH_DATES__
-            );
+            if (previous && typeof previous.cleanup === "function") {
+                try { previous.cleanup(); } catch (error) {}
+            }
 
+            const matchDates = new Set(__WC_MATCH_DATES__);
             const monthNumbers = {
-                january: "01",
-                february: "02",
-                march: "03",
-                april: "04",
-                may: "05",
-                june: "06",
-                july: "07",
-                august: "08",
-                september: "09",
-                october: "10",
-                november: "11",
-                december: "12"
+                january: "01", february: "02", march: "03", april: "04",
+                may: "05", june: "06", july: "07", august: "08",
+                september: "09", october: "10", november: "11", december: "12"
             };
+            const inputSelector = 'div[class*="st-key-filter_date"] input';
+            let frame = 0;
+            let calendarObserver = null;
+            let observedCalendar = null;
 
-            const inputSelector =
-                'div[class*="st-key-filter_date"] input';
-
-            /*
-             * Giữ nguyên logic readonly hiện tại.
-             */
             const makeInputReadonly = (input) => {
-                if (
-                    !input
-                    || !(input instanceof parentWindow.HTMLInputElement)
-                ) {
-                    return;
-                }
-
+                if (!(input instanceof parentWindow.HTMLInputElement)) return;
                 input.readOnly = true;
-
                 input.setAttribute("readonly", "");
                 input.setAttribute("aria-readonly", "true");
                 input.setAttribute("inputmode", "none");
                 input.setAttribute("autocomplete", "off");
                 input.setAttribute("spellcheck", "false");
-
-                if (input.dataset.wcDateReadonlyBound === "1") {
-                    return;
-                }
-
-                const preventManualEditing = (event) => {
-                    event.preventDefault();
-                };
-
-                input.addEventListener(
-                    "beforeinput",
-                    preventManualEditing
-                );
-
-                input.addEventListener(
-                    "paste",
-                    preventManualEditing
-                );
-
-                input.addEventListener(
-                    "drop",
-                    preventManualEditing
-                );
-
-                input.dataset.wcDateReadonlyBound = "1";
             };
 
-            /*
-             * Lấy ngày thật từ aria-label của ô lịch.
-             * Hỗ trợ cả aria-label nằm trên gridcell
-             * và aria-label nằm trong phần tử con.
-             */
             const extractDateIso = (cell) => {
-                const labelledElements = [];
+                const candidates = cell.hasAttribute("aria-label")
+                    ? [cell, ...cell.querySelectorAll("[aria-label]")]
+                    : [...cell.querySelectorAll("[aria-label]")];
 
-                if (cell.hasAttribute("aria-label")) {
-                    labelledElements.push(cell);
+                for (const element of candidates) {
+                    const label = element.getAttribute("aria-label") || "";
+                    const match = label.match(/\\b(January|February|March|April|May|June|July|August|September|October|November|December)\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,)?\\s+(\\d{4})\\b/i);
+                    if (!match) continue;
+                    const month = monthNumbers[match[1].toLowerCase()];
+                    const day = String(Number(match[2])).padStart(2, "0");
+                    return `${match[3]}-${month}-${day}`;
                 }
-
-                cell
-                    .querySelectorAll("[aria-label]")
-                    .forEach((element) => {
-                        labelledElements.push(element);
-                    });
-
-                for (const element of labelledElements) {
-                    const ariaLabel =
-                        element.getAttribute("aria-label") || "";
-
-                    const dateMatch = ariaLabel.match(
-                        /\\b(January|February|March|April|May|June|July|August|September|October|November|December)\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,)?\\s+(\\d{4})\\b/i
-                    );
-
-                    if (!dateMatch) {
-                        continue;
-                    }
-
-                    const month =
-                        monthNumbers[
-                            dateMatch[1].toLowerCase()
-                        ];
-
-                    const day = String(
-                        Number(dateMatch[2])
-                    ).padStart(2, "0");
-
-                    return `${dateMatch[3]}-${month}-${day}`;
-                }
-
                 return null;
             };
 
-            /*
-             * Gán font-weight dưới dạng inline !important.
-             *
-             * Inline !important sẽ không bị các rule hover,
-             * selected hoặc today trong CSS ghi đè.
-             */
-            const setImportantFontWeight = (
-                element,
-                fontWeight
-            ) => {
-                if (!element) {
-                    return;
-                }
-
-                const currentValue =
-                    element.style.getPropertyValue(
-                        "font-weight"
-                    );
-
-                const currentPriority =
-                    element.style.getPropertyPriority(
-                        "font-weight"
-                    );
-
+            const setWeight = (element, value) => {
+                if (!element) return;
                 if (
-                    currentValue === fontWeight
-                    && currentPriority === "important"
-                ) {
-                    return;
-                }
-
-                element.style.setProperty(
-                    "font-weight",
-                    fontWeight,
-                    "important"
-                );
+                    element.style.getPropertyValue("font-weight") === value
+                    && element.style.getPropertyPriority("font-weight") === "important"
+                ) return;
+                element.style.setProperty("font-weight", value, "important");
             };
 
-            const applyDateCellWeight = (cell) => {
+            const applyCell = (cell) => {
                 const dateIso = extractDateIso(cell);
-
-                const isMatchDate = Boolean(
-                    dateIso
-                    && matchDates.has(dateIso)
-                );
-
-                const fontWeight = (
-                    isMatchDate
-                    ? "800"
-                    : "400"
-                );
-
-                /*
-                 * Xóa class từ cách triển khai cũ,
-                 * tránh CSS cũ còn sót gây xung đột.
-                 */
-                if (
-                    cell.classList.contains(
-                        "wc-match-date"
-                    )
-                ) {
-                    cell.classList.remove(
-                        "wc-match-date"
-                    );
-                }
-
-                cell.dataset.wcHasMatch = (
-                    isMatchDate
-                    ? "true"
-                    : "false"
-                );
-
-                /*
-                 * Áp trực tiếp lên cả ô ngày và phần tử chứa số.
-                 */
-                setImportantFontWeight(
-                    cell,
-                    fontWeight
-                );
-
-                cell
-                    .querySelectorAll("*")
-                    .forEach((element) => {
-                        setImportantFontWeight(
-                            element,
-                            fontWeight
-                        );
-                    });
+                const weight = dateIso && matchDates.has(dateIso) ? "800" : "400";
+                cell.dataset.wcHasMatch = weight === "800" ? "true" : "false";
+                setWeight(cell, weight);
+                cell.querySelectorAll("*").forEach((element) => setWeight(element, weight));
             };
 
-            const applyCalendarEnhancements = () => {
-                parentDocument
-                    .querySelectorAll(inputSelector)
-                    .forEach(makeInputReadonly);
-
-                /*
-                 * Chỉ xử lý calendar khi widget filter_date
-                 * đang tồn tại trên trang.
-                 */
-                const filterDateWidget =
-                    parentDocument.querySelector(
-                        'div[class*="st-key-filter_date"]'
-                    );
-
-                if (!filterDateWidget) {
-                    return;
-                }
-
-                parentDocument
-                    .querySelectorAll(
-                        'div[data-baseweb="calendar"] div[role="gridcell"]'
-                    )
-                    .forEach(applyDateCellWeight);
+            const applyCalendar = (calendar) => {
+                if (!calendar) return;
+                calendar.querySelectorAll('div[role="gridcell"]').forEach(applyCell);
             };
 
-            /*
-             * Gom nhiều mutation liên tiếp vào một lần cập nhật.
-             */
-            let updateScheduled = false;
+            const attachCalendarObserver = (calendar) => {
+                if (calendar === observedCalendar) return;
+                if (calendarObserver) calendarObserver.disconnect();
+                observedCalendar = calendar;
+                calendarObserver = null;
+                if (!calendar) return;
 
-            const scheduleCalendarUpdate = () => {
-                if (updateScheduled) {
-                    return;
-                }
-
-                updateScheduled = true;
-
-                parentWindow.requestAnimationFrame(() => {
-                    updateScheduled = false;
-                    applyCalendarEnhancements();
-                });
+                calendarObserver = new parentWindow.MutationObserver(schedule);
+                calendarObserver.observe(calendar, {childList: true, subtree: true});
             };
 
-            /*
-             * Dọn observer của cách triển khai cũ.
-             */
-            const legacyObserver =
-                parentWindow.__wcMatchDateBoldObserver;
+            const update = () => {
+                frame = 0;
+                parentDocument.querySelectorAll(inputSelector).forEach(makeInputReadonly);
+                const calendar = parentDocument.querySelector('div[data-baseweb="calendar"]');
+                attachCalendarObserver(calendar);
+                applyCalendar(calendar);
+            };
 
-            if (legacyObserver) {
-                legacyObserver.disconnect();
-
-                try {
-                    delete parentWindow.__wcMatchDateBoldObserver;
-                } catch (error) {
-                    parentWindow.__wcMatchDateBoldObserver = null;
-                }
+            function schedule() {
+                if (frame) return;
+                frame = parentWindow.requestAnimationFrame(update);
             }
 
-            /*
-             * Ngắt observer hiện tại trước khi tạo observer mới,
-             * tránh observer bị nhân đôi sau mỗi Streamlit rerun.
-             */
-            const observerKey =
-                "__wcFilterDateReadonlyObserver";
-
-            const oldObserver =
-                parentWindow[observerKey];
-
-            if (oldObserver) {
-                oldObserver.disconnect();
-            }
-
-            applyCalendarEnhancements();
-
-            /*
-             * Theo dõi cả việc Streamlit/BaseWeb:
-             * - Mở calendar
-             * - Đổi tháng
-             * - Render lại ngày
-             * - Thay đổi trạng thái hover/selected
-             */
-            const observer =
-                new parentWindow.MutationObserver(
-                    scheduleCalendarUpdate
-                );
-
-            observer.observe(
-                parentDocument.body,
-                {
-                    childList: true,
-                    subtree: true
+            const onFocusIn = (event) => {
+                if (event.target?.matches?.(inputSelector)) {
+                    makeInputReadonly(event.target);
+                    schedule();
                 }
-            );
+            };
 
-            parentWindow[observerKey] = observer;
+            const bodyObserver = new parentWindow.MutationObserver((mutations) => {
+                for (const mutation of mutations) {
+                    if (mutation.addedNodes.length || mutation.removedNodes.length) {
+                        schedule();
+                        break;
+                    }
+                }
+            });
+
+            bodyObserver.observe(parentDocument.body, {childList: true, subtree: true});
+            parentDocument.addEventListener("focusin", onFocusIn, true);
+            schedule();
+
+            const cleanup = () => {
+                parentWindow.cancelAnimationFrame(frame);
+                bodyObserver.disconnect();
+                if (calendarObserver) calendarObserver.disconnect();
+                parentDocument.removeEventListener("focusin", onFocusIn, true);
+            };
+
+            parentWindow[controllerKey] = {cleanup};
         })();
         </script>
         """.replace(
             "__WC_MATCH_DATES__",
             match_date_iso_js
-        ))
+        )
+    )
 
 
 def inject_mobile_match_title_css():
@@ -7505,32 +7326,19 @@ def inject_mobile_match_title_css():
     )
 
 def inject_desktop_match_vs_style():
-    """
-    Chỉ thay đổi màu và kích thước chữ 'vs' trên desktop.
-
-    Không thay:
-    - cấu trúc heading
-    - khoảng cách với badge
-    - khoảng cách với ribbon
-    - giao diện mobile
-    """
+    """Style the explicit desktop ``vs`` span without a DOM observer."""
     st.markdown(
         """
         <style>
         @media (min-width: 769px) {
             div[class*="st-key-match_title_desktop_"]
-            h3
-            .epl-desktop-vs-only {
+            h3 .epl-desktop-vs-only {
                 display: inline;
-
                 color: #FF2882 !important;
-
                 font-size: 0.62em !important;
                 font-weight: 950 !important;
                 line-height: inherit !important;
-
                 letter-spacing: 0 !important;
-
                 vertical-align: 0.08em;
             }
         }
@@ -7539,143 +7347,6 @@ def inject_desktop_match_vs_style():
         unsafe_allow_html=True
     )
 
-    render_parent_script("""
-        <script>
-        (() => {
-            const parentWindow = window.parent;
-            const parentDocument = parentWindow.document;
-
-            const headingSelector =
-                'div[class*="st-key-match_title_desktop_"] h3';
-
-            const observerKey =
-                "__eplDesktopVsOnlyObserver";
-
-            /*
-             * Ngắt observer cũ sau mỗi Streamlit rerun,
-             * tránh tạo nhiều observer trùng nhau.
-             */
-            if (parentWindow[observerKey]) {
-                parentWindow[observerKey].disconnect();
-            }
-
-            const styleVsInHeading = (heading) => {
-                if (
-                    !heading
-                    || heading.dataset.eplVsStyled === "1"
-                ) {
-                    return;
-                }
-
-                const walker =
-                    parentDocument.createTreeWalker(
-                        heading,
-                        parentWindow.NodeFilter.SHOW_TEXT
-                    );
-
-                let textNode;
-
-                while (
-                    (textNode = walker.nextNode())
-                ) {
-                    const value =
-                        textNode.nodeValue || "";
-
-                    const matched =
-                        value.match(
-                            /^(.*?)(\\s+vs\\s+)(.*)$/i
-                        );
-
-                    if (!matched) {
-                        continue;
-                    }
-
-                    const fragment =
-                        parentDocument
-                        .createDocumentFragment();
-
-                    fragment.appendChild(
-                        parentDocument.createTextNode(
-                            matched[1] + " "
-                        )
-                    );
-
-                    const vsSpan =
-                        parentDocument.createElement(
-                            "span"
-                        );
-
-                    vsSpan.className =
-                        "epl-desktop-vs-only";
-
-                    vsSpan.textContent = "vs";
-
-                    fragment.appendChild(vsSpan);
-
-                    fragment.appendChild(
-                        parentDocument.createTextNode(
-                            " " + matched[3]
-                        )
-                    );
-
-                    textNode.parentNode.replaceChild(
-                        fragment,
-                        textNode
-                    );
-
-                    heading.dataset.eplVsStyled = "1";
-
-                    break;
-                }
-            };
-
-            const applyStyle = () => {
-                parentDocument
-                    .querySelectorAll(
-                        headingSelector
-                    )
-                    .forEach(
-                        styleVsInHeading
-                    );
-            };
-
-            let updateScheduled = false;
-
-            const scheduleUpdate = () => {
-                if (updateScheduled) {
-                    return;
-                }
-
-                updateScheduled = true;
-
-                parentWindow.requestAnimationFrame(
-                    () => {
-                        updateScheduled = false;
-                        applyStyle();
-                    }
-                );
-            };
-
-            applyStyle();
-
-            const observer =
-                new parentWindow.MutationObserver(
-                    scheduleUpdate
-                );
-
-            observer.observe(
-                parentDocument.querySelector('[data-testid="stMain"]')
-                    || parentDocument.body,
-                {
-                    childList: true,
-                    subtree: true
-                }
-            );
-
-            parentWindow[observerKey] = observer;
-        })();
-        </script>
-        """)
 
 @st.dialog(" ")
 def render_daily_checkin_dialog(user_id: int):
@@ -8063,10 +7734,7 @@ def render_daily_checkin_dialog(user_id: int):
     </div>
     """
 
-    if hasattr(st, "html"):
-        st.html(daily_checkin_html)
-    else:
-        components.html(daily_checkin_html, height=620, scrolling=True)
+    st.html(daily_checkin_html)
 
     if not checked_today and next_day_no is not None:
         claim_clicked = st.button(
@@ -8095,159 +7763,6 @@ def render_daily_checkin_dialog(user_id: int):
 
 
 @st.dialog(" ")
-def render_daily_checkin_reward_dialog(reward_info: dict):
-    reward_label = str(reward_info.get("reward_label") or "")
-    reward_type = normalize_star_type(reward_info.get("reward_type"))
-    day_no = int(reward_info.get("day_no") or 0)
-
-    safe_reward_label = html.escape(reward_label)
-
-    reward_symbol = "✦" if reward_type == STAR_TYPE_SUPER else "★"
-
-    daily_reward_html = f"""
-    <style>
-    div[role="dialog"]:has(.wc-daily-reward-shell) {{
-        width: min(560px, calc(100vw - 32px)) !important;
-        max-width: min(560px, calc(100vw - 32px)) !important;
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        padding: 0 !important;
-    }}
-
-    div[role="dialog"]:has(.wc-daily-reward-shell) h2,
-    div[role="dialog"]:has(.wc-daily-reward-shell) [data-testid="stDialogHeader"] {{
-        display: none !important;
-    }}
-
-    div[role="dialog"]:has(.wc-daily-reward-shell) button[aria-label="Close"] {{
-        color: #FFFFFF !important;
-        background: rgba(255, 255, 255, 0.12) !important;
-        border-radius: 999px !important;
-        top: 18px !important;
-        right: 18px !important;
-    }}
-
-    .wc-daily-reward-shell {{
-        border-radius: 28px;
-        padding: 38px 34px 30px 34px;
-        background:
-            radial-gradient(circle at 50% 0%, rgba(245, 197, 66, 0.24), transparent 30%),
-            linear-gradient(135deg, rgba(7, 17, 31, 0.98), rgba(11, 31, 58, 0.97));
-        border: 1px solid rgba(255, 255, 255, 0.16);
-        box-shadow: 0 28px 70px rgba(7, 17, 31, 0.46);
-        color: #F8FAFC;
-        text-align: center;
-        overflow: hidden;
-        box-sizing: border-box;
-    }}
-
-    .wc-daily-reward-orb {{
-        width: 84px;
-        height: 84px;
-        margin: 0 auto 18px auto;
-        border-radius: 999px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: linear-gradient(135deg, #F5C542, #FFD761);
-        color: #07111F;
-        font-size: 42px;
-        font-weight: 950;
-        box-shadow:
-            0 0 0 8px rgba(245, 197, 66, 0.10),
-            0 0 32px rgba(245, 197, 66, 0.32);
-    }}
-
-    .wc-daily-reward-title {{
-        color: #F8FAFC;
-        font-size: 32px;
-        font-weight: 950;
-        line-height: 1.12;
-        letter-spacing: -0.04em;
-        margin-bottom: 10px;
-    }}
-
-    .wc-daily-reward-subtitle {{
-        color: #CBD5E1;
-        font-size: 15.5px;
-        line-height: 1.55;
-        margin-bottom: 18px;
-    }}
-
-    .wc-daily-reward-card {{
-        max-width: 420px;
-        margin: 0 auto 24px auto;
-        border: 1px solid rgba(245, 197, 66, 0.62);
-        border-radius: 18px;
-        padding: 16px 18px;
-        background: rgba(245, 197, 66, 0.08);
-        box-shadow: 0 0 28px rgba(245, 197, 66, 0.14);
-    }}
-
-    .wc-daily-reward-name {{
-        color: #F5C542;
-        font-size: 20px;
-        font-weight: 950;
-        line-height: 1.2;
-    }}
-
-    .wc-daily-reward-note {{
-        color: #CBD5E1;
-        font-size: 14px;
-        margin-top: 6px;
-    }}
-
-    div[class*="st-key-daily_reward_confirm"] {{
-        width: min(560px, calc(100vw - 32px)) !important;
-        margin: 14px auto 0 auto !important;
-    }}
-
-    div[class*="st-key-daily_reward_confirm"] button {{
-        width: 100% !important;
-        min-height: 54px !important;
-        border-radius: 999px !important;
-        border: none !important;
-        background: linear-gradient(135deg, #F5C542, #FFD761) !important;
-        color: #07111F !important;
-        font-size: 18px !important;
-        font-weight: 950 !important;
-        box-shadow: 0 14px 34px rgba(245, 197, 66, 0.24) !important;
-    }}
-
-    div[class*="st-key-daily_reward_confirm"] button:hover {{
-        transform: translateY(-1px) !important;
-        filter: brightness(1.02) !important;
-    }}
-    </style>
-
-    <div class="wc-daily-reward-shell">
-        <div class="wc-daily-reward-orb">{reward_symbol}</div>
-        <div class="wc-daily-reward-title">Phần thưởng đã nhận</div>
-
-        <div class="wc-daily-reward-subtitle">
-            Bạn đã điểm danh đủ <b style="color:#F5C542;">{day_no} ngày</b>
-            trong chu kỳ hiện tại.
-        </div>
-
-        <div class="wc-daily-reward-card">
-            <div class="wc-daily-reward-name">{safe_reward_label}</div>
-            <div class="wc-daily-reward-note">Đã được cộng vào kho bổ trợ của bạn</div>
-        </div>
-    </div>
-    """
-
-    if hasattr(st, "html"):
-        st.html(daily_reward_html)
-    else:
-        components.html(daily_reward_html, height=430, scrolling=False)
-
-    if st.button(
-        "Hoàn tất",
-        key="daily_reward_confirm",
-        use_container_width=True
-    ):
-        st.rerun()
 
 def render_daily_checkin_reward_content(reward_info: dict):
     reward_label = str(reward_info.get("reward_label") or "")
@@ -8358,10 +7873,7 @@ def render_daily_checkin_reward_content(reward_info: dict):
     </div>
     """
 
-    if hasattr(st, "html"):
-        st.html(daily_reward_html)
-    else:
-        components.html(daily_reward_html, height=430, scrolling=False)
+    st.html(daily_reward_html)
 
     if st.button(
         "Hoàn tất",
@@ -8530,10 +8042,7 @@ def render_final_poster_popup(user_id: int):
     </div>
     """
 
-    if hasattr(st, "html"):
-        st.html(poster_html)
-    else:
-        components.html(poster_html, height=720, scrolling=True)
+    st.html(poster_html)
 
 def maybe_render_final_poster_popup(user_id: int) -> bool:
     user_id = int(user_id)
@@ -10630,43 +10139,6 @@ def get_prediction_radio_css():
     }
     """
 
-def get_star_radio_css(
-    disable_hope: bool = False,
-    disable_super: bool = False
-) -> str:
-    css = get_prediction_radio_css()
-
-    if disable_hope:
-        css += """
-        label[data-baseweb="radio"]:nth-of-type(2) {
-            opacity: 0.48 !important;
-            pointer-events: none !important;
-            color: #94A3B8 !important;
-            background: rgba(148, 163, 184, 0.08) !important;
-            border-color: rgba(148, 163, 184, 0.16) !important;
-        }
-
-        label[data-baseweb="radio"]:nth-of-type(2) * {
-            color: #94A3B8 !important;
-        }
-        """
-
-    if disable_super:
-        css += """
-        label[data-baseweb="radio"]:nth-of-type(3) {
-            opacity: 0.48 !important;
-            pointer-events: none !important;
-            color: #94A3B8 !important;
-            background: rgba(148, 163, 184, 0.08) !important;
-            border-color: rgba(148, 163, 184, 0.16) !important;
-        }
-
-        label[data-baseweb="radio"]:nth-of-type(3) * {
-            color: #94A3B8 !important;
-        }
-        """
-
-    return css
 
 def get_prediction_action_spacing_css():
     """
@@ -11253,20 +10725,6 @@ def render_page_title(title: str, subtitle: str = ""):
         <div class="wc-page-title">
             <h2>{title}</h2>
             <p>{subtitle}</p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-
-def render_status_legend():
-    st.markdown(
-        """
-        <div class="wc-status-legend">
-            <div class="wc-legend-item"><span class="wc-dot" style="background:#2563EB;"></span>Đang mở dự đoán</div>
-            <div class="wc-legend-item"><span class="wc-dot" style="background:#F59E0B;"></span>Đã khóa</div>
-            <div class="wc-legend-item"><span class="wc-dot" style="background:#16A34A;"></span>Đã có kết quả</div>
-            <div class="wc-legend-item"><span class="wc-dot" style="background:#9CA3AF;"></span>Chưa xác định đội</div>
         </div>
         """,
         unsafe_allow_html=True
@@ -14037,8 +13495,8 @@ def get_engine() -> Engine:
         pool_pre_ping=True,
         pool_recycle=1800,
         pool_timeout=15,
-        pool_size=3,
-        max_overflow=5,
+        pool_size=2,
+        max_overflow=2,
         pool_use_lifo=True,
         connect_args={
             "connect_timeout": 10,
@@ -14542,11 +14000,6 @@ def normalize_star_type(star_type) -> str:
     return star_type
 
 
-def get_star_multiplier(star_type) -> int:
-    star_type = normalize_star_type(star_type)
-    return int(STAR_CONFIG[star_type]["multiplier"])
-
-
 def calculate_points_with_star(
     base_points: int,
     star_type: str,
@@ -14632,7 +14085,7 @@ def build_star_usage_result(
 
 @st.cache_data(
     ttl=10,
-    max_entries=512,
+    max_entries=CACHE_MAX_STAR_USAGE,
     show_spinner=False
 )
 def _load_user_star_usage_counts_cached(
@@ -14869,75 +14322,6 @@ def validate_star_quota(
             )
 
 
-def get_available_star_options(
-    user_id: int,
-    match_id: int,
-    current_star_type: str,
-    usage: dict | None = None
-) -> list[str]:
-    """
-    Luôn hiển thị đủ các option bổ trợ.
-    Option hết thật sẽ được xử lý bằng label xám + validate khi lưu.
-    """
-    return [
-        STAR_TYPE_NONE,
-        STAR_TYPE_HOPE,
-        STAR_TYPE_SUPER
-    ]
-
-
-def format_star_option_label(
-    star_type: str,
-    current_star_type: str,
-    usage: dict
-) -> str:
-    """
-    Format label cho option bổ trợ.
-
-    Quy ước hiển thị:
-    - Kho còn lại = tổng sao - sao đã khóa/mất.
-      Sao đang giữ tạm ở các trận chưa khóa vẫn nằm trong kho này.
-    - Đang dùng = số sao đang giữ tạm ở các trận chưa khóa.
-    - free_left vẫn chỉ dùng ngầm cho logic chuyển sao, không đưa lên label.
-    """
-    star_type = normalize_star_type(star_type)
-    current_star_type = normalize_star_type(current_star_type)
-
-    if star_type == STAR_TYPE_NONE:
-        return "Không dùng sao"
-
-    if star_type == STAR_TYPE_HOPE:
-        hope_label = STAR_CONFIG[STAR_TYPE_HOPE]["label"]
-
-        hope_left = int(usage.get("hope_left", 0))
-        hope_using = int(usage.get("hope_reserved_used", 0))
-
-        if hope_left <= 0 and current_star_type != STAR_TYPE_HOPE:
-            return f"{hope_label} (đã hết)"
-
-        return (
-            f"{hope_label} "
-            f"(Kho còn lại: {hope_left}/{HOPE_STARS_PER_USER}; "
-            f"Đang dùng: {hope_using}/{HOPE_STARS_PER_USER})"
-        )
-
-    if star_type == STAR_TYPE_SUPER:
-        super_label = STAR_CONFIG[STAR_TYPE_SUPER]["label"]
-
-        super_left = int(usage.get("super_left", 0))
-        super_using = int(usage.get("super_reserved_used", 0))
-
-        if super_left <= 0 and current_star_type != STAR_TYPE_SUPER:
-            return f"{super_label} (đã hết)"
-
-        return (
-            f"{super_label} "
-            f"(Kho còn lại: {super_left}/{SUPER_STARS_PER_USER}; "
-            f"Đang dùng: {super_using}/{SUPER_STARS_PER_USER})"
-        )
-
-    return STAR_CONFIG[star_type]["label"]
-
 def get_prediction_result_info(
     pred_home,
     pred_away,
@@ -15020,36 +14404,6 @@ def get_prediction_result_info(
     }
 
 
-def render_prediction_result_line(result_info):
-    if result_info is None:
-        return
-
-    st.markdown(
-        f"""
-        <div style="
-            margin-top: 8px;
-            margin-bottom: 8px;
-            font-size: 15px;
-            color: #07111F;
-        ">
-            Kết quả dự đoán:
-            <span style="
-                display: inline-block;
-                margin-left: 6px;
-                padding: 5px 11px;
-                border-radius: 999px;
-                background: {result_info["bg_color"]};
-                color: {result_info["text_color"]};
-                border: 1px solid {result_info["border_color"]};
-                font-weight: 850;
-                font-size: 14px;
-            ">
-                {result_info["label"]}
-            </span>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
 
 def calculate_display_points_for_prediction(existing, match_row) -> dict | None:
     if existing is None:
@@ -15720,429 +15074,6 @@ def get_match_card_css(status_info):
     }}
     """
 
-def local_asset_exists(asset_path: str) -> bool:
-    """
-    Kiểm tra file ảnh local có tồn tại không.
-    Nếu thiếu ảnh thì không render logo, tránh ảnh vỡ trong card.
-    """
-    if not asset_path:
-        return False
-
-    asset_path = str(asset_path).strip()
-
-    if asset_path.startswith(
-        ("http://", "https://", "data:")
-    ):
-        return True
-
-    normalized_path = asset_path.replace("\\", "/")
-    raw_path = Path(normalized_path)
-
-    candidate_paths = []
-
-    if raw_path.is_absolute():
-        candidate_paths.append(raw_path)
-    else:
-        candidate_paths.append(
-            BASE_DIR / raw_path
-        )
-
-        if normalized_path.startswith(
-            "data/static/"
-        ):
-            candidate_paths.append(
-                BASE_DIR
-                / normalized_path.replace(
-                    "data/static/",
-                    "static/",
-                    1
-                )
-            )
-
-        candidate_paths.append(
-            BASE_DIR
-            / "static"
-            / raw_path.name
-        )
-
-    return any(
-        candidate_path.exists()
-        and candidate_path.is_file()
-        for candidate_path in candidate_paths
-    )
-
-
-def get_winner_team_display_name(row) -> str:
-    """
-    Lấy tên đội thắng để dùng cho alt/title của logo.
-    """
-    if row is None:
-        return ""
-
-    display_name = row.get(
-        "winner_team_display_name"
-    )
-
-    if (
-        display_name is not None
-        and not pd.isna(display_name)
-        and str(display_name).strip()
-    ):
-        return str(display_name).strip()
-
-    winner_name = row.get(
-        "winner_team_name"
-    )
-
-    if (
-        winner_name is not None
-        and not pd.isna(winner_name)
-        and str(winner_name).strip()
-    ):
-        return str(winner_name).strip()
-
-    winner_team_id = to_optional_int(
-        row.get("winner_team_id")
-    )
-
-    home_team_id = to_optional_int(
-        row.get("home_team_id")
-    )
-
-    away_team_id = to_optional_int(
-        row.get("away_team_id")
-    )
-
-    if (
-        winner_team_id is not None
-        and winner_team_id == home_team_id
-    ):
-        return str(
-            row.get("home_team_name") or ""
-        ).strip()
-
-    if (
-        winner_team_id is not None
-        and winner_team_id == away_team_id
-    ):
-        return str(
-            row.get("away_team_name") or ""
-        ).strip()
-
-    return ""
-
-
-def get_winner_team_logo_path(row) -> str:
-    """
-    Lấy logo của đội thắng từ metadata đã JOIN trong load_matches().
-    """
-    if row is None:
-        return ""
-
-    direct_logo_path = row.get(
-        "winner_team_logo_path"
-    )
-
-    if (
-        direct_logo_path is not None
-        and not pd.isna(direct_logo_path)
-        and str(direct_logo_path).strip()
-    ):
-        return str(direct_logo_path).strip()
-
-    winner_team_id = to_optional_int(
-        row.get("winner_team_id")
-    )
-
-    home_team_id = to_optional_int(
-        row.get("home_team_id")
-    )
-
-    away_team_id = to_optional_int(
-        row.get("away_team_id")
-    )
-
-    if winner_team_id is None:
-        return ""
-
-    if winner_team_id == home_team_id:
-        logo_path = row.get(
-            "home_team_logo_path"
-        )
-
-    elif winner_team_id == away_team_id:
-        logo_path = row.get(
-            "away_team_logo_path"
-        )
-
-    else:
-        return ""
-
-    if (
-        logo_path is None
-        or pd.isna(logo_path)
-    ):
-        return ""
-
-    return str(logo_path).strip()
-
-
-def should_render_winner_logo(row) -> bool:
-    """
-    Chỉ hiển thị logo khi:
-    - Trận đã kết thúc.
-    - Có đội thắng, không phải trận hòa.
-    - Metadata có logo hợp lệ.
-    """
-    if row is None:
-        return False
-
-    if not to_bool(
-        row.get("is_finished")
-    ):
-        return False
-
-    if (
-        to_optional_int(
-            row.get("winner_team_id")
-        )
-        is None
-    ):
-        return False
-
-    logo_path = get_winner_team_logo_path(
-        row
-    )
-
-    if not logo_path:
-        return False
-
-    return local_asset_exists(
-        logo_path
-    )
-
-
-def render_winner_logo_overlay(row):
-    """
-    Hiển thị logo đội thắng bằng đúng cơ chế overlay cờ
-    đã dùng ổn định trong app World Cup.
-
-    Chỉ thay nguồn ảnh từ cờ sang logo câu lạc bộ.
-    Vị trí, hiệu ứng, kích thước và responsive được giữ nguyên.
-    """
-    if not should_render_winner_logo(row):
-        return
-
-    match_id = int(row.get("match_id"))
-
-    logo_asset_path = get_winner_team_logo_path(row)
-    logo_src = resolve_asset_src(logo_asset_path)
-
-    if not logo_src:
-        return
-
-    winner_name = (
-        get_winner_team_display_name(row)
-        or "Đội thắng"
-    )
-
-    safe_winner_name = html.escape(
-        winner_name,
-        quote=True
-    )
-
-    safe_logo_src = html.escape(
-        logo_src,
-        quote=True
-    )
-
-    logo_html = f"""
-    <style>
-    @keyframes wcWinnerLogoWave_{match_id} {{
-        0% {{
-            transform:
-                perspective(520px)
-                rotateY(-9deg)
-                skewY(-1deg)
-                translateY(0);
-            filter: brightness(1.02) saturate(1.08);
-        }}
-
-        50% {{
-            transform:
-                perspective(520px)
-                rotateY(9deg)
-                skewY(1.15deg)
-                translateY(-1px);
-            filter: brightness(1.08) saturate(1.14);
-        }}
-
-        100% {{
-            transform:
-                perspective(520px)
-                rotateY(-9deg)
-                skewY(-1deg)
-                translateY(0);
-            filter: brightness(1.02) saturate(1.08);
-        }}
-    }}
-
-    @keyframes wcWinnerLogoShine_{match_id} {{
-        0% {{
-            transform: translateX(-150%) skewX(-22deg);
-            opacity: 0;
-        }}
-
-        18% {{
-            opacity: 0;
-        }}
-
-        38% {{
-            opacity: 0.75;
-        }}
-
-        62% {{
-            opacity: 0.75;
-        }}
-
-        82% {{
-            opacity: 0;
-        }}
-
-        100% {{
-            transform: translateX(170%) skewX(-22deg);
-            opacity: 0;
-        }}
-    }}
-
-    .wc-winner-logo-overlay-{match_id} {{
-        position: absolute;
-
-        top: -50px;
-        right: -48px;
-
-        z-index: 3;
-
-        width: 122px;
-        height: 72px;
-
-        pointer-events: none;
-
-        display: flex;
-        align-items: flex-start;
-        justify-content: flex-start;
-    }}
-
-    .wc-winner-logo-frame-{match_id} {{
-        position: absolute;
-    
-        left: 11px;
-        top: 8px;
-    
-        width: fit-content;
-        height: fit-content;
-    
-        max-width: 98px;
-        max-height: 64px;
-    
-        border: none;
-        border-radius: 0;
-        background: transparent;
-        box-shadow: none;
-    
-        overflow: visible;
-        transform-origin: center;
-    
-        animation:
-            wcWinnerLogoWave_{match_id}
-            2.4s
-            ease-in-out
-            infinite;
-    }}
-
-    .wc-winner-logo-img-{match_id} {{
-        display: block;
-    
-        width: auto;
-        height: auto;
-    
-        max-width: 56px;
-        max-height: 50px;
-    
-        object-fit: contain;
-        object-position: center;
-    
-        filter:
-            drop-shadow(
-                0 8px 12px
-                rgba(15, 23, 42, 0.24)
-            );
-    }}
-    .wc-winner-logo-shine-{match_id} {{
-        display: none;
-    }}
-    @media (max-width: 768px) {{
-        .wc-winner-logo-overlay-{match_id} {{
-            top: -25px;
-            right: -20px;
-
-            width: 84px;
-            height: 52px;
-        }}
-
-        .wc-winner-logo-frame-{match_id} {{
-            left: 8px;
-            top: 7px;
-
-            max-width: 66px;
-            max-height: 39px;
-
-            border-radius: 6px;
-        }}
-
-        .wc-winner-logo-img-{match_id} {{
-            max-width: 66px;
-            max-height: 39px;
-        }}
-
-        .wc-winner-logo-shine-{match_id} {{
-            width: 48%;
-        }}
-    }}
-
-    @media (max-width: 390px) {{
-        .wc-winner-logo-overlay-{match_id} {{
-            top: 15px;
-            right: 10px;
-
-            width: 78px;
-            height: 50px;
-        }}
-
-        .wc-winner-logo-frame-{match_id} {{
-            max-width: 61px;
-            max-height: 36px;
-        }}
-
-        .wc-winner-logo-img-{match_id} {{
-            max-width: 61px;
-            max-height: 36px;
-        }}
-    }}
-    </style>
-
-    <div class="wc-winner-logo-overlay-{match_id}" title="Đội thắng: {safe_winner_name}">
-        <div class="wc-winner-logo-frame-{match_id}">
-            <img class="wc-winner-logo-img-{match_id}" src="{safe_logo_src}" alt="Logo {safe_winner_name}" />
-            <div class="wc-winner-logo-shine-{match_id}"></div>
-        </div>
-    </div>
-    """
-
-    st.markdown(
-        textwrap.dedent(logo_html).strip(),
-        unsafe_allow_html=True
-    )
 
 def get_countdown_seconds_to_kickoff(kickoff_time_utc) -> int | None:
     """
@@ -16886,15 +15817,6 @@ def initialize_app_once():
     return True
 
 
-def count_users() -> int:
-    row = fetch_one(
-        """
-        SELECT COUNT(*) AS n
-        FROM users
-        """
-    )
-
-    return int(row["n"])
 
 def hash_session_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
@@ -16934,34 +15856,24 @@ def create_login_session(user_id: int) -> str:
     return token
 
 def set_login_cookie_and_reload(token: str):
-    """
-    Ghi session token vào browser cookie rồi reload lại app.
-
-    Lý do:
-    - st.session_state sẽ mất khi F5.
-    - Cookie phải được browser ghi chắc chắn trước khi app rerun/reload.
-    - Không đổi logic login/session, chỉ đảm bảo cookie được persist đúng.
-    """
+    """Persist the login cookie and reload once, without a component iframe."""
     max_age_seconds = SESSION_DAYS * 24 * 60 * 60
-
     safe_cookie_name = html.escape(COOKIE_NAME, quote=True)
     safe_token = html.escape(str(token), quote=True)
 
-    components.html(
+    st.html(
         f"""
         <script>
-        (function() {{
+        (() => {{
             document.cookie = "{safe_cookie_name}={safe_token}; path=/; max-age={max_age_seconds}; SameSite=Lax";
-            setTimeout(function() {{
-                window.parent.location.reload();
-            }}, 120);
+            window.setTimeout(() => window.location.reload(), 120);
         }})();
         </script>
         """,
-        height=0
+        unsafe_allow_javascript=True
     )
-
     st.stop()
+
 
 def get_user_by_session_token(token: str):
     if not token:
@@ -17085,7 +15997,7 @@ def clear_daily_checkin_cache():
 
 @st.cache_data(
     ttl=60,
-    max_entries=512,
+    max_entries=CACHE_MAX_DAILY_CHECKIN,
     show_spinner=False
 )
 def get_daily_checkin_bonus_counts_cached(user_id: int) -> dict:
@@ -17259,7 +16171,7 @@ def get_daily_checkin_state_from_db(user_id: int) -> dict:
 
 @st.cache_data(
     ttl=60,
-    max_entries=512,
+    max_entries=CACHE_MAX_DAILY_CHECKIN,
     show_spinner=False
 )
 def get_daily_checkin_state_cached(user_id: int, today_key: str) -> dict:
@@ -17799,35 +16711,39 @@ def logout_user():
 # ============================================================
 
 @st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner=False)
 def get_prediction_cache_revision_store() -> dict:
-    """
-    Revision nhỏ dùng làm cache key thay cho việc clear toàn bộ cache.
-
-    Một user lưu dự đoán chỉ làm mới:
-    - cache tổng của đúng mùa;
-    - cache cá nhân của đúng user;
-    - không xóa dữ liệu cá nhân của những user khác.
-    """
+    """Small, bounded revision registry used only as cache-key metadata."""
     return {
         "lock": threading.RLock(),
-        "all_predictions": {},
-        "all_user_predictions": {},
-        "single_user_predictions": {}
+        "all_predictions": OrderedDict(),
+        "all_user_predictions": OrderedDict(),
+        "single_user_predictions": OrderedDict()
     }
 
 
-def get_all_predictions_revision(
-    season_slug: str
+def _increment_bounded_revision(
+    mapping: OrderedDict,
+    key,
+    *,
+    max_entries: int
 ) -> int:
+    next_revision = int(mapping.get(key, 0)) + 1
+    mapping[key] = next_revision
+    mapping.move_to_end(key)
+
+    while len(mapping) > max_entries:
+        mapping.popitem(last=False)
+
+    return next_revision
+
+
+def get_all_predictions_revision(season_slug: str) -> int:
     store = get_prediction_cache_revision_store()
+    season_key = str(season_slug)
 
     with store["lock"]:
-        return int(
-            store["all_predictions"].get(
-                str(season_slug),
-                0
-            )
-        )
+        return int(store["all_predictions"].get(season_key, 0))
 
 
 def get_user_predictions_revisions(
@@ -17835,30 +16751,13 @@ def get_user_predictions_revisions(
     season_slug: str
 ) -> tuple[int, int]:
     store = get_prediction_cache_revision_store()
-    season_slug = str(season_slug)
-    user_key = (
-        int(user_id),
-        season_slug
-    )
+    season_key = str(season_slug)
+    user_key = (int(user_id), season_key)
 
     with store["lock"]:
         return (
-            int(
-                store[
-                    "all_user_predictions"
-                ].get(
-                    season_slug,
-                    0
-                )
-            ),
-            int(
-                store[
-                    "single_user_predictions"
-                ].get(
-                    user_key,
-                    0
-                )
-            )
+            int(store["all_user_predictions"].get(season_key, 0)),
+            int(store["single_user_predictions"].get(user_key, 0))
         )
 
 
@@ -17867,64 +16766,34 @@ def bump_prediction_cache_revisions(
     user_id: int | None = None,
     all_users: bool = False
 ):
-    """
-    Làm mới cache theo phạm vi thay đổi thực tế.
-    """
+    """Invalidate only the affected scope without unbounded metadata growth."""
     store = get_prediction_cache_revision_store()
-    season_slug = str(
-        season_slug
-        or DEFAULT_SEASON_SLUG
-    )
+    season_key = str(season_slug or DEFAULT_SEASON_SLUG)
 
     with store["lock"]:
-        store["all_predictions"][season_slug] = (
-            int(
-                store["all_predictions"].get(
-                    season_slug,
-                    0
-                )
-            )
-            + 1
+        _increment_bounded_revision(
+            store["all_predictions"],
+            season_key,
+            max_entries=max(8, len(SEASON_OPTIONS) * 4)
         )
 
         if all_users:
-            store[
-                "all_user_predictions"
-            ][season_slug] = (
-                int(
-                    store[
-                        "all_user_predictions"
-                    ].get(
-                        season_slug,
-                        0
-                    )
-                )
-                + 1
+            _increment_bounded_revision(
+                store["all_user_predictions"],
+                season_key,
+                max_entries=max(8, len(SEASON_OPTIONS) * 4)
             )
-
         elif user_id is not None:
-            user_key = (
-                int(user_id),
-                season_slug
-            )
-
-            store[
-                "single_user_predictions"
-            ][user_key] = (
-                int(
-                    store[
-                        "single_user_predictions"
-                    ].get(
-                        user_key,
-                        0
-                    )
-                )
-                + 1
+            _increment_bounded_revision(
+                store["single_user_predictions"],
+                (int(user_id), season_key),
+                max_entries=PREDICTION_REVISION_MAX_USERS
             )
 
 
-@st.cache_resource(
-    ttl=30,
+
+@st.cache_data(
+    ttl=45,
     max_entries=8,
     show_spinner=False
 )
@@ -18030,7 +16899,7 @@ def load_matches(season_slug: str | None = None) -> pd.DataFrame:
 
     return df
 
-@st.cache_resource(
+@st.cache_data(
     ttl=300,
     max_entries=2,
     show_spinner=False
@@ -18053,9 +16922,9 @@ def load_users() -> pd.DataFrame:
     )
 
 
-@st.cache_resource(
+@st.cache_data(
     ttl=30,
-    max_entries=64,
+    max_entries=CACHE_MAX_ALL_PREDICTIONS,
     show_spinner=False
 )
 def _load_predictions_cached(
@@ -18092,9 +16961,9 @@ def load_predictions(
     )
 
 
-@st.cache_resource(
-    ttl=30,
-    max_entries=256,
+@st.cache_data(
+    ttl=15,
+    max_entries=CACHE_MAX_USER_PREDICTIONS,
     show_spinner=False
 )
 def _load_user_predictions_cached(
@@ -18148,9 +17017,9 @@ def load_user_predictions(
     )
 
 
-@st.cache_resource(
+@st.cache_data(
     ttl=900,
-    max_entries=256,
+    max_entries=CACHE_MAX_GOAL_SCORERS,
     show_spinner=False
 )
 def _load_goal_scorers_for_match_cached(
@@ -18201,9 +17070,9 @@ def load_goal_scorers_for_match(
         )
         return pd.DataFrame()
 
-@st.cache_resource(
+@st.cache_data(
     ttl=300,
-    max_entries=64,
+    max_entries=48,
     show_spinner=False
 )
 def load_epl_top_scorers(
@@ -19271,25 +18140,6 @@ def _write_prediction_in_transaction(
     }
 
 
-def get_user_prediction_from_db(user_id: int, match_id: int):
-    """
-    Dùng cho thao tác ghi dữ liệu/save.
-    Luôn đọc trực tiếp database để đảm bảo dữ liệu mới nhất.
-    """
-    return fetch_one(
-        """
-        SELECT *
-        FROM predictions
-        WHERE user_id = :user_id
-          AND match_id = :match_id
-        """,
-        {
-            "user_id": user_id,
-            "match_id": match_id
-        }
-    )
-
-
 def get_user_star_usage_from_db(
     user_id: int,
     exclude_match_id: int | None = None,
@@ -20020,84 +18870,6 @@ def get_star_transfer_candidates(
     return candidates
 
 
-def get_star_save_plan(
-    user_id: int,
-    match_id: int,
-    selected_star_type: str,
-    current_star_type: str
-) -> dict:
-    """
-    Quyết định khi lưu:
-    - save_direct: lưu thẳng.
-    - exhausted: sao đã hết thật.
-    - transfer_required: cần hỏi chuyển sao từ trận khác.
-    """
-    selected_star_type = normalize_star_type(selected_star_type)
-    current_star_type = normalize_star_type(current_star_type)
-
-    if selected_star_type == STAR_TYPE_NONE:
-        return {
-            "status": "save_direct",
-            "candidates": []
-        }
-
-    if selected_star_type == current_star_type:
-        return {
-            "status": "save_direct",
-            "candidates": []
-        }
-
-    usage = get_user_star_usage_from_db(
-        user_id=user_id,
-        exclude_match_id=match_id
-    )
-
-    if selected_star_type == STAR_TYPE_HOPE:
-        left_key = "hope_left"
-        free_key = "hope_free_left"
-        star_name = "Ngôi sao hy vọng"
-
-    elif selected_star_type == STAR_TYPE_SUPER:
-        left_key = "super_left"
-        free_key = "super_free_left"
-        star_name = "Siêu sao"
-
-    else:
-        return {
-            "status": "save_direct",
-            "candidates": []
-        }
-
-    if usage[left_key] <= 0:
-        return {
-            "status": "exhausted",
-            "message": f"Bạn đã dùng hết {star_name}.",
-            "candidates": []
-        }
-
-    if usage[free_key] > 0:
-        return {
-            "status": "save_direct",
-            "candidates": []
-        }
-
-    candidates = get_star_transfer_candidates(
-        user_id=user_id,
-        target_match_id=match_id,
-        star_type=selected_star_type
-    )
-
-    if not candidates:
-        return {
-            "status": "exhausted",
-            "message": f"Hiện không còn {star_name} trống để dùng cho trận này.",
-            "candidates": []
-        }
-
-    return {
-        "status": "transfer_required",
-        "candidates": candidates
-    }
 
 def save_prediction(
     user_id: int,
@@ -20465,7 +19237,7 @@ def delete_prediction(user_id: int, match_id: int) -> dict:
 
 @st.cache_data(
     ttl=30,
-    max_entries=512,
+    max_entries=CACHE_MAX_SCORING_RUNS,
     show_spinner=False
 )
 def score_all_predictions(
@@ -21159,8 +19931,15 @@ def render_match_title(
         }
         """
     ):
-        st.subheader(
-            f"{home_display} vs {away_display}"
+        st.markdown(
+            (
+                '<h3>'
+                f'{safe_home} '
+                '<span class="epl-desktop-vs-only">vs</span> '
+                f'{safe_away}'
+                '</h3>'
+            ),
+            unsafe_allow_html=True
         )
     
         st.markdown(
@@ -21205,121 +19984,6 @@ def render_match_title(
             unsafe_allow_html=True
         )
 
-def render_pending_star_transfer_box(user_id: int, match_id: int):
-    pending = st.session_state.get("pending_star_transfer")
-
-    if not pending:
-        return
-
-    if int(pending.get("target_match_id")) != int(match_id):
-        return
-
-    star_type = normalize_star_type(pending.get("star_type"))
-    star_label = format_star_short(star_type)
-    candidates = pending.get("candidates", [])
-
-    if not candidates:
-        st.session_state.pop("pending_star_transfer", None)
-        return
-
-    candidate_options = {
-        candidate["label"]: candidate
-        for candidate in candidates
-    }
-
-    with stylable_container(
-        key=f"star_transfer_confirm_box_{match_id}",
-        css_styles="""
-        {
-            margin-top: 18px;
-            margin-bottom: 18px;
-            padding: 18px 20px;
-            border-radius: 20px;
-            border: 1px solid rgba(245, 158, 11, 0.42);
-            background:
-                radial-gradient(circle at top left, rgba(245, 197, 66, 0.18), transparent 34%),
-                linear-gradient(135deg, rgba(255, 251, 235, 0.98), rgba(255, 255, 255, 0.96));
-            box-shadow: 0 18px 42px rgba(15, 23, 42, 0.12);
-        }
-
-        div[data-testid="stSelectbox"] label {
-            color: #07111F !important;
-            font-weight: 850 !important;
-        }
-        """
-    ):
-        st.markdown(
-            f"""
-            <div style="
-                color:#07111F;
-                font-weight:950;
-                font-size:18px;
-                margin-bottom:6px;
-            ">
-                Xác nhận chuyển bổ trợ
-            </div>
-
-            <div style="
-                color:#475569;
-                font-size:14px;
-                line-height:1.55;
-                margin-bottom:14px;
-            ">
-                Bạn đang muốn dùng <b>{html.escape(star_label)}</b> cho trận
-                <b>{html.escape(str(pending.get("target_label")))}</b>.
-                Tuy nhiên bổ trợ còn lại này đang được đặt ở trận khác chưa diễn ra.
-                Hãy chọn trận muốn gỡ sao để chuyển sang trận hiện tại.
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-        selected_source_label = st.selectbox(
-            "Chọn trận muốn chuyển sao từ:",
-            options=list(candidate_options.keys()),
-            key=f"star_transfer_source_{match_id}"
-        )
-
-        confirm_col, cancel_col = st.columns([1, 1])
-
-        with confirm_col:
-            confirm_transfer = st.button(
-                "Xác nhận chuyển sao",
-                key=f"confirm_star_transfer_{match_id}",
-                use_container_width=True
-            )
-
-        with cancel_col:
-            cancel_transfer = st.button(
-                "Hủy",
-                key=f"cancel_star_transfer_{match_id}",
-                use_container_width=True
-            )
-
-        if confirm_transfer:
-            selected_candidate = candidate_options[selected_source_label]
-
-            try:
-                transfer_star_and_save_prediction(
-                    user_id=user_id,
-                    source_match_id=int(selected_candidate["match_id"]),
-                    target_match_id=int(pending["target_match_id"]),
-                    predicted_home_score=int(pending["predicted_home_score"]),
-                    predicted_away_score=int(pending["predicted_away_score"]),
-                    predicted_winner_team_id=pending["predicted_winner_team_id"],
-                    star_type=star_type
-                )
-
-                st.session_state.pop("pending_star_transfer", None)
-                st.success("Đã chuyển bổ trợ và lưu dự đoán.")
-                st.rerun()
-
-            except ValueError as e:
-                st.error(str(e))
-
-        if cancel_transfer:
-            st.session_state.pop("pending_star_transfer", None)
-            st.rerun()
 
 @st.dialog("Xác nhận chuyển bổ trợ")
 def render_star_transfer_dialog(user_id: int):
@@ -21756,20 +20420,6 @@ def render_ai_match_suggestion_dialog(match_id: int):
         """,
         unsafe_allow_html=True
     )
-def normalize_venue_text(value) -> str:
-    """
-    Chuẩn hóa tên SVĐ/địa điểm để hiển thị ở cuối card.
-    """
-    if value is None:
-        return ""
-
-    try:
-        if pd.isna(value):
-            return ""
-    except TypeError:
-        pass
-
-    return str(value).strip()
 
 
 def render_match_venue_footer(
@@ -33565,7 +32215,7 @@ def page_admin():
         st.error("Bạn không có quyền truy cập trang này.")
         return
 
-    matches = load_matches(get_selected_season_slug())
+    matches = load_matches(get_selected_season_slug()).copy()
     users = load_users()
     predictions = load_predictions(get_selected_season_slug())
 
@@ -33970,1066 +32620,384 @@ def _build_epl_news_ticker_document(
     ticker_items: list[str],
     generated_at
 ) -> str:
-    """
-    Tạo tài liệu HTML độc lập cho components.html.
+    """Build a same-document ticker.
 
-    Ticker được render trong iframe riêng để không bị CSS hoặc DOM observer
-    của Streamlit làm vỡ cấu trúc. Script bên trong iframe chỉ đo header,
-    nút Menu và sidebar rồi đồng bộ vị trí host ở cửa sổ cha.
+    Keeping the ticker in the Streamlit document removes one permanently fixed
+    iframe and its independent visual viewport/compositing tree, which is
+    especially valuable on iOS Safari during pinch zoom.
     """
-
     safe_items = [
-        html.escape(
-            re.sub(
-                r"\s+",
-                " ",
-                str(item)
-            ).strip(),
-            quote=False
-        )
+        html.escape(re.sub(r"\s+", " ", str(item)).strip(), quote=False)
         for item in ticker_items
         if str(item).strip()
     ]
-
     if not safe_items:
         return ""
 
     item_markup = "".join(
-        (
-            '<span class="ticker-item">'
-            f'{item}'
-            '</span>'
-            '<span class="ticker-separator" aria-hidden="true">'
-            '◆'
-            '</span>'
-        )
+        '<span class="epl-ticker-item">' + item + '</span>'
+        '<span class="epl-ticker-separator" aria-hidden="true">◆</span>'
         for item in safe_items
     )
-
-    group_markup = (
-        '<div class="ticker-group">'
-        f'{item_markup}'
-        '</div>'
+    group_markup = f'<div class="epl-ticker-group">{item_markup}</div>'
+    track_markup = group_markup + (
+        '<div class="epl-ticker-group" aria-hidden="true">'
+        f'{item_markup}</div>'
     )
 
-    track_markup = (
-        f'{group_markup}'
-        '<div class="ticker-group" aria-hidden="true">'
-        f'{item_markup}'
-        '</div>'
-    )
-
-    total_characters = sum(
-        len(item)
-        for item in ticker_items
-    )
-
-    animation_duration = max(
-        90,
-        min(
-            210,
-            round(total_characters / 7)
-        )
-    )
-
-    generated_label = (
-        _format_epl_ticker_generated_label(
-            generated_at
-        )
-    )
-
-    accessible_label = (
-        "Tin tức Premier League mới nhất"
-    )
-
+    total_characters = sum(len(item) for item in ticker_items)
+    duration = max(90, min(210, round(total_characters / 7)))
+    generated_label = _format_epl_ticker_generated_label(generated_at)
+    accessible_label = "Tin tức Premier League mới nhất"
     if generated_label:
-        accessible_label += (
-            f", cập nhật lúc {generated_label}"
-        )
+        accessible_label += f", cập nhật lúc {generated_label}"
 
-    safe_accessible_label = html.escape(
-        accessible_label,
-        quote=True
-    )
+    safe_label = html.escape(accessible_label, quote=True)
 
-    ticker_document = r"""
-    <!doctype html>
-    <html lang="vi">
-    <head>
-        <meta charset="utf-8">
-        <meta
-            name="viewport"
-            content="width=device-width, initial-scale=1, viewport-fit=cover"
-        >
-
-        <style>
-        :root {
-            color-scheme: light;
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        /*
-         * Safari/Chrome trên iPhone có cơ chế tự phóng đại chữ trong iframe
-         * khi nội dung là một dòng dài. Chrome DevTools trên máy tính không
-         * mô phỏng chính xác cơ chế này. Cố định text-size-adjust để cỡ chữ
-         * luôn bám đúng font-size CSS đã khai báo.
-         */
-        html,
-        body,
-        body * {
-            -webkit-text-size-adjust: 100% !important;
-            text-size-adjust: 100% !important;
-        }
-
-        html,
-        body {
-            width: 100%;
-            height: 100%;
-            min-height: 100%;
-
-            margin: 0;
-            padding: 0;
-
-            overflow: hidden;
-            background: transparent;
-        }
-
-        body {
-            display: flex;
-            align-items: stretch;
-
-            font-family:
-                system-ui,
-                -apple-system,
-                BlinkMacSystemFont,
-                "Segoe UI",
-                sans-serif;
-        }
-
-        .ticker-shell {
-            --ticker-duration: __TICKER_DURATION__s;
-
-            display: flex;
-            align-items: stretch;
-
-            width: 100%;
-            min-width: 0;
-            height: 100%;
-            min-height: 100%;
-
-            margin: 0;
-            padding: 0;
-
-            overflow: hidden;
-
-            background:
-                linear-gradient(
-                    90deg,
-                    #210027 0%,
-                    #37003C 48%,
-                    #26002D 100%
-                );
-
-            border: 0;
-            border-radius: 0;
-
-            box-shadow:
-                inset 0 -1px 0 rgba(255, 255, 255, 0.14),
-                0 5px 16px rgba(55, 0, 60, 0.16);
-
-            user-select: none;
-            -webkit-user-select: none;
-        }
-
-        .ticker-label {
-            position: relative;
-            z-index: 2;
-
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-
-            flex: 0 0 92px;
-
-            width: 92px;
-            min-width: 92px;
-            max-width: 92px;
-            height: 100%;
-
-            gap: 7px;
-
-            margin: 0;
-            padding: 0 18px 0 13px;
-
-            background:
-                linear-gradient(
-                    135deg,
-                    #FF2882 0%,
-                    #D90D69 100%
-                );
-
-            color: #FFFFFF;
-
-            clip-path:
-                polygon(
-                    0 0,
-                    calc(100% - 14px) 0,
-                    100% 50%,
-                    calc(100% - 14px) 100%,
-                    0 100%
-                );
-
-            font-size: 11px;
-            font-weight: 950;
-            line-height: 1;
-            letter-spacing: 0.075em;
-            text-transform: uppercase;
-            white-space: nowrap;
-        }
-
-        .ticker-label-dot {
-            display: block;
-
-            flex: 0 0 6px;
-
-            width: 6px;
-            height: 6px;
-
-            background: #00FF85;
-
-            transform: rotate(45deg);
-
-            box-shadow:
-                0 0 8px rgba(0, 255, 133, 0.62);
-        }
-
-        .ticker-label-text {
-            display: inline-block;
-            color: #FFFFFF;
-            white-space: nowrap;
-        }
-
-        .ticker-viewport {
-            position: relative;
-
-            display: block;
-
-            flex: 1 1 auto;
-
-            width: auto;
-            min-width: 0;
-            height: 100%;
-
-            margin: 0;
-            padding: 0;
-
-            overflow: hidden;
-        }
-
-        .ticker-track {
-            display: flex;
-            align-items: center;
-
-            width: max-content;
-            min-width: max-content;
-            height: 100%;
-
-            margin: 0;
-            padding: 0;
-
-            will-change: transform;
-
-            animation:
-                tickerMove
-                var(--ticker-duration)
-                linear
-                infinite;
-        }
-
-        .ticker-group {
-            display: inline-flex;
-            align-items: center;
-
-            flex: 0 0 auto;
-
-            width: max-content;
-            min-width: max-content;
-            height: 100%;
-
-            margin: 0;
-            padding: 0 34px 0 25px;
-        }
-
-        .ticker-item {
-            display: inline-block;
-
-            flex: 0 0 auto;
-
-            margin: 0;
-            padding: 0;
-
-            color: #FFFFFF;
-
-            font-size: 13.5px;
-            font-weight: 700;
-            line-height: 1.2;
-            letter-spacing: 0.002em;
-
-            opacity: 1;
-            visibility: visible;
-            white-space: nowrap;
-        }
-
-        .ticker-separator {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-
-            flex: 0 0 auto;
-
-            margin: 0 21px;
-            padding: 0;
-
-            color: #00FF85;
-
-            font-size: 7px;
-            font-weight: 900;
-            line-height: 1;
-
-            opacity: 1;
-            visibility: visible;
-
-            filter:
-                drop-shadow(
-                    0 0 5px rgba(0, 255, 133, 0.52)
-                );
-        }
-
-        @keyframes tickerMove {
-            from {
-                transform: translate3d(0, 0, 0);
-            }
-
-            to {
-                transform: translate3d(-50%, 0, 0);
-            }
-        }
-
-        .ticker-zoom-paused .ticker-track {
-            animation-play-state: paused !important;
-            will-change: auto !important;
-        }
-
-        @media (max-width: 768px) {
-            .ticker-track {
-                will-change: auto;
-            }
-
-            .ticker-label {
-                flex-basis: 72px;
-
-                width: 72px;
-                min-width: 72px;
-                max-width: 72px;
-
-                gap: 5px;
-
-                padding: 0 12px 0 9px;
-
-                font-size: 8.5px !important;
-                letter-spacing: 0.05em;
-
-                -webkit-text-size-adjust: 100% !important;
-                text-size-adjust: 100% !important;
-            }
-
-            .ticker-label-dot {
-                flex-basis: 5px;
-                width: 5px;
-                height: 5px;
-            }
-
-            .ticker-group {
-                padding: 0 24px 0 18px;
-            }
-
-            .ticker-item {
-                font-size: 11.5px !important;
-                font-weight: 700;
-                line-height: 1.15 !important;
-
-                -webkit-text-size-adjust: 100% !important;
-                text-size-adjust: 100% !important;
-            }
-
-            .ticker-separator {
-                margin: 0 15px;
-                font-size: 6px;
-            }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-            .ticker-track {
-                animation: none;
-                transform: none;
-            }
-
-            .ticker-group:nth-child(2) {
-                display: none;
-            }
-        }
-        </style>
-    </head>
-
-    <body>
-        <div
-            class="ticker-shell"
-            role="region"
-            aria-label="__ACCESSIBLE_LABEL__"
-            title="__ACCESSIBLE_LABEL__"
-        >
-            <div
-                class="ticker-label"
-                aria-hidden="true"
-            >
-                <span class="ticker-label-dot"></span>
-                <span class="ticker-label-text">NEWS</span>
-            </div>
-
-            <div class="ticker-viewport">
-                <div class="ticker-track">
-                    __TRACK_MARKUP__
-                </div>
-            </div>
-        </div>
-
-        <script>
-        (() => {
-            const parentWindow = window.parent;
-            const parentDocument = parentWindow.document;
-            const parentRoot = parentDocument.documentElement;
-
-            const controllerName =
-                "__eplNewsTickerLayoutController";
-
-            const oldController =
-                parentWindow[controllerName];
-
-            if (
-                oldController
-                && typeof oldController.cleanup === "function"
-            ) {
-                try {
-                    oldController.cleanup();
-                } catch (error) {
-                    console.warn(
-                        "Could not clean up the previous ticker controller.",
-                        error
-                    );
-                }
-            }
-
-            const frameElement = window.frameElement;
-
-            const host = frameElement
-                ? frameElement.closest(
-                    'div[class*="st-key-epl_news_ticker_host"]'
-                )
-                : null;
-
-            if (!host || !frameElement) {
-                return;
-            }
-
-            let animationFrame = 0;
-            let cleaned = false;
-            const delayedTimers = new Set();
-
-            const syncZoomAnimationState = () => {
-                const zoomActive = parentRoot.getAttribute(
-                    "data-epl-pinch-zoom-active"
-                ) === "true";
-
-                document.documentElement.classList.toggle(
-                    "ticker-zoom-paused",
-                    zoomActive
-                );
-            };
-
-            const zoomStateObserver =
-                new parentWindow.MutationObserver(
-                    syncZoomAnimationState
-                );
-
-            zoomStateObserver.observe(
-                parentRoot,
-                {
-                    attributes: true,
-                    attributeFilter: [
-                        "data-epl-pinch-zoom-active"
-                    ]
-                }
-            );
-
-            syncZoomAnimationState();
-
-            const getVisibleRect = (element) => {
-                if (!element) {
-                    return null;
-                }
-
-                const style =
-                    parentWindow.getComputedStyle(element);
-
-                if (
-                    style.display === "none"
-                    || style.visibility === "hidden"
-                    || style.opacity === "0"
-                ) {
-                    return null;
-                }
-
-                const rect =
-                    element.getBoundingClientRect();
-
-                if (
-                    rect.width <= 0
-                    || rect.height <= 0
-                    || rect.right <= 0
-                    || rect.left >= parentWindow.innerWidth
-                ) {
-                    return null;
-                }
-
-                return rect;
-            };
-
-            const getFirstVisibleRect = (selector) => {
-                const candidates =
-                    parentDocument.querySelectorAll(selector);
-
-                for (const candidate of candidates) {
-                    const rect = getVisibleRect(candidate);
-
-                    if (rect) {
-                        return rect;
-                    }
-                }
-
-                return null;
-            };
-
-            const getHeaderRect = () =>
-                getFirstVisibleRect(
-                    'header[data-testid="stHeader"], '
-                    + '[data-testid="stHeader"]'
-                );
-
-            const getSidebarRect = () => {
-                const sidebarRect =
-                    getFirstVisibleRect(
-                        'section[data-testid="stSidebar"]'
-                    );
-
-                if (
-                    !sidebarRect
-                    || sidebarRect.width < 80
-                    || sidebarRect.right <= 1
-                ) {
-                    return null;
-                }
-
-                return sidebarRect;
-            };
-
-            const getMenuRect = () =>
-                getFirstVisibleRect(
-                    '[data-testid="stExpandSidebarButton"], '
-                    + '[data-testid="stSidebarCollapsedControl"], '
-                    + '[data-testid="stSidebarCollapseButton"]'
-                );
-
-            const syncLayout = () => {
-                const visualScale = Number(
-                    parentWindow.visualViewport?.scale || 1
-                );
-
-                /* Không ghi lại layout của iframe fixed trong lúc pinch-zoom. */
-                if (Math.abs(visualScale - 1) > 0.01) {
-                    return;
-                }
-
-                const isMobile =
-                    parentWindow.matchMedia(
-                        "(max-width: 768px)"
-                    ).matches;
-
-                const viewportWidth =
-                    parentDocument.documentElement.clientWidth
-                    || parentWindow.innerWidth;
-
-                const headerRect = getHeaderRect();
-                const sidebarRect = getSidebarRect();
-                const menuRect = getMenuRect();
-
-                const fallbackHeight = isMobile
-                    ? 56
-                    : 60;
-
-                const headerHeight = Math.max(
-                    48,
-                    Math.round(
-                        headerRect
-                            ? headerRect.height
-                            : fallbackHeight
-                    )
-                );
-
-                const headerTop = Math.max(
-                    0,
-                    Math.round(
-                        headerRect
-                            ? headerRect.top
-                            : 0
-                    )
-                );
-
-                let leftOffset = 108;
-
-                if (sidebarRect) {
-                    leftOffset = Math.ceil(
-                        sidebarRect.right
-                    );
-                } else if (menuRect) {
-                    leftOffset = Math.ceil(
-                        menuRect.right + 8
-                    );
-                }
-
-                leftOffset = Math.max(
-                    0,
-                    Math.min(
-                        leftOffset,
-                        viewportWidth - 72
-                    )
-                );
-
-                const availableWidth =
-                    viewportWidth - leftOffset;
-
-                host.style.setProperty(
-                    "position",
-                    "fixed",
-                    "important"
-                );
-
-                host.style.setProperty(
-                    "top",
-                    headerTop + "px",
-                    "important"
-                );
-
-                host.style.setProperty(
-                    "left",
-                    leftOffset + "px",
-                    "important"
-                );
-
-                host.style.setProperty(
-                    "right",
-                    "0px",
-                    "important"
-                );
-
-                host.style.setProperty(
-                    "width",
-                    "auto",
-                    "important"
-                );
-
-                host.style.setProperty(
-                    "height",
-                    headerHeight + "px",
-                    "important"
-                );
-
-                host.style.setProperty(
-                    "visibility",
-                    availableWidth >= 72
-                        ? "visible"
-                        : "hidden",
-                    "important"
-                );
-
-                frameElement.style.setProperty(
-                    "width",
-                    "100%",
-                    "important"
-                );
-
-                frameElement.style.setProperty(
-                    "height",
-                    headerHeight + "px",
-                    "important"
-                );
-
-                parentRoot.style.setProperty(
-                    "--epl-news-ticker-header-height",
-                    headerHeight + "px"
-                );
-
-                parentRoot.style.setProperty(
-                    "--epl-news-ticker-left",
-                    leftOffset + "px"
-                );
-            };
-
-            const scheduleSync = () => {
-                parentWindow.cancelAnimationFrame(
-                    animationFrame
-                );
-
-                animationFrame =
-                    parentWindow.requestAnimationFrame(
-                        syncLayout
-                    );
-            };
-
-            const clearDelayedTimers = () => {
-                delayedTimers.forEach((timer) => {
-                    parentWindow.clearTimeout(timer);
-                });
-                delayedTimers.clear();
-            };
-
-            const scheduleSyncBurst = () => {
-                clearDelayedTimers();
-                scheduleSync();
-
-                // Hai lần hậu kiểm là đủ cho transition sidebar/header.
-                for (const delay of [120, 360]) {
-                    const timer = parentWindow.setTimeout(
-                        () => {
-                            delayedTimers.delete(timer);
-                            scheduleSync();
-                        },
-                        delay
-                    );
-
-                    delayedTimers.add(timer);
-                }
-            };
-
-            /*
-             * Chỉ theo dõi đúng sidebar/menu. Bản cũ observe toàn bộ body và
-             * tạo bốn timeout cho mỗi mutation, gây timer avalanche trên iOS.
-             */
-            const layoutMutationObserver =
-                new parentWindow.MutationObserver(
-                    scheduleSyncBurst
-                );
-
-            [
-                parentDocument.querySelector(
-                    'section[data-testid="stSidebar"]'
-                ),
-                parentDocument.querySelector(
-                    '[data-testid="stExpandSidebarButton"], '
-                    + '[data-testid="stSidebarCollapsedControl"], '
-                    + '[data-testid="stSidebarCollapseButton"]'
-                )
-            ].filter(Boolean).forEach((target) => {
-                layoutMutationObserver.observe(
-                    target,
-                    {
-                        attributes: true,
-                        attributeFilter: [
-                            "class",
-                            "style",
-                            "aria-expanded"
-                        ]
-                    }
-                );
-            });
-
-            const resizeObserver =
-                "ResizeObserver" in parentWindow
-                ? new parentWindow.ResizeObserver(
-                    scheduleSync
-                )
-                : null;
-
-            if (resizeObserver) {
-                const resizeTargets = [
-                    parentDocument.querySelector(
-                        'header[data-testid="stHeader"], '
-                        + '[data-testid="stHeader"]'
-                    ),
-                    parentDocument.querySelector(
-                        'section[data-testid="stSidebar"]'
-                    ),
-                    parentDocument.querySelector(
-                        '[data-testid="stExpandSidebarButton"], '
-                        + '[data-testid="stSidebarCollapsedControl"], '
-                        + '[data-testid="stSidebarCollapseButton"]'
-                    )
-                ].filter(Boolean);
-
-                resizeTargets.forEach((target) => {
-                    resizeObserver.observe(target);
-                });
-            }
-
-            parentWindow.addEventListener(
-                "resize",
-                scheduleSyncBurst,
-                { passive: true }
-            );
-
-            parentWindow.addEventListener(
-                "orientationchange",
-                scheduleSyncBurst,
-                { passive: true }
-            );
-
-            const cleanup = () => {
-                if (cleaned) {
-                    return;
-                }
-
-                cleaned = true;
-
-                parentWindow.cancelAnimationFrame(
-                    animationFrame
-                );
-
-                delayedTimers.forEach((timer) => {
-                    parentWindow.clearTimeout(timer);
-                });
-
-                delayedTimers.clear();
-
-                layoutMutationObserver.disconnect();
-                zoomStateObserver.disconnect();
-                document.documentElement.classList.remove(
-                    "ticker-zoom-paused"
-                );
-
-                if (resizeObserver) {
-                    resizeObserver.disconnect();
-                }
-
-                parentWindow.removeEventListener(
-                    "resize",
-                    scheduleSyncBurst
-                );
-
-                parentWindow.removeEventListener(
-                    "orientationchange",
-                    scheduleSyncBurst
-                );
-
-            };
-
-            syncLayout();
-            scheduleSyncBurst();
-
-            parentWindow[controllerName] = {
-                cleanup
-            };
-        })();
-        </script>
-    </body>
-    </html>
-    """
-
-    return (
-        ticker_document
-        .replace(
-            "__TICKER_DURATION__",
-            str(animation_duration)
-        )
-        .replace(
-            "__ACCESSIBLE_LABEL__",
-            safe_accessible_label
-        )
-        .replace(
-            "__TRACK_MARKUP__",
-            track_markup
-        )
-    )
-
-def _render_epl_news_ticker_content():
-    """
-    Render ticker trong iframe độc lập và đặt host cố định lên toàn bộ header.
-
-    Phần bên trái được chừa đúng theo nút Menu. Khi sidebar mở, script trong
-    ticker tự đo mép phải sidebar và dịch ticker theo, vì vậy ticker không đè
-    lên nút Menu nhưng vẫn che toàn bộ cụm Share/Favorite/Edit bên phải.
-    """
-
-    if not NEWS_TICKER_ENABLED:
-        return
-
-    try:
-        ticker_data = (
-            load_latest_epl_news_ticker()
-        )
-
-    except Exception:
-        LOGGER.exception(
-            "Failed to load EPL news ticker."
-        )
-        return
-
-    if not ticker_data:
-        return
-
-    ticker_items = ticker_data.get(
-        "items",
-        []
-    )
-
-    if not ticker_items:
-        return
-
-    ticker_document = (
-        _build_epl_news_ticker_document(
-            ticker_items=ticker_items,
-            generated_at=ticker_data.get(
-                "generated_at"
-            )
-        )
-    )
-
-    if not ticker_document:
-        return
-
-    ticker_host_css = r"""
+    markup = r"""
     <style>
     :root {
         --epl-news-ticker-header-height: 60px;
         --epl-news-ticker-left: 108px;
     }
 
-    /* Header gốc ở dưới ticker. */
-    header[data-testid="stHeader"],
-    [data-testid="stHeader"] {
+    header[data-testid="stHeader"], [data-testid="stHeader"] {
         z-index: 1000000 !important;
     }
 
-    /* Ticker che toàn bộ phần header còn lại tới sát mép phải viewport. */
     div[class*="st-key-epl_news_ticker_host"] {
         position: fixed !important;
         top: 0 !important;
         left: var(--epl-news-ticker-left) !important;
         right: 0 !important;
-        bottom: auto !important;
-
         z-index: 1000002 !important;
-
         width: auto !important;
         min-width: 0 !important;
-        max-width: none !important;
-
         height: var(--epl-news-ticker-header-height) !important;
         min-height: var(--epl-news-ticker-header-height) !important;
         max-height: var(--epl-news-ticker-header-height) !important;
-
         margin: 0 !important;
         padding: 0 !important;
-
         overflow: hidden !important;
-        pointer-events: auto !important;
+        pointer-events: none !important;
+        contain: layout paint style;
     }
 
     div[class*="st-key-epl_news_ticker_host"]
-    > :is(
-        div[data-testid="stVerticalBlock"],
-        div[data-testid="stVerticalBlockBorderWrapper"]
-    ),
-    div[class*="st-key-epl_news_ticker_host"]
-    div[data-testid="stVerticalBlock"],
-    div[class*="st-key-epl_news_ticker_host"]
-    div[data-testid="stElementContainer"] {
+    > :is(div[data-testid="stVerticalBlock"], div[data-testid="stVerticalBlockBorderWrapper"]),
+    div[class*="st-key-epl_news_ticker_host"] div[data-testid="stVerticalBlock"],
+    div[class*="st-key-epl_news_ticker_host"] div[data-testid="stElementContainer"] {
         width: 100% !important;
         min-width: 0 !important;
         max-width: 100% !important;
-
         height: 100% !important;
         min-height: 100% !important;
         max-height: 100% !important;
-
         margin: 0 !important;
         padding: 0 !important;
         gap: 0 !important;
-
         overflow: hidden !important;
     }
 
-    div[class*="st-key-epl_news_ticker_host"] iframe {
-        display: block !important;
-
-        width: 100% !important;
-        min-width: 0 !important;
-        max-width: 100% !important;
-
-        height: 100% !important;
-        min-height: 100% !important;
-        max-height: 100% !important;
-
-        margin: 0 !important;
-        padding: 0 !important;
-
-        border: 0 !important;
-        border-radius: 0 !important;
-        background: transparent !important;
+    .epl-ticker-shell, .epl-ticker-shell * {
+        box-sizing: border-box;
+        -webkit-text-size-adjust: 100% !important;
+        text-size-adjust: 100% !important;
     }
 
-    /* Sidebar và nút Menu luôn nằm trên ticker. */
-    section[data-testid="stSidebar"] {
-        z-index: 1000005 !important;
+    .epl-ticker-shell {
+        --ticker-duration: __DURATION__s;
+        display: flex;
+        align-items: stretch;
+        width: 100%;
+        min-width: 0;
+        height: 100%;
+        overflow: hidden;
+        background: linear-gradient(90deg, #210027 0%, #37003C 48%, #26002D 100%);
+        box-shadow: inset 0 -1px 0 rgba(255,255,255,.14), 0 5px 16px rgba(55,0,60,.16);
+        user-select: none;
+        -webkit-user-select: none;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
+    .epl-ticker-label {
+        position: relative;
+        z-index: 2;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 92px;
+        width: 92px;
+        min-width: 92px;
+        height: 100%;
+        gap: 7px;
+        padding: 0 18px 0 13px;
+        background: linear-gradient(135deg, #FF2882 0%, #D90D69 100%);
+        color: #FFF;
+        clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 0 100%);
+        font-size: 11px;
+        font-weight: 950;
+        line-height: 1;
+        letter-spacing: .075em;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+
+    .epl-ticker-label-dot {
+        flex: 0 0 6px;
+        width: 6px;
+        height: 6px;
+        background: #00FF85;
+        transform: rotate(45deg);
+        box-shadow: 0 0 8px rgba(0,255,133,.62);
+    }
+
+    .epl-ticker-viewport {
+        position: relative;
+        flex: 1 1 auto;
+        min-width: 0;
+        height: 100%;
+        overflow: hidden;
+    }
+
+    .epl-ticker-track {
+        display: flex;
+        align-items: center;
+        width: max-content;
+        min-width: max-content;
+        height: 100%;
+        animation: eplTickerMove var(--ticker-duration) linear infinite;
+    }
+
+    .epl-ticker-group {
+        display: inline-flex;
+        align-items: center;
+        flex: 0 0 auto;
+        width: max-content;
+        min-width: max-content;
+        height: 100%;
+        padding: 0 34px 0 25px;
+    }
+
+    .epl-ticker-item {
+        flex: 0 0 auto;
+        color: #FFF;
+        font-size: 13.5px;
+        font-weight: 700;
+        line-height: 1.2;
+        letter-spacing: .002em;
+        white-space: nowrap;
+    }
+
+    .epl-ticker-separator {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        margin: 0 21px;
+        color: #00FF85;
+        font-size: 7px;
+        font-weight: 900;
+        line-height: 1;
+        filter: drop-shadow(0 0 5px rgba(0,255,133,.52));
+    }
+
+    @keyframes eplTickerMove {
+        from { transform: translateX(0); }
+        to { transform: translateX(-50%); }
+    }
+
+    html[data-epl-pinch-zoom-active="true"] .epl-ticker-track {
+        animation-play-state: paused !important;
+    }
+
+    section[data-testid="stSidebar"] { z-index: 1000005 !important; }
     [data-testid="stExpandSidebarButton"],
     [data-testid="stSidebarCollapsedControl"],
     [data-testid="stSidebarCollapseButton"],
-    [data-testid="stExpandSidebarButton"] button,
-    [data-testid="stSidebarCollapsedControl"] button,
-    [data-testid="stSidebarCollapseButton"] button,
-    section[data-testid="stSidebar"]
-    button[data-testid="stBaseButton-headerNoPadding"],
-    section[data-testid="stSidebar"]
-    button[kind="headerNoPadding"] {
+    section[data-testid="stSidebar"] button[data-testid="stBaseButton-headerNoPadding"],
+    section[data-testid="stSidebar"] button[kind="headerNoPadding"] {
         position: relative !important;
         z-index: 1000006 !important;
     }
 
     @media (max-width: 768px) {
-        :root {
-            --epl-news-ticker-header-height: 56px;
-            --epl-news-ticker-left: 108px;
+        :root { --epl-news-ticker-header-height: 56px; --epl-news-ticker-left: 108px; }
+        .epl-ticker-label {
+            flex-basis: 72px;
+            width: 72px;
+            min-width: 72px;
+            gap: 5px;
+            padding: 0 12px 0 9px;
+            font-size: 8.5px !important;
+            letter-spacing: .05em;
         }
+        .epl-ticker-label-dot { flex-basis: 5px; width: 5px; height: 5px; }
+        .epl-ticker-group { padding: 0 24px 0 18px; }
+        .epl-ticker-item { font-size: 11.5px !important; line-height: 1.15 !important; }
+        .epl-ticker-separator { margin: 0 15px; font-size: 6px; filter: none; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .epl-ticker-track { animation: none; transform: none; }
+        .epl-ticker-group:nth-child(2) { display: none; }
     }
     </style>
+
+    <div class="epl-ticker-shell" role="region" aria-label="__LABEL__" title="__LABEL__">
+        <div class="epl-ticker-label" aria-hidden="true">
+            <span class="epl-ticker-label-dot"></span>
+            <span>NEWS</span>
+        </div>
+        <div class="epl-ticker-viewport">
+            <div class="epl-ticker-track">__TRACK__</div>
+        </div>
+    </div>
+
+    <script>
+    (() => {
+        const parentWindow = window.parent;
+        const parentDocument = parentWindow.document;
+        const controllerKey = "__eplNewsTickerParentControllerV1";
+        const previous = parentWindow[controllerKey];
+        if (previous && typeof previous.cleanup === "function") {
+            try { previous.cleanup(); } catch (error) {}
+        }
+
+        const host = parentDocument.querySelector('div[class*="st-key-epl_news_ticker_host"]');
+        if (!host) return;
+
+        const root = parentDocument.documentElement;
+        let frame = 0;
+        let timer = 0;
+        let resizeObserver = null;
+
+        const visibleRect = (element) => {
+            if (!element) return null;
+            const style = parentWindow.getComputedStyle(element);
+            if (style.display === "none" || style.visibility === "hidden") return null;
+            const rect = element.getBoundingClientRect();
+            return rect.width > 1 && rect.height > 1 ? rect : null;
+        };
+
+        const firstRect = (selector) => {
+            for (const element of parentDocument.querySelectorAll(selector)) {
+                const rect = visibleRect(element);
+                if (rect) return rect;
+            }
+            return null;
+        };
+
+        const update = () => {
+            frame = 0;
+            const scale = Number(parentWindow.visualViewport?.scale || 1);
+            if (Math.abs(scale - 1) > .01) return;
+
+            const mobile = parentWindow.matchMedia("(max-width: 768px)").matches;
+            const viewportWidth = parentDocument.documentElement.clientWidth || parentWindow.innerWidth;
+            const headerRect = firstRect('header[data-testid="stHeader"], [data-testid="stHeader"]');
+            const sidebarRect = firstRect('section[data-testid="stSidebar"]');
+            const menuRect = firstRect('[data-testid="stExpandSidebarButton"], [data-testid="stSidebarCollapsedControl"], [data-testid="stSidebarCollapseButton"]');
+
+            const headerHeight = Math.max(48, Math.round(headerRect?.height || (mobile ? 56 : 60)));
+            const headerTop = Math.max(0, Math.round(headerRect?.top || 0));
+            let left = sidebarRect && sidebarRect.width >= 80 && sidebarRect.right > 1
+                ? Math.ceil(sidebarRect.right)
+                : Math.ceil((menuRect?.right || 100) + 8);
+            left = Math.max(0, Math.min(left, viewportWidth - 72));
+
+            host.style.setProperty("top", `${headerTop}px`, "important");
+            host.style.setProperty("left", `${left}px`, "important");
+            host.style.setProperty("height", `${headerHeight}px`, "important");
+            host.style.setProperty("visibility", viewportWidth - left >= 72 ? "visible" : "hidden", "important");
+            root.style.setProperty("--epl-news-ticker-header-height", `${headerHeight}px`);
+            root.style.setProperty("--epl-news-ticker-left", `${left}px`);
+        };
+
+        const schedule = () => {
+            if (frame) return;
+            frame = parentWindow.requestAnimationFrame(update);
+        };
+
+        const burst = () => {
+            parentWindow.clearTimeout(timer);
+            schedule();
+            timer = parentWindow.setTimeout(schedule, 280);
+        };
+
+        const onClick = (event) => {
+            if (event.target?.closest?.('[data-testid="stExpandSidebarButton"], [data-testid="stSidebarCollapsedControl"], [data-testid="stSidebarCollapseButton"]')) {
+                burst();
+            }
+        };
+
+        if ("ResizeObserver" in parentWindow) {
+            resizeObserver = new parentWindow.ResizeObserver(schedule);
+            [
+                parentDocument.querySelector('header[data-testid="stHeader"], [data-testid="stHeader"]'),
+                parentDocument.querySelector('section[data-testid="stSidebar"]')
+            ].filter(Boolean).forEach((element) => resizeObserver.observe(element));
+        }
+
+        parentWindow.addEventListener("resize", burst, {passive: true});
+        parentWindow.addEventListener("orientationchange", burst, {passive: true});
+        parentDocument.addEventListener("click", onClick, true);
+
+        const cleanup = () => {
+            parentWindow.cancelAnimationFrame(frame);
+            parentWindow.clearTimeout(timer);
+            if (resizeObserver) resizeObserver.disconnect();
+            parentWindow.removeEventListener("resize", burst);
+            parentWindow.removeEventListener("orientationchange", burst);
+            parentDocument.removeEventListener("click", onClick, true);
+        };
+
+        parentWindow[controllerKey] = {cleanup};
+        update();
+        burst();
+    })();
+    </script>
     """
 
-    st.markdown(
-        ticker_host_css,
-        unsafe_allow_html=True
+    return (
+        markup
+        .replace("__DURATION__", str(duration))
+        .replace("__LABEL__", safe_label)
+        .replace("__TRACK__", track_markup)
     )
 
-    with st.container(
-        key="epl_news_ticker_host"
-    ):
-        components.html(
-            ticker_document,
-            height=64,
-            scrolling=False
+
+def _render_epl_news_ticker_content():
+    """Render the ticker in the parent document, without an iframe."""
+    if not NEWS_TICKER_ENABLED:
+        return
+
+    try:
+        ticker_data = load_latest_epl_news_ticker()
+    except Exception:
+        LOGGER.exception("Failed to load EPL news ticker.")
+        return
+
+    if not ticker_data:
+        return
+
+    ticker_items = ticker_data.get("items", [])
+    if not ticker_items:
+        return
+
+    ticker_markup = _build_epl_news_ticker_document(
+        ticker_items=ticker_items,
+        generated_at=ticker_data.get("generated_at")
+    )
+    if not ticker_markup:
+        return
+
+    with st.container(key="epl_news_ticker_host"):
+        st.html(
+            ticker_markup,
+            unsafe_allow_javascript=True
         )
+
 
 
 @st.fragment
