@@ -1386,18 +1386,42 @@ def load_avatar_catalog() -> tuple[str, ...]:
     return tuple(load_avatar_keys())
 
 
+def get_avatar_catalog_fingerprint(
+    avatar_keys: tuple[str, ...] | None = None
+) -> str:
+    """Tạo cache version từ tên file, kích thước và thời gian sửa avatar."""
+    avatar_keys = avatar_keys or load_avatar_catalog()
+    avatar_dir = get_avatar_dir()
+
+    digest = hashlib.sha256()
+    digest.update(str(avatar_dir.resolve()).encode("utf-8"))
+
+    for avatar_key in avatar_keys:
+        avatar_path = avatar_dir / avatar_key
+        digest.update(avatar_key.encode("utf-8"))
+
+        try:
+            file_stat = avatar_path.stat()
+        except OSError:
+            digest.update(b":missing")
+            continue
+
+        digest.update(str(file_stat.st_mtime_ns).encode("ascii"))
+        digest.update(str(file_stat.st_size).encode("ascii"))
+
+    return digest.hexdigest()[:20]
+
+
 @st.cache_resource(show_spinner=False, max_entries=2)
-def build_avatar_sprite_payload() -> tuple[str, int, int]:
+@st.cache_resource(show_spinner=False, max_entries=4)
+def build_avatar_sprite_payload(
+    avatar_fingerprint: str
+) -> tuple[str, int, int]:
     """
-    Tạo một sprite WebP dùng chung cho toàn bộ avatar.
+    Tạo đúng một sprite cho toàn bộ kho avatar.
 
-    Trả về:
-    - data URI của sprite;
-    - số cột;
-    - số hàng.
-
-    Hàm chạy một lần cho mỗi app process. Khi deploy bộ ảnh mới, process mới
-    sẽ tự tạo sprite mới; không giữ 80 ảnh Base64 độc lập trong cache.
+    Fingerprint là cache key bắt buộc, nên sprite rỗng hoặc sprite cũ không thể
+    bị tái sử dụng sau khi bộ ảnh được thay đổi hay app được deploy lại.
     """
     avatar_keys = load_avatar_catalog()
 
@@ -1408,15 +1432,8 @@ def build_avatar_sprite_payload() -> tuple[str, int, int]:
         from io import BytesIO
         from PIL import Image, ImageOps
 
-        columns = min(
-            AVATAR_SPRITE_COLUMNS,
-            len(avatar_keys)
-        )
-        rows = (
-            len(avatar_keys)
-            + columns
-            - 1
-        ) // columns
+        columns = min(AVATAR_SPRITE_COLUMNS, len(avatar_keys))
+        rows = (len(avatar_keys) + columns - 1) // columns
 
         sprite = Image.new(
             "RGB",
@@ -1428,6 +1445,7 @@ def build_avatar_sprite_payload() -> tuple[str, int, int]:
         )
 
         avatar_dir = get_avatar_dir()
+        pasted_images = 0
 
         for index, avatar_key in enumerate(avatar_keys):
             avatar_path = avatar_dir / avatar_key
@@ -1460,6 +1478,10 @@ def build_avatar_sprite_payload() -> tuple[str, int, int]:
                         row_index * AVATAR_SPRITE_CELL_PX
                     )
                 )
+                pasted_images += 1
+
+        if pasted_images == 0:
+            return "", AVATAR_SPRITE_COLUMNS, 0
 
         output_buffer = BytesIO()
         output_mime_type = "image/webp"
@@ -1472,9 +1494,7 @@ def build_avatar_sprite_payload() -> tuple[str, int, int]:
                 lossless=False,
                 method=4
             )
-
         except Exception:
-            # Một số bản Pillow không có codec WebP.
             output_buffer = BytesIO()
             output_mime_type = "image/png"
             sprite.save(
@@ -1494,28 +1514,31 @@ def build_avatar_sprite_payload() -> tuple[str, int, int]:
         )
 
     except Exception:
-        # Fallback an toàn: vẫn giữ app hoạt động nếu Pillow/WebP gặp lỗi.
-        # Chỉ dùng ảnh hiện tại ở nút avatar; grid sẽ không có ảnh nền thay
-        # vì làm sập toàn bộ ứng dụng.
         LOGGER.warning(
-            "Could not build avatar sprite; using image fallback.",
+            "Could not build avatar sprite for fingerprint %s.",
+            avatar_fingerprint,
             exc_info=True
         )
         return "", AVATAR_SPRITE_COLUMNS, 0
 
 
 
+
 def get_avatar_sprite_position(
     avatar_key: str,
-    avatar_keys: tuple[str, ...] | None = None
+    avatar_keys: tuple[str, ...] | None = None,
+    avatar_fingerprint: str | None = None
 ) -> tuple[float, float] | None:
-    """
-    Trả về background-position theo phần trăm cho một avatar trong sprite.
-    """
+    """Trả về background-position chính xác của avatar trong sprite."""
     avatar_keys = avatar_keys or load_avatar_catalog()
 
     if not avatar_keys:
         return None
+
+    avatar_fingerprint = (
+        avatar_fingerprint
+        or get_avatar_catalog_fingerprint(avatar_keys)
+    )
 
     normalized_avatar_key = normalize_avatar_key(
         avatar_key,
@@ -1527,7 +1550,9 @@ def get_avatar_sprite_position(
     except ValueError:
         return None
 
-    _, columns, rows = build_avatar_sprite_payload()
+    _, columns, rows = build_avatar_sprite_payload(
+        avatar_fingerprint
+    )
 
     if columns <= 0 or rows <= 0:
         return None
@@ -1549,17 +1574,22 @@ def get_avatar_sprite_position(
     return x_position, y_position
 
 
-@st.cache_resource(show_spinner=False, max_entries=2)
-def build_avatar_background_css() -> str:
-    """
-    Tạo CSS cho grid avatar dạng button từ đúng một sprite Base64.
 
-    Cơ chế tương tác dùng st.button giống dự án World Cup. Sprite chỉ chịu
-    trách nhiệm hiển thị ảnh, không tham gia xác định lựa chọn hoặc callback.
-    Vì vậy code không còn phụ thuộc vào DOM nội bộ của st.radio/nth-of-type.
+@st.cache_resource(show_spinner=False, max_entries=2)
+@st.cache_resource(show_spinner=False, max_entries=4)
+def build_avatar_background_css(
+    avatar_fingerprint: str
+) -> str:
+    """
+    Tạo CSS kho avatar từ một sprite duy nhất.
+
+    Sprite được gắn trực tiếp vào pseudo-element thay vì qua biến CSS :root,
+    tránh mất phạm vi sau fragment rerun nhưng vẫn chỉ tải một ảnh duy nhất.
     """
     avatar_keys = load_avatar_catalog()
-    sprite_src, columns, rows = build_avatar_sprite_payload()
+    sprite_src, columns, rows = build_avatar_sprite_payload(
+        avatar_fingerprint
+    )
 
     if not avatar_keys:
         return ""
@@ -1570,22 +1600,14 @@ def build_avatar_background_css() -> str:
         and rows > 0
     )
 
-    if not sprite_available:
-        # Pixel trong suốt; từng avatar sẽ được gắn riêng ở fallback bên dưới.
-        sprite_src = (
-            "data:image/gif;base64,"
-            "R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs="
-        )
-        columns = 1
-        rows = 1
+    safe_sprite_src = (
+        html.escape(sprite_src, quote=True)
+        if sprite_available
+        else ""
+    )
 
     css_parts = [
         """
-        :root {
-            --epl-avatar-sprite-image:
-                url("__AVATAR_SPRITE_SRC__");
-        }
-
         div[class*="st-key-avatar_pick_"] {
             width: 100% !important;
             min-width: 0 !important;
@@ -1632,22 +1654,20 @@ def build_avatar_background_css() -> str:
         }
 
         div[class*="st-key-avatar_pick_"] button::before {
-            content: "";
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            width: 64px;
-            height: 64px;
-            transform: translate(-50%, -50%);
-            border: 3px solid #FFFFFF;
-            border-radius: 999px;
-            background-image:
-                var(--epl-avatar-sprite-image);
-            background-size:
-                __AVATAR_SPRITE_WIDTH__% __AVATAR_SPRITE_HEIGHT__%;
-            background-repeat: no-repeat;
-            box-shadow: 0 7px 18px rgba(15,23,42,0.16);
-            pointer-events: none;
+            content: "" !important;
+            display: block !important;
+            position: absolute !important;
+            left: 50% !important;
+            top: 50% !important;
+            width: 64px !important;
+            height: 64px !important;
+            transform: translate(-50%, -50%) !important;
+            border: 3px solid #FFFFFF !important;
+            border-radius: 999px !important;
+            background-color: #F8FAFC !important;
+            background-repeat: no-repeat !important;
+            box-shadow: 0 7px 18px rgba(15,23,42,0.16) !important;
+            pointer-events: none !important;
         }
 
         div[class*="st-key-avatar_pick_"] button::after {
@@ -1679,11 +1699,6 @@ def build_avatar_background_css() -> str:
             line-height: 0 !important;
         }
 
-        /*
-        Trạng thái avatar đang dùng được gắn trực tiếp vào thuộc tính disabled
-        của đúng button. Cách này không phụ thuộc vào thứ tự các thẻ <style>
-        sau fragment rerun và không cần đoán DOM bằng nth-of-type.
-        */
         div[class*="st-key-avatar_pick_"]:has(button:disabled) {
             opacity: 1 !important;
         }
@@ -1713,8 +1728,8 @@ def build_avatar_background_css() -> str:
             }
 
             div[class*="st-key-avatar_pick_"] button::before {
-                width: 82px;
-                height: 82px;
+                width: 82px !important;
+                height: 82px !important;
             }
 
             div[class*="st-key-avatar_pick_"] button::after {
@@ -1731,70 +1746,71 @@ def build_avatar_background_css() -> str:
             }
 
             div[class*="st-key-avatar_pick_"] button::before {
-                width: 76px;
-                height: 76px;
+                width: 76px !important;
+                height: 76px !important;
             }
         }
         """
-        .replace("__AVATAR_SPRITE_SRC__", sprite_src)
-        .replace(
-            "__AVATAR_SPRITE_WIDTH__",
-            str(columns * 100)
-        )
-        .replace(
-            "__AVATAR_SPRITE_HEIGHT__",
-            str(rows * 100)
-        )
     ]
 
-    for avatar_key in avatar_keys:
-        avatar_button_key = get_avatar_button_key(
-            avatar_key
-        )
-
-        if not sprite_available:
-            avatar_src = get_avatar_src(
-                avatar_key,
-                avatar_keys=list(avatar_keys)
-            )
-
-            if avatar_src:
-                css_parts.append(
-                    f"""
-                    .st-key-{avatar_button_key} button::before {{
-                        background-image: url("{avatar_src}");
-                        background-size: cover;
-                        background-position: center;
-                    }}
-                    """
-                )
-
-            continue
-
-        position = get_avatar_sprite_position(
-            avatar_key,
-            avatar_keys=avatar_keys
-        )
-
-        if position is None:
-            continue
-
-        x_position, y_position = position
-
+    if sprite_available:
         css_parts.append(
             f"""
-            .st-key-{avatar_button_key} button::before {{
-                background-position:
-                    {x_position:.6f}% {y_position:.6f}%;
+            div[class*="st-key-avatar_pick_"] button::before {{
+                background-image: url("{safe_sprite_src}") !important;
+                background-size:
+                    {columns * 100}% {rows * 100}% !important;
             }}
             """
         )
 
-    return (
-        "<style>"
-        + "\n".join(css_parts)
-        + "</style>"
-    )
+    for avatar_key in avatar_keys:
+        avatar_button_key = get_avatar_button_key(avatar_key)
+
+        if sprite_available:
+            position = get_avatar_sprite_position(
+                avatar_key,
+                avatar_keys=avatar_keys,
+                avatar_fingerprint=avatar_fingerprint
+            )
+
+            if position is None:
+                continue
+
+            x_position, y_position = position
+
+            css_parts.append(
+                f"""
+                .st-key-{avatar_button_key} button::before {{
+                    background-position:
+                        {x_position:.6f}% {y_position:.6f}% !important;
+                }}
+                """
+            )
+            continue
+
+        avatar_src = get_avatar_src(
+            avatar_key,
+            avatar_keys=list(avatar_keys)
+        )
+
+        if not avatar_src:
+            continue
+
+        safe_avatar_src = html.escape(avatar_src, quote=True)
+
+        css_parts.append(
+            f"""
+            .st-key-{avatar_button_key} button::before {{
+                background-image: url("{safe_avatar_src}") !important;
+                background-size: cover !important;
+                background-position: center !important;
+            }}
+            """
+        )
+
+    return "<style>" + "\n".join(css_parts) + "</style>"
+
 
 
 # ============================================================
@@ -3088,13 +3104,8 @@ def inject_epl_premium_match_card_css():
                 font-size: 7px !important;
             }
         }
-        /* =====================================================
-           DESKTOP: TÁCH RIBBON KHỎI CHÂN TIÊU ĐỀ
 
-           Ribbon và heading là hai Streamlit element riêng. Padding được đặt
-           trên đúng element chứa ribbon để khoảng cách tham gia vào layout,
-           không dùng transform nên không đè lên phần giờ thi đấu phía dưới.
-           ===================================================== */
+        /* DESKTOP: tách ribbon khỏi chân tiêu đề */
         @media (min-width: 769px) {
             div[class*="st-key-match_title_desktop_"]
             div[data-testid="stElementContainer"]:has(
@@ -6543,18 +6554,9 @@ def inject_mobile_team_name_display_script():
 
 def inject_match_datepicker_calendar_theme(match_dates):
     """
-    Trang trí lịch ngày thi đấu bằng quy tắc rõ ràng và đối chiếu ngày chính xác.
+    Giữ cơ chế lịch cũ đã hoạt động nhưng so sánh ngày bằng ISO chính xác.
 
-    Quy tắc:
-    - Ngày có ít nhất một trận: chữ đậm.
-    - Hôm nay: vòng tròn xám nhạt.
-    - Ngày đang chọn: vòng tròn xanh đậm, chữ trắng; ưu tiên cao nhất.
-    - Ngày khác: chữ thường.
-    - Ngày bị vô hiệu hóa/ngoài tháng: chữ mờ.
-
-    Không dùng CSS [aria-label*="August 1"] vì selector substring đó cũng khớp
-    August 10 đến August 19. JavaScript phân tích aria-label thành ISO date rồi
-    gắn data attribute chính xác cho từng ô lịch.
+    Đồng thời dọn observer cũ để không có hai controller cùng ghi đè style.
     """
     today_iso = today_vietnam_date().isoformat()
 
@@ -6572,37 +6574,13 @@ def inject_match_datepicker_calendar_theme(match_dates):
     st.markdown(
         """
         <style>
-        /* Chỉ áp dụng khi bộ lọc ngày của trang Lịch thi đấu tồn tại. */
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"] {
+        div[data-baseweb="calendar"] div[role="gridcell"] {
             position: relative !important;
             isolation: isolate !important;
-
-            color: #0F172A !important;
-            font-weight: 400 !important;
-
-            background: transparent !important;
-            border: none !important;
-            outline: none !important;
-            box-shadow: none !important;
             border-radius: 999px !important;
         }
 
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"] * {
-            position: relative !important;
-            z-index: 2 !important;
-            color: inherit !important;
-            font-weight: inherit !important;
-            background: transparent !important;
-            box-shadow: none !important;
-        }
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]::before {
+        div[data-baseweb="calendar"] div[role="gridcell"]::before {
             content: "" !important;
             position: absolute !important;
             left: 50% !important;
@@ -6610,107 +6588,58 @@ def inject_match_datepicker_calendar_theme(match_dates):
             width: 0 !important;
             height: 0 !important;
             transform: translate(-50%, -50%) !important;
-            border: none !important;
             border-radius: 999px !important;
             background: transparent !important;
             box-shadow: none !important;
             z-index: 0 !important;
             pointer-events: none !important;
-            transition:
-                width 0.15s ease,
-                height 0.15s ease,
-                background 0.15s ease !important;
         }
 
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]::after,
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"] > *::before,
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"] > *::after {
-            content: none !important;
-            display: none !important;
+        div[data-baseweb="calendar"] div[role="gridcell"] > * {
+            position: relative !important;
+            z-index: 2 !important;
+            background: transparent !important;
         }
 
-        /* Ngày có trận: chỉ in đậm, không tự tạo vòng tròn. */
-        body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][data-epl-has-match="true"],
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][data-epl-has-match="true"] * {
-            font-weight: 800 !important;
-        }
-
-        /* Hôm nay: vòng tròn xám nhạt, nhưng chỉ khi chưa được chọn. */
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][data-epl-today="true"]
-        :is(*) {
-            color: #0F172A !important;
-        }
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][data-epl-today="true"]:not(
-            [data-epl-selected="true"]
+        div[role="gridcell"][data-wc-today="true"]:not(
+            [data-wc-selected="true"]
         )::before {
             width: 28px !important;
             height: 28px !important;
             background: #E5E7EB !important;
         }
 
-        /* Ngày đang chọn: ưu tiên cao nhất. */
-        body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][data-epl-selected="true"] {
-            color: #FFFFFF !important;
-            font-weight: 800 !important;
-            background: transparent !important;
-            box-shadow: none !important;
-        }
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][data-epl-selected="true"] * {
-            color: #FFFFFF !important;
-            -webkit-text-fill-color: #FFFFFF !important;
-            fill: #FFFFFF !important;
-            font-weight: 800 !important;
-        }
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][data-epl-selected="true"]::before {
+        div[role="gridcell"][data-wc-selected="true"]::before {
             width: 28px !important;
             height: 28px !important;
             background: #123C69 !important;
-            box-shadow: none !important;
         }
 
-        /* Hover chỉ dành cho ngày có thể chọn và chưa được chọn. */
-        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][data-wc-selected="true"],
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][data-wc-selected="true"] * {
+            color: #FFFFFF !important;
+            -webkit-text-fill-color: #FFFFFF !important;
+            font-weight: 800 !important;
+        }
+
         div[data-baseweb="calendar"]
         div[role="gridcell"]:not([aria-disabled="true"]):not(
-            [data-epl-selected="true"]
+            [data-wc-selected="true"]
         ):hover::before {
             width: 28px !important;
             height: 28px !important;
             background: rgba(18, 60, 105, 0.08) !important;
         }
 
-        /* Ngày bị vô hiệu hóa hoặc thuộc tháng kế bên. */
-        body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
         div[role="gridcell"][aria-disabled="true"],
-        body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
         div[role="gridcell"][aria-disabled="true"] * {
             color: #A8B1C2 !important;
-            font-weight: 400 !important;
             opacity: 0.72 !important;
         }
 
@@ -6727,166 +6656,168 @@ def inject_match_datepicker_calendar_theme(match_dates):
     )
 
     script_html = r"""
-        <script>
-        (() => {
-            const parentWindow = window.parent;
-            const parentDocument = parentWindow.document;
-            const controllerKey = "__eplFilterDateRuntimeV4";
+    <script>
+    (() => {
+        const parentWindow = window.parent;
+        const parentDocument = parentWindow.document;
+        const controllerKey = "__wcFilterDateExactControllerV5";
 
-            const previous = parentWindow[controllerKey];
-            if (previous && typeof previous.cleanup === "function") {
-                try { previous.cleanup(); } catch (error) {}
+        const disconnectValue = (key) => {
+            const value = parentWindow[key];
+            if (!value) return;
+
+            try {
+                if (typeof value.cleanup === "function") value.cleanup();
+                else if (typeof value.disconnect === "function") value.disconnect();
+            } catch (error) {}
+
+            try { delete parentWindow[key]; }
+            catch (error) { parentWindow[key] = null; }
+        };
+
+        [
+            controllerKey,
+            "__eplFilterDateRuntimeV4",
+            "__wcFilterDateReadonlyObserver",
+            "__wcMatchDateBoldObserver"
+        ].forEach(disconnectValue);
+
+        const matchDates = new Set(__WC_MATCH_DATES__);
+        const todayIso = "__WC_TODAY_ISO__";
+        const monthNumbers = {
+            january: "01", february: "02", march: "03", april: "04",
+            may: "05", june: "06", july: "07", august: "08",
+            september: "09", october: "10", november: "11", december: "12"
+        };
+
+        const inputSelector = 'div[class*="st-key-filter_date"] input';
+        let frame = 0;
+
+        const makeInputReadonly = (input) => {
+            if (!(input instanceof parentWindow.HTMLInputElement)) return;
+            input.readOnly = true;
+            input.setAttribute("readonly", "");
+            input.setAttribute("aria-readonly", "true");
+            input.setAttribute("inputmode", "none");
+            input.setAttribute("autocomplete", "off");
+            input.setAttribute("spellcheck", "false");
+        };
+
+        const calendarYear = (cell) => {
+            const calendar = cell.closest('div[data-baseweb="calendar"]');
+            const match = (calendar?.textContent || "").match(/\b(20\d{2})\b/);
+            return match ? match[1] : null;
+        };
+
+        const extractDateIso = (cell) => {
+            const labelledElements = [];
+            if (cell.hasAttribute("aria-label")) labelledElements.push(cell);
+            cell.querySelectorAll("[aria-label]").forEach(
+                (element) => labelledElements.push(element)
+            );
+
+            for (const element of labelledElements) {
+                const label = element.getAttribute("aria-label") || "";
+                const match = label.match(
+                    /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,)?(?:\s+(\d{4}))?\b/i
+                );
+                if (!match) continue;
+
+                const year = match[3] || calendarYear(cell);
+                if (!year) continue;
+
+                const month = monthNumbers[match[1].toLowerCase()];
+                const day = String(Number(match[2])).padStart(2, "0");
+                return `${year}-${month}-${day}`;
             }
 
-            const matchDates = new Set(__EPL_MATCH_DATES__);
-            const todayIso = "__EPL_TODAY_ISO__";
-            const monthNumbers = {
-                january: "01", february: "02", march: "03", april: "04",
-                may: "05", june: "06", july: "07", august: "08",
-                september: "09", october: "10", november: "11", december: "12"
-            };
+            return null;
+        };
 
-            const inputSelector = 'div[class*="st-key-filter_date"] input';
-            const calendarSelector = 'div[data-baseweb="calendar"]';
-            let frame = 0;
-            let calendarObserver = null;
-            let observedCalendar = null;
+        const isSelectedCell = (cell) => {
+            if (cell.getAttribute("aria-selected") === "true") return true;
+            if (cell.getAttribute("data-selected") === "true") return true;
 
-            const makeInputReadonly = (input) => {
-                if (!(input instanceof parentWindow.HTMLInputElement)) return;
-                input.readOnly = true;
-                input.setAttribute("readonly", "");
-                input.setAttribute("aria-readonly", "true");
-                input.setAttribute("inputmode", "none");
-                input.setAttribute("autocomplete", "off");
-                input.setAttribute("spellcheck", "false");
-            };
+            const ownLabel = cell.getAttribute("aria-label") || "";
+            if (/\bselected\b/i.test(ownLabel)) return true;
 
-            const extractDateIso = (cell) => {
-                const candidates = [cell, ...cell.querySelectorAll("[aria-label]")];
+            return Boolean(cell.querySelector(
+                '[aria-selected="true"], [data-selected="true"], [aria-label*="Selected" i]'
+            ));
+        };
 
-                for (const element of candidates) {
-                    const label = element.getAttribute?.("aria-label") || "";
-                    const match = label.match(
-                        /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,)?\s+(\d{4})\b/i
-                    );
-                    if (!match) continue;
+        const setImportantWeight = (element, value) => {
+            if (!element) return;
+            element.style.setProperty("font-weight", value, "important");
+        };
 
-                    const month = monthNumbers[match[1].toLowerCase()];
-                    const day = String(Number(match[2])).padStart(2, "0");
-                    return `${match[3]}-${month}-${day}`;
-                }
+        const applyCell = (cell) => {
+            const dateIso = extractDateIso(cell);
+            const hasMatch = Boolean(dateIso && matchDates.has(dateIso));
+            const isToday = dateIso === todayIso;
+            const isSelected = isSelectedCell(cell);
+            const weight = (hasMatch || isSelected) ? "800" : "400";
 
-                return null;
-            };
+            cell.dataset.wcHasMatch = hasMatch ? "true" : "false";
+            cell.dataset.wcToday = isToday ? "true" : "false";
+            cell.dataset.wcSelected = isSelected ? "true" : "false";
 
-            const readSelectedState = (cell) => {
-                if (cell.getAttribute("aria-selected") === "true") return true;
-                if (cell.getAttribute("data-selected") === "true") return true;
+            setImportantWeight(cell, weight);
+            cell.querySelectorAll("*").forEach(
+                (element) => setImportantWeight(element, weight)
+            );
+        };
 
-                return Boolean(
-                    cell.querySelector(
-                        '[aria-selected="true"], [data-selected="true"]'
-                    )
-                );
-            };
+        const applyAll = () => {
+            parentDocument.querySelectorAll(inputSelector).forEach(makeInputReadonly);
 
-            const applyCell = (cell) => {
-                const dateIso = extractDateIso(cell);
-                const hasMatch = Boolean(dateIso && matchDates.has(dateIso));
-                const isToday = dateIso === todayIso;
-                const isSelected = readSelectedState(cell);
+            if (!parentDocument.querySelector('div[class*="st-key-filter_date"]')) {
+                return;
+            }
 
-                cell.dataset.eplHasMatch = hasMatch ? "true" : "false";
-                cell.dataset.eplToday = isToday ? "true" : "false";
-                cell.dataset.eplSelected = isSelected ? "true" : "false";
-            };
+            parentDocument.querySelectorAll(
+                'div[data-baseweb="calendar"] div[role="gridcell"]'
+            ).forEach(applyCell);
+        };
 
-            const applyCalendar = (calendar) => {
-                if (!calendar) return;
-                calendar
-                    .querySelectorAll('div[role="gridcell"]')
-                    .forEach(applyCell);
-            };
-
-            const schedule = () => {
-                if (frame) return;
-                frame = parentWindow.requestAnimationFrame(() => {
-                    frame = 0;
-
-                    parentDocument
-                        .querySelectorAll(inputSelector)
-                        .forEach(makeInputReadonly);
-
-                    const calendar = parentDocument.querySelector(calendarSelector);
-
-                    if (calendar !== observedCalendar) {
-                        if (calendarObserver) calendarObserver.disconnect();
-                        observedCalendar = calendar;
-                        calendarObserver = null;
-
-                        if (calendar) {
-                            calendarObserver = new parentWindow.MutationObserver(schedule);
-                            calendarObserver.observe(calendar, {
-                                childList: true,
-                                subtree: true,
-                                attributes: true,
-                                attributeFilter: [
-                                    "aria-label",
-                                    "aria-selected",
-                                    "data-selected"
-                                ]
-                            });
-                        }
-                    }
-
-                    applyCalendar(calendar);
-                });
-            };
-
-            const onFocusIn = (event) => {
-                if (event.target?.matches?.(inputSelector)) {
-                    makeInputReadonly(event.target);
-                    schedule();
-                }
-            };
-
-            const bodyObserver = new parentWindow.MutationObserver((mutations) => {
-                for (const mutation of mutations) {
-                    if (mutation.addedNodes.length || mutation.removedNodes.length) {
-                        schedule();
-                        return;
-                    }
-                }
+        const schedule = () => {
+            if (frame) return;
+            frame = parentWindow.requestAnimationFrame(() => {
+                frame = 0;
+                applyAll();
             });
+        };
 
-            bodyObserver.observe(parentDocument.body, {
-                childList: true,
-                subtree: true
-            });
+        const observer = new parentWindow.MutationObserver(schedule);
+        observer.observe(parentDocument.body, {
+            childList: true,
+            subtree: true
+        });
 
-            parentDocument.addEventListener("focusin", onFocusIn, true);
-            schedule();
+        parentDocument.addEventListener("focusin", schedule, true);
+        parentDocument.addEventListener("click", schedule, true);
+        schedule();
 
-            const cleanup = () => {
-                if (frame) parentWindow.cancelAnimationFrame(frame);
-                bodyObserver.disconnect();
-                if (calendarObserver) calendarObserver.disconnect();
-                parentDocument.removeEventListener("focusin", onFocusIn, true);
-            };
+        const cleanup = () => {
+            if (frame) parentWindow.cancelAnimationFrame(frame);
+            observer.disconnect();
+            parentDocument.removeEventListener("focusin", schedule, true);
+            parentDocument.removeEventListener("click", schedule, true);
+        };
 
-            parentWindow[controllerKey] = {cleanup};
-        })();
-        </script>
+        parentWindow[controllerKey] = {cleanup};
+    })();
+    </script>
     """
 
     script_html = (
         script_html
-        .replace("__EPL_MATCH_DATES__", match_date_iso_js)
-        .replace("__EPL_TODAY_ISO__", today_iso)
+        .replace("__WC_MATCH_DATES__", match_date_iso_js)
+        .replace("__WC_TODAY_ISO__", today_iso)
     )
 
     render_parent_script(script_html)
+
 
 
 def inject_mobile_match_title_css():
@@ -12117,7 +12048,12 @@ def render_avatar_popover(user: dict):
     )
 
     def render_avatar_grid():
-        sprite_css = build_avatar_background_css()
+        avatar_fingerprint = get_avatar_catalog_fingerprint(
+            avatar_keys
+        )
+        sprite_css = build_avatar_background_css(
+            avatar_fingerprint
+        )
 
         if sprite_css:
             st.markdown(
@@ -29157,8 +29093,11 @@ def render_round_leaderboard_table(
     )
 
     available_avatar_keys = load_avatar_catalog()
+    avatar_fingerprint = get_avatar_catalog_fingerprint(
+        available_avatar_keys
+    )
     sprite_src, sprite_columns, sprite_rows = (
-        build_avatar_sprite_payload()
+        build_avatar_sprite_payload(avatar_fingerprint)
     )
 
     def safe_int(row, column_name):
@@ -30703,8 +30642,11 @@ def page_leaderboard():
     )
 
     available_avatar_keys = load_avatar_catalog()
+    avatar_fingerprint = get_avatar_catalog_fingerprint(
+        available_avatar_keys
+    )
     sprite_src, sprite_columns, sprite_rows = (
-        build_avatar_sprite_payload()
+        build_avatar_sprite_payload(avatar_fingerprint)
     )
 
     def safe_int(row, column_name):
