@@ -3088,6 +3088,27 @@ def inject_epl_premium_match_card_css():
                 font-size: 7px !important;
             }
         }
+        /* =====================================================
+           DESKTOP: TÁCH RIBBON KHỎI CHÂN TIÊU ĐỀ
+
+           Ribbon và heading là hai Streamlit element riêng. Padding được đặt
+           trên đúng element chứa ribbon để khoảng cách tham gia vào layout,
+           không dùng transform nên không đè lên phần giờ thi đấu phía dưới.
+           ===================================================== */
+        @media (min-width: 769px) {
+            div[class*="st-key-match_title_desktop_"]
+            div[data-testid="stElementContainer"]:has(
+                .epl-premier-league-ribbon
+            ) {
+                padding-top: 9px !important;
+            }
+
+            div[class*="st-key-match_title_desktop_"]
+            .epl-premier-league-ribbon {
+                margin-top: 0 !important;
+            }
+        }
+
         /* Ngày giờ thi đấu trên tất cả card. */
         div[class*="st-key-match_card_"]
         .epl-match-kickoff {
@@ -6521,52 +6542,40 @@ def inject_mobile_team_name_display_script():
     render_parent_script(script_html)
 
 def inject_match_datepicker_calendar_theme(match_dates):
-    today = today_vietnam_date()
+    """
+    Trang trí lịch ngày thi đấu bằng quy tắc rõ ràng và đối chiếu ngày chính xác.
 
-    english_month_names = [
-        "January",
-        "February",
-        "March",
-        "April",
-        "May",
-        "June",
-        "July",
-        "August",
-        "September",
-        "October",
-        "November",
-        "December"
-    ]
+    Quy tắc:
+    - Ngày có ít nhất một trận: chữ đậm.
+    - Hôm nay: vòng tròn xám nhạt.
+    - Ngày đang chọn: vòng tròn xanh đậm, chữ trắng; ưu tiên cao nhất.
+    - Ngày khác: chữ thường.
+    - Ngày bị vô hiệu hóa/ngoài tháng: chữ mờ.
 
-    today_month_en = english_month_names[today.month - 1]
-    today_day = today.day
-    today_year = today.year
+    Không dùng CSS [aria-label*="August 1"] vì selector substring đó cũng khớp
+    August 10 đến August 19. JavaScript phân tích aria-label thành ISO date rồi
+    gắn data attribute chính xác cho từng ô lịch.
+    """
+    today_iso = today_vietnam_date().isoformat()
+
     match_date_iso_values = sorted({
         pd.Timestamp(date_value).date().isoformat()
         for date_value in match_dates
         if date_value is not None and not pd.isna(date_value)
     })
 
-    match_date_iso_js = (
-        "["
-        + ",".join(
-            f'"{date_value}"'
-            for date_value in match_date_iso_values
-        )
-        + "]"
+    match_date_iso_js = json.dumps(
+        match_date_iso_values,
+        ensure_ascii=False
     )
 
     st.markdown(
-        f"""
+        """
         <style>
-        /* =====================================================
-           PHẠM VI ÁP DỤNG
-           Chỉ áp dụng khi widget filter_date có mặt trên trang
-           ===================================================== */
-
+        /* Chỉ áp dụng khi bộ lọc ngày của trang Lịch thi đấu tồn tại. */
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"] {{
+        div[role="gridcell"] {
             position: relative !important;
             isolation: isolate !important;
 
@@ -6577,569 +6586,168 @@ def inject_match_datepicker_calendar_theme(match_dates):
             border: none !important;
             outline: none !important;
             box-shadow: none !important;
-
             border-radius: 999px !important;
-        }}
+        }
 
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"] * {{
+        div[role="gridcell"] * {
             position: relative !important;
             z-index: 2 !important;
-
-            font-weight: 400 !important;
+            color: inherit !important;
+            font-weight: inherit !important;
+            background: transparent !important;
             box-shadow: none !important;
-        }}
+        }
 
-        /* Reset pseudo-element mặc định của từng ngày */
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"]::before {{
+        div[role="gridcell"]::before {
             content: "" !important;
-
             position: absolute !important;
             left: 50% !important;
             top: 50% !important;
-
             width: 0 !important;
             height: 0 !important;
-
             transform: translate(-50%, -50%) !important;
-
             border: none !important;
             border-radius: 999px !important;
-
             background: transparent !important;
             box-shadow: none !important;
-
             z-index: 0 !important;
             pointer-events: none !important;
-
             transition:
                 width 0.15s ease,
                 height 0.15s ease,
                 background 0.15s ease !important;
-        }}
+        }
 
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"]::after {{
+        div[role="gridcell"]::after,
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"] > *::before,
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"] > *::after {
             content: none !important;
             display: none !important;
+        }
 
-            background: transparent !important;
-            border: none !important;
-            box-shadow: none !important;
-        }}
-
-        /* =====================================================
-           HOVER
-           ===================================================== */
-
+        /* Ngày có trận: chỉ in đậm, không tự tạo vòng tròn. */
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"]:not([aria-disabled="true"]):hover::before {{
-            width: 28px !important;
-            height: 28px !important;
-
-            background: rgba(18, 60, 105, 0.08) !important;
-        }}
-
+        div[role="gridcell"][data-epl-has-match="true"],
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"]:not([aria-disabled="true"]):hover,
+        div[role="gridcell"][data-epl-has-match="true"] * {
+            font-weight: 800 !important;
+        }
+
+        /* Hôm nay: vòng tròn xám nhạt, nhưng chỉ khi chưa được chọn. */
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"]:not([aria-disabled="true"]):hover * {{
+        div[role="gridcell"][data-epl-today="true"]
+        :is(*) {
             color: #0F172A !important;
-            font-weight: 400 !important;
-        }}
-
-        /* =====================================================
-           NGÀY HÔM NAY
-           Luôn có ô tròn xám nhạt khi chưa được chọn
-           ===================================================== */
+        }
 
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"]
-        [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"] {{
-            font-weight: 400 !important;
-        }}
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]
-        )::before {{
+        div[role="gridcell"][data-epl-today="true"]:not(
+            [data-epl-selected="true"]
+        )::before {
             width: 28px !important;
             height: 28px !important;
-
             background: #E5E7EB !important;
+        }
 
-            border: none !important;
-            border-radius: 999px !important;
-
-            box-shadow: none !important;
-        }}
-
+        /* Ngày đang chọn: ưu tiên cao nhất. */
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"],
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"] *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]
-        ),
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]
-        ) * {{
-            color: #0F172A !important;
-            font-weight: 400 !important;
-        }}
-
-        /* =====================================================
-           RESET NGÀY ĐƯỢC CHỌN
-           Xóa toàn bộ nền/vòng tròn đỏ mặc định ở các lớp con
-           ===================================================== */
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-selected="true"],
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][data-selected="true"],
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="Selected"],
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has([aria-selected="true"]),
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has([data-selected="true"]) {{
-            background: transparent !important;
-
-            border: none !important;
-            outline: none !important;
-
-            box-shadow: none !important;
-            filter: none !important;
-        }}
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-selected="true"] *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][data-selected="true"] *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="Selected"] *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has([aria-selected="true"]) *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has([data-selected="true"]) * {{
-            background: transparent !important;
-
-            border-color: transparent !important;
-            outline: none !important;
-
-            box-shadow: none !important;
-            filter: none !important;
-        }}
-
-        /* Xóa pseudo-element đỏ nằm trên các phần tử con */
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-selected="true"] > *::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-selected="true"] > *::after,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][data-selected="true"] > *::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][data-selected="true"] > *::after,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="Selected"] > *::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="Selected"] > *::after,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has([aria-selected="true"]) > *::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has([aria-selected="true"]) > *::after {{
-            content: none !important;
-            display: none !important;
-
-            background: transparent !important;
-            border: none !important;
-            outline: none !important;
-
-            box-shadow: none !important;
-            filter: none !important;
-        }}
-
-        /* =====================================================
-           NGÀY ĐƯỢC CHỌN
-           ===================================================== */
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-selected="true"]::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][data-selected="true"]::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="Selected"]::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has([aria-selected="true"])::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has([data-selected="true"])::before {{
-            content: "" !important;
-            display: block !important;
-
-            width: 28px !important;
-            height: 28px !important;
-
-            background: #123C69 !important;
-
-            border: none !important;
-            border-radius: 999px !important;
-
-            outline: none !important;
-            box-shadow: none !important;
-            filter: none !important;
-        }}
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-selected="true"],
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-selected="true"] *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][data-selected="true"],
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][data-selected="true"] *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="Selected"],
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="Selected"] *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has([aria-selected="true"]),
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has([aria-selected="true"]) *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has([data-selected="true"]),
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has([data-selected="true"]) * {{
+        div[role="gridcell"][data-epl-selected="true"] {
             color: #FFFFFF !important;
-            font-weight: 400 !important;
-        }}
-
-        /* =====================================================
-           HÔM NAY + ĐANG ĐƯỢC CHỌN
-           ===================================================== */
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"]::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][data-selected="true"]::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-label*="Selected"]::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]:has(
-            [aria-selected="true"]
-        )::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]:has(
-            [data-selected="true"]
-        )::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"]
-        )::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][data-selected="true"]
-        )::before,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-label*="Selected"]
-        )::before {{
-            width: 28px !important;
-            height: 28px !important;
-
-            background: #123C69 !important;
-
-            border: none !important;
-            border-radius: 999px !important;
-
+            font-weight: 800 !important;
+            background: transparent !important;
             box-shadow: none !important;
-        }}
+        }
 
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"],
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"] *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][data-selected="true"],
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][data-selected="true"] *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]:has(
-            [aria-selected="true"]
-        ),
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"]:has(
-            [aria-selected="true"]
-        ) *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"]
-        ),
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"]
-        ) *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][data-selected="true"]
-        ),
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][data-selected="true"]
-        ) * {{
-            color: #FFFFFF !important;
-            font-weight: 400 !important;
-        }}
-
-        /* =====================================================
-           NGÀY KHÔNG KHẢ DỤNG
-           ===================================================== */
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-disabled="true"],
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-disabled="true"] * {{
-            color: #A8B1C2 !important;
-            font-weight: 400 !important;
-            opacity: 0.72 !important;
-        }}
-
-        /* =====================================================
-           FIX CUỐI: HÔM NAY KHI ĐƯỢC CHỌN
-           Ép số ngày thành màu trắng
-           ===================================================== */
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"],
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-selected="true"] *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][data-selected="true"],
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][data-selected="true"] *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-label*="Selected"],
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"][aria-label*="{today_month_en} {today_day}"][aria-label*="{today_year}"][aria-label*="Selected"] *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"]
-            [aria-label*="{today_year}"]
-            [aria-selected="true"]
-        ),
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"]
-            [aria-label*="{today_year}"]
-            [aria-selected="true"]
-        ) *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"]
-            [aria-label*="{today_year}"]
-            [data-selected="true"]
-        ),
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"]
-            [aria-label*="{today_year}"]
-            [data-selected="true"]
-        ) *,
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"]
-            [aria-label*="{today_year}"]
-            [aria-label*="Selected"]
-        ),
-
-        body:has(div[class*="st-key-filter_date"])
-        div[data-baseweb="calendar"]
-        div[role="gridcell"]:has(
-            [aria-label*="{today_month_en} {today_day}"]
-            [aria-label*="{today_year}"]
-            [aria-label*="Selected"]
-        ) * {{
+        div[role="gridcell"][data-epl-selected="true"] * {
             color: #FFFFFF !important;
             -webkit-text-fill-color: #FFFFFF !important;
             fill: #FFFFFF !important;
-            font-weight: 400 !important;
-        }}
-        /* =====================================================
-           Ô ngày chỉ đọc
-           ===================================================== */
+            font-weight: 800 !important;
+        }
 
-        div[class*="st-key-filter_date"] input[readonly] {{
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][data-epl-selected="true"]::before {
+            width: 28px !important;
+            height: 28px !important;
+            background: #123C69 !important;
+            box-shadow: none !important;
+        }
+
+        /* Hover chỉ dành cho ngày có thể chọn và chưa được chọn. */
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"]:not([aria-disabled="true"]):not(
+            [data-epl-selected="true"]
+        ):hover::before {
+            width: 28px !important;
+            height: 28px !important;
+            background: rgba(18, 60, 105, 0.08) !important;
+        }
+
+        /* Ngày bị vô hiệu hóa hoặc thuộc tháng kế bên. */
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-disabled="true"],
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        div[role="gridcell"][aria-disabled="true"] * {
+            color: #A8B1C2 !important;
+            font-weight: 400 !important;
+            opacity: 0.72 !important;
+        }
+
+        div[class*="st-key-filter_date"] input[readonly] {
             cursor: pointer !important;
             caret-color: transparent !important;
-
             user-select: none !important;
             -webkit-user-select: none !important;
             -webkit-touch-callout: none !important;
-        }}
+        }
         </style>
         """,
         unsafe_allow_html=True
     )
-    render_parent_script(
-        r"""
+
+    script_html = r"""
         <script>
         (() => {
             const parentWindow = window.parent;
             const parentDocument = parentWindow.document;
-            const controllerKey = "__wcFilterDateRuntimeV3";
-            const previous = parentWindow[controllerKey];
+            const controllerKey = "__eplFilterDateRuntimeV4";
 
+            const previous = parentWindow[controllerKey];
             if (previous && typeof previous.cleanup === "function") {
                 try { previous.cleanup(); } catch (error) {}
             }
 
-            const matchDates = new Set(__WC_MATCH_DATES__);
+            const matchDates = new Set(__EPL_MATCH_DATES__);
+            const todayIso = "__EPL_TODAY_ISO__";
             const monthNumbers = {
                 january: "01", february: "02", march: "03", april: "04",
                 may: "05", june: "06", july: "07", august: "08",
                 september: "09", october: "10", november: "11", december: "12"
             };
+
             const inputSelector = 'div[class*="st-key-filter_date"] input';
+            const calendarSelector = 'div[data-baseweb="calendar"]';
             let frame = 0;
             let calendarObserver = null;
             let observedCalendar = null;
@@ -7155,66 +6763,86 @@ def inject_match_datepicker_calendar_theme(match_dates):
             };
 
             const extractDateIso = (cell) => {
-                const candidates = cell.hasAttribute("aria-label")
-                    ? [cell, ...cell.querySelectorAll("[aria-label]")]
-                    : [...cell.querySelectorAll("[aria-label]")];
+                const candidates = [cell, ...cell.querySelectorAll("[aria-label]")];
 
                 for (const element of candidates) {
-                    const label = element.getAttribute("aria-label") || "";
-                    const match = label.match(/\\b(January|February|March|April|May|June|July|August|September|October|November|December)\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,)?\\s+(\\d{4})\\b/i);
+                    const label = element.getAttribute?.("aria-label") || "";
+                    const match = label.match(
+                        /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,)?\s+(\d{4})\b/i
+                    );
                     if (!match) continue;
+
                     const month = monthNumbers[match[1].toLowerCase()];
                     const day = String(Number(match[2])).padStart(2, "0");
                     return `${match[3]}-${month}-${day}`;
                 }
+
                 return null;
             };
 
-            const setWeight = (element, value) => {
-                if (!element) return;
-                if (
-                    element.style.getPropertyValue("font-weight") === value
-                    && element.style.getPropertyPriority("font-weight") === "important"
-                ) return;
-                element.style.setProperty("font-weight", value, "important");
+            const readSelectedState = (cell) => {
+                if (cell.getAttribute("aria-selected") === "true") return true;
+                if (cell.getAttribute("data-selected") === "true") return true;
+
+                return Boolean(
+                    cell.querySelector(
+                        '[aria-selected="true"], [data-selected="true"]'
+                    )
+                );
             };
 
             const applyCell = (cell) => {
                 const dateIso = extractDateIso(cell);
-                const weight = dateIso && matchDates.has(dateIso) ? "800" : "400";
-                cell.dataset.wcHasMatch = weight === "800" ? "true" : "false";
-                setWeight(cell, weight);
-                cell.querySelectorAll("*").forEach((element) => setWeight(element, weight));
+                const hasMatch = Boolean(dateIso && matchDates.has(dateIso));
+                const isToday = dateIso === todayIso;
+                const isSelected = readSelectedState(cell);
+
+                cell.dataset.eplHasMatch = hasMatch ? "true" : "false";
+                cell.dataset.eplToday = isToday ? "true" : "false";
+                cell.dataset.eplSelected = isSelected ? "true" : "false";
             };
 
             const applyCalendar = (calendar) => {
                 if (!calendar) return;
-                calendar.querySelectorAll('div[role="gridcell"]').forEach(applyCell);
+                calendar
+                    .querySelectorAll('div[role="gridcell"]')
+                    .forEach(applyCell);
             };
 
-            const attachCalendarObserver = (calendar) => {
-                if (calendar === observedCalendar) return;
-                if (calendarObserver) calendarObserver.disconnect();
-                observedCalendar = calendar;
-                calendarObserver = null;
-                if (!calendar) return;
-
-                calendarObserver = new parentWindow.MutationObserver(schedule);
-                calendarObserver.observe(calendar, {childList: true, subtree: true});
-            };
-
-            const update = () => {
-                frame = 0;
-                parentDocument.querySelectorAll(inputSelector).forEach(makeInputReadonly);
-                const calendar = parentDocument.querySelector('div[data-baseweb="calendar"]');
-                attachCalendarObserver(calendar);
-                applyCalendar(calendar);
-            };
-
-            function schedule() {
+            const schedule = () => {
                 if (frame) return;
-                frame = parentWindow.requestAnimationFrame(update);
-            }
+                frame = parentWindow.requestAnimationFrame(() => {
+                    frame = 0;
+
+                    parentDocument
+                        .querySelectorAll(inputSelector)
+                        .forEach(makeInputReadonly);
+
+                    const calendar = parentDocument.querySelector(calendarSelector);
+
+                    if (calendar !== observedCalendar) {
+                        if (calendarObserver) calendarObserver.disconnect();
+                        observedCalendar = calendar;
+                        calendarObserver = null;
+
+                        if (calendar) {
+                            calendarObserver = new parentWindow.MutationObserver(schedule);
+                            calendarObserver.observe(calendar, {
+                                childList: true,
+                                subtree: true,
+                                attributes: true,
+                                attributeFilter: [
+                                    "aria-label",
+                                    "aria-selected",
+                                    "data-selected"
+                                ]
+                            });
+                        }
+                    }
+
+                    applyCalendar(calendar);
+                });
+            };
 
             const onFocusIn = (event) => {
                 if (event.target?.matches?.(inputSelector)) {
@@ -7227,17 +6855,21 @@ def inject_match_datepicker_calendar_theme(match_dates):
                 for (const mutation of mutations) {
                     if (mutation.addedNodes.length || mutation.removedNodes.length) {
                         schedule();
-                        break;
+                        return;
                     }
                 }
             });
 
-            bodyObserver.observe(parentDocument.body, {childList: true, subtree: true});
+            bodyObserver.observe(parentDocument.body, {
+                childList: true,
+                subtree: true
+            });
+
             parentDocument.addEventListener("focusin", onFocusIn, true);
             schedule();
 
             const cleanup = () => {
-                parentWindow.cancelAnimationFrame(frame);
+                if (frame) parentWindow.cancelAnimationFrame(frame);
                 bodyObserver.disconnect();
                 if (calendarObserver) calendarObserver.disconnect();
                 parentDocument.removeEventListener("focusin", onFocusIn, true);
@@ -7246,11 +6878,15 @@ def inject_match_datepicker_calendar_theme(match_dates):
             parentWindow[controllerKey] = {cleanup};
         })();
         </script>
-        """.replace(
-            "__WC_MATCH_DATES__",
-            match_date_iso_js
-        )
+    """
+
+    script_html = (
+        script_html
+        .replace("__EPL_MATCH_DATES__", match_date_iso_js)
+        .replace("__EPL_TODAY_ISO__", today_iso)
     )
+
+    render_parent_script(script_html)
 
 
 def inject_mobile_match_title_css():
