@@ -79,6 +79,8 @@ SEASON_TITLE_BY_SLUG = {
 APP_TAGLINE = "Dự đoán tỉ số Ngoại hạng Anh, tích điểm và tranh tài cùng bạn bè."
 COOKIE_NAME = "epl_session_token"
 SESSION_DAYS = 30
+DISPLAY_NAME_CHANGE_COOLDOWN_DAYS = 30
+DISPLAY_NAME_MAX_LENGTH = 50
 HOPE_STARS_PER_USER = 5
 SUPER_STARS_PER_USER = 1
 
@@ -10958,6 +10960,539 @@ def render_sidebar_star_balance(user_id: int):
         unsafe_allow_html=True
     )
 
+
+DISPLAY_NAME_FEEDBACK_KEY = "display_name_feedback_popup"
+
+
+def inject_display_name_ui_css():
+    st.markdown(
+        """
+        <style>
+        section[data-testid="stSidebar"]
+        div[class*="st-key-sidebar_display_name_row"] {
+            margin: 1px 0 2px 0 !important;
+        }
+
+        section[data-testid="stSidebar"]
+        div[class*="st-key-sidebar_display_name_row"]
+        div[data-testid="stHorizontalBlock"] {
+            align-items: center !important;
+            gap: 5px !important;
+        }
+
+        section[data-testid="stSidebar"]
+        .epl-sidebar-greeting {
+            min-width: 0;
+            overflow: hidden;
+            color: #F8FAFC;
+            font-size: 14px;
+            line-height: 28px;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
+        section[data-testid="stSidebar"]
+        .epl-sidebar-greeting strong {
+            font-weight: 900;
+            color: #FFFFFF;
+        }
+
+        section[data-testid="stSidebar"]
+        div[class*="st-key-sidebar_display_name_edit"] {
+            width: 29px !important;
+            min-width: 29px !important;
+        }
+
+        section[data-testid="stSidebar"]
+        div[class*="st-key-sidebar_display_name_edit"]
+        .stButton {
+            width: 29px !important;
+        }
+
+        section[data-testid="stSidebar"]
+        div[class*="st-key-sidebar_display_name_edit"]
+        .stButton > button {
+            width: 29px !important;
+            min-width: 29px !important;
+            height: 29px !important;
+            min-height: 29px !important;
+            padding: 0 !important;
+            border: 1px solid rgba(245, 197, 66, 0.18) !important;
+            border-radius: 9px !important;
+            background: rgba(255, 255, 255, 0.055) !important;
+            color: #CBD5E1 !important;
+            box-shadow: none !important;
+            transform: none !important;
+        }
+
+        section[data-testid="stSidebar"]
+        div[class*="st-key-sidebar_display_name_edit"]
+        .stButton > button p {
+            margin: 0 !important;
+            color: inherit !important;
+            font-family: Arial, sans-serif !important;
+            font-size: 16px !important;
+            font-weight: 700 !important;
+            line-height: 1 !important;
+            transform: translateY(-1px);
+        }
+
+        section[data-testid="stSidebar"]
+        div[class*="st-key-sidebar_display_name_edit"]
+        .stButton > button:hover {
+            border-color: rgba(245, 197, 66, 0.62) !important;
+            background: rgba(245, 197, 66, 0.12) !important;
+            color: #F5C542 !important;
+        }
+
+        section[data-testid="stSidebar"]
+        div[class*="st-key-sidebar_display_name_edit"]
+        .stButton > button:focus-visible {
+            outline: 2px solid rgba(245, 197, 66, 0.78) !important;
+            outline-offset: 2px !important;
+        }
+
+        div[role="dialog"]:has(.epl-display-name-dialog-shell) {
+            width: min(430px, calc(100vw - 30px)) !important;
+            max-width: 430px !important;
+            border: 1px solid rgba(18, 60, 105, 0.15) !important;
+            border-radius: 22px !important;
+            background:
+                radial-gradient(
+                    circle at top right,
+                    rgba(245, 197, 66, 0.12),
+                    transparent 38%
+                ),
+                #FFFFFF !important;
+            box-shadow:
+                0 28px 70px rgba(7, 17, 31, 0.24),
+                0 8px 24px rgba(15, 23, 42, 0.10) !important;
+            overflow: hidden !important;
+        }
+
+        div[role="dialog"]:has(.epl-display-name-dialog-shell)
+        [data-testid="stDialogHeader"] {
+            padding-bottom: 4px !important;
+        }
+
+        div[role="dialog"]:has(.epl-display-name-dialog-shell) h2 {
+            color: #07111F !important;
+            font-size: 21px !important;
+            font-weight: 950 !important;
+            letter-spacing: -0.025em !important;
+        }
+
+        div[role="dialog"]:has(.epl-display-name-dialog-shell)
+        button[aria-label="Close"] {
+            border-radius: 10px !important;
+        }
+
+        .epl-display-name-dialog-shell {
+            color: #475569;
+            font-size: 14px;
+            line-height: 1.55;
+            margin: -2px 0 15px 0;
+        }
+
+        .epl-display-name-current {
+            margin-top: 8px;
+            padding: 9px 11px;
+            border: 1px solid rgba(18, 60, 105, 0.10);
+            border-radius: 11px;
+            background: rgba(241, 245, 249, 0.72);
+            color: #64748B;
+            font-size: 13px;
+        }
+
+        .epl-display-name-current strong {
+            color: #07111F;
+            font-weight: 900;
+        }
+
+        .epl-display-name-warning {
+            display: grid;
+            grid-template-columns: 28px minmax(0, 1fr);
+            align-items: center;
+            gap: 10px;
+            margin: 0 0 15px 0;
+            padding: 11px 12px;
+            border: 1px solid rgba(245, 197, 66, 0.48);
+            border-radius: 13px;
+            background: rgba(245, 197, 66, 0.10);
+            color: #5F4700;
+            font-size: 13px;
+            font-weight: 700;
+            line-height: 1.45;
+        }
+
+        .epl-display-name-warning-icon {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 9px;
+            background: #F5C542;
+            color: #07111F;
+            font-size: 15px;
+            font-weight: 950;
+        }
+
+        div[role="dialog"]:has(.epl-display-name-dialog-shell)
+        .stTextInput input {
+            min-height: 44px !important;
+            border-radius: 12px !important;
+        }
+
+        div[role="dialog"]:has(.epl-display-name-dialog-shell)
+        .stTextInput input:focus {
+            border-color: #123C69 !important;
+            box-shadow: 0 0 0 2px rgba(18, 60, 105, 0.12) !important;
+        }
+
+        div[role="dialog"]:has(.epl-display-name-dialog-shell)
+        button[kind="primaryFormSubmit"] {
+            background: #123C69 !important;
+            color: #FFFFFF !important;
+            border-color: #123C69 !important;
+        }
+
+        div[role="dialog"]:has(.epl-display-name-dialog-shell)
+        button[kind="primaryFormSubmit"]:hover {
+            background: #0D2F55 !important;
+            border-color: #0D2F55 !important;
+            transform: none !important;
+        }
+
+        @media (max-width: 480px) {
+            div[role="dialog"]:has(.epl-display-name-dialog-shell) {
+                width: calc(100vw - 22px) !important;
+                border-radius: 18px !important;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+def render_sidebar_display_name(user: dict) -> bool:
+    display_name = normalize_display_name(
+        user.get("display_name", "")
+    )
+    safe_display_name = html.escape(
+        display_name,
+        quote=True
+    )
+
+    with st.container(
+        key="sidebar_display_name_row"
+    ):
+        name_column, edit_column = st.columns(
+            [1, 0.14],
+            gap="small"
+        )
+
+        with name_column:
+            st.markdown(
+                f"""
+                <div
+                    class="epl-sidebar-greeting"
+                    title="{safe_display_name}"
+                >
+                    Xin chào, <strong>{safe_display_name}</strong>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        with edit_column:
+            return st.button(
+                "✎",
+                key="sidebar_display_name_edit",
+                help="Đổi tên hiển thị"
+            )
+
+
+def set_display_name_feedback(
+    title: str,
+    detail: str = "",
+    tone: str = "info"
+):
+    st.session_state[DISPLAY_NAME_FEEDBACK_KEY] = {
+        "title": str(title),
+        "detail": str(detail),
+        "tone": str(tone),
+        "created_at_ms": int(
+            datetime.now(timezone.utc).timestamp() * 1000
+        )
+    }
+
+
+def render_display_name_feedback_popup():
+    feedback = st.session_state.pop(
+        DISPLAY_NAME_FEEDBACK_KEY,
+        None
+    )
+
+    popup_html = """
+    <div
+        aria-hidden="true"
+        style="display:none;width:0;height:0;overflow:hidden;"
+    ></div>
+    """
+
+    if feedback:
+        tone_config = {
+            "success": {
+                "icon": "✓",
+                "accent": "#16A34A",
+                "icon_bg": "#DCFCE7",
+                "icon_color": "#166534"
+            },
+            "info": {
+                "icon": "i",
+                "accent": "#2563EB",
+                "icon_bg": "#DBEAFE",
+                "icon_color": "#1D4ED8"
+            },
+            "danger": {
+                "icon": "!",
+                "accent": "#E63946",
+                "icon_bg": "#FEE2E2",
+                "icon_color": "#B91C1C"
+            }
+        }
+
+        theme = tone_config.get(
+            feedback.get("tone"),
+            tone_config["info"]
+        )
+        created_at_ms = int(
+            feedback.get(
+                "created_at_ms",
+                datetime.now(timezone.utc).timestamp() * 1000
+            )
+        )
+        safe_title = html.escape(
+            str(feedback.get("title", ""))
+        )
+        safe_detail = html.escape(
+            str(feedback.get("detail", ""))
+        )
+        detail_html = (
+            f'<div class="epl-name-feedback-detail">'
+            f'{safe_detail}</div>'
+            if safe_detail
+            else ""
+        )
+
+        popup_html = f"""
+        <style>
+        @keyframes eplNameFeedback{created_at_ms} {{
+            0% {{
+                opacity: 0;
+                transform: translate(-50%, calc(-50% - 12px)) scale(0.97);
+            }}
+            9%, 82% {{
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }}
+            100% {{
+                opacity: 0;
+                transform: translate(-50%, calc(-50% - 8px)) scale(0.98);
+                visibility: hidden;
+            }}
+        }}
+
+        .epl-name-feedback-{created_at_ms} {{
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            z-index: 2147483647;
+            width: min(390px, calc(100vw - 36px));
+            display: grid;
+            grid-template-columns: 42px minmax(0, 1fr);
+            align-items: center;
+            gap: 13px;
+            box-sizing: border-box;
+            padding: 15px 17px 15px 15px;
+            border: 1px solid rgba(18, 60, 105, 0.15);
+            border-left: 4px solid {theme["accent"]};
+            border-radius: 18px;
+            background:
+                radial-gradient(
+                    circle at top right,
+                    rgba(245, 197, 66, 0.13),
+                    transparent 42%
+                ),
+                rgba(255, 255, 255, 0.99);
+            box-shadow:
+                0 24px 58px rgba(7, 17, 31, 0.22),
+                0 6px 18px rgba(15, 23, 42, 0.10);
+            pointer-events: none;
+            animation:
+                eplNameFeedback{created_at_ms}
+                5s
+                cubic-bezier(0.22, 1, 0.36, 1)
+                forwards;
+        }}
+
+        .epl-name-feedback-icon {{
+            width: 42px;
+            height: 42px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background: {theme["icon_bg"]};
+            color: {theme["icon_color"]};
+            font-size: 20px;
+            font-weight: 950;
+        }}
+
+        .epl-name-feedback-title {{
+            color: #07111F;
+            font-size: 15px;
+            font-weight: 950;
+            line-height: 1.3;
+        }}
+
+        .epl-name-feedback-detail {{
+            margin-top: 3px;
+            color: #64748B;
+            font-size: 13px;
+            font-weight: 650;
+            line-height: 1.4;
+        }}
+        </style>
+
+        <div
+            class="epl-name-feedback-{created_at_ms}"
+            role="status"
+            aria-live="polite"
+        >
+            <div class="epl-name-feedback-icon">
+                {theme["icon"]}
+            </div>
+            <div>
+                <div class="epl-name-feedback-title">
+                    {safe_title}
+                </div>
+                {detail_html}
+            </div>
+        </div>
+        """
+
+    st.html(popup_html)
+
+
+@st.dialog("Đổi tên hiển thị")
+def render_display_name_change_dialog(user: dict):
+    user = st.session_state.get("user", user)
+    current_display_name = normalize_display_name(
+        user.get("display_name", "")
+    )
+    safe_current_display_name = html.escape(
+        current_display_name
+    )
+
+    st.markdown(
+        f"""
+        <div class="epl-display-name-dialog-shell">
+            Tên mới sẽ được cập nhật trên bảng xếp hạng và
+            các khu vực hiển thị người chơi.
+            <div class="epl-display-name-current">
+                Tên hiện tại:
+                <strong>{safe_current_display_name}</strong>
+            </div>
+        </div>
+        <div class="epl-display-name-warning">
+            <div class="epl-display-name-warning-icon">!</div>
+            <div>
+                Bạn chỉ có thể đổi tên 1 lần trong mỗi 30 ngày.
+                Hãy kiểm tra kỹ trước khi lưu.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    with st.form(
+        "display_name_change_form",
+        clear_on_submit=False
+    ):
+        new_display_name = st.text_input(
+            "Tên hiển thị mới",
+            max_chars=DISPLAY_NAME_MAX_LENGTH,
+            placeholder="Nhập tên bạn muốn sử dụng",
+            help=(
+                "Tối đa "
+                f"{DISPLAY_NAME_MAX_LENGTH} ký tự."
+            )
+        )
+
+        cancel_column, save_column = st.columns(
+            [1, 1],
+            gap="small"
+        )
+
+        with cancel_column:
+            cancel_clicked = st.form_submit_button(
+                "Hủy",
+                use_container_width=True
+            )
+
+        with save_column:
+            save_clicked = st.form_submit_button(
+                "Lưu tên mới",
+                type="primary",
+                use_container_width=True
+            )
+
+    if cancel_clicked:
+        rerun_full_app()
+
+    if not save_clicked:
+        return
+
+    try:
+        updated_user = update_user_display_name(
+            user_id=int(user["user_id"]),
+            new_display_name=new_display_name
+        )
+
+        session_user = dict(user)
+        session_user["display_name"] = updated_user[
+            "display_name"
+        ]
+        st.session_state["user"] = session_user
+
+        set_display_name_feedback(
+            title="Đã cập nhật tên hiển thị",
+            detail=(
+                f'Tên mới của bạn là '
+                f'"{updated_user["display_name"]}".'
+            ),
+            tone="success"
+        )
+
+        rerun_full_app()
+
+    except ValueError as error:
+        st.error(str(error))
+
+    except Exception:
+        LOGGER.exception(
+            "Failed to update display name for user_id=%s",
+            int(user["user_id"])
+        )
+        st.error(
+            "Chưa thể đổi tên lúc này. "
+            "Vui lòng thử lại sau."
+        )
+
+
 @st.fragment
 def render_avatar_popover(user: dict):
     """
@@ -14717,6 +15252,30 @@ def check_required_app_tables():
         )
         st.stop()
 
+    actual_user_columns = set(
+        schema_columns.loc[
+            schema_columns["name"] == "users",
+            "column_name"
+        ].tolist()
+    )
+
+    required_user_columns = {
+        "display_name_changed_at"
+    }
+
+    missing_user_columns = sorted(
+        required_user_columns
+        - actual_user_columns
+    )
+
+    if missing_user_columns:
+        st.error(
+            "Bảng `users` đang thiếu cột phục vụ đổi tên: "
+            + ", ".join(missing_user_columns)
+            + ". Hãy chạy migration database trước khi mở app."
+        )
+        st.stop()
+
     actual_team_columns = set(
         schema_columns.loc[
             schema_columns["name"] == "teams",
@@ -14806,8 +15365,16 @@ def init_app_tables():
             password_salt TEXT NOT NULL,
             password_hash TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'player',
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            display_name_changed_at TIMESTAMPTZ
         )
+        """
+    )
+
+    execute_sql(
+        """
+        ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS display_name_changed_at TIMESTAMPTZ
         """
     )
 
@@ -15549,15 +16116,235 @@ def claim_daily_checkin(user_id: int) -> dict:
 # 5. AUTH FUNCTIONS
 # ============================================================
 
+def normalize_display_name(display_name: str) -> str:
+    """
+    Chuẩn hóa khoảng trắng nhưng vẫn giữ nguyên chữ hoa/thường và Unicode.
+    """
+    return re.sub(
+        r"\s+",
+        " ",
+        str(display_name or "")
+    ).strip()
+
+
+def format_vietnam_datetime(datetime_value) -> str:
+    timestamp = pd.Timestamp(datetime_value)
+
+    if pd.isna(timestamp):
+        return ""
+
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.tz_localize("UTC")
+
+    return (
+        timestamp
+        .tz_convert("Asia/Ho_Chi_Minh")
+        .strftime("%H:%M, %d/%m/%Y")
+    )
+
+
+def get_display_name_change_state(user_id: int) -> dict:
+    """
+    Đọc trực tiếp từ database khi người dùng bấm nút sửa tên.
+    Không cache để trạng thái luôn đúng giữa nhiều tab/thiết bị.
+    """
+    state = fetch_one(
+        """
+        SELECT
+            display_name,
+            display_name_changed_at,
+            (
+                display_name_changed_at IS NULL
+                OR display_name_changed_at
+                   + (:cooldown_days * INTERVAL '1 day')
+                   <= NOW()
+            ) AS can_change,
+            CASE
+                WHEN display_name_changed_at IS NULL THEN NULL
+                ELSE display_name_changed_at
+                     + (:cooldown_days * INTERVAL '1 day')
+            END AS next_available_at
+        FROM users
+        WHERE user_id = :user_id
+        """,
+        {
+            "user_id": int(user_id),
+            "cooldown_days": DISPLAY_NAME_CHANGE_COOLDOWN_DAYS
+        }
+    )
+
+    if state is None:
+        raise ValueError(
+            "Không tìm thấy tài khoản để kiểm tra quyền đổi tên."
+        )
+
+    state["can_change"] = to_bool(state.get("can_change"))
+    return state
+
+
+def update_user_display_name(
+    user_id: int,
+    new_display_name: str
+) -> dict:
+    """
+    Đổi tên trong một transaction và khóa đúng user hiện tại.
+
+    Advisory lock dùng chung với create_user() để việc kiểm tra tên trùng
+    không thể bị vượt qua bởi hai yêu cầu đăng ký/đổi tên đồng thời.
+    """
+    new_display_name = normalize_display_name(
+        new_display_name
+    )
+
+    if not new_display_name:
+        raise ValueError(
+            "Tên hiển thị không được để trống."
+        )
+
+    if len(new_display_name) > DISPLAY_NAME_MAX_LENGTH:
+        raise ValueError(
+            "Tên hiển thị không được vượt quá "
+            f"{DISPLAY_NAME_MAX_LENGTH} ký tự."
+        )
+
+    try:
+        with get_engine().begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    SELECT pg_advisory_xact_lock(
+                        2026072901
+                    )
+                    """
+                )
+            )
+
+            current_user = conn.execute(
+                text(
+                    """
+                    SELECT
+                        display_name,
+                        display_name_changed_at,
+                        NOW() AS checked_at
+                    FROM users
+                    WHERE user_id = :user_id
+                    FOR UPDATE
+                    """
+                ),
+                {
+                    "user_id": int(user_id)
+                }
+            ).mappings().fetchone()
+
+            if current_user is None:
+                raise ValueError(
+                    "Không tìm thấy tài khoản để đổi tên."
+                )
+
+            current_display_name = normalize_display_name(
+                current_user.get("display_name")
+            )
+
+            if new_display_name == current_display_name:
+                raise ValueError(
+                    "Tên mới cần khác tên hiển thị hiện tại."
+                )
+
+            changed_at = current_user.get(
+                "display_name_changed_at"
+            )
+
+            if changed_at is not None:
+                next_available_at = (
+                    changed_at
+                    + timedelta(
+                        days=DISPLAY_NAME_CHANGE_COOLDOWN_DAYS
+                    )
+                )
+
+                if current_user["checked_at"] < next_available_at:
+                    raise ValueError(
+                        "Bạn chưa thể đổi tên lúc này. "
+                        "Có thể đổi lại từ "
+                        f"{format_vietnam_datetime(next_available_at)}."
+                    )
+
+            duplicate_name = conn.execute(
+                text(
+                    """
+                    SELECT 1
+                    FROM users
+                    WHERE user_id <> :user_id
+                      AND LOWER(TRIM(display_name))
+                          = LOWER(TRIM(:display_name))
+                    LIMIT 1
+                    """
+                ),
+                {
+                    "user_id": int(user_id),
+                    "display_name": new_display_name
+                }
+            ).fetchone()
+
+            if duplicate_name is not None:
+                raise ValueError(
+                    "Tên hiển thị này đã được sử dụng. "
+                    "Hãy chọn tên khác."
+                )
+
+            updated_user = conn.execute(
+                text(
+                    """
+                    UPDATE users
+                    SET
+                        display_name = :display_name,
+                        display_name_changed_at = NOW()
+                    WHERE user_id = :user_id
+                    RETURNING
+                        display_name,
+                        display_name_changed_at
+                    """
+                ),
+                {
+                    "user_id": int(user_id),
+                    "display_name": new_display_name
+                }
+            ).mappings().one()
+
+    except IntegrityError as error:
+        raise ValueError(
+            "Tên hiển thị này đã được sử dụng. "
+            "Hãy chọn tên khác."
+        ) from error
+
+    try:
+        load_users.clear()
+    except (NameError, AttributeError):
+        pass
+
+    try:
+        build_leaderboard_df.clear()
+    except (NameError, AttributeError):
+        pass
+
+    return dict(updated_user)
+
+
 def create_user(username: str, display_name: str, password: str):
     username = username.strip().lower()
-    display_name = display_name.strip()
+    display_name = normalize_display_name(display_name)
 
     if not username:
         raise ValueError("Username không được để trống.")
 
     if not display_name:
         raise ValueError("Tên hiển thị không được để trống.")
+
+    if len(display_name) > DISPLAY_NAME_MAX_LENGTH:
+        raise ValueError(
+            "Tên hiển thị không được vượt quá "
+            f"{DISPLAY_NAME_MAX_LENGTH} ký tự."
+        )
 
     if len(password) < 8:
         raise ValueError("Mật khẩu nên có ít nhất 8 ký tự.")
@@ -18873,7 +19660,10 @@ def render_auth_page():
 
             with st.form("register_form"):
                 username = st.text_input("Username", key="register_username")
-                display_name = st.text_input("Tên hiển thị")
+                display_name = st.text_input(
+                    "Tên hiển thị",
+                    max_chars=DISPLAY_NAME_MAX_LENGTH
+                )
                 password = st.text_input("Mật khẩu", type="password", key="register_password")
                 password_confirm = st.text_input("Nhập lại mật khẩu", type="password")
 
@@ -32178,6 +32968,7 @@ def main():
         inject_epl_theme()
         inject_hide_streamlit_embed_footer_css()
         inject_sidebar_menu_radio_css()
+        inject_display_name_ui_css()
 
         # Đặt cuối cùng để ưu tiên CSS bố cục tổng.
         inject_main_page_lift_css()
@@ -32221,10 +33012,14 @@ def main():
     if not daily_checkin_popup_opened:
         maybe_render_final_poster_popup(user["user_id"])
 
+    display_name_edit_clicked = False
+
     with st.sidebar:
         render_sidebar_brand()
 
-        st.markdown(f"Xin chào, **{user['display_name']}**")
+        display_name_edit_clicked = (
+            render_sidebar_display_name(user)
+        )
         render_sidebar_star_balance(user["user_id"])
 
         if st.button(
@@ -32260,6 +33055,42 @@ def main():
         )
 
         render_sidebar_footer()
+
+    if display_name_edit_clicked:
+        try:
+            change_state = get_display_name_change_state(
+                int(user["user_id"])
+            )
+
+            if change_state["can_change"]:
+                render_display_name_change_dialog(user)
+            else:
+                next_change_text = format_vietnam_datetime(
+                    change_state.get("next_available_at")
+                )
+
+                set_display_name_feedback(
+                    title="Chưa đến thời gian đổi tên",
+                    detail=(
+                        "Bạn có thể đổi lại từ "
+                        f"{next_change_text}."
+                    ),
+                    tone="info"
+                )
+
+        except Exception:
+            LOGGER.exception(
+                "Failed to check display name cooldown "
+                "for user_id=%s",
+                int(user["user_id"])
+            )
+            set_display_name_feedback(
+                title="Chưa thể kiểm tra quyền đổi tên",
+                detail="Vui lòng thử lại sau.",
+                tone="danger"
+            )
+
+    render_display_name_feedback_popup()
 
     # Chỉ nạp CSS/JavaScript chuyên biệt của trang đang mở.
     # Trước đây mọi trang, kể cả đăng nhập, đều phải nhận toàn bộ CSS card
