@@ -1,48 +1,143 @@
 name: Update EPL News Ticker
 
 on:
+  # Tự động chạy mỗi ngày lúc:
+  # - 00:00 giờ Việt Nam
+  # - 14:00 giờ Việt Nam
   schedule:
-    # 00:00 giờ Việt Nam
-    # Tương ứng 17:00 UTC ngày hôm trước
-    - cron: "0 17 * * *"
+    - cron: "0 0,14 * * *"
+      timezone: "Asia/Ho_Chi_Minh"
 
-    # 14:00 giờ Việt Nam
-    # Tương ứng 07:00 UTC cùng ngày
-    - cron: "0 7 * * *"
-
+  # Cho phép chạy thử thủ công trong tab Actions.
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# Không cho hai lượt cập nhật ticker chạy cùng lúc.
+# Nếu một lượt đang chạy, lượt tiếp theo sẽ chờ thay vì hủy lượt cũ.
 concurrency:
   group: epl-news-ticker
   cancel-in-progress: false
 
 jobs:
   update-epl-news-ticker:
+    name: Generate latest EPL news ticker
+
     runs-on: ubuntu-latest
 
     timeout-minutes: 15
 
     env:
+      # GitHub Repository Secrets.
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
+      # Có thể tạo Repository Variable tên GEMINI_NEWS_MODEL
+      # để thay model mà không cần sửa workflow.
+      #
+      # Nếu chưa tạo variable, workflow dùng gemini-3.6-flash.
+      GEMINI_NEWS_MODEL: ${{ vars.GEMINI_NEWS_MODEL || 'gemini-3.6-flash' }}
+
+      # Hiển thị log Python ngay lập tức.
+      PYTHONUNBUFFERED: "1"
+
+      # Giảm log không cần thiết của pip.
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
     steps:
+      # ======================================================
+      # 1. LẤY CODE TỪ REPOSITORY
+      # ======================================================
+
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+
+      # ======================================================
+      # 2. CÀI PYTHON
+      # ======================================================
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
-      - name: Install dependencies
+      # ======================================================
+      # 3. KIỂM TRA BIẾN MÔI TRƯỜNG
+      # ======================================================
+
+      - name: Validate required configuration
+        shell: bash
         run: |
+          set -euo pipefail
+
+          if [ -z "${GEMINI_API_KEY:-}" ]; then
+            echo "::error::Missing GitHub secret: GEMINI_API_KEY"
+            exit 1
+          fi
+
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error::Missing GitHub secret: DATABASE_URL"
+            exit 1
+          fi
+
+          if [ -z "${GEMINI_NEWS_MODEL:-}" ]; then
+            echo "::error::GEMINI_NEWS_MODEL is empty"
+            exit 1
+          fi
+
+          echo "Required configuration is available."
+          echo "Gemini model: ${GEMINI_NEWS_MODEL}"
+
+      # ======================================================
+      # 4. CÀI THƯ VIỆN
+      # ======================================================
+
+      - name: Install Python dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+
           python -m pip install --upgrade pip
-          pip install google-genai sqlalchemy psycopg2-binary
+
+          python -m pip install \
+            "google-genai>=1,<2" \
+            "SQLAlchemy>=2,<3" \
+            "psycopg2-binary>=2.9,<3"
+
+          python -m pip check
+
+      # ======================================================
+      # 5. KIỂM TRA FILE SCRIPT
+      # ======================================================
+
+      - name: Validate ticker script
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ ! -f "scripts/update_epl_news_ticker.py" ]; then
+            echo "::error::File scripts/update_epl_news_ticker.py does not exist"
+            exit 1
+          fi
+
+          python -m py_compile \
+            scripts/update_epl_news_ticker.py
+
+          echo "Ticker script syntax is valid."
+
+      # ======================================================
+      # 6. TẠO VÀ ĐĂNG TICKER
+      # ======================================================
 
       - name: Generate and publish latest EPL ticker
+        shell: bash
         run: |
+          set -euo pipefail
+
+          echo "Starting EPL news ticker generation..."
+          echo "Model: ${GEMINI_NEWS_MODEL}"
+
           python scripts/update_epl_news_ticker.py
+
+          echo "EPL news ticker workflow completed successfully."
