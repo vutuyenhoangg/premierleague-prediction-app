@@ -1775,8 +1775,14 @@ def inject_epl_theme():
             .block-container,
             [data-testid="stMainBlockContainer"],
             [data-testid="stAppViewBlockContainer"] {{
-                /* Chỉ chừa đúng chiều cao header/ticker mobile. */
-                padding-top: 56px !important;
+                /*
+                 * Chừa đúng chiều cao header/ticker cộng một khoảng thở 8px.
+                 * Biến này được ticker đồng bộ theo chiều cao header thực tế.
+                 */
+                padding-top: calc(
+                    var(--epl-news-ticker-header-height, 56px)
+                    + 8px
+                ) !important;
                 margin-top: 0 !important;
             }}
         }}
@@ -3718,69 +3724,32 @@ def inject_epl_big_match_card_css():
 
 def inject_main_page_lift_css():
     """
-    Loại bỏ khoảng trống giả ở đầu trang do các container chỉ chứa CSS,
-    JavaScript hoặc các widget đã được position: fixed.
+    Xóa triệt để khoảng trống giả trước nội dung chính trên mobile.
 
-    Nội dung mobile bắt đầu ngay dưới header/ticker 56px, không bị cộng thêm
-    chiều cao của avatar, ticker, nút điểm danh hoặc các script bootstrap.
+    Nguyên nhân không chỉ là padding của block-container. Những widget fixed
+    như avatar, ticker và nút điểm danh vẫn có các wrapper cấp cao nằm trong
+    stVerticalBlock của Streamlit. Wrapper con có thể đã position: fixed hoặc
+    cao 0, nhưng slot cấp cao và `gap` của stVerticalBlock vẫn tiếp tục chiếm
+    diện tích trong luồng trang.
+
+    Cách xử lý:
+    - CSS đặt kích thước dự phòng cho các utility wrapper.
+    - JavaScript tìm đúng slot trực tiếp của từng utility trong block chính.
+    - Đưa toàn bộ các slot đó ra khỏi normal flow.
+    - Xóa riêng gap của block cấp cao, không tác động gap bên trong nội dung.
+    - Đồng bộ lại sau mọi Streamlit rerun/fragment rerender.
     """
     st.markdown(
         """
         <style>
         /* =====================================================
-           BOOTSTRAP KHÔNG ĐƯỢC CHIẾM CHỖ TRONG LUỒNG TRANG
+           UTILITY/FIXED ELEMENT KHÔNG ĐƯỢC CHIẾM CHỖ
            ===================================================== */
 
         div[class*="st-key-global_ui_bootstrap"],
         div[class*="st-key-matches_page_ui_bootstrap"],
         div[class*="st-key-daily_checkin_fab_script_host"] {
             position: absolute !important;
-
-            top: 0 !important;
-            left: 0 !important;
-
-            width: 1px !important;
-            min-width: 0 !important;
-            max-width: 1px !important;
-
-            height: 1px !important;
-            min-height: 0 !important;
-            max-height: 1px !important;
-
-            margin: 0 !important;
-            padding: 0 !important;
-
-            overflow: visible !important;
-            pointer-events: none !important;
-        }
-
-        /*
-         * Đưa cả wrapper Streamlit của các phần tử fixed/utility ra khỏi
-         * flex-flow. Nếu chỉ fixed phần tử con, wrapper rỗng vẫn bị tính gap.
-         */
-        div[data-testid="stElementContainer"]:has(
-            div[class*="st-key-global_ui_bootstrap"]
-        ),
-        div[data-testid="stElementContainer"]:has(
-            div[class*="st-key-matches_page_ui_bootstrap"]
-        ),
-        div[data-testid="stElementContainer"]:has(
-            div[class*="st-key-daily_checkin_fab_script_host"]
-        ),
-        div[data-testid="stElementContainer"]:has(
-            div[class*="st-key-top_right_avatar_popover_shell"]
-        ),
-        div[data-testid="stElementContainer"]:has(
-            div[class*="st-key-daily_checkin_shortcut_button"]
-        ),
-        div[data-testid="stElementContainer"]:has(
-            div[class*="st-key-epl_news_ticker_host"]
-        ),
-        div[data-testid="stFragment"]:has(
-            div[class*="st-key-epl_news_ticker_host"]
-        ) {
-            position: absolute !important;
-
             top: 0 !important;
             left: 0 !important;
 
@@ -3794,21 +3763,78 @@ def inject_main_page_lift_css():
 
             margin: 0 !important;
             padding: 0 !important;
-
             border: 0 !important;
+
             overflow: visible !important;
         }
 
-        div[class*="st-key-global_ui_bootstrap"]
-        div[data-testid="stVerticalBlock"],
-        div[class*="st-key-matches_page_ui_bootstrap"]
-        div[data-testid="stVerticalBlock"],
-        div[class*="st-key-daily_checkin_fab_script_host"]
-        div[data-testid="stVerticalBlock"] {
+        /*
+         * Class này được JavaScript gắn vào đúng flex item trực tiếp của
+         * stVerticalBlock cấp cao. Đây mới là lớp thực sự tạo khoảng trống.
+         */
+        .epl-top-level-utility-slot {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+
+            width: 0 !important;
+            min-width: 0 !important;
+            max-width: 0 !important;
+
+            height: 0 !important;
             min-height: 0 !important;
-            gap: 0 !important;
+            max-height: 0 !important;
+
+            flex: 0 0 0 !important;
+
             margin: 0 !important;
             padding: 0 !important;
+            border: 0 !important;
+
+            overflow: visible !important;
+        }
+
+        .epl-top-level-utility-slot
+        > :is(
+            div[data-testid="stElementContainer"],
+            div[data-testid="stFragment"],
+            div[data-testid="stVerticalBlockBorderWrapper"],
+            div[data-testid="stVerticalBlock"]
+        ) {
+            width: 0 !important;
+            min-width: 0 !important;
+            max-width: 0 !important;
+
+            height: 0 !important;
+            min-height: 0 !important;
+            max-height: 0 !important;
+
+            margin: 0 !important;
+            padding: 0 !important;
+            border: 0 !important;
+
+            overflow: visible !important;
+        }
+
+        /*
+         * Chỉ block cấp cao chứa utility slots và main_page_content_shell
+         * được bỏ gap. Các block bên trong trang vẫn giữ nguyên khoảng cách.
+         */
+        .epl-main-top-vertical-block {
+            position: relative !important;
+            gap: 0 !important;
+            row-gap: 0 !important;
+            column-gap: 0 !important;
+            margin-top: 0 !important;
+            padding-top: 0 !important;
+        }
+
+        .epl-main-content-flow-slot {
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            margin-top: 0 !important;
+            padding-top: 0 !important;
         }
 
         /* =====================================================
@@ -3817,6 +3843,9 @@ def inject_main_page_lift_css():
 
         div[class*="st-key-main_page_content_shell"] {
             position: relative !important;
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
             margin-top: 0 !important;
             padding-top: 0 !important;
         }
@@ -3833,9 +3862,12 @@ def inject_main_page_lift_css():
         div[class*="st-key-main_page_content_shell"]
         div[data-testid="stElementContainer"]:first-child {
             margin-top: 0 !important;
+            padding-top: 0 !important;
         }
 
         @media (max-width: 768px) {
+            html,
+            body,
             [data-testid="stAppViewContainer"],
             [data-testid="stMain"],
             section.main,
@@ -3847,14 +3879,320 @@ def inject_main_page_lift_css():
             .block-container,
             [data-testid="stMainBlockContainer"],
             [data-testid="stAppViewBlockContainer"] {
-                /* Nội dung nằm sát dưới ticker/header 56px. */
-                padding-top: 56px !important;
+                /*
+                 * Không dùng 56px cố định. Ticker ghi chiều cao header thật
+                 * vào CSS variable, nhờ đó mobile thật và trình giả lập đều
+                 * có cùng khoảng cách.
+                 */
+                padding-top: calc(
+                    var(--epl-news-ticker-header-height, 56px)
+                    + 8px
+                ) !important;
+                margin-top: 0 !important;
+            }
+
+            div[class*="st-key-main_page_content_shell"]
+            .wc-hero:first-child {
                 margin-top: 0 !important;
             }
         }
         </style>
         """,
         unsafe_allow_html=True
+    )
+
+    components.html(
+        r"""
+        <script>
+        (() => {
+            const parentWindow = window.parent;
+            const parentDocument = parentWindow.document;
+
+            const controllerKey =
+                "__eplMainTopFlowCompactorV2";
+
+            const oldController =
+                parentWindow[controllerKey];
+
+            if (
+                oldController
+                && typeof oldController.cleanup === "function"
+            ) {
+                oldController.cleanup();
+            }
+
+            const utilitySelectors = [
+                'div[class*="st-key-global_ui_bootstrap"]',
+                'div[class*="st-key-matches_page_ui_bootstrap"]',
+                'div[class*="st-key-top_right_avatar_popover_shell"]',
+                'div[class*="st-key-daily_checkin_shortcut_button"]',
+                'div[class*="st-key-daily_checkin_fab_script_host"]',
+                'div[class*="st-key-epl_news_ticker_host"]'
+            ];
+
+            let animationFrame = 0;
+            let cleaned = false;
+            const delayedTimers = new Set();
+
+            const clearOldClasses = () => {
+                parentDocument
+                    .querySelectorAll(
+                        ".epl-top-level-utility-slot"
+                    )
+                    .forEach((element) => {
+                        element.classList.remove(
+                            "epl-top-level-utility-slot"
+                        );
+                    });
+
+                parentDocument
+                    .querySelectorAll(
+                        ".epl-main-top-vertical-block"
+                    )
+                    .forEach((element) => {
+                        element.classList.remove(
+                            "epl-main-top-vertical-block"
+                        );
+                    });
+
+                parentDocument
+                    .querySelectorAll(
+                        ".epl-main-content-flow-slot"
+                    )
+                    .forEach((element) => {
+                        element.classList.remove(
+                            "epl-main-content-flow-slot"
+                        );
+                    });
+            };
+
+            const findTopVerticalBlock = (mainShell) => {
+                let current = mainShell;
+
+                while (current && current !== parentDocument.body) {
+                    const parent = current.parentElement;
+
+                    if (!parent) {
+                        return null;
+                    }
+
+                    if (
+                        parent.matches(
+                            'div[data-testid="stVerticalBlock"]'
+                        )
+                    ) {
+                        return parent;
+                    }
+
+                    current = parent;
+                }
+
+                return null;
+            };
+
+            const findDirectChildSlot = (
+                target,
+                topVerticalBlock
+            ) => {
+                if (
+                    !target
+                    || !topVerticalBlock
+                    || !topVerticalBlock.contains(target)
+                ) {
+                    return null;
+                }
+
+                let current = target;
+
+                while (
+                    current
+                    && current.parentElement
+                    && current.parentElement !== topVerticalBlock
+                ) {
+                    current = current.parentElement;
+                }
+
+                return (
+                    current
+                    && current.parentElement === topVerticalBlock
+                    ? current
+                    : null
+                );
+            };
+
+            const compactTopFlow = () => {
+                if (cleaned) {
+                    return;
+                }
+
+                const mainShell =
+                    parentDocument.querySelector(
+                        'div[class*="st-key-main_page_content_shell"]'
+                    );
+
+                if (!mainShell) {
+                    return;
+                }
+
+                const topVerticalBlock =
+                    findTopVerticalBlock(mainShell);
+
+                if (!topVerticalBlock) {
+                    return;
+                }
+
+                clearOldClasses();
+
+                topVerticalBlock.classList.add(
+                    "epl-main-top-vertical-block"
+                );
+
+                const mainSlot = findDirectChildSlot(
+                    mainShell,
+                    topVerticalBlock
+                );
+
+                if (mainSlot) {
+                    mainSlot.classList.add(
+                        "epl-main-content-flow-slot"
+                    );
+                }
+
+                const utilitySlots = new Set();
+
+                for (const selector of utilitySelectors) {
+                    parentDocument
+                        .querySelectorAll(selector)
+                        .forEach((target) => {
+                            const slot = findDirectChildSlot(
+                                target,
+                                topVerticalBlock
+                            );
+
+                            if (
+                                slot
+                                && slot !== mainSlot
+                            ) {
+                                utilitySlots.add(slot);
+                            }
+                        });
+                }
+
+                utilitySlots.forEach((slot) => {
+                    slot.classList.add(
+                        "epl-top-level-utility-slot"
+                    );
+                });
+            };
+
+            const scheduleCompact = () => {
+                parentWindow.cancelAnimationFrame(
+                    animationFrame
+                );
+
+                animationFrame =
+                    parentWindow.requestAnimationFrame(
+                        compactTopFlow
+                    );
+            };
+
+            const scheduleCompactBurst = () => {
+                scheduleCompact();
+
+                for (const delay of [60, 160, 320, 620]) {
+                    const timer = parentWindow.setTimeout(
+                        () => {
+                            delayedTimers.delete(timer);
+                            scheduleCompact();
+                        },
+                        delay
+                    );
+
+                    delayedTimers.add(timer);
+                }
+            };
+
+            const observer =
+                new parentWindow.MutationObserver(
+                    scheduleCompact
+                );
+
+            observer.observe(
+                parentDocument.body,
+                {
+                    childList: true,
+                    subtree: true
+                }
+            );
+
+            parentWindow.addEventListener(
+                "resize",
+                scheduleCompactBurst,
+                { passive: true }
+            );
+
+            parentWindow.addEventListener(
+                "orientationchange",
+                scheduleCompactBurst,
+                { passive: true }
+            );
+
+            if (parentWindow.visualViewport) {
+                parentWindow.visualViewport.addEventListener(
+                    "resize",
+                    scheduleCompactBurst,
+                    { passive: true }
+                );
+            }
+
+            const cleanup = () => {
+                if (cleaned) {
+                    return;
+                }
+
+                cleaned = true;
+
+                observer.disconnect();
+
+                parentWindow.cancelAnimationFrame(
+                    animationFrame
+                );
+
+                delayedTimers.forEach((timer) => {
+                    parentWindow.clearTimeout(timer);
+                });
+                delayedTimers.clear();
+
+                parentWindow.removeEventListener(
+                    "resize",
+                    scheduleCompactBurst
+                );
+
+                parentWindow.removeEventListener(
+                    "orientationchange",
+                    scheduleCompactBurst
+                );
+
+                if (parentWindow.visualViewport) {
+                    parentWindow.visualViewport
+                        .removeEventListener(
+                            "resize",
+                            scheduleCompactBurst
+                        );
+                }
+            };
+
+            parentWindow[controllerKey] = {
+                cleanup,
+                compactTopFlow
+            };
+
+            scheduleCompactBurst();
+        })();
+        </script>
+        """,
+        height=0,
+        scrolling=False
     )
 
 def inject_mobile_prediction_score_row_css():
