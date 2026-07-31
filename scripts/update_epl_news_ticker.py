@@ -26,15 +26,27 @@ LOGGER = logging.getLogger("epl_news_ticker")
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
 # Cố định đúng model theo yêu cầu.
-# Script không đọc GEMINI_NEWS_MODEL để tránh workflow cũ ghi đè.
 MODEL_NAME = "gemini-2.5-flash"
 
-MIN_ITEMS = 8
-MAX_ITEMS = 10
-MIN_ITEM_LENGTH = 130
-MAX_ITEM_LENGTH = 220
-MAX_CONTENT_ATTEMPTS = 2
-MAX_OUTPUT_TOKENS = 4096
+# Số lượng tin trong mỗi lần tạo
+MIN_ITEMS = 12
+MAX_ITEMS = 15
+
+# Độ dài mỗi tin, tính cả dấu cách
+MIN_ITEM_LENGTH = 170
+MAX_ITEM_LENGTH = 280
+
+# Cho Gemini thêm cơ hội sửa nếu JSON hoặc nội dung chưa đạt yêu cầu
+MAX_CONTENT_ATTEMPTS = 3
+
+# Tăng ngân sách đầu ra vì số lượng tin và độ dài đều tăng
+MAX_OUTPUT_TOKENS = 8192
+
+# Số tin cũ dùng để kiểm tra trùng lặp
+MAX_PREVIOUS_ITEMS = 20
+
+# Giới hạn tin chuyển nhượng chưa chính thức
+MAX_UNCONFIRMED_TRANSFERS = 4
 
 CURRENT_ITEM_SIMILARITY_LIMIT = 0.84
 PREVIOUS_ITEM_SIMILARITY_LIMIT = 0.97
@@ -199,7 +211,7 @@ def load_previous_items(engine: Engine) -> list[str]:
         if item_text:
             previous_items.append(item_text)
 
-    return previous_items[:MAX_ITEMS]
+    return previous_items[:MAX_PREVIOUS_ITEMS]
 
 
 # ============================================================
@@ -249,7 +261,9 @@ CÁCH XÁC ĐỊNH TIN MỚI
 - So sánh ngày và giờ công bố hoặc cập nhật giữa các nguồn.
 - Ưu tiên thông tin vừa được công bố hoặc vừa có diễn biến mới.
 - Ưu tiên các tin trong vòng 24 giờ gần nhất.
-- Nếu chưa đủ {MIN_ITEMS} tin nổi bật trong 24 giờ gần nhất, có thể mở rộng phạm vi tìm kiếm đến 72 giờ nhưng phải xếp các diễn biến mới nhất lên trước.
+- Nếu chưa đủ {MIN_ITEMS} tin nổi bật trong 24 giờ gần nhất, mở rộng lần lượt sang 48 giờ và tối đa 96 giờ.
+- Khi mở rộng thời gian, chỉ chọn những sự kiện vẫn còn ảnh hưởng trực tiếp đến lực lượng, lịch thi đấu, đội hình, huấn luyện viên hoặc chuyển nhượng của câu lạc bộ Premier League.
+- Không dùng các bài tổng hợp cũ hoặc tin không có diễn biến mới chỉ để đủ số lượng.
 - Không lấy bài viết cũ rồi mô tả như một diễn biến mới.
 - Nếu nhiều bài cùng nói về một sự kiện, chỉ chọn thông tin mới nhất, đầy đủ nhất và đáng tin cậy nhất.
 - Không chọn tin chỉ vì bài viết mới đăng lại nhưng nội dung thực tế đã cũ.
@@ -285,9 +299,24 @@ Mỗi tin phải là một câu tiếng Việt hoàn chỉnh theo phong cách b�
 
 Mỗi câu phải có đủ:
 
-- Chủ thể rõ ràng.
-- Diễn biến hoặc thông tin chính.
-- Bối cảnh, trạng thái xác nhận hoặc tác động đến đội bóng hay trận đấu.
+- Chủ thể rõ ràng, chẳng hạn cầu thủ, huấn luyện viên hoặc câu lạc bộ.
+- Diễn biến chính đang xảy ra.
+- Bối cảnh cần thiết để người đọc hiểu vì sao thông tin này đáng chú ý.
+- Trạng thái xác nhận của thông tin.
+- Tác động cụ thể đến lực lượng, kế hoạch thi đấu, đội hình dự kiến hoặc khả năng dự đoán kết quả trận đấu.
+
+Mỗi tin nên có từ hai đến ba vế câu liên kết tự nhiên, nhưng vẫn phải là một câu hoàn chỉnh.
+
+Khi nguồn tin có thông tin đáng tin cậy, hãy ưu tiên bổ sung các chi tiết như:
+
+- Thời điểm cầu thủ dự kiến trở lại.
+- Trận đấu hoặc giai đoạn cầu thủ có thể vắng mặt.
+- Nguyên nhân của thay đổi lực lượng.
+- Phát biểu hoặc kết luận chính từ huấn luyện viên.
+- Tác động đến vị trí thi đấu hoặc phương án thay thế.
+- Trạng thái hiện tại của thương vụ hoặc quá trình kiểm tra y tế.
+
+Không thêm chi tiết nếu nguồn không xác nhận.
 
 Không viết kiểu headline cụt như:
 
@@ -310,7 +339,7 @@ QUY TẮC BIÊN TẬP
 - Không biến tin đồn thành thông tin chính thức.
 - Không viết hai tin khác nhau về cùng một sự kiện.
 - Không để một câu lạc bộ chiếm phần lớn bản tin.
-- Tin chuyển nhượng chưa hoàn tất không được chiếm quá ba tin.
+- Tin chuyển nhượng chưa hoàn tất không được chiếm quá {MAX_UNCONFIRMED_TRANSFERS} tin.
 - Ưu tiên tin có ảnh hưởng trực tiếp đến lực lượng, phong độ hoặc kết quả trận đấu.
 
 BẢN TIN HIỆN ĐANG HIỂN THỊ
@@ -517,6 +546,30 @@ def validate_ticker_items(
                 f"Tin {index} dài {ticker_length} ký tự, "
                 f"yêu cầu từ {MIN_ITEM_LENGTH} đến {MAX_ITEM_LENGTH}."
             )
+        sentence_detail_markers = (
+            ",",
+            " nhưng ",
+            " trong khi ",
+            " sau khi ",
+            " trước khi ",
+            " khiến ",
+            " qua đó ",
+            " đồng nghĩa ",
+            " vì vậy ",
+            " dự kiến ",
+        )
+        
+        if (
+            ticker_length >= 200
+            and not any(
+                marker in ticker_text.casefold()
+                for marker in sentence_detail_markers
+            )
+        ):
+            validation_errors.append(
+                f"Tin {index} đủ dài nhưng chưa thể hiện rõ "
+                "bối cảnh hoặc tác động."
+            )
 
         if URL_PATTERN.search(ticker_text):
             validation_errors.append(f"Tin {index} chứa URL.")
@@ -598,9 +651,11 @@ def validate_ticker_items(
         and item["information_status"] != "confirmed"
     )
 
-    if unconfirmed_transfers > 3:
+    if unconfirmed_transfers > MAX_UNCONFIRMED_TRANSFERS:
         validation_errors.append(
-            "Có quá ba tin chuyển nhượng chưa được xác nhận."
+            "Có quá "
+            f"{MAX_UNCONFIRMED_TRANSFERS} "
+            "tin chuyển nhượng chưa được xác nhận."
         )
 
     if validation_errors:
