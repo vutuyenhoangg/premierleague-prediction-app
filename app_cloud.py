@@ -113,27 +113,11 @@ NEWS_TICKER_MAX_AGE_HOURS = 48
 NEWS_TICKER_REFRESH_INTERVAL = "10m"
 
 
-def _streamlit_version_tuple(version_text: str) -> tuple[int, int, int]:
-    version_parts = [
-        int(part)
-        for part in re.findall(r"\d+", str(version_text))[:3]
-    ]
-
-    while len(version_parts) < 3:
-        version_parts.append(0)
-
-    return tuple(version_parts[:3])
-
-
-# Streamlit 1.60 sửa duplicate/stale run_every timers. Trên bản cũ, ticker vẫn
-# hiển thị và cập nhật sau mọi tương tác/full rerun, nhưng không tự tạo timer.
-NEWS_TICKER_FRAGMENT_RUN_EVERY = (
-    NEWS_TICKER_REFRESH_INTERVAL
-    if _streamlit_version_tuple(
-        getattr(st, "__version__", "0.0.0")
-    ) >= (1, 60, 0)
-    else None
-)
+# App được cố định ở Streamlit 1.58.0 để giữ nguyên toàn bộ UI hiện tại.
+# Không dùng run_every cho ticker trên bản này. Ticker vẫn được dựng ở lần tải
+# đầu và cập nhật theo các full rerun do thao tác của người dùng, nhưng không
+# tạo auto-rerun nền có thể tích lũy timer trên Safari mobile.
+NEWS_TICKER_FRAGMENT_RUN_EVERY = None
 
 MOBILE_TEAM_NAME_OVERRIDES = {
     "arsenal fc": "Arsenal",
@@ -34887,9 +34871,7 @@ def _render_epl_news_ticker_content():
         )
 
 
-@st.fragment(
-    run_every=NEWS_TICKER_FRAGMENT_RUN_EVERY
-)
+@st.fragment
 def render_epl_news_ticker():
     """
     Tự kiểm tra bản tin mới mà không rerun toàn bộ app.
