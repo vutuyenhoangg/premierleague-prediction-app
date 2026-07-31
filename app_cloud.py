@@ -108,8 +108,32 @@ NEWS_TICKER_ENABLED = True
 # Ticker quá thời gian này sẽ tự ẩn.
 NEWS_TICKER_MAX_AGE_HOURS = 48
 
-# Streamlit kiểm tra dữ liệu mới sau mỗi 2 phút.
-NEWS_TICKER_REFRESH_INTERVAL = "2m"
+# Ticker vẫn tự cập nhật, nhưng giảm tần suất dựng lại iframe trên mobile.
+# 10 phút phù hợp với bản tin thể thao và tránh fragment redraw liên tục.
+NEWS_TICKER_REFRESH_INTERVAL = "10m"
+
+
+def _streamlit_version_tuple(version_text: str) -> tuple[int, int, int]:
+    version_parts = [
+        int(part)
+        for part in re.findall(r"\d+", str(version_text))[:3]
+    ]
+
+    while len(version_parts) < 3:
+        version_parts.append(0)
+
+    return tuple(version_parts[:3])
+
+
+# Streamlit 1.60 sửa duplicate/stale run_every timers. Trên bản cũ, ticker vẫn
+# hiển thị và cập nhật sau mọi tương tác/full rerun, nhưng không tự tạo timer.
+NEWS_TICKER_FRAGMENT_RUN_EVERY = (
+    NEWS_TICKER_REFRESH_INTERVAL
+    if _streamlit_version_tuple(
+        getattr(st, "__version__", "0.0.0")
+    ) >= (1, 60, 0)
+    else None
+)
 
 MOBILE_TEAM_NAME_OVERRIDES = {
     "arsenal fc": "Arsenal",
@@ -1025,50 +1049,38 @@ st.set_page_config(
 
 def enforce_embed_url():
     """
-    Giữ query parameter embed=true nhưng không tạo một iframe JavaScript mới
-    ở mọi lượt rerun khi Streamlit hỗ trợ st.query_params.
+    Giữ query parameter embed=true bằng API native của Streamlit.
+
+    Không dùng iframe JavaScript/location.replace làm fallback nữa vì reload
+    trình duyệt là thao tác rất đắt trên iOS Safari và có thể góp phần tạo vòng
+    tải lại khi tab vừa được khôi phục từ bộ nhớ.
     """
-    query_params_supported = True
+    try:
+        current_embed_value = st.query_params.get("embed")
+    except Exception:
+        # Bản Streamlit quá cũ sẽ tiếp tục chạy bình thường, chỉ không ép embed.
+        return
+
+    if str(current_embed_value).lower() == "true":
+        return
 
     try:
-        current_embed_value = st.query_params.get(
-            "embed"
-        )
+        st.query_params["embed"] = "true"
     except Exception:
-        query_params_supported = False
-        current_embed_value = None
+        return
 
-    if query_params_supported:
-        if str(current_embed_value).lower() != "true":
-            try:
-                st.query_params["embed"] = "true"
-            except Exception:
-                query_params_supported = False
-            else:
-                st.rerun()
-
-        if query_params_supported:
-            return
-
-    # Fallback cho Streamlit cũ.
-    components.html(
-        """
-        <script>
-        (function() {
-            const url = new URL(window.parent.location.href);
-            const hasEmbed = url.searchParams.get("embed") === "true";
-
-            if (!hasEmbed) {
-                url.searchParams.set("embed", "true");
-                window.parent.location.replace(url.toString());
-            }
-        })();
-        </script>
-        """,
-        height=0,
-    )
+    # Chỉ chạy đúng một lần khi URL chưa có embed=true.
+    st.rerun()
 
 cookie_controller = CookieController()
+
+
+def render_parent_script(script_html: str):
+    """Render script trực tiếp trong trang, không tạo iframe V1 mới."""
+    st.html(
+        script_html,
+        unsafe_allow_javascript=True
+    )
 
 def get_avatar_dir() -> Path:
     """
@@ -3724,53 +3736,37 @@ def inject_epl_big_match_card_css():
 
 def inject_main_page_lift_css():
     """
-    Khôi phục nguyên trạng bố cục desktop của phiên bản trước, đồng thời giữ
-    cơ chế xóa khoảng trống triệt để chỉ dành riêng cho mobile.
+    Xóa khoảng trống đầu trang bằng CSS thuần.
 
-    Desktop (>= 769px):
-    - Sử dụng đúng CSS và flow trước bản sửa khoảng trống gần nhất.
-    - Không gắn class nén layout, không xóa gap của stVerticalBlock cấp cao.
-
-    Mobile (<= 768px):
-    - Tìm đúng các slot utility/fixed còn chiếm diện tích.
-    - Đưa chúng ra khỏi normal flow.
-    - Xóa gap thừa trước main_page_content_shell.
-    - Đồng bộ sau Streamlit rerun và thay đổi viewport.
+    Bản trước dùng một iframe JavaScript + MutationObserver trên toàn bộ body,
+    liên tục gắn/xóa class sau mỗi delta của Streamlit. Trên iOS, việc layout bị
+    đổi sau paint tạo cảm giác nhấp nháy và làm tăng CPU/RAM. Bản này dùng :has()
+    để loại đúng các utility slot khỏi normal flow, không quét DOM và không tạo
+    observer/timer nào.
     """
     st.markdown(
         """
         <style>
-        /* =====================================================
-           PHẦN DÙNG CHUNG, GIỮ ĐÚNG HÀNH VI CỦA BẢN TRƯỚC
-           ===================================================== */
-
+        /* Utility host không được chiếm diện tích ở bất kỳ viewport nào. */
         div[class*="st-key-global_ui_bootstrap"],
         div[class*="st-key-matches_page_ui_bootstrap"],
         div[class*="st-key-daily_checkin_fab_script_host"] {
             position: absolute !important;
-
             top: 0 !important;
             left: 0 !important;
-
             width: 1px !important;
             min-width: 0 !important;
             max-width: 1px !important;
-
             height: 1px !important;
             min-height: 0 !important;
             max-height: 1px !important;
-
             margin: 0 !important;
             padding: 0 !important;
-
+            border: 0 !important;
             overflow: visible !important;
             pointer-events: none !important;
         }
 
-        /*
-         * Đây là cơ chế wrapper nguyên bản của phiên bản trước.
-         * Nó tiếp tục được giữ cho desktop để giao diện không thay đổi.
-         */
         div[data-testid="stElementContainer"]:has(
             div[class*="st-key-global_ui_bootstrap"]
         ),
@@ -3793,35 +3789,18 @@ def inject_main_page_lift_css():
             div[class*="st-key-epl_news_ticker_host"]
         ) {
             position: absolute !important;
-
             top: 0 !important;
             left: 0 !important;
-
             width: 0 !important;
             min-width: 0 !important;
             max-width: 0 !important;
-
             height: 0 !important;
             min-height: 0 !important;
             max-height: 0 !important;
-
             margin: 0 !important;
             padding: 0 !important;
-
             border: 0 !important;
             overflow: visible !important;
-        }
-
-        div[class*="st-key-global_ui_bootstrap"]
-        div[data-testid="stVerticalBlock"],
-        div[class*="st-key-matches_page_ui_bootstrap"]
-        div[data-testid="stVerticalBlock"],
-        div[class*="st-key-daily_checkin_fab_script_host"]
-        div[data-testid="stVerticalBlock"] {
-            min-height: 0 !important;
-            gap: 0 !important;
-            margin: 0 !important;
-            padding: 0 !important;
         }
 
         div[class*="st-key-main_page_content_shell"] {
@@ -3839,93 +3818,49 @@ def inject_main_page_lift_css():
             padding-top: 0 !important;
         }
 
-        div[class*="st-key-main_page_content_shell"]
-        div[data-testid="stElementContainer"]:first-child {
-            margin-top: 0 !important;
-        }
-
-        /* =====================================================
-           MOBILE ONLY: NÉN TRIỆT ĐỂ CÁC SLOT RỖNG
-           Tuyệt đối không áp dụng các rule này cho desktop.
-           ===================================================== */
-
         @media (max-width: 768px) {
-            div[class*="st-key-global_ui_bootstrap"],
-            div[class*="st-key-matches_page_ui_bootstrap"],
-            div[class*="st-key-daily_checkin_fab_script_host"] {
-                width: 0 !important;
-                min-width: 0 !important;
-                max-width: 0 !important;
-
-                height: 0 !important;
-                min-height: 0 !important;
-                max-height: 0 !important;
-
-                border: 0 !important;
-            }
-
             /*
-             * JavaScript chỉ gắn class này khi viewport là mobile.
+             * Thu gọn đúng slot trực tiếp chứa utility widget. :has() đã được
+             * code hiện tại sử dụng rộng rãi và không gây mutation/layout loop.
              */
-            .epl-top-level-utility-slot {
+            div[data-testid="stVerticalBlock"]
+            > :is(div, section):has(
+                div[class*="st-key-global_ui_bootstrap"]
+            ),
+            div[data-testid="stVerticalBlock"]
+            > :is(div, section):has(
+                div[class*="st-key-matches_page_ui_bootstrap"]
+            ),
+            div[data-testid="stVerticalBlock"]
+            > :is(div, section):has(
+                div[class*="st-key-top_right_avatar_popover_shell"]
+            ),
+            div[data-testid="stVerticalBlock"]
+            > :is(div, section):has(
+                div[class*="st-key-daily_checkin_shortcut_button"]
+            ),
+            div[data-testid="stVerticalBlock"]
+            > :is(div, section):has(
+                div[class*="st-key-daily_checkin_fab_script_host"]
+            ),
+            div[data-testid="stVerticalBlock"]
+            > :is(div, section):has(
+                div[class*="st-key-epl_news_ticker_host"]
+            ) {
                 position: absolute !important;
                 top: 0 !important;
                 left: 0 !important;
-
                 width: 0 !important;
                 min-width: 0 !important;
                 max-width: 0 !important;
-
                 height: 0 !important;
                 min-height: 0 !important;
                 max-height: 0 !important;
-
                 flex: 0 0 0 !important;
-
                 margin: 0 !important;
                 padding: 0 !important;
                 border: 0 !important;
-
                 overflow: visible !important;
-            }
-
-            .epl-top-level-utility-slot
-            > :is(
-                div[data-testid="stElementContainer"],
-                div[data-testid="stFragment"],
-                div[data-testid="stVerticalBlockBorderWrapper"],
-                div[data-testid="stVerticalBlock"]
-            ) {
-                width: 0 !important;
-                min-width: 0 !important;
-                max-width: 0 !important;
-
-                height: 0 !important;
-                min-height: 0 !important;
-                max-height: 0 !important;
-
-                margin: 0 !important;
-                padding: 0 !important;
-                border: 0 !important;
-
-                overflow: visible !important;
-            }
-
-            .epl-main-top-vertical-block {
-                position: relative !important;
-                gap: 0 !important;
-                row-gap: 0 !important;
-                column-gap: 0 !important;
-                margin-top: 0 !important;
-                padding-top: 0 !important;
-            }
-
-            .epl-main-content-flow-slot {
-                width: 100% !important;
-                min-width: 0 !important;
-                max-width: 100% !important;
-                margin-top: 0 !important;
-                padding-top: 0 !important;
             }
 
             html,
@@ -3955,369 +3890,50 @@ def inject_main_page_lift_css():
             }
 
             div[class*="st-key-main_page_content_shell"]
-            div[data-testid="stElementContainer"]:first-child {
-                padding-top: 0 !important;
-            }
-
+            div[data-testid="stElementContainer"]:first-child,
             div[class*="st-key-main_page_content_shell"]
             .wc-hero:first-child {
                 margin-top: 0 !important;
+                padding-top: 0 !important;
+            }
+
+            /*
+             * iOS Safari dễ thiếu bộ nhớ với nhiều lớp compositing động.
+             * Giữ nguyên màu sắc/viền nhưng dừng các shimmer trang trí trên
+             * mobile; desktop hoàn toàn không đổi.
+             */
+            div[class*="st-key-match_card_"]::before {
+                animation: none !important;
+                filter: none !important;
+                will-change: auto !important;
+            }
+
+            div[class*="st-key-match_card_"]::after {
+                transform: none !important;
+                will-change: auto !important;
+            }
+
+            .epl-big-match-label,
+            div[class*="st-key-match_card_big_"]
+            .epl-big-match-ribbon::before,
+            .epl-finished-score-wrap::after {
+                animation: none !important;
+            }
+
+            div[class*="st-key-top_right_avatar_popover_shell"],
+            div[class*="st-key-daily_checkin_shortcut_button"] {
+                will-change: auto !important;
+            }
+
+            div[class*="st-key-top_right_avatar_popover_shell"].epl-avatar-dragging,
+            div[class*="st-key-daily_checkin-shortcut-button"].epl-checkin-dragging,
+            #epl-mobile-checkin-fab.epl-checkin-dragging {
+                will-change: left, top !important;
             }
         }
         </style>
         """,
         unsafe_allow_html=True
-    )
-
-    components.html(
-        r"""
-        <script>
-        (() => {
-            const parentWindow = window.parent;
-            const parentDocument = parentWindow.document;
-            const mobileQuery = parentWindow.matchMedia(
-                "(max-width: 768px)"
-            );
-
-            const controllerKey =
-                "__eplMainTopFlowCompactorV3MobileOnly";
-
-            const legacyControllerKeys = [
-                "__eplMainTopFlowCompactorV2",
-                controllerKey
-            ];
-
-            for (const key of legacyControllerKeys) {
-                const oldController = parentWindow[key];
-
-                if (
-                    oldController
-                    && typeof oldController.cleanup === "function"
-                ) {
-                    oldController.cleanup();
-                }
-            }
-
-            const utilitySelectors = [
-                'div[class*="st-key-global_ui_bootstrap"]',
-                'div[class*="st-key-matches_page_ui_bootstrap"]',
-                'div[class*="st-key-top_right_avatar_popover_shell"]',
-                'div[class*="st-key-daily_checkin_shortcut_button"]',
-                'div[class*="st-key-daily_checkin_fab_script_host"]',
-                'div[class*="st-key-epl_news_ticker_host"]'
-            ];
-
-            let animationFrame = 0;
-            let cleaned = false;
-            const delayedTimers = new Set();
-
-            const clearCompactorClasses = () => {
-                parentDocument
-                    .querySelectorAll(
-                        ".epl-top-level-utility-slot"
-                    )
-                    .forEach((element) => {
-                        element.classList.remove(
-                            "epl-top-level-utility-slot"
-                        );
-                    });
-
-                parentDocument
-                    .querySelectorAll(
-                        ".epl-main-top-vertical-block"
-                    )
-                    .forEach((element) => {
-                        element.classList.remove(
-                            "epl-main-top-vertical-block"
-                        );
-                    });
-
-                parentDocument
-                    .querySelectorAll(
-                        ".epl-main-content-flow-slot"
-                    )
-                    .forEach((element) => {
-                        element.classList.remove(
-                            "epl-main-content-flow-slot"
-                        );
-                    });
-            };
-
-            const findTopVerticalBlock = (mainShell) => {
-                let current = mainShell;
-
-                while (current && current !== parentDocument.body) {
-                    const parent = current.parentElement;
-
-                    if (!parent) {
-                        return null;
-                    }
-
-                    if (
-                        parent.matches(
-                            'div[data-testid="stVerticalBlock"]'
-                        )
-                    ) {
-                        return parent;
-                    }
-
-                    current = parent;
-                }
-
-                return null;
-            };
-
-            const findDirectChildSlot = (
-                target,
-                topVerticalBlock
-            ) => {
-                if (
-                    !target
-                    || !topVerticalBlock
-                    || !topVerticalBlock.contains(target)
-                ) {
-                    return null;
-                }
-
-                let current = target;
-
-                while (
-                    current
-                    && current.parentElement
-                    && current.parentElement !== topVerticalBlock
-                ) {
-                    current = current.parentElement;
-                }
-
-                return (
-                    current
-                    && current.parentElement === topVerticalBlock
-                    ? current
-                    : null
-                );
-            };
-
-            const compactMobileTopFlow = () => {
-                if (cleaned) {
-                    return;
-                }
-
-                /*
-                 * Quan trọng: desktop phải trở về nguyên trạng.
-                 * Không gắn bất kỳ class nén layout nào khi rộng > 768px.
-                 */
-                if (!mobileQuery.matches) {
-                    clearCompactorClasses();
-                    return;
-                }
-
-                const mainShell =
-                    parentDocument.querySelector(
-                        'div[class*="st-key-main_page_content_shell"]'
-                    );
-
-                if (!mainShell) {
-                    return;
-                }
-
-                const topVerticalBlock =
-                    findTopVerticalBlock(mainShell);
-
-                if (!topVerticalBlock) {
-                    return;
-                }
-
-                clearCompactorClasses();
-
-                topVerticalBlock.classList.add(
-                    "epl-main-top-vertical-block"
-                );
-
-                const mainSlot = findDirectChildSlot(
-                    mainShell,
-                    topVerticalBlock
-                );
-
-                if (mainSlot) {
-                    mainSlot.classList.add(
-                        "epl-main-content-flow-slot"
-                    );
-                }
-
-                const utilitySlots = new Set();
-
-                for (const selector of utilitySelectors) {
-                    parentDocument
-                        .querySelectorAll(selector)
-                        .forEach((target) => {
-                            const slot = findDirectChildSlot(
-                                target,
-                                topVerticalBlock
-                            );
-
-                            if (
-                                slot
-                                && slot !== mainSlot
-                            ) {
-                                utilitySlots.add(slot);
-                            }
-                        });
-                }
-
-                utilitySlots.forEach((slot) => {
-                    slot.classList.add(
-                        "epl-top-level-utility-slot"
-                    );
-                });
-            };
-
-            const scheduleCompact = () => {
-                parentWindow.cancelAnimationFrame(
-                    animationFrame
-                );
-
-                animationFrame =
-                    parentWindow.requestAnimationFrame(
-                        compactMobileTopFlow
-                    );
-            };
-
-            const clearDelayedTimers = () => {
-                delayedTimers.forEach((timer) => {
-                    parentWindow.clearTimeout(timer);
-                });
-                delayedTimers.clear();
-            };
-
-            const scheduleCompactBurst = () => {
-                clearDelayedTimers();
-
-                if (!mobileQuery.matches) {
-                    parentWindow.cancelAnimationFrame(
-                        animationFrame
-                    );
-                    clearCompactorClasses();
-                    return;
-                }
-
-                scheduleCompact();
-
-                for (const delay of [60, 160, 320, 620]) {
-                    const timer = parentWindow.setTimeout(
-                        () => {
-                            delayedTimers.delete(timer);
-                            scheduleCompact();
-                        },
-                        delay
-                    );
-
-                    delayedTimers.add(timer);
-                }
-            };
-
-            const observer =
-                new parentWindow.MutationObserver(
-                    () => {
-                        if (mobileQuery.matches) {
-                            scheduleCompact();
-                        }
-                    }
-                );
-
-            observer.observe(
-                parentDocument.body,
-                {
-                    childList: true,
-                    subtree: true
-                }
-            );
-
-            const viewportHandler = () => {
-                scheduleCompactBurst();
-            };
-
-            const mediaHandler = () => {
-                scheduleCompactBurst();
-            };
-
-            parentWindow.addEventListener(
-                "resize",
-                viewportHandler,
-                { passive: true }
-            );
-
-            parentWindow.addEventListener(
-                "orientationchange",
-                viewportHandler,
-                { passive: true }
-            );
-
-            mobileQuery.addEventListener(
-                "change",
-                mediaHandler
-            );
-
-            if (parentWindow.visualViewport) {
-                parentWindow.visualViewport.addEventListener(
-                    "resize",
-                    viewportHandler,
-                    { passive: true }
-                );
-            }
-
-            const cleanup = () => {
-                if (cleaned) {
-                    return;
-                }
-
-                cleaned = true;
-
-                observer.disconnect();
-
-                parentWindow.cancelAnimationFrame(
-                    animationFrame
-                );
-
-                clearDelayedTimers();
-                clearCompactorClasses();
-
-                parentWindow.removeEventListener(
-                    "resize",
-                    viewportHandler
-                );
-
-                parentWindow.removeEventListener(
-                    "orientationchange",
-                    viewportHandler
-                );
-
-                mobileQuery.removeEventListener(
-                    "change",
-                    mediaHandler
-                );
-
-                if (parentWindow.visualViewport) {
-                    parentWindow.visualViewport
-                        .removeEventListener(
-                            "resize",
-                            viewportHandler
-                        );
-                }
-            };
-
-            parentWindow[controllerKey] = {
-                cleanup,
-                compactMobileTopFlow
-            };
-
-            /* Xóa class còn sót từ bản trước trước khi áp dụng viewport mới. */
-            clearCompactorClasses();
-            scheduleCompactBurst();
-        })();
-        </script>
-        """,
-        height=0,
-        scrolling=False
     )
 
 def inject_mobile_prediction_score_row_css():
@@ -6270,8 +5886,7 @@ def inject_prediction_score_readonly_script():
     Nút tăng/giảm native của Streamlit vẫn hoạt động bình thường.
     Không tác động đến number_input ở trang Admin.
     """
-    components.html(
-        """
+    render_parent_script("""
         <script>
         (() => {
             const parentWindow = window.parent;
@@ -6404,10 +6019,7 @@ def inject_prediction_score_readonly_script():
             parentWindow[observerKey] = observer;
         })();
         </script>
-        """,
-        height=0,
-        scrolling=False
-    )
+        """)
 
 def inject_mobile_team_name_display_script():
     """
@@ -6718,11 +6330,7 @@ def inject_mobile_team_name_display_script():
         aliases_json
     )
 
-    components.html(
-        script_html,
-        height=0,
-        scrolling=False
-    )
+    render_parent_script(script_html)
 
 def inject_match_datepicker_calendar_theme(match_dates):
     today = today_vietnam_date()
@@ -7324,8 +6932,7 @@ def inject_match_datepicker_calendar_theme(match_dates):
         """,
         unsafe_allow_html=True
     )
-    components.html(
-        """
+    render_parent_script("""
         <script>
         (() => {
             const parentWindow = window.parent;
@@ -7638,10 +7245,7 @@ def inject_match_datepicker_calendar_theme(match_dates):
         """.replace(
             "__WC_MATCH_DATES__",
             match_date_iso_js
-        ),
-        height=0,
-        scrolling=False
-    )
+        ))
 
 
 def inject_mobile_match_title_css():
@@ -7806,8 +7410,7 @@ def inject_desktop_match_vs_style():
         unsafe_allow_html=True
     )
 
-    components.html(
-        """
+    render_parent_script("""
         <script>
         (() => {
             const parentWindow = window.parent;
@@ -7942,10 +7545,7 @@ def inject_desktop_match_vs_style():
             parentWindow[observerKey] = observer;
         })();
         </script>
-        """,
-        height=0,
-        scrolling=False
-    )
+        """)
 
 @st.dialog(" ")
 def render_daily_checkin_dialog(user_id: int):
@@ -10296,7 +9896,7 @@ def render_daily_checkin_shortcut_button(user_id: int):
             );
 
             if (mutationObserver) {
-                mutationObserver.disconnect();
+                layoutMutationObserver.disconnect();
             }
 
             const staleFab =
@@ -16512,8 +16112,7 @@ def inject_match_countdown_runtime():
         unsafe_allow_html=True
     )
 
-    components.html(
-        """
+    render_parent_script("""
         <script>
         (() => {
             const parentWindow = window.parent;
@@ -16629,10 +16228,7 @@ def inject_match_countdown_runtime():
             };
         })();
         </script>
-        """,
-        height=0,
-        scrolling=False
-    )
+        """)
 
 
 def render_status_badge(status_info, row=None):
@@ -30357,8 +29953,7 @@ def render_prediction_round_filter(
                 label_visibility="collapsed"
             )
 
-    components.html(
-        """
+    render_parent_script("""
         <script>
         (() => {
             const parentWindow = window.parent;
@@ -30499,10 +30094,7 @@ def render_prediction_round_filter(
             };
         })();
         </script>
-        """,
-        height=0,
-        scrolling=False
-    )
+        """)
 
     return selected_round
 
@@ -34949,10 +34541,19 @@ def _build_epl_news_ticker_document(
                     );
             };
 
+            const clearDelayedTimers = () => {
+                delayedTimers.forEach((timer) => {
+                    parentWindow.clearTimeout(timer);
+                });
+                delayedTimers.clear();
+            };
+
             const scheduleSyncBurst = () => {
+                clearDelayedTimers();
                 scheduleSync();
 
-                for (const delay of [80, 180, 320, 520]) {
+                // Hai lần hậu kiểm là đủ cho transition sidebar/header.
+                for (const delay of [120, 360]) {
                     const timer = parentWindow.setTimeout(
                         () => {
                             delayedTimers.delete(timer);
@@ -34965,23 +34566,37 @@ def _build_epl_news_ticker_document(
                 }
             };
 
-            const mutationObserver =
+            /*
+             * Chỉ theo dõi đúng sidebar/menu. Bản cũ observe toàn bộ body và
+             * tạo bốn timeout cho mỗi mutation, gây timer avalanche trên iOS.
+             */
+            const layoutMutationObserver =
                 new parentWindow.MutationObserver(
                     scheduleSyncBurst
                 );
 
-            mutationObserver.observe(
-                parentDocument.body,
-                {
-                    childList: true,
-                    subtree: true,
-                    attributes: true,
-                    attributeFilter: [
-                        "class",
-                        "aria-expanded"
-                    ]
-                }
-            );
+            [
+                parentDocument.querySelector(
+                    'section[data-testid="stSidebar"]'
+                ),
+                parentDocument.querySelector(
+                    '[data-testid="stExpandSidebarButton"], '
+                    + '[data-testid="stSidebarCollapsedControl"], '
+                    + '[data-testid="stSidebarCollapseButton"]'
+                )
+            ].filter(Boolean).forEach((target) => {
+                layoutMutationObserver.observe(
+                    target,
+                    {
+                        attributes: true,
+                        attributeFilter: [
+                            "class",
+                            "style",
+                            "aria-expanded"
+                        ]
+                    }
+                );
+            });
 
             const resizeObserver =
                 "ResizeObserver" in parentWindow
@@ -35027,13 +34642,6 @@ def _build_epl_news_ticker_document(
                 parentWindow.visualViewport
                     .addEventListener(
                         "resize",
-                        scheduleSyncBurst,
-                        { passive: true }
-                    );
-
-                parentWindow.visualViewport
-                    .addEventListener(
-                        "scroll",
                         scheduleSync,
                         { passive: true }
                     );
@@ -35076,12 +34684,6 @@ def _build_epl_news_ticker_document(
                     parentWindow.visualViewport
                         .removeEventListener(
                             "resize",
-                            scheduleSyncBurst
-                        );
-
-                    parentWindow.visualViewport
-                        .removeEventListener(
-                            "scroll",
                             scheduleSync
                         );
                 }
@@ -35286,7 +34888,7 @@ def _render_epl_news_ticker_content():
 
 
 @st.fragment(
-    run_every=NEWS_TICKER_REFRESH_INTERVAL
+    run_every=NEWS_TICKER_FRAGMENT_RUN_EVERY
 )
 def render_epl_news_ticker():
     """
