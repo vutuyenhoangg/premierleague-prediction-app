@@ -103,6 +103,14 @@ ENABLE_FINAL_POSTER = False
 ENABLE_AI_FEATURES = True
 AI_SUGGESTION_MAX_DAYS = 3
 
+NEWS_TICKER_ENABLED = True
+
+# Ticker quá thời gian này sẽ tự ẩn.
+NEWS_TICKER_MAX_AGE_HOURS = 48
+
+# Streamlit kiểm tra dữ liệu mới sau mỗi 2 phút.
+NEWS_TICKER_REFRESH_INTERVAL = "2m"
+
 MOBILE_TEAM_NAME_OVERRIDES = {
     "arsenal fc": "Arsenal",
     "aston villa fc": "Aston Villa",
@@ -32978,6 +32986,696 @@ def page_admin():
             "Đã chấm lại toàn bộ dự đoán theo luật mới."
         )
 
+# ============================================================
+# EPL NEWS TICKER
+# ============================================================
+
+@st.cache_data(
+    ttl=60,
+    show_spinner=False,
+    max_entries=2
+)
+def load_latest_epl_news_ticker():
+    """
+    Đọc bản ticker hiện tại từ Supabase.
+
+    Tính năng này là phụ:
+    - Database lỗi thì ticker tự ẩn.
+    - Không làm gián đoạn các trang khác.
+    - Cache 60 giây để tránh query liên tục.
+    """
+
+    row = fetch_one(
+        """
+        SELECT
+            generated_at,
+            items,
+            ticker_text,
+            model_name,
+            updated_at
+        FROM epl_news_ticker
+        WHERE id = 1
+          AND updated_at >= (
+              NOW()
+              - make_interval(
+                    hours => :max_age_hours
+                )
+          )
+        LIMIT 1
+        """,
+        {
+            "max_age_hours": int(
+                NEWS_TICKER_MAX_AGE_HOURS
+            )
+        }
+    )
+
+    if row is None:
+        return None
+
+    row = dict(row)
+
+    raw_items = row.get("items")
+
+    # Một số driver có thể trả JSONB dưới dạng chuỗi.
+    if isinstance(raw_items, str):
+        try:
+            raw_items = json.loads(
+                raw_items
+            )
+        except json.JSONDecodeError:
+            LOGGER.warning(
+                "EPL news ticker items contain invalid JSON."
+            )
+            return None
+
+    if not isinstance(raw_items, list):
+        return None
+
+    ticker_items = []
+
+    for raw_item in raw_items:
+        if not isinstance(raw_item, dict):
+            continue
+
+        item_text = re.sub(
+            r"\s+",
+            " ",
+            str(
+                raw_item.get(
+                    "text",
+                    ""
+                )
+            )
+        ).strip()
+
+        if item_text:
+            ticker_items.append(
+                item_text
+            )
+
+    if not ticker_items:
+        return None
+
+    row["items"] = ticker_items
+
+    return row
+
+
+def _render_epl_news_ticker_content():
+    """
+    Render phần nội dung ticker.
+
+    Tách thành hàm riêng để có thể dùng với st.fragment.
+    """
+
+    if not NEWS_TICKER_ENABLED:
+        return
+
+    try:
+        ticker_data = (
+            load_latest_epl_news_ticker()
+        )
+
+    except Exception:
+        LOGGER.exception(
+            "Failed to load EPL news ticker."
+        )
+        return
+
+    if not ticker_data:
+        return
+
+    ticker_items = ticker_data.get(
+        "items",
+        []
+    )
+
+    if not ticker_items:
+        return
+
+    safe_items = [
+        html.escape(
+            str(item),
+            quote=False
+        )
+        for item in ticker_items
+    ]
+
+    item_markup = "".join(
+        (
+            '<span class="epl-news-item">'
+            f'{item}'
+            '</span>'
+
+            '<span '
+            'class="epl-news-separator" '
+            'aria-hidden="true">'
+            '◆'
+            '</span>'
+        )
+        for item in safe_items
+    )
+
+    total_characters = sum(
+        len(item)
+        for item in ticker_items
+    )
+
+    # Tự điều chỉnh tốc độ theo tổng độ dài bản tin.
+    animation_duration = max(
+        100,
+        min(
+            220,
+            round(
+                total_characters / 7
+            )
+        )
+    )
+
+    generated_at = ticker_data.get(
+        "generated_at"
+    )
+
+    generated_label = ""
+
+    if generated_at:
+        try:
+            if isinstance(
+                generated_at,
+                str
+            ):
+                generated_at = (
+                    datetime.fromisoformat(
+                        generated_at.replace(
+                            "Z",
+                            "+00:00"
+                        )
+                    )
+                )
+
+            if isinstance(
+                generated_at,
+                datetime
+            ):
+                if (
+                    generated_at.tzinfo
+                    is None
+                ):
+                    generated_at = (
+                        generated_at.replace(
+                            tzinfo=timezone.utc
+                        )
+                    )
+
+                generated_vietnam = (
+                    generated_at.astimezone(
+                        timezone(
+                            timedelta(hours=7)
+                        )
+                    )
+                )
+
+                generated_label = (
+                    generated_vietnam.strftime(
+                        "%H:%M %d/%m"
+                    )
+                )
+
+        except Exception:
+            generated_label = ""
+
+    label_title = "Tin EPL mới nhất"
+
+    if generated_label:
+        label_title += (
+            f" · Cập nhật {generated_label}"
+        )
+
+    safe_label_title = html.escape(
+        label_title,
+        quote=True
+    )
+
+    ticker_css = f"""
+    <style>
+    div[class*="st-key-epl_news_ticker_shell"] {{
+        width: 100% !important;
+        max-width: 100% !important;
+
+        margin:
+            0 0 12px 0 !important;
+
+        padding:
+            0 !important;
+    }}
+
+    div[class*="st-key-epl_news_ticker_shell"]
+    > div[data-testid="stVerticalBlock"] {{
+        gap: 0 !important;
+    }}
+
+    div[class*="st-key-epl_news_ticker_shell"]
+    div[data-testid="stElementContainer"] {{
+        margin:
+            0 !important;
+    }}
+
+    .epl-news-shell {{
+        --ticker-duration:
+            {animation_duration}s;
+
+        display:
+            grid;
+
+        grid-template-columns:
+            auto minmax(0, 1fr);
+
+        width:
+            100%;
+
+        min-width:
+            0;
+
+        height:
+            40px;
+
+        min-height:
+            40px;
+
+        box-sizing:
+            border-box;
+
+        overflow:
+            hidden;
+
+        background:
+            linear-gradient(
+                90deg,
+                #210027 0%,
+                #37003C 46%,
+                #27002E 100%
+            );
+
+        border:
+            1px solid
+            rgba(55, 0, 60, 0.24);
+
+        border-radius:
+            11px;
+
+        box-shadow:
+            0 8px 22px
+            rgba(55, 0, 60, 0.13),
+            inset 0 1px 0
+            rgba(255, 255, 255, 0.10);
+
+        user-select:
+            none;
+
+        pointer-events:
+            none;
+    }}
+
+    .epl-news-label {{
+        position:
+            relative;
+
+        z-index:
+            2;
+
+        display:
+            inline-flex;
+
+        align-items:
+            center;
+
+        justify-content:
+            center;
+
+        gap:
+            8px;
+
+        min-width:
+            103px;
+
+        height:
+            40px;
+
+        box-sizing:
+            border-box;
+
+        padding:
+            0 16px 0 13px;
+
+        background:
+            linear-gradient(
+                135deg,
+                #FF2882 0%,
+                #D90D69 100%
+            );
+
+        color:
+            #FFFFFF;
+
+        font-size:
+            10px;
+
+        font-weight:
+            950;
+
+        line-height:
+            1;
+
+        letter-spacing:
+            0.075em;
+
+        white-space:
+            nowrap;
+
+        text-transform:
+            uppercase;
+
+        clip-path:
+            polygon(
+                0 0,
+                calc(100% - 12px) 0,
+                100% 50%,
+                calc(100% - 12px) 100%,
+                0 100%
+            );
+    }}
+
+    .epl-news-label-dot {{
+        width:
+            6px;
+
+        height:
+            6px;
+
+        flex:
+            0 0 auto;
+
+        background:
+            #00FF85;
+
+        transform:
+            rotate(45deg);
+
+        box-shadow:
+            0 0 8px
+            rgba(0, 255, 133, 0.62);
+    }}
+
+    .epl-news-viewport {{
+        width:
+            100%;
+
+        min-width:
+            0;
+
+        height:
+            40px;
+
+        overflow:
+            hidden;
+
+        box-sizing:
+            border-box;
+    }}
+
+    .epl-news-track {{
+        display:
+            flex;
+
+        align-items:
+            center;
+
+        width:
+            max-content;
+
+        height:
+            40px;
+
+        will-change:
+            transform;
+
+        animation:
+            eplNewsTickerAnimation
+            var(--ticker-duration)
+            linear
+            infinite;
+    }}
+
+    .epl-news-group {{
+        display:
+            inline-flex;
+
+        align-items:
+            center;
+
+        flex:
+            0 0 auto;
+
+        height:
+            40px;
+
+        box-sizing:
+            border-box;
+
+        padding-right:
+            28px;
+    }}
+
+    .epl-news-item {{
+        display:
+            inline-block;
+
+        color:
+            #FFFFFF;
+
+        font-size:
+            13px;
+
+        font-weight:
+            650;
+
+        line-height:
+            1.2;
+
+        letter-spacing:
+            0.002em;
+
+        white-space:
+            nowrap;
+    }}
+
+    .epl-news-separator {{
+        display:
+            inline-flex;
+
+        align-items:
+            center;
+
+        justify-content:
+            center;
+
+        flex:
+            0 0 auto;
+
+        margin:
+            0 20px;
+
+        color:
+            #00FF85;
+
+        font-size:
+            7px;
+
+        line-height:
+            1;
+
+        filter:
+            drop-shadow(
+                0 0 4px
+                rgba(0, 255, 133, 0.48)
+            );
+    }}
+
+    @keyframes eplNewsTickerAnimation {{
+        from {{
+            transform:
+                translate3d(
+                    0,
+                    0,
+                    0
+                );
+        }}
+
+        to {{
+            transform:
+                translate3d(
+                    -50%,
+                    0,
+                    0
+                );
+        }}
+    }}
+
+    @media (max-width: 768px) {{
+        div[class*="st-key-epl_news_ticker_shell"] {{
+            margin-bottom:
+                10px !important;
+        }}
+
+        .epl-news-shell {{
+            height:
+                35px;
+
+            min-height:
+                35px;
+
+            border-radius:
+                9px;
+        }}
+
+        .epl-news-label {{
+            min-width:
+                73px;
+
+            height:
+                35px;
+
+            gap:
+                6px;
+
+            padding:
+                0 9px 0 8px;
+
+            font-size:
+                7.8px;
+
+            letter-spacing:
+                0.045em;
+        }}
+
+        .epl-news-label-dot {{
+            width:
+                5px;
+
+            height:
+                5px;
+        }}
+
+        .epl-news-viewport,
+        .epl-news-track,
+        .epl-news-group {{
+            height:
+                35px;
+        }}
+
+        .epl-news-item {{
+            font-size:
+                11.5px;
+
+            font-weight:
+                650;
+        }}
+
+        .epl-news-separator {{
+            margin:
+                0 15px;
+
+            font-size:
+                6px;
+        }}
+
+        .epl-news-group {{
+            padding-right:
+                22px;
+        }}
+    }}
+
+    @media (
+        prefers-reduced-motion: reduce
+    ) {{
+        .epl-news-track {{
+            animation:
+                none !important;
+
+            transform:
+                none !important;
+        }}
+
+        .epl-news-group:nth-child(2) {{
+            display:
+                none !important;
+        }}
+    }}
+    </style>
+    """
+
+    ticker_html = f"""
+    <div
+        class="epl-news-shell"
+        role="region"
+        aria-label="{safe_label_title}"
+        title="{safe_label_title}"
+    >
+        <div
+            class="epl-news-label"
+            aria-hidden="true"
+        >
+            <span
+                class="epl-news-label-dot"
+            ></span>
+
+            <span>
+                TIN EPL
+            </span>
+        </div>
+
+        <div
+            class="epl-news-viewport"
+        >
+            <div
+                class="epl-news-track"
+                aria-hidden="true"
+            >
+                <div
+                    class="epl-news-group"
+                >
+                    {item_markup}
+                </div>
+
+                <div
+                    class="epl-news-group"
+                >
+                    {item_markup}
+                </div>
+            </div>
+        </div>
+    </div>
+    """
+
+    with st.container(
+        key="epl_news_ticker_shell"
+    ):
+        st.markdown(
+            ticker_css + ticker_html,
+            unsafe_allow_html=True
+        )
+
+
+@st.fragment(
+    run_every=NEWS_TICKER_REFRESH_INTERVAL
+)
+def render_epl_news_ticker():
+    """
+    Tự kiểm tra bản tin mới mà không rerun toàn bộ app.
+    """
+
+    _render_epl_news_ticker_content()
 
 def render_footer():
     if FOOTER_PROJECT_URL:
@@ -33191,7 +33889,11 @@ def main():
             )
 
     render_display_name_feedback_popup()
-
+    
+    # Hiển thị ticker tin tức Premier League
+    # trên mọi trang sau khi người dùng đăng nhập.
+    render_epl_news_ticker()
+    
     # Chỉ nạp CSS/JavaScript chuyên biệt của trang đang mở.
     # Trước đây mọi trang, kể cả đăng nhập, đều phải nhận toàn bộ CSS card
     # và ba DOM observer của trang dự đoán dù không sử dụng.
