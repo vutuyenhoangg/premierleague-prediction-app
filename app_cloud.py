@@ -33350,19 +33350,19 @@ def _build_epl_news_ticker_document(
             justify-content: center;
 
             flex:
-                0 0 104px;
+                0 0 76px;
 
-            width: 104px;
-            min-width: 104px;
-            max-width: 104px;
+            width: 76px;
+            min-width: 76px;
+            max-width: 76px;
 
             height: 40px;
 
-            gap: 8px;
+            gap: 6px;
 
             margin: 0;
             padding:
-                0 17px 0 13px;
+                0 13px 0 10px;
 
             background:
                 linear-gradient(
@@ -33560,20 +33560,20 @@ def _build_epl_news_ticker_document(
             }}
 
             .ticker-label {{
-                flex-basis: 74px;
+                flex-basis: 62px;
 
-                width: 74px;
-                min-width: 74px;
-                max-width: 74px;
+                width: 62px;
+                min-width: 62px;
+                max-width: 62px;
 
                 height: 35px;
 
-                gap: 6px;
+                gap: 5px;
 
                 padding:
-                    0 11px 0 8px;
+                    0 9px 0 7px;
 
-                font-size: 7.8px;
+                font-size: 7.6px;
                 letter-spacing: 0.045em;
             }}
 
@@ -33640,7 +33640,7 @@ def _build_epl_news_ticker_document(
                 <span
                     class="ticker-label-text"
                 >
-                    TIN EPL
+                    NEWS
                 </span>
             </div>
 
@@ -33706,11 +33706,92 @@ def _render_epl_news_ticker_content():
     if not ticker_document:
         return
 
-    components.html(
-        ticker_document,
-        height=52,
-        scrolling=False
+    ticker_host_css = """
+    <style>
+    :root {
+        --epl-streamlit-header-height: 3.75rem;
+    }
+
+    /*
+     * Kéo riêng ticker lên đúng một chiều cao header mặc định
+     * mà không làm thay đổi vị trí hero và nội dung trang bên dưới.
+     */
+    div[class*="st-key-epl_news_ticker_host"] {
+        position: relative !important;
+        z-index: 1000001 !important;
+
+        width: 100% !important;
+        max-width: 100% !important;
+
+        margin-top:
+            calc(-1 * var(--epl-streamlit-header-height)) !important;
+        margin-bottom: 12px !important;
+
+        padding: 0 !important;
+
+        overflow: visible !important;
+    }
+
+    div[class*="st-key-epl_news_ticker_host"]
+    > :is(
+        div[data-testid="stVerticalBlock"],
+        div[data-testid="stVerticalBlockBorderWrapper"]
+    ) {
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        gap: 0 !important;
+        overflow: visible !important;
+    }
+
+    div[class*="st-key-epl_news_ticker_host"]
+    div[data-testid="stElementContainer"] {
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    div[class*="st-key-epl_news_ticker_host"] iframe {
+        display: block !important;
+        width: 100% !important;
+        height: 52px !important;
+
+        margin: 0 !important;
+        padding: 0 !important;
+
+        border: 0 !important;
+        background: transparent !important;
+    }
+
+    @media (max-width: 768px) {
+        :root {
+            --epl-streamlit-header-height: 3.5rem;
+        }
+
+        div[class*="st-key-epl_news_ticker_host"] {
+            margin-bottom: 10px !important;
+        }
+
+        div[class*="st-key-epl_news_ticker_host"] iframe {
+            height: 44px !important;
+        }
+    }
+    </style>
+    """
+
+    st.markdown(
+        ticker_host_css,
+        unsafe_allow_html=True
     )
+
+    with st.container(
+        key="epl_news_ticker_host"
+    ):
+        components.html(
+            ticker_document,
+            height=52,
+            scrolling=False
+        )
 
 
 @st.fragment(
