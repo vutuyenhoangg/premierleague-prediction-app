@@ -28,7 +28,6 @@ jobs:
     env:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      GEMINI_NEWS_MODEL: gemini-2.5-flash
 
     steps:
       - name: Checkout repository
