@@ -3,3 +3,12 @@ base = "light"
 
 [client]
 toolbarMode = "minimal"
+
+[server]
+headless = true
+runOnSave = false
+fileWatcherType = "none"
+enableStaticServing = true
+
+[browser]
+gatherUsageStats = false
