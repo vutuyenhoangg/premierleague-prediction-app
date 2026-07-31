@@ -8311,10 +8311,8 @@ def maybe_render_final_poster_popup(user_id: int) -> bool:
 def render_daily_checkin_shortcut_button(user_id: int):
     """
     Nút điểm danh dạng float độc lập để mở lại popup điểm danh.
-
-    Nút hỗ trợ kéo thả bằng chuột, bút cảm ứng và thao tác chạm.
-    Vị trí được giữ trong sessionStorage của tab hiện tại và tự giới hạn
-    trong vùng nhìn thấy của màn hình.
+    Có thể kéo nút trong vùng nội dung; vị trí không được lưu qua lần tải trang.
+    Chỉ gọi hàm này ở trang Lịch thi đấu & dự đoán.
     """
     user_id = int(user_id)
 
@@ -8347,10 +8345,7 @@ def render_daily_checkin_shortcut_button(user_id: int):
             position: fixed !important;
             top: 148px !important;
             right: 45px !important;
-            left: auto !important;
-            bottom: auto !important;
-
-            z-index: 2147482000 !important;
+            z-index: 999998 !important;
 
             width: 46px !important;
             height: 46px !important;
@@ -8362,24 +8357,15 @@ def render_daily_checkin_shortcut_button(user_id: int):
             padding: 0 !important;
             margin: 0 !important;
             overflow: visible !important;
-
             cursor: grab !important;
             touch-action: none !important;
-            overscroll-behavior: contain !important;
             user-select: none !important;
             -webkit-user-select: none !important;
-            -webkit-touch-callout: none !important;
-            -webkit-tap-highlight-color: transparent !important;
-
             will-change: left, top;
         }}
 
         div[class*="st-key-daily_checkin_shortcut_button"] button {{
             position: relative !important;
-
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
 
             width: 46px !important;
             height: 46px !important;
@@ -8391,11 +8377,11 @@ def render_daily_checkin_shortcut_button(user_id: int):
             padding: 0 !important;
             margin: 0 !important;
 
-            border: 0 !important;
             border-radius: 999px !important;
-            outline: 0 !important;
+            border: none !important;
+            outline: none !important;
 
-            background: rgba(255, 255, 255, 0.97) !important;
+            background: rgba(255, 255, 255, 0.96) !important;
 
             box-shadow:
                 0 10px 24px rgba(7, 17, 31, 0.14),
@@ -8405,19 +8391,19 @@ def render_daily_checkin_shortcut_button(user_id: int):
             font-size: 0 !important;
             line-height: 0 !important;
 
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+
             cursor: grab !important;
             overflow: visible !important;
             touch-action: none !important;
-            overscroll-behavior: contain !important;
             user-select: none !important;
             -webkit-user-select: none !important;
-            -webkit-touch-callout: none !important;
-            -webkit-tap-highlight-color: transparent !important;
 
             transition:
                 box-shadow 0.18s ease,
-                background 0.18s ease,
-                transform 0.12s ease !important;
+                background 0.18s ease !important;
         }}
 
         div[class*="st-key-daily_checkin_shortcut_button"] button::before {{
@@ -8463,19 +8449,21 @@ def render_daily_checkin_shortcut_button(user_id: int):
                 transform 0.18s ease;
         }}
 
-        @media (hover: hover) {{
-            div[class*="st-key-daily_checkin_shortcut_button"] button:hover {{
-                background: #FFFFFF !important;
+        div[class*="st-key-daily_checkin_shortcut_button"] button:hover {{
+            background: #FFFFFF !important;
 
-                box-shadow:
-                    0 14px 30px rgba(7, 17, 31, 0.18),
-                    0 0 0 4px rgba(245, 197, 66, 0.12) !important;
-            }}
+            box-shadow:
+                0 14px 30px rgba(7, 17, 31, 0.18),
+                0 0 0 4px rgba(245, 197, 66, 0.12) !important;
+        }}
 
-            div[class*="st-key-daily_checkin_shortcut_button"] button:hover::after {{
-                opacity: 1;
-                transform: translateY(-50%) translateX(0);
-            }}
+        div[class*="st-key-daily_checkin_shortcut_button"] button:hover::after {{
+            opacity: 1;
+            transform: translateY(-50%) translateX(0);
+        }}
+
+        div[class*="st-key-daily_checkin_shortcut_button"] button:active {{
+            cursor: grabbing !important;
         }}
 
         div[class*="st-key-daily_checkin_shortcut_button"].epl-checkin-dragging,
@@ -8483,12 +8471,12 @@ def render_daily_checkin_shortcut_button(user_id: int):
             cursor: grabbing !important;
         }}
 
-        div[class*="st-key-daily_checkin_shortcut_button"].epl-checkin-dragging button {{
+        div[class*="st-key-daily_checkin_shortcut_button"].epl-checkin-dragging
+        button {{
             transition: none !important;
-            transform: scale(1.04) !important;
             box-shadow:
                 0 16px 34px rgba(7, 17, 31, 0.22),
-                0 0 0 5px rgba(245, 197, 66, 0.15) !important;
+                0 0 0 5px rgba(245, 197, 66, 0.14) !important;
         }}
 
         div[class*="st-key-daily_checkin_shortcut_button"] button * {{
@@ -8501,30 +8489,32 @@ def render_daily_checkin_shortcut_button(user_id: int):
 
         @media (max-width: 768px) {{
             div[class*="st-key-daily_checkin_shortcut_button"] {{
-                top: 76px !important;
-                right: 8px !important;
-                left: auto !important;
+                top: 77px !important;
+                right: 5px !important;
 
-                width: 42px !important;
-                height: 42px !important;
-                min-width: 42px !important;
-                min-height: 42px !important;
-                max-width: 42px !important;
-                max-height: 42px !important;
+                width: 40px !important;
+                height: 40px !important;
+                min-width: 40px !important;
+                min-height: 40px !important;
+                max-width: 40px !important;
+                max-height: 40px !important;
             }}
 
             div[class*="st-key-daily_checkin_shortcut_button"] button {{
-                width: 42px !important;
-                height: 42px !important;
-                min-width: 42px !important;
-                min-height: 42px !important;
-                max-width: 42px !important;
-                max-height: 42px !important;
+                width: 40px !important;
+                height: 40px !important;
+                min-width: 40px !important;
+                min-height: 40px !important;
+                max-width: 40px !important;
+                max-height: 40px !important;
+
+                border: none !important;
+                outline: none !important;
             }}
 
             div[class*="st-key-daily_checkin_shortcut_button"] button::before {{
-                width: 21px;
-                height: 21px;
+                width: 20px;
+                height: 20px;
             }}
 
             div[class*="st-key-daily_checkin_shortcut_button"] button::after {{
@@ -8542,58 +8532,59 @@ def render_daily_checkin_shortcut_button(user_id: int):
         help="Xem điểm danh hàng ngày"
     )
 
-    # Chạy trong component iframe nhưng gắn listener trực tiếp vào DOM cha.
-    # Cách này hoạt động ổn định hơn st.html trên iOS/Android và hỗ trợ
-    # đồng thời Pointer Events lẫn Touch Events fallback.
-    checkin_drag_script = r"""
+    checkin_drag_script = """
     <script>
     (() => {
-        const parentWindow = window.parent;
-        const parentDocument = parentWindow.document;
+        const controllerName =
+            "__eplCheckinDragController";
 
-        const controllerName = "__eplCheckinDragControllerV3";
-        const storageKey = "epl_checkin_shortcut_position_v3";
-
-        const previousController = parentWindow[controllerName];
+        const oldController =
+            window[controllerName];
 
         if (
-            previousController
-            && typeof previousController.cleanup === "function"
+            oldController
+            && typeof oldController.cleanup
+                === "function"
         ) {
-            previousController.cleanup();
+            oldController.cleanup();
         }
 
-        const shell = parentDocument.querySelector(
-            'div[class*="st-key-daily_checkin_shortcut_button"]'
-        );
+        const shell =
+            document.querySelector(
+                'div[class*="st-key-'
+                + 'daily_checkin_shortcut_button"]'
+            );
 
         if (!shell) {
             return;
         }
 
-        const button = shell.querySelector("button");
+        const button =
+            shell.querySelector("button");
 
         if (!button) {
             return;
         }
 
         const edgeGap = 8;
-        const headerGap = 8;
-        const dragThreshold = 5;
+        const headerGap = 6;
+        const dragThreshold = 6;
 
         let activePointer = null;
-        let activeTouch = null;
         let dragStarted = false;
         let suppressClickUntil = 0;
         let resizeFrame = 0;
         let cleaned = false;
 
-        const getVisibleRect = (element) => {
+        const getVisibleRect = (
+            element
+        ) => {
             if (!element) {
                 return null;
             }
 
-            const style = parentWindow.getComputedStyle(element);
+            const style =
+                window.getComputedStyle(element);
 
             if (
                 style.display === "none"
@@ -8602,9 +8593,13 @@ def render_daily_checkin_shortcut_button(user_id: int):
                 return null;
             }
 
-            const rect = element.getBoundingClientRect();
+            const rect =
+                element.getBoundingClientRect();
 
-            if (rect.width <= 0 || rect.height <= 0) {
+            if (
+                rect.width <= 0
+                || rect.height <= 0
+            ) {
                 return null;
             }
 
@@ -8612,12 +8607,15 @@ def render_daily_checkin_shortcut_button(user_id: int):
         };
 
         const getHeaderRect = () => {
-            const candidates = parentDocument.querySelectorAll(
-                'header[data-testid="stHeader"], [data-testid="stHeader"]'
-            );
+            const candidates =
+                document.querySelectorAll(
+                    'header[data-testid="stHeader"], '
+                    + '[data-testid="stHeader"]'
+                );
 
             for (const candidate of candidates) {
-                const rect = getVisibleRect(candidate);
+                const rect =
+                    getVisibleRect(candidate);
 
                 if (rect) {
                     return rect;
@@ -8627,200 +8625,147 @@ def render_daily_checkin_shortcut_button(user_id: int):
             return null;
         };
 
-        const getViewportSize = () => {
-            const viewport = parentWindow.visualViewport;
-
-            return {
-                width: viewport?.width || parentWindow.innerWidth,
-                height: viewport?.height || parentWindow.innerHeight,
-                offsetLeft: viewport?.offsetLeft || 0,
-                offsetTop: viewport?.offsetTop || 0
-            };
-        };
-
         const getMovementBounds = () => {
-            const shellRect = shell.getBoundingClientRect();
-            const headerRect = getHeaderRect();
-            const viewport = getViewportSize();
+            const shellRect =
+                shell.getBoundingClientRect();
 
-            const viewportLeft = viewport.offsetLeft;
-            const viewportTop = viewport.offsetTop;
-            const viewportRight = viewportLeft + viewport.width;
-            const viewportBottom = viewportTop + viewport.height;
+            const headerRect =
+                getHeaderRect();
 
-            const requestedMinTop = headerRect
-                ? Math.ceil(headerRect.bottom + headerGap)
-                : viewportTop + edgeGap;
+            const minimumTop =
+                headerRect
+                ? Math.ceil(
+                    headerRect.bottom
+                    + headerGap
+                )
+                : edgeGap;
 
-            const minLeft = viewportLeft + edgeGap;
-            const maxLeft = Math.max(
-                minLeft,
-                viewportRight - shellRect.width - edgeGap
-            );
+            const maxLeft =
+                Math.max(
+                    edgeGap,
+                    window.innerWidth
+                    - shellRect.width
+                    - edgeGap
+                );
 
-            const maxTop = Math.max(
-                viewportTop + edgeGap,
-                viewportBottom - shellRect.height - edgeGap
-            );
-
-            const minTop = Math.min(
-                Math.max(viewportTop + edgeGap, requestedMinTop),
-                maxTop
-            );
+            const maxTop =
+                Math.max(
+                    edgeGap,
+                    window.innerHeight
+                    - shellRect.height
+                    - edgeGap
+                );
 
             return {
-                minLeft,
-                minTop,
+                minLeft: edgeGap,
+                minTop: Math.min(
+                    Math.max(
+                        edgeGap,
+                        minimumTop
+                    ),
+                    maxTop
+                ),
                 maxLeft,
                 maxTop
             };
         };
 
-        const clampNumber = (value, minimum, maximum) => {
-            const numericValue = Number(value);
-
-            return Math.min(
-                Math.max(
-                    Number.isFinite(numericValue)
-                        ? numericValue
-                        : minimum,
-                    minimum
-                ),
-                maximum
-            );
-        };
-
-        const savePosition = (left, top) => {
-            try {
-                parentWindow.sessionStorage.setItem(
-                    storageKey,
-                    JSON.stringify({ left, top })
-                );
-            } catch (error) {
-                // sessionStorage có thể bị chặn trong một số chế độ riêng tư.
-            }
-        };
-
-        const readSavedPosition = () => {
-            try {
-                const value = parentWindow.sessionStorage.getItem(storageKey);
-
-                if (!value) {
-                    return null;
-                }
-
-                const parsed = JSON.parse(value);
-
-                if (
-                    !Number.isFinite(Number(parsed?.left))
-                    || !Number.isFinite(Number(parsed?.top))
-                ) {
-                    return null;
-                }
-
-                return {
-                    left: Number(parsed.left),
-                    top: Number(parsed.top)
-                };
-            } catch (error) {
-                return null;
-            }
-        };
+        const clampNumber = (
+            value,
+            minimum,
+            maximum
+        ) => Math.min(
+            Math.max(
+                Number.isFinite(Number(value))
+                    ? Number(value)
+                    : minimum,
+                minimum
+            ),
+            maximum
+        );
 
         const applyPosition = (
             proposedLeft,
-            proposedTop,
-            persist = false
+            proposedTop
         ) => {
-            const bounds = getMovementBounds();
+            const bounds =
+                getMovementBounds();
 
-            const left = clampNumber(
-                proposedLeft,
-                bounds.minLeft,
-                bounds.maxLeft
+            const left =
+                clampNumber(
+                    proposedLeft,
+                    bounds.minLeft,
+                    bounds.maxLeft
+                );
+
+            const top =
+                clampNumber(
+                    proposedTop,
+                    bounds.minTop,
+                    bounds.maxTop
+                );
+
+            shell.style.setProperty(
+                "left",
+                left + "px",
+                "important"
             );
 
-            const top = clampNumber(
-                proposedTop,
-                bounds.minTop,
-                bounds.maxTop
+            shell.style.setProperty(
+                "top",
+                top + "px",
+                "important"
             );
 
-            shell.style.setProperty("left", `${left}px`, "important");
-            shell.style.setProperty("top", `${top}px`, "important");
-            shell.style.setProperty("right", "auto", "important");
-            shell.style.setProperty("bottom", "auto", "important");
+            shell.style.setProperty(
+                "right",
+                "auto",
+                "important"
+            );
 
-            if (persist) {
-                savePosition(left, top);
-            }
+            shell.style.setProperty(
+                "bottom",
+                "auto",
+                "important"
+            );
         };
 
-        const startDrag = (identifier, clientX, clientY) => {
-            const shellRect = shell.getBoundingClientRect();
-
-            return {
-                identifier,
-                startX: clientX,
-                startY: clientY,
-                startLeft: shellRect.left,
-                startTop: shellRect.top
-            };
-        };
-
-        const moveDrag = (state, clientX, clientY, event) => {
-            if (!state) {
+        const stopDragging = (
+            event
+        ) => {
+            if (!activePointer) {
                 return;
             }
 
-            const deltaX = clientX - state.startX;
-            const deltaY = clientY - state.startY;
-
             if (
-                !dragStarted
-                && Math.hypot(deltaX, deltaY) < dragThreshold
+                event
+                && event.pointerId
+                    !== activePointer.pointerId
             ) {
                 return;
             }
 
-            dragStarted = true;
-            shell.classList.add("epl-checkin-dragging");
-
-            if (event?.cancelable) {
-                event.preventDefault();
-            }
-
-            event?.stopPropagation();
-
-            applyPosition(
-                state.startLeft + deltaX,
-                state.startTop + deltaY,
-                false
-            );
-        };
-
-        const finishDrag = (event) => {
             if (dragStarted) {
-                suppressClickUntil = Date.now() + 650;
+                suppressClickUntil =
+                    Date.now() + 500;
 
-                if (event?.cancelable) {
+                if (event) {
                     event.preventDefault();
+                    event.stopPropagation();
                 }
-
-                event?.stopPropagation();
-
-                const rect = shell.getBoundingClientRect();
-                savePosition(rect.left, rect.top);
             }
 
             activePointer = null;
-            activeTouch = null;
             dragStarted = false;
 
-            shell.classList.remove("epl-checkin-dragging");
+            shell.classList.remove(
+                "epl-checkin-dragging"
+            );
         };
 
-        const onPointerDown = (event) => {
+        const onPointerDown = (
+            event
+        ) => {
             if (
                 event.button !== undefined
                 && event.button !== 0
@@ -8828,121 +8773,85 @@ def render_daily_checkin_shortcut_button(user_id: int):
                 return;
             }
 
-            activePointer = startDrag(
-                event.pointerId,
-                event.clientX,
+            const shellRect =
+                shell.getBoundingClientRect();
+
+            activePointer = {
+                pointerId: event.pointerId,
+                startX: event.clientX,
+                startY: event.clientY,
+                startLeft: shellRect.left,
+                startTop: shellRect.top
+            };
+
+            dragStarted = false;
+        };
+
+        const onPointerMove = (
+            event
+        ) => {
+            if (
+                !activePointer
+                || event.pointerId
+                    !== activePointer.pointerId
+            ) {
+                return;
+            }
+
+            const deltaX =
+                event.clientX
+                - activePointer.startX;
+
+            const deltaY =
                 event.clientY
-            );
+                - activePointer.startY;
 
-            dragStarted = false;
-
-            try {
-                button.setPointerCapture(event.pointerId);
-            } catch (error) {
-                // Safari cũ có thể không hỗ trợ pointer capture đầy đủ.
-            }
-        };
-
-        const onPointerMove = (event) => {
             if (
-                !activePointer
-                || event.pointerId !== activePointer.identifier
+                !dragStarted
+                && Math.hypot(
+                    deltaX,
+                    deltaY
+                ) < dragThreshold
             ) {
                 return;
             }
 
-            moveDrag(
-                activePointer,
-                event.clientX,
-                event.clientY,
-                event
+            dragStarted = true;
+
+            shell.classList.add(
+                "epl-checkin-dragging"
+            );
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            applyPosition(
+                activePointer.startLeft
+                    + deltaX,
+                activePointer.startTop
+                    + deltaY
             );
         };
 
-        const onPointerEnd = (event) => {
+        const onPointerUp = (
+            event
+        ) => {
+            stopDragging(event);
+        };
+
+        const onPointerCancel = (
+            event
+        ) => {
+            stopDragging(event);
+        };
+
+        const onClickCapture = (
+            event
+        ) => {
             if (
-                !activePointer
-                || event.pointerId !== activePointer.identifier
+                Date.now()
+                >= suppressClickUntil
             ) {
-                return;
-            }
-
-            try {
-                button.releasePointerCapture(event.pointerId);
-            } catch (error) {
-                // Không cần xử lý nếu pointer capture đã tự mất.
-            }
-
-            finishDrag(event);
-        };
-
-        const getTrackedTouch = (touchList, identifier) => {
-            for (const touch of touchList) {
-                if (touch.identifier === identifier) {
-                    return touch;
-                }
-            }
-
-            return null;
-        };
-
-        const onTouchStart = (event) => {
-            if (parentWindow.PointerEvent || event.touches.length !== 1) {
-                return;
-            }
-
-            const touch = event.touches[0];
-
-            activeTouch = startDrag(
-                touch.identifier,
-                touch.clientX,
-                touch.clientY
-            );
-
-            dragStarted = false;
-        };
-
-        const onTouchMove = (event) => {
-            if (!activeTouch) {
-                return;
-            }
-
-            const touch = getTrackedTouch(
-                event.touches,
-                activeTouch.identifier
-            );
-
-            if (!touch) {
-                return;
-            }
-
-            moveDrag(
-                activeTouch,
-                touch.clientX,
-                touch.clientY,
-                event
-            );
-        };
-
-        const onTouchEnd = (event) => {
-            if (!activeTouch) {
-                return;
-            }
-
-            const touchStillActive = getTrackedTouch(
-                event.touches,
-                activeTouch.identifier
-            );
-
-            if (touchStillActive) {
-                return;
-            }
-
-            finishDrag(event);
-        };
-
-        const onClickCapture = (event) => {
-            if (Date.now() >= suppressClickUntil) {
                 return;
             }
 
@@ -8952,16 +8861,23 @@ def render_daily_checkin_shortcut_button(user_id: int):
         };
 
         const keepInsideAllowedArea = () => {
-            parentWindow.cancelAnimationFrame(resizeFrame);
+            cancelAnimationFrame(
+                resizeFrame
+            );
 
-            resizeFrame = parentWindow.requestAnimationFrame(() => {
-                const rect = shell.getBoundingClientRect();
-                applyPosition(rect.left, rect.top, true);
-            });
-        };
+            resizeFrame =
+                requestAnimationFrame(
+                    () => {
+                        const currentRect =
+                            shell
+                                .getBoundingClientRect();
 
-        const onDragStart = (event) => {
-            event.preventDefault();
+                        applyPosition(
+                            currentRect.left,
+                            currentRect.top
+                        );
+                    }
+                );
         };
 
         const cleanup = () => {
@@ -8971,120 +8887,123 @@ def render_daily_checkin_shortcut_button(user_id: int):
 
             cleaned = true;
 
-            parentWindow.cancelAnimationFrame(resizeFrame);
+            cancelAnimationFrame(
+                resizeFrame
+            );
 
-            button.removeEventListener("pointerdown", onPointerDown, true);
-            parentDocument.removeEventListener("pointermove", onPointerMove, true);
-            parentDocument.removeEventListener("pointerup", onPointerEnd, true);
-            parentDocument.removeEventListener("pointercancel", onPointerEnd, true);
+            button.removeEventListener(
+                "pointerdown",
+                onPointerDown
+            );
 
-            button.removeEventListener("touchstart", onTouchStart, true);
-            parentDocument.removeEventListener("touchmove", onTouchMove, true);
-            parentDocument.removeEventListener("touchend", onTouchEnd, true);
-            parentDocument.removeEventListener("touchcancel", onTouchEnd, true);
+            document.removeEventListener(
+                "pointermove",
+                onPointerMove,
+                true
+            );
 
-            button.removeEventListener("click", onClickCapture, true);
-            button.removeEventListener("dragstart", onDragStart, true);
+            document.removeEventListener(
+                "pointerup",
+                onPointerUp,
+                true
+            );
 
-            parentWindow.removeEventListener("resize", keepInsideAllowedArea);
-            parentWindow.removeEventListener("orientationchange", keepInsideAllowedArea);
+            document.removeEventListener(
+                "pointercancel",
+                onPointerCancel,
+                true
+            );
 
-            if (parentWindow.visualViewport) {
-                parentWindow.visualViewport.removeEventListener(
-                    "resize",
-                    keepInsideAllowedArea
-                );
+            shell.removeEventListener(
+                "click",
+                onClickCapture,
+                true
+            );
 
-                parentWindow.visualViewport.removeEventListener(
-                    "scroll",
-                    keepInsideAllowedArea
-                );
+            window.removeEventListener(
+                "resize",
+                keepInsideAllowedArea
+            );
+
+            if (window.visualViewport) {
+                window.visualViewport
+                    .removeEventListener(
+                        "resize",
+                        keepInsideAllowedArea
+                    );
             }
         };
 
-        button.setAttribute("title", "Xem điểm danh");
         button.setAttribute(
-            "aria-label",
-            "Xem điểm danh; giữ và kéo để di chuyển nút"
+            "title",
+            "Xem điểm danh"
         );
 
-        button.addEventListener("pointerdown", onPointerDown, {
-            capture: true,
-            passive: false
-        });
+        button.setAttribute(
+            "aria-label",
+            "Xem điểm danh; giữ và kéo "
+            + "để di chuyển nút"
+        );
 
-        parentDocument.addEventListener("pointermove", onPointerMove, {
-            capture: true,
-            passive: false
-        });
+        button.addEventListener(
+            "pointerdown",
+            onPointerDown
+        );
 
-        parentDocument.addEventListener("pointerup", onPointerEnd, true);
-        parentDocument.addEventListener("pointercancel", onPointerEnd, true);
+        document.addEventListener(
+            "pointermove",
+            onPointerMove,
+            {
+                capture: true,
+                passive: false
+            }
+        );
 
-        button.addEventListener("touchstart", onTouchStart, {
-            capture: true,
-            passive: false
-        });
+        document.addEventListener(
+            "pointerup",
+            onPointerUp,
+            true
+        );
 
-        parentDocument.addEventListener("touchmove", onTouchMove, {
-            capture: true,
-            passive: false
-        });
+        document.addEventListener(
+            "pointercancel",
+            onPointerCancel,
+            true
+        );
 
-        parentDocument.addEventListener("touchend", onTouchEnd, true);
-        parentDocument.addEventListener("touchcancel", onTouchEnd, true);
+        shell.addEventListener(
+            "click",
+            onClickCapture,
+            true
+        );
 
-        button.addEventListener("click", onClickCapture, true);
-        button.addEventListener("dragstart", onDragStart, true);
+        window.addEventListener(
+            "resize",
+            keepInsideAllowedArea,
+            { passive: true }
+        );
 
-        parentWindow.addEventListener("resize", keepInsideAllowedArea, {
-            passive: true
-        });
-
-        parentWindow.addEventListener("orientationchange", keepInsideAllowedArea, {
-            passive: true
-        });
-
-        if (parentWindow.visualViewport) {
-            parentWindow.visualViewport.addEventListener(
-                "resize",
-                keepInsideAllowedArea,
-                { passive: true }
-            );
-
-            parentWindow.visualViewport.addEventListener(
-                "scroll",
-                keepInsideAllowedArea,
-                { passive: true }
-            );
+        if (window.visualViewport) {
+            window.visualViewport
+                .addEventListener(
+                    "resize",
+                    keepInsideAllowedArea,
+                    { passive: true }
+                );
         }
 
-        const savedPosition = readSavedPosition();
-
-        if (savedPosition) {
-            applyPosition(
-                savedPosition.left,
-                savedPosition.top,
-                false
-            );
-        } else {
-            const currentRect = shell.getBoundingClientRect();
-            applyPosition(currentRect.left, currentRect.top, false);
-        }
-
-        parentWindow[controllerName] = {
+        window[controllerName] = {
             cleanup
         };
     })();
     </script>
     """
 
-    components.html(
+    st.html(
         checkin_drag_script,
-        height=0,
-        scrolling=False
+        unsafe_allow_javascript=True
     )
-
+    
     if shortcut_clicked:
         render_daily_checkin_dialog(user_id)
 
@@ -33078,10 +32997,13 @@ def page_admin():
 )
 def load_latest_epl_news_ticker():
     """
-    Đọc bản ticker mới nhất từ Supabase.
+    Đọc bản ticker hiện tại từ Supabase.
 
-    Ticker là tính năng phụ. Nếu bảng hoặc dữ liệu gặp lỗi,
-    hàm trả về None để app chính vẫn tiếp tục hoạt động.
+    Quy tắc an toàn:
+    - Ticker là tính năng phụ nên lỗi database không được làm sập app.
+    - Chỉ lấy bản tin còn mới trong NEWS_TICKER_MAX_AGE_HOURS.
+    - Hỗ trợ cột items là JSONB, chuỗi JSON, list[dict] hoặc list[str].
+    - Nếu items không dùng được thì thử đọc ticker_text làm phương án dự phòng.
     """
 
     row = fetch_one(
@@ -33117,42 +33039,58 @@ def load_latest_epl_news_ticker():
 
     if isinstance(raw_items, str):
         try:
-            raw_items = json.loads(raw_items)
+            raw_items = json.loads(
+                raw_items
+            )
         except json.JSONDecodeError:
-            raw_items = []
+            raw_items = None
 
     ticker_items = []
 
     if isinstance(raw_items, list):
         for raw_item in raw_items:
             if isinstance(raw_item, dict):
-                raw_text = raw_item.get("text", "")
+                raw_text = raw_item.get(
+                    "text",
+                    ""
+                )
             else:
                 raw_text = raw_item
 
             item_text = re.sub(
                 r"\s+",
                 " ",
-                str(raw_text or "")
+                str(
+                    raw_text
+                    if raw_text is not None
+                    else ""
+                )
             ).strip()
 
             if item_text:
-                ticker_items.append(item_text)
+                ticker_items.append(
+                    item_text
+                )
 
-    # Fallback an toàn nếu items bị lỗi nhưng ticker_text vẫn còn.
     if not ticker_items:
-        raw_ticker_text = re.sub(
+        ticker_text = re.sub(
             r"\s+",
             " ",
-            str(row.get("ticker_text") or "")
+            str(
+                row.get(
+                    "ticker_text",
+                    ""
+                )
+                or ""
+            )
         ).strip()
 
-        if raw_ticker_text:
+        if ticker_text:
             ticker_items = [
                 item.strip()
                 for item in re.split(
-                    r"\s*[◆•]\s*",
-                    raw_ticker_text
+                    r"\s*◆\s*",
+                    ticker_text
                 )
                 if item.strip()
             ]
@@ -33165,21 +33103,579 @@ def load_latest_epl_news_ticker():
     return row
 
 
+def _format_epl_ticker_generated_label(
+    generated_at
+) -> str:
+    """
+    Chuẩn hóa thời điểm tạo ticker sang giờ Việt Nam.
+    Lỗi định dạng thời gian chỉ làm mất nhãn cập nhật,
+    không ảnh hưởng nội dung ticker.
+    """
+
+    if not generated_at:
+        return ""
+
+    try:
+        parsed_datetime = generated_at
+
+        if isinstance(
+            parsed_datetime,
+            str
+        ):
+            parsed_datetime = (
+                datetime.fromisoformat(
+                    parsed_datetime.replace(
+                        "Z",
+                        "+00:00"
+                    )
+                )
+            )
+
+        if not isinstance(
+            parsed_datetime,
+            datetime
+        ):
+            return ""
+
+        if parsed_datetime.tzinfo is None:
+            parsed_datetime = (
+                parsed_datetime.replace(
+                    tzinfo=timezone.utc
+                )
+            )
+
+        vietnam_datetime = (
+            parsed_datetime.astimezone(
+                timezone(
+                    timedelta(hours=7)
+                )
+            )
+        )
+
+        return vietnam_datetime.strftime(
+            "%H:%M %d/%m"
+        )
+
+    except Exception:
+        return ""
+
+
+def _build_epl_news_ticker_document(
+    ticker_items: list[str],
+    generated_at
+) -> str:
+    """
+    Tạo một tài liệu HTML độc lập cho components.html.
+
+    Ticker được render trong iframe riêng để:
+    - Không bị Markdown chia vỡ cấu trúc HTML.
+    - Không bị CSS toàn cục của app ghi đè.
+    - Không bị các DOM observer khác trong app chỉnh sửa text.
+    """
+
+    safe_items = [
+        html.escape(
+            re.sub(
+                r"\s+",
+                " ",
+                str(item)
+            ).strip(),
+            quote=False
+        )
+        for item in ticker_items
+        if str(item).strip()
+    ]
+
+    if not safe_items:
+        return ""
+
+    item_markup = "".join(
+        (
+            '<span class="ticker-item">'
+            f'{item}'
+            '</span>'
+            '<span '
+            'class="ticker-separator" '
+            'aria-hidden="true">'
+            '◆'
+            '</span>'
+        )
+        for item in safe_items
+    )
+
+    group_markup = (
+        '<div class="ticker-group">'
+        f'{item_markup}'
+        '</div>'
+    )
+
+    track_markup = (
+        f'{group_markup}'
+        '<div '
+        'class="ticker-group" '
+        'aria-hidden="true">'
+        f'{item_markup}'
+        '</div>'
+    )
+
+    total_characters = sum(
+        len(item)
+        for item in ticker_items
+    )
+
+    animation_duration = max(
+        90,
+        min(
+            210,
+            round(
+                total_characters / 7
+            )
+        )
+    )
+
+    generated_label = (
+        _format_epl_ticker_generated_label(
+            generated_at
+        )
+    )
+
+    accessible_label = (
+        "Tin tức Premier League mới nhất"
+    )
+
+    if generated_label:
+        accessible_label += (
+            f", cập nhật lúc {generated_label}"
+        )
+
+    safe_accessible_label = html.escape(
+        accessible_label,
+        quote=True
+    )
+
+    return f"""
+    <!doctype html>
+    <html lang="vi">
+    <head>
+        <meta charset="utf-8">
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1"
+        >
+
+        <style>
+        :root {{
+            color-scheme: light;
+        }}
+
+        * {{
+            box-sizing: border-box;
+        }}
+
+        html,
+        body {{
+            width: 100%;
+            height: 100%;
+
+            margin: 0;
+            padding: 0;
+
+            overflow: hidden;
+
+            background: transparent;
+        }}
+
+        body {{
+            display: flex;
+            align-items: flex-start;
+
+            padding: 4px 0 7px 0;
+
+            font-family:
+                system-ui,
+                -apple-system,
+                BlinkMacSystemFont,
+                "Segoe UI",
+                sans-serif;
+        }}
+
+        .ticker-shell {{
+            --ticker-duration:
+                {animation_duration}s;
+
+            display: flex;
+            align-items: stretch;
+
+            width: 100%;
+            min-width: 0;
+
+            height: 40px;
+            min-height: 40px;
+
+            margin: 0;
+            padding: 0;
+
+            overflow: hidden;
+
+            background:
+                linear-gradient(
+                    90deg,
+                    #210027 0%,
+                    #37003C 48%,
+                    #26002D 100%
+                );
+
+            border:
+                1px solid
+                rgba(55, 0, 60, 0.34);
+
+            border-radius: 11px;
+
+            box-shadow:
+                0 7px 18px
+                rgba(55, 0, 60, 0.16),
+                inset 0 1px 0
+                rgba(255, 255, 255, 0.12);
+
+            user-select: none;
+            -webkit-user-select: none;
+        }}
+
+        .ticker-label {{
+            position: relative;
+            z-index: 2;
+
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+
+            flex:
+                0 0 76px;
+
+            width: 76px;
+            min-width: 76px;
+            max-width: 76px;
+
+            height: 40px;
+
+            gap: 6px;
+
+            margin: 0;
+            padding:
+                0 13px 0 10px;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #FF2882 0%,
+                    #D90D69 100%
+                );
+
+            color: #FFFFFF;
+
+            clip-path:
+                polygon(
+                    0 0,
+                    calc(100% - 12px) 0,
+                    100% 50%,
+                    calc(100% - 12px) 100%,
+                    0 100%
+                );
+
+            font-size: 10px;
+            font-weight: 900;
+            line-height: 1;
+
+            letter-spacing: 0.075em;
+
+            text-transform: uppercase;
+            white-space: nowrap;
+        }}
+
+        .ticker-label-dot {{
+            display: block;
+
+            flex:
+                0 0 6px;
+
+            width: 6px;
+            height: 6px;
+
+            background: #00FF85;
+
+            transform:
+                rotate(45deg);
+
+            box-shadow:
+                0 0 8px
+                rgba(0, 255, 133, 0.62);
+        }}
+
+        .ticker-label-text {{
+            display: inline-block;
+
+            color: #FFFFFF;
+
+            white-space: nowrap;
+        }}
+
+        .ticker-viewport {{
+            position: relative;
+
+            display: block;
+
+            flex:
+                1 1 auto;
+
+            width: auto;
+            min-width: 0;
+
+            height: 40px;
+
+            margin: 0;
+            padding: 0;
+
+            overflow: hidden;
+        }}
+
+        .ticker-track {{
+            display: flex;
+            align-items: center;
+
+            width: max-content;
+            min-width: max-content;
+
+            height: 40px;
+
+            margin: 0;
+            padding: 0;
+
+            will-change: transform;
+
+            animation:
+                tickerMove
+                var(--ticker-duration)
+                linear
+                infinite;
+        }}
+
+        .ticker-group {{
+            display: inline-flex;
+            align-items: center;
+
+            flex:
+                0 0 auto;
+
+            width: max-content;
+            min-width: max-content;
+
+            height: 40px;
+
+            margin: 0;
+            padding:
+                0 30px 0 22px;
+        }}
+
+        .ticker-item {{
+            display: inline-block;
+
+            flex:
+                0 0 auto;
+
+            margin: 0;
+            padding: 0;
+
+            color: #FFFFFF;
+
+            font-size: 13px;
+            font-weight: 650;
+            line-height: 1.2;
+
+            letter-spacing: 0.002em;
+
+            opacity: 1;
+            visibility: visible;
+            white-space: nowrap;
+        }}
+
+        .ticker-separator {{
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+
+            flex:
+                0 0 auto;
+
+            margin:
+                0 20px;
+            padding: 0;
+
+            color: #00FF85;
+
+            font-size: 7px;
+            font-weight: 900;
+            line-height: 1;
+
+            opacity: 1;
+            visibility: visible;
+
+            filter:
+                drop-shadow(
+                    0 0 5px
+                    rgba(0, 255, 133, 0.52)
+                );
+        }}
+
+        @keyframes tickerMove {{
+            from {{
+                transform:
+                    translate3d(
+                        0,
+                        0,
+                        0
+                    );
+            }}
+
+            to {{
+                transform:
+                    translate3d(
+                        -50%,
+                        0,
+                        0
+                    );
+            }}
+        }}
+
+        @media (max-width: 768px) {{
+            body {{
+                padding-top: 3px;
+                padding-bottom: 6px;
+            }}
+
+            .ticker-shell {{
+                height: 35px;
+                min-height: 35px;
+
+                border-radius: 9px;
+            }}
+
+            .ticker-label {{
+                flex-basis: 62px;
+
+                width: 62px;
+                min-width: 62px;
+                max-width: 62px;
+
+                height: 35px;
+
+                gap: 5px;
+
+                padding:
+                    0 9px 0 7px;
+
+                font-size: 7.6px;
+                letter-spacing: 0.045em;
+            }}
+
+            .ticker-label-dot {{
+                flex-basis: 5px;
+
+                width: 5px;
+                height: 5px;
+            }}
+
+            .ticker-viewport,
+            .ticker-track,
+            .ticker-group {{
+                height: 35px;
+            }}
+
+            .ticker-group {{
+                padding:
+                    0 22px 0 17px;
+            }}
+
+            .ticker-item {{
+                font-size: 11.5px;
+            }}
+
+            .ticker-separator {{
+                margin:
+                    0 15px;
+
+                font-size: 6px;
+            }}
+        }}
+
+        @media (
+            prefers-reduced-motion: reduce
+        ) {{
+            .ticker-track {{
+                animation: none;
+                transform: none;
+            }}
+
+            .ticker-group:nth-child(2) {{
+                display: none;
+            }}
+        }}
+        </style>
+    </head>
+
+    <body>
+        <div
+            class="ticker-shell"
+            role="region"
+            aria-label="{safe_accessible_label}"
+            title="{safe_accessible_label}"
+        >
+            <div
+                class="ticker-label"
+                aria-hidden="true"
+            >
+                <span
+                    class="ticker-label-dot"
+                ></span>
+
+                <span
+                    class="ticker-label-text"
+                >
+                    NEWS
+                </span>
+            </div>
+
+            <div
+                class="ticker-viewport"
+            >
+                <div
+                    class="ticker-track"
+                >
+                    {track_markup}
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+
 def _render_epl_news_ticker_content():
     """
-    Render ticker đè lên header mặc định của Streamlit.
+    Render ticker trong iframe độc lập bằng components.html.
 
-    - Góc NEWS nhỏ gọn, đường nét thẳng và mạnh.
-    - Khi sidebar mở, ticker tự dịch sang phải theo mép thật của sidebar.
-    - Nếu sidebar chiếm gần hết màn hình mobile, ticker tạm ẩn để không đè menu.
-    - Host không chiếm diện tích trong luồng nội dung chính.
+    Đây là phần sửa chính cho lỗi thanh ticker có khung nhưng không có chữ:
+    st.markdown trước đó có thể chia vỡ HTML lồng nhau và CSS của app có thể
+    tác động vào cấu trúc ticker. Iframe tách hoàn toàn ticker khỏi hai nguồn
+    xung đột đó.
     """
 
     if not NEWS_TICKER_ENABLED:
         return
 
     try:
-        ticker_data = load_latest_epl_news_ticker()
+        ticker_data = (
+            load_latest_epl_news_ticker()
+        )
 
     except Exception:
         LOGGER.exception(
@@ -33190,848 +33686,101 @@ def _render_epl_news_ticker_content():
     if not ticker_data:
         return
 
-    ticker_items = []
-
-    for raw_item in ticker_data.get("items", []):
-        item_text = re.sub(
-            r"\s+",
-            " ",
-            str(raw_item or "")
-        ).strip()
-
-        if item_text:
-            ticker_items.append(item_text)
+    ticker_items = ticker_data.get(
+        "items",
+        []
+    )
 
     if not ticker_items:
         return
 
-    safe_items = [
-        html.escape(
-            item,
-            quote=False
-        )
-        for item in ticker_items
-    ]
-
-    total_characters = sum(
-        len(item)
-        for item in ticker_items
-    )
-
-    animation_duration = max(
-        105,
-        min(
-            230,
-            round(total_characters / 7)
+    ticker_document = (
+        _build_epl_news_ticker_document(
+            ticker_items=ticker_items,
+            generated_at=ticker_data.get(
+                "generated_at"
+            )
         )
     )
 
-    generated_at = ticker_data.get(
-        "generated_at"
-    )
+    if not ticker_document:
+        return
 
-    generated_label = ""
-
-    if generated_at:
-        try:
-            if isinstance(
-                generated_at,
-                str
-            ):
-                generated_at = datetime.fromisoformat(
-                    generated_at.replace(
-                        "Z",
-                        "+00:00"
-                    )
-                )
-
-            if isinstance(
-                generated_at,
-                datetime
-            ):
-                if generated_at.tzinfo is None:
-                    generated_at = generated_at.replace(
-                        tzinfo=timezone.utc
-                    )
-
-                generated_vietnam = generated_at.astimezone(
-                    timezone(
-                        timedelta(hours=7)
-                    )
-                )
-
-                generated_label = generated_vietnam.strftime(
-                    "%H:%M %d/%m"
-                )
-
-        except Exception:
-            generated_label = ""
-
-    aria_label = "Tin tức Premier League mới nhất"
-
-    if generated_label:
-        aria_label += (
-            f", cập nhật lúc {generated_label}"
-        )
-
-    safe_aria_label = html.escape(
-        aria_label,
-        quote=True
-    )
-
-    ticker_items_html = "".join(
-        (
-            '<span class="epl-header-ticker-item">'
-            f'{item}'
-            '</span>'
-            '<span '
-            'class="epl-header-ticker-separator" '
-            'aria-hidden="true">'
-            '◆'
-            '</span>'
-        )
-        for item in safe_items
-    )
-
-    ticker_groups_html = (
-        '<div class="epl-header-ticker-group">'
-        f'{ticker_items_html}'
-        '</div>'
-        '<div '
-        'class="epl-header-ticker-group" '
-        'aria-hidden="true">'
-        f'{ticker_items_html}'
-        '</div>'
-    )
-
-    parent_layout_css = """
+    ticker_host_css = """
     <style>
     :root {
-        --epl-default-header-height: 60px;
-        --epl-ticker-closed-left: 142px;
-        --epl-ticker-dynamic-left: 142px;
-        --epl-ticker-right: 0px;
+        --epl-streamlit-header-height: 3.75rem;
     }
 
-    header[data-testid="stHeader"],
-    [data-testid="stHeader"] {
-        min-height: var(--epl-default-header-height) !important;
-        height: var(--epl-default-header-height) !important;
-    }
+    /*
+     * Kéo riêng ticker lên đúng một chiều cao header mặc định
+     * mà không làm thay đổi vị trí hero và nội dung trang bên dưới.
+     */
+    div[class*="st-key-epl_news_ticker_host"] {
+        position: relative !important;
+        z-index: 1000001 !important;
 
-    div[data-testid="stElementContainer"]:has(
-        div[class*="st-key-epl_news_ticker_host"]
-    ) {
-        position: static !important;
+        width: 100% !important;
+        max-width: 100% !important;
 
-        width: 0 !important;
-        min-width: 0 !important;
-        max-width: 0 !important;
+        margin-top:
+            calc(-1 * var(--epl-streamlit-header-height)) !important;
+        margin-bottom: 12px !important;
 
-        height: 0 !important;
-        min-height: 0 !important;
-        max-height: 0 !important;
-
-        margin: 0 !important;
         padding: 0 !important;
 
         overflow: visible !important;
     }
 
-    div[class*="st-key-epl_news_ticker_host"] {
-        position: fixed !important;
-
-        top: 0 !important;
-        left: max(
-            var(--epl-ticker-closed-left),
-            var(--epl-ticker-dynamic-left)
-        ) !important;
-        right: var(--epl-ticker-right) !important;
-
-        width: auto !important;
-        min-width: 0 !important;
-        max-width: none !important;
-
-        height: var(--epl-default-header-height) !important;
-        min-height: var(--epl-default-header-height) !important;
-        max-height: var(--epl-default-header-height) !important;
-
-        margin: 0 !important;
-        padding: 0 !important;
-
-        overflow: hidden !important;
-
-        background: #24002A !important;
-
-        border: 0 !important;
-        border-radius: 2px 0 0 2px !important;
-
-        box-shadow:
-            0 5px 16px rgba(55, 0, 60, 0.20) !important;
-
-        z-index: 2147483000 !important;
-
-        pointer-events: none !important;
-        isolation: isolate !important;
-        transform: none !important;
-
-        opacity: 1 !important;
-        visibility: visible !important;
-
-        transition:
-            left 180ms ease,
-            opacity 140ms ease !important;
-    }
-
-    html[data-epl-ticker-constrained="true"]
-    div[class*="st-key-epl_news_ticker_host"] {
-        opacity: 0 !important;
-        visibility: hidden !important;
-    }
-
     div[class*="st-key-epl_news_ticker_host"]
-    > div[data-testid="stVerticalBlock"],
-
-    div[class*="st-key-epl_news_ticker_host"]
-    > div[data-testid="stVerticalBlockBorderWrapper"],
-
-    div[class*="st-key-epl_news_ticker_host"]
-    div[data-testid="stVerticalBlock"] {
+    > :is(
+        div[data-testid="stVerticalBlock"],
+        div[data-testid="stVerticalBlockBorderWrapper"]
+    ) {
         width: 100% !important;
-        height: 100% !important;
-        min-height: 0 !important;
-
-        gap: 0 !important;
-
         margin: 0 !important;
         padding: 0 !important;
+        gap: 0 !important;
+        overflow: visible !important;
     }
 
     div[class*="st-key-epl_news_ticker_host"]
     div[data-testid="stElementContainer"] {
         width: 100% !important;
-        height: 100% !important;
-
         margin: 0 !important;
         padding: 0 !important;
     }
 
     div[class*="st-key-epl_news_ticker_host"] iframe {
         display: block !important;
-
         width: 100% !important;
-        min-width: 100% !important;
-        max-width: 100% !important;
-
-        height: var(--epl-default-header-height) !important;
-        min-height: var(--epl-default-header-height) !important;
-        max-height: var(--epl-default-header-height) !important;
+        height: 52px !important;
 
         margin: 0 !important;
         padding: 0 !important;
 
         border: 0 !important;
-        outline: 0 !important;
-
-        background: #24002A !important;
-        pointer-events: none !important;
-    }
-
-    header[data-testid="stHeader"]
-    :is(
-        [data-testid="stToolbar"],
-        [data-testid="stToolbarActions"],
-        [data-testid="stHeaderActionElements"],
-        [data-testid="stStatusWidget"],
-        [data-testid="stAppDeployButton"]
-    ) {
-        z-index: 1 !important;
+        background: transparent !important;
     }
 
     @media (max-width: 768px) {
         :root {
-            --epl-default-header-height: 56px;
-            --epl-ticker-closed-left: 64px;
+            --epl-streamlit-header-height: 3.5rem;
         }
 
         div[class*="st-key-epl_news_ticker_host"] {
-            border-radius: 0 !important;
+            margin-bottom: 10px !important;
+        }
+
+        div[class*="st-key-epl_news_ticker_host"] iframe {
+            height: 44px !important;
         }
     }
     </style>
     """
 
-    ticker_document = f"""
-    <!doctype html>
-    <html lang="vi">
-    <head>
-        <meta charset="utf-8" />
-        <meta
-            name="viewport"
-            content="width=device-width, initial-scale=1"
-        />
-
-        <style>
-        :root {{
-            --ticker-duration: {animation_duration}s;
-            --ticker-height: 60px;
-        }}
-
-        html,
-        body {{
-            width: 100%;
-            height: var(--ticker-height);
-
-            margin: 0;
-            padding: 0;
-
-            overflow: hidden;
-
-            background: #24002A;
-
-            font-family:
-                system-ui,
-                -apple-system,
-                BlinkMacSystemFont,
-                "Segoe UI",
-                sans-serif;
-        }}
-
-        * {{
-            box-sizing: border-box;
-        }}
-
-        .epl-header-ticker-shell {{
-            position: relative;
-
-            display: flex;
-            align-items: stretch;
-
-            width: 100%;
-            height: var(--ticker-height);
-            min-height: var(--ticker-height);
-
-            overflow: hidden;
-
-            background:
-                linear-gradient(
-                    90deg,
-                    #1D0024 0%,
-                    #37003C 47%,
-                    #23002A 100%
-                );
-
-            color: #FFFFFF;
-            user-select: none;
-            -webkit-user-select: none;
-            pointer-events: none;
-        }}
-
-        .epl-header-ticker-accent {{
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-
-            width: 3px;
-
-            background:
-                linear-gradient(
-                    180deg,
-                    #FF2882 0%,
-                    #FF2882 48%,
-                    #00FF85 52%,
-                    #00FF85 100%
-                );
-        }}
-
-        .epl-header-ticker-label-zone {{
-            position: relative;
-            z-index: 3;
-
-            display: inline-flex;
-            align-items: center;
-
-            flex: 0 0 auto;
-
-            height: var(--ticker-height);
-
-            padding: 0 11px 0 12px;
-        }}
-
-        .epl-header-ticker-label {{
-            position: relative;
-
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-
-            width: 76px;
-            min-width: 76px;
-            max-width: 76px;
-
-            height: 30px;
-            min-height: 30px;
-
-            padding: 0 12px 0 10px;
-
-            background:
-                linear-gradient(
-                    135deg,
-                    #FF2D88 0%,
-                    #D80D68 100%
-                );
-
-            color: #FFFFFF;
-
-            border: 1px solid rgba(255, 255, 255, 0.14);
-            border-radius: 2px;
-
-            clip-path:
-                polygon(
-                    4px 0,
-                    calc(100% - 10px) 0,
-                    100% 50%,
-                    calc(100% - 10px) 100%,
-                    4px 100%,
-                    0 calc(100% - 4px),
-                    0 4px
-                );
-
-            box-shadow:
-                0 4px 12px rgba(255, 40, 130, 0.18),
-                inset 0 1px 0 rgba(255, 255, 255, 0.12);
-
-            font-size: 10px;
-            font-weight: 950;
-            line-height: 1;
-            letter-spacing: 0.055em;
-            text-transform: uppercase;
-            white-space: nowrap;
-        }}
-
-        .epl-header-ticker-label::after {{
-            content: "";
-
-            position: absolute;
-            right: -7px;
-            top: 5px;
-
-            width: 1px;
-            height: 20px;
-
-            background:
-                linear-gradient(
-                    180deg,
-                    transparent 0%,
-                    rgba(245, 197, 66, 0.78) 50%,
-                    transparent 100%
-                );
-        }}
-
-        .epl-header-ticker-label-dot {{
-            width: 5px;
-            height: 5px;
-            flex: 0 0 5px;
-
-            background: #00FF85;
-            transform: rotate(45deg);
-
-            box-shadow:
-                0 0 7px rgba(0, 255, 133, 0.62);
-        }}
-
-        .epl-header-ticker-label-text {{
-            display: inline-block;
-            white-space: nowrap;
-        }}
-
-        .epl-header-ticker-viewport {{
-            flex: 1 1 auto;
-            min-width: 0;
-            height: var(--ticker-height);
-            overflow: hidden;
-        }}
-
-        .epl-header-ticker-track {{
-            display: flex;
-            align-items: center;
-
-            width: max-content;
-            min-width: max-content;
-            height: var(--ticker-height);
-
-            will-change: transform;
-
-            animation:
-                eplHeaderTickerMove
-                var(--ticker-duration)
-                linear
-                infinite;
-        }}
-
-        .epl-header-ticker-group {{
-            display: inline-flex;
-            align-items: center;
-            flex: 0 0 auto;
-
-            width: max-content;
-            min-width: max-content;
-            height: var(--ticker-height);
-
-            padding: 0 28px 0 10px;
-        }}
-
-        .epl-header-ticker-item {{
-            display: inline-block;
-            flex: 0 0 auto;
-
-            color: #FFFFFF;
-            -webkit-text-fill-color: #FFFFFF;
-
-            font-size: 13px;
-            font-weight: 670;
-            line-height: 1.2;
-            letter-spacing: 0.001em;
-            white-space: nowrap;
-        }}
-
-        .epl-header-ticker-separator {{
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            flex: 0 0 auto;
-
-            margin: 0 20px;
-
-            color: #00FF85;
-            -webkit-text-fill-color: #00FF85;
-
-            font-size: 7px;
-            font-weight: 900;
-            line-height: 1;
-
-            filter:
-                drop-shadow(
-                    0 0 5px
-                    rgba(0, 255, 133, 0.50)
-                );
-        }}
-
-        @keyframes eplHeaderTickerMove {{
-            from {{
-                transform: translate3d(0, 0, 0);
-            }}
-
-            to {{
-                transform: translate3d(-50%, 0, 0);
-            }}
-        }}
-
-        @media (max-width: 768px) {{
-            :root {{
-                --ticker-height: 56px;
-            }}
-
-            .epl-header-ticker-label-zone {{
-                padding-left: 7px;
-                padding-right: 8px;
-            }}
-
-            .epl-header-ticker-label {{
-                width: 64px;
-                min-width: 64px;
-                max-width: 64px;
-
-                height: 28px;
-                min-height: 28px;
-
-                gap: 5px;
-                padding: 0 10px 0 8px;
-
-                font-size: 9px;
-                letter-spacing: 0.035em;
-            }}
-
-            .epl-header-ticker-label::after {{
-                right: -5px;
-                top: 6px;
-                height: 16px;
-            }}
-
-            .epl-header-ticker-label-dot {{
-                width: 4px;
-                height: 4px;
-                flex-basis: 4px;
-            }}
-
-            .epl-header-ticker-group {{
-                padding-right: 22px;
-                padding-left: 8px;
-            }}
-
-            .epl-header-ticker-item {{
-                font-size: 11.5px;
-            }}
-
-            .epl-header-ticker-separator {{
-                margin: 0 15px;
-                font-size: 6px;
-            }}
-        }}
-
-        @media (prefers-reduced-motion: reduce) {{
-            .epl-header-ticker-track {{
-                animation: none !important;
-                transform: none !important;
-            }}
-
-            .epl-header-ticker-group:nth-child(2) {{
-                display: none !important;
-            }}
-        }}
-        </style>
-    </head>
-
-    <body>
-        <div
-            class="epl-header-ticker-shell"
-            role="region"
-            aria-label="{safe_aria_label}"
-            title="{safe_aria_label}"
-        >
-            <span
-                class="epl-header-ticker-accent"
-                aria-hidden="true"
-            ></span>
-
-            <div
-                class="epl-header-ticker-label-zone"
-                aria-hidden="true"
-            >
-                <div class="epl-header-ticker-label">
-                    <span
-                        class="epl-header-ticker-label-dot"
-                    ></span>
-
-                    <span
-                        class="epl-header-ticker-label-text"
-                    >
-                        NEWS
-                    </span>
-                </div>
-            </div>
-
-            <div class="epl-header-ticker-viewport">
-                <div
-                    class="epl-header-ticker-track"
-                    aria-hidden="true"
-                >
-                    {ticker_groups_html}
-                </div>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
-
-    sidebar_controller_script = r"""
-    <script>
-    (() => {
-        const parentWindow = window.parent;
-        const parentDocument = parentWindow.document;
-        const root = parentDocument.documentElement;
-        const controllerName = "__eplTickerSidebarControllerV3";
-
-        const previousController = parentWindow[controllerName];
-
-        if (
-            previousController
-            && typeof previousController.cleanup === "function"
-        ) {
-            previousController.cleanup();
-        }
-
-        let resizeObserver = null;
-        let mutationObserver = null;
-        let bodyObserver = null;
-        let animationFrame = 0;
-        let observedSidebar = null;
-        let cleaned = false;
-
-        const getClosedReserve = () => {
-            return parentWindow.innerWidth <= 768
-                ? 64
-                : 142;
-        };
-
-        const getSidebarVisibleRight = (sidebar) => {
-            if (!sidebar) {
-                return 0;
-            }
-
-            const style = parentWindow.getComputedStyle(sidebar);
-
-            if (
-                style.display === "none"
-                || style.visibility === "hidden"
-                || Number(style.opacity) === 0
-            ) {
-                return 0;
-            }
-
-            const rect = sidebar.getBoundingClientRect();
-            const visibleLeft = Math.max(0, rect.left);
-            const visibleRight = Math.min(
-                parentWindow.innerWidth,
-                rect.right
-            );
-            const visibleWidth = Math.max(
-                0,
-                visibleRight - visibleLeft
-            );
-
-            if (visibleWidth < 96 || rect.right <= 0) {
-                return 0;
-            }
-
-            return Math.max(0, Math.round(visibleRight));
-        };
-
-        const updateTickerOffset = () => {
-            const sidebar = parentDocument.querySelector(
-                'section[data-testid="stSidebar"]'
-            );
-
-            const closedReserve = getClosedReserve();
-            const sidebarRight = getSidebarVisibleRight(sidebar);
-            const leftOffset = Math.max(
-                closedReserve,
-                sidebarRight
-            );
-            const remainingWidth = Math.max(
-                0,
-                parentWindow.innerWidth - leftOffset
-            );
-
-            root.style.setProperty(
-                "--epl-ticker-dynamic-left",
-                `${leftOffset}px`
-            );
-
-            root.setAttribute(
-                "data-epl-ticker-constrained",
-                remainingWidth < 280
-                    ? "true"
-                    : "false"
-            );
-
-            if (sidebar !== observedSidebar) {
-                if (resizeObserver) {
-                    resizeObserver.disconnect();
-                }
-
-                if (mutationObserver) {
-                    mutationObserver.disconnect();
-                }
-
-                observedSidebar = sidebar;
-
-                if (sidebar) {
-                    resizeObserver = new parentWindow.ResizeObserver(
-                        scheduleUpdate
-                    );
-
-                    resizeObserver.observe(sidebar);
-
-                    mutationObserver = new parentWindow.MutationObserver(
-                        scheduleUpdate
-                    );
-
-                    mutationObserver.observe(sidebar, {
-                        attributes: true,
-                        attributeFilter: [
-                            "style",
-                            "class",
-                            "aria-expanded"
-                        ],
-                        childList: true,
-                        subtree: false
-                    });
-                }
-            }
-        };
-
-        const scheduleUpdate = () => {
-            parentWindow.cancelAnimationFrame(animationFrame);
-
-            animationFrame = parentWindow.requestAnimationFrame(
-                updateTickerOffset
-            );
-        };
-
-        const cleanup = () => {
-            if (cleaned) {
-                return;
-            }
-
-            cleaned = true;
-
-            parentWindow.cancelAnimationFrame(animationFrame);
-
-            resizeObserver?.disconnect();
-            mutationObserver?.disconnect();
-            bodyObserver?.disconnect();
-
-            parentWindow.removeEventListener("resize", scheduleUpdate);
-            parentWindow.removeEventListener("orientationchange", scheduleUpdate);
-
-            if (parentWindow.visualViewport) {
-                parentWindow.visualViewport.removeEventListener(
-                    "resize",
-                    scheduleUpdate
-                );
-            }
-        };
-
-        bodyObserver = new parentWindow.MutationObserver(scheduleUpdate);
-
-        bodyObserver.observe(parentDocument.body, {
-            childList: true,
-            subtree: true
-        });
-
-        parentWindow.addEventListener("resize", scheduleUpdate, {
-            passive: true
-        });
-
-        parentWindow.addEventListener("orientationchange", scheduleUpdate, {
-            passive: true
-        });
-
-        if (parentWindow.visualViewport) {
-            parentWindow.visualViewport.addEventListener(
-                "resize",
-                scheduleUpdate,
-                { passive: true }
-            );
-        }
-
-        updateTickerOffset();
-        parentWindow.setTimeout(scheduleUpdate, 80);
-        parentWindow.setTimeout(scheduleUpdate, 240);
-        parentWindow.setTimeout(scheduleUpdate, 520);
-
-        parentWindow[controllerName] = {
-            cleanup
-        };
-    })();
-    </script>
-    """
-
     st.markdown(
-        parent_layout_css,
+        ticker_host_css,
         unsafe_allow_html=True
     )
 
@@ -34040,15 +33789,9 @@ def _render_epl_news_ticker_content():
     ):
         components.html(
             ticker_document,
-            height=60,
+            height=52,
             scrolling=False
         )
-
-    components.html(
-        sidebar_controller_script,
-        height=0,
-        scrolling=False
-    )
 
 
 @st.fragment(
