@@ -1525,43 +1525,25 @@ def get_avatar_sprite_position(
     return x_position, y_position
 
 
-@st.cache_resource(show_spinner=False, max_entries=2)
 def build_avatar_background_css() -> str:
-    """
-    Tạo CSS cho grid avatar dạng button từ đúng một sprite Base64.
+    """Render the avatar picker with one reliable PNG URL per button.
 
-    Cơ chế tương tác dùng st.button giống dự án World Cup. Sprite chỉ chịu
-    trách nhiệm hiển thị ảnh, không tham gia xác định lựa chọn hoặc callback.
-    Vì vậy code không còn phụ thuộc vào DOM nội bộ của st.radio/nth-of-type.
+    The sprite implementation was compact, but a very large data URI stored in
+    a CSS custom property is not handled consistently by Streamlit 1.58 and
+    browser style parsing. The visible symptom is a complete grid of white
+    circles even though the same avatar file works in the floating avatar.
+
+    Static PNG files are already browser-cacheable, so assigning the original
+    image URL directly to each button is both lighter than 80 Base64 strings and
+    substantially more reliable than the runtime sprite.
     """
     avatar_keys = load_avatar_catalog()
-    sprite_src, columns, rows = build_avatar_sprite_payload()
 
     if not avatar_keys:
         return ""
 
-    sprite_available = bool(
-        sprite_src
-        and columns > 0
-        and rows > 0
-    )
-
-    if not sprite_available:
-        # Pixel trong suốt; từng avatar sẽ được gắn riêng ở fallback bên dưới.
-        sprite_src = (
-            "data:image/gif;base64,"
-            "R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs="
-        )
-        columns = 1
-        rows = 1
-
     css_parts = [
         """
-        :root {
-            --epl-avatar-sprite-image:
-                url("__AVATAR_SPRITE_SRC__");
-        }
-
         div[class*="st-key-avatar_pick_"] {
             width: 100% !important;
             min-width: 0 !important;
@@ -1578,10 +1560,10 @@ def build_avatar_background_css() -> str:
             min-height: 88px !important;
             padding: 0 !important;
             margin: 0 0 8px 0 !important;
-            border: 2px solid rgba(15,23,42,0.10) !important;
+            border: 2px solid rgba(15, 23, 42, 0.10) !important;
             border-radius: 18px !important;
             background: #FFFFFF !important;
-            box-shadow: 0 8px 20px rgba(15,23,42,0.06) !important;
+            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06) !important;
             overflow: hidden !important;
             cursor: pointer !important;
             color: transparent !important;
@@ -1599,8 +1581,8 @@ def build_avatar_background_css() -> str:
             background: #FFF7ED !important;
             transform: translateY(-1px) !important;
             box-shadow:
-                0 0 0 4px rgba(245,197,66,0.18),
-                0 12px 28px rgba(15,23,42,0.13) !important;
+                0 0 0 4px rgba(245, 197, 66, 0.18),
+                0 12px 28px rgba(15, 23, 42, 0.13) !important;
         }
 
         div[class*="st-key-avatar_pick_"] button:active {
@@ -1609,21 +1591,20 @@ def build_avatar_background_css() -> str:
 
         div[class*="st-key-avatar_pick_"] button::before {
             content: "";
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            width: 64px;
-            height: 64px;
-            transform: translate(-50%, -50%);
-            border: 3px solid #FFFFFF;
-            border-radius: 999px;
-            background-image:
-                var(--epl-avatar-sprite-image);
-            background-size:
-                __AVATAR_SPRITE_WIDTH__% __AVATAR_SPRITE_HEIGHT__%;
-            background-repeat: no-repeat;
-            box-shadow: 0 7px 18px rgba(15,23,42,0.16);
-            pointer-events: none;
+            position: absolute !important;
+            left: 50% !important;
+            top: 50% !important;
+            width: 64px !important;
+            height: 64px !important;
+            transform: translate(-50%, -50%) !important;
+            border: 3px solid #FFFFFF !important;
+            border-radius: 999px !important;
+            background-color: #F8FAFC !important;
+            background-repeat: no-repeat !important;
+            background-size: cover !important;
+            background-position: center center !important;
+            box-shadow: 0 7px 18px rgba(15, 23, 42, 0.16) !important;
+            pointer-events: none !important;
         }
 
         div[class*="st-key-avatar_pick_"] button::after {
@@ -1643,7 +1624,7 @@ def build_avatar_background_css() -> str:
             font-size: 13px;
             font-weight: 950;
             line-height: 1;
-            box-shadow: 0 5px 12px rgba(15,23,42,0.18);
+            box-shadow: 0 5px 12px rgba(15, 23, 42, 0.18);
             pointer-events: none;
         }
 
@@ -1655,11 +1636,6 @@ def build_avatar_background_css() -> str:
             line-height: 0 !important;
         }
 
-        /*
-        Trạng thái avatar đang dùng được gắn trực tiếp vào thuộc tính disabled
-        của đúng button. Cách này không phụ thuộc vào thứ tự các thẻ <style>
-        sau fragment rerun và không cần đoán DOM bằng nth-of-type.
-        */
         div[class*="st-key-avatar_pick_"]:has(button:disabled) {
             opacity: 1 !important;
         }
@@ -1671,8 +1647,8 @@ def build_avatar_background_css() -> str:
             background: #FFF7ED !important;
             transform: none !important;
             box-shadow:
-                0 0 0 4px rgba(245,197,66,0.20),
-                0 10px 24px rgba(15,23,42,0.10) !important;
+                0 0 0 4px rgba(245, 197, 66, 0.20),
+                0 10px 24px rgba(15, 23, 42, 0.10) !important;
             cursor: default !important;
         }
 
@@ -1689,8 +1665,8 @@ def build_avatar_background_css() -> str:
             }
 
             div[class*="st-key-avatar_pick_"] button::before {
-                width: 82px;
-                height: 82px;
+                width: 82px !important;
+                height: 82px !important;
             }
 
             div[class*="st-key-avatar_pick_"] button::after {
@@ -1707,70 +1683,65 @@ def build_avatar_background_css() -> str:
             }
 
             div[class*="st-key-avatar_pick_"] button::before {
-                width: 76px;
-                height: 76px;
+                width: 76px !important;
+                height: 76px !important;
             }
         }
         """
-        .replace("__AVATAR_SPRITE_SRC__", sprite_src)
-        .replace(
-            "__AVATAR_SPRITE_WIDTH__",
-            str(columns * 100)
-        )
-        .replace(
-            "__AVATAR_SPRITE_HEIGHT__",
-            str(rows * 100)
-        )
     ]
 
+    avatar_dir = get_avatar_dir()
+
     for avatar_key in avatar_keys:
-        avatar_button_key = get_avatar_button_key(
-            avatar_key
+        avatar_button_key = get_avatar_button_key(avatar_key)
+        avatar_path = avatar_dir / avatar_key
+
+        # Prefer the browser-cached PNG in ./static/avatars. If static serving
+        # is unavailable, resolve_asset_src transparently returns Base64.
+        avatar_src = resolve_asset_src(
+            f"static/avatars/{avatar_key}"
         )
 
-        if not sprite_available:
+        if not avatar_src:
             avatar_src = get_avatar_src(
                 avatar_key,
                 avatar_keys=list(avatar_keys)
             )
 
-            if avatar_src:
-                css_parts.append(
-                    f"""
-                    .st-key-{avatar_button_key} button::before {{
-                        background-image: url("{avatar_src}");
-                        background-size: cover;
-                        background-position: center;
-                    }}
-                    """
+        if not avatar_src:
+            continue
+
+        # Cache bust only public static URLs. Data URIs must remain untouched.
+        if (
+            avatar_src.startswith(f"{STATIC_URL_PREFIX}/")
+            and avatar_path.exists()
+            and avatar_path.is_file()
+        ):
+            try:
+                avatar_src = (
+                    f"{avatar_src}?v={avatar_path.stat().st_mtime_ns:x}"
                 )
+            except OSError:
+                pass
 
-            continue
-
-        position = get_avatar_sprite_position(
-            avatar_key,
-            avatar_keys=avatar_keys
+        safe_avatar_src = html.escape(
+            avatar_src,
+            quote=True
         )
-
-        if position is None:
-            continue
-
-        x_position, y_position = position
 
         css_parts.append(
             f"""
+            div[class*="st-key-{avatar_button_key}"] button::before,
             .st-key-{avatar_button_key} button::before {{
-                background-position:
-                    {x_position:.6f}% {y_position:.6f}%;
+                background-image: url("{safe_avatar_src}") !important;
+                background-size: cover !important;
+                background-position: center center !important;
+                background-repeat: no-repeat !important;
             }}
             """
         )
 
-    return (
-        "<style>"
-        + "\n".join(css_parts)
-        + "</style>"
-    )
+    return "<style>" + "\n".join(css_parts) + "</style>"
 
 
 # ============================================================
@@ -2658,9 +2629,45 @@ def inject_epl_premium_match_card_css():
             z-index: 2;
         }
 
+        /*
+         * Desktop title and ribbon are one explicit vertical stack.
+         * This prevents Streamlit element wrappers from collapsing the ribbon
+         * into the heading after the refactor from st.subheader to raw HTML.
+         */
+        div[class*="st-key-match_title_desktop_"]
+        .epl-match-title-stack {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            justify-content: flex-start !important;
+            gap: 9px !important;
+            width: 100% !important;
+            min-width: 0 !important;
+            margin: 0 0 13px 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+        }
+
+        div[class*="st-key-match_title_desktop_"]
+        .epl-match-title-stack h3 {
+            display: block !important;
+            width: 100% !important;
+            min-width: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        div[class*="st-key-match_title_desktop_"]
+        .epl-match-title-stack
+        .epl-premier-league-ribbon {
+            position: relative !important;
+            flex: 0 0 auto !important;
+            margin: 0 !important;
+            clear: both !important;
+        }
+
         div[class*="st-key-match_title_desktop_"] h3 {
-            margin:
-                0 0 8px 0 !important;
+            margin: 0 !important;
 
             color:
                 #190021 !important;
@@ -19953,28 +19960,32 @@ def render_match_title(
             '</div>'
         )
 
-    # Desktop
+    # Desktop: render heading and ribbon in one HTML stack. Keeping both
+    # elements in one Streamlit slot removes the wrapper-height regression that
+    # made the ribbon touch or overlap long team names after the refactor.
+    desktop_title_html = (
+        '<div class="epl-match-title-stack">'
+            '<h3 class="epl-match-title-heading">'
+                f'{safe_home} '
+                '<span class="epl-desktop-vs-only">vs</span> '
+                f'{safe_away}'
+            '</h3>'
+            f'{ribbon_html}'
+        '</div>'
+    )
+
     with stylable_container(
         key=f"match_title_desktop_{match_id}",
         css_styles="""
         {
             display: block;
+            width: 100%;
+            overflow: visible;
         }
         """
     ):
         st.markdown(
-            (
-                '<h3>'
-                f'{safe_home} '
-                '<span class="epl-desktop-vs-only">vs</span> '
-                f'{safe_away}'
-                '</h3>'
-            ),
-            unsafe_allow_html=True
-        )
-    
-        st.markdown(
-            ribbon_html,
+            desktop_title_html,
             unsafe_allow_html=True
         )
 
