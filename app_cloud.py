@@ -1182,9 +1182,12 @@ def render_parent_script(script_html: str):
     )
 
 def get_avatar_dir() -> Path:
-    """Return the avatar directory, preferring the new root static folder."""
-    primary_dir = STATIC_DIR / "avatars"
-    fallback_dir = DATA_STATIC_DIR / "avatars"
+    """
+    Xác định đúng thư mục avatar.
+    Ưu tiên data/static/avatars.
+    """
+    primary_dir = BASE_DIR / "data" / "static" / "avatars"
+    fallback_dir = BASE_DIR / "static" / "avatars"
 
     if primary_dir.exists() and primary_dir.is_dir():
         return primary_dir
@@ -1385,13 +1388,19 @@ def load_avatar_catalog() -> tuple[str, ...]:
 
 @st.cache_resource(show_spinner=False, max_entries=2)
 def build_avatar_sprite_payload() -> tuple[str, int, int]:
-    """Build one compressed avatar sprite and return a cached data URI.
+    """
+    Tạo một sprite WebP dùng chung cho toàn bộ avatar.
 
-    Streamlit static serving does not provide a browser image MIME type for
-    generated WebP files, so a static WebP sprite can appear as empty circles.
-    One cached data URI is reliable while still replacing 80 separate images.
+    Trả về:
+    - data URI của sprite;
+    - số cột;
+    - số hàng.
+
+    Hàm chạy một lần cho mỗi app process. Khi deploy bộ ảnh mới, process mới
+    sẽ tự tạo sprite mới; không giữ 80 ảnh Base64 độc lập trong cache.
     """
     avatar_keys = load_avatar_catalog()
+
     if not avatar_keys:
         return "", AVATAR_SPRITE_COLUMNS, 0
 
@@ -1399,36 +1408,51 @@ def build_avatar_sprite_payload() -> tuple[str, int, int]:
         from io import BytesIO
         from PIL import Image, ImageOps
 
-        columns = min(AVATAR_SPRITE_COLUMNS, len(avatar_keys))
-        rows = (len(avatar_keys) + columns - 1) // columns
+        columns = min(
+            AVATAR_SPRITE_COLUMNS,
+            len(avatar_keys)
+        )
+        rows = (
+            len(avatar_keys)
+            + columns
+            - 1
+        ) // columns
+
         sprite = Image.new(
             "RGB",
-            (columns * AVATAR_SPRITE_CELL_PX, rows * AVATAR_SPRITE_CELL_PX),
+            (
+                columns * AVATAR_SPRITE_CELL_PX,
+                rows * AVATAR_SPRITE_CELL_PX
+            ),
             color=(255, 255, 255)
         )
+
         avatar_dir = get_avatar_dir()
-        version_parts: list[str] = []
 
         for index, avatar_key in enumerate(avatar_keys):
             avatar_path = avatar_dir / avatar_key
+
             if not avatar_path.exists() or not avatar_path.is_file():
                 continue
 
-            stat = avatar_path.stat()
-            version_parts.append(
-                f"{avatar_key}:{stat.st_mtime_ns}:{stat.st_size}"
-            )
-
             with Image.open(avatar_path) as source_image:
-                avatar_image = ImageOps.exif_transpose(source_image).convert("RGB")
+                avatar_image = ImageOps.exif_transpose(
+                    source_image
+                ).convert("RGB")
+
                 avatar_image = ImageOps.fit(
                     avatar_image,
-                    (AVATAR_SPRITE_CELL_PX, AVATAR_SPRITE_CELL_PX),
+                    (
+                        AVATAR_SPRITE_CELL_PX,
+                        AVATAR_SPRITE_CELL_PX
+                    ),
                     method=Image.Resampling.LANCZOS,
                     centering=(0.5, 0.5)
                 )
+
                 column_index = index % columns
                 row_index = index // columns
+
                 sprite.paste(
                     avatar_image,
                     (
@@ -1439,7 +1463,6 @@ def build_avatar_sprite_payload() -> tuple[str, int, int]:
 
         output_buffer = BytesIO()
         output_mime_type = "image/webp"
-        output_suffix = ".webp"
 
         try:
             sprite.save(
@@ -1449,23 +1472,21 @@ def build_avatar_sprite_payload() -> tuple[str, int, int]:
                 lossless=False,
                 method=4
             )
+
         except Exception:
+            # Một số bản Pillow không có codec WebP.
             output_buffer = BytesIO()
             output_mime_type = "image/png"
-            output_suffix = ".png"
-            sprite.save(output_buffer, format="PNG", optimize=True)
+            sprite.save(
+                output_buffer,
+                format="PNG",
+                optimize=True
+            )
 
-        payload = output_buffer.getvalue()
-        version_hash = hashlib.sha256(
-            ("|".join(version_parts)).encode("utf-8") + payload[:2048]
-        ).hexdigest()[:16]
+        encoded = base64.b64encode(
+            output_buffer.getvalue()
+        ).decode("ascii")
 
-        # Do not serve the generated sprite through Streamlit's static route.
-        # Streamlit serves unsupported extensions such as .webp as text/plain
-        # with nosniff, which makes browsers reject the image. Runtime-generated
-        # files are also not guaranteed to persist on Community Cloud. A single
-        # cached data URI is reliable and still avoids 80 independent payloads.
-        encoded = base64.b64encode(payload).decode("ascii")
         return (
             f"data:{output_mime_type};base64,{encoded}",
             columns,
@@ -1473,6 +1494,9 @@ def build_avatar_sprite_payload() -> tuple[str, int, int]:
         )
 
     except Exception:
+        # Fallback an toàn: vẫn giữ app hoạt động nếu Pillow/WebP gặp lỗi.
+        # Chỉ dùng ảnh hiện tại ở nút avatar; grid sẽ không có ảnh nền thay
+        # vì làm sập toàn bộ ứng dụng.
         LOGGER.warning(
             "Could not build avatar sprite; using image fallback.",
             exc_info=True
@@ -7357,19 +7381,32 @@ def inject_mobile_match_title_css():
     )
 
 def inject_desktop_match_vs_style():
-    """Style the explicit desktop ``vs`` span without a DOM observer."""
+    """
+    Chỉ thay đổi màu và kích thước chữ 'vs' trên desktop.
+
+    Không thay:
+    - cấu trúc heading
+    - khoảng cách với badge
+    - khoảng cách với ribbon
+    - giao diện mobile
+    """
     st.markdown(
         """
         <style>
         @media (min-width: 769px) {
             div[class*="st-key-match_title_desktop_"]
-            h3 .epl-desktop-vs-only {
+            h3
+            .epl-desktop-vs-only {
                 display: inline;
+
                 color: #FF2882 !important;
+
                 font-size: 0.62em !important;
                 font-weight: 950 !important;
                 line-height: inherit !important;
+
                 letter-spacing: 0 !important;
+
                 vertical-align: 0.08em;
             }
         }
@@ -7377,6 +7414,144 @@ def inject_desktop_match_vs_style():
         """,
         unsafe_allow_html=True
     )
+
+    render_parent_script("""
+        <script>
+        (() => {
+            const parentWindow = window.parent;
+            const parentDocument = parentWindow.document;
+
+            const headingSelector =
+                'div[class*="st-key-match_title_desktop_"] h3';
+
+            const observerKey =
+                "__eplDesktopVsOnlyObserver";
+
+            /*
+             * Ngắt observer cũ sau mỗi Streamlit rerun,
+             * tránh tạo nhiều observer trùng nhau.
+             */
+            if (parentWindow[observerKey]) {
+                parentWindow[observerKey].disconnect();
+            }
+
+            const styleVsInHeading = (heading) => {
+                if (
+                    !heading
+                    || heading.dataset.eplVsStyled === "1"
+                ) {
+                    return;
+                }
+
+                const walker =
+                    parentDocument.createTreeWalker(
+                        heading,
+                        parentWindow.NodeFilter.SHOW_TEXT
+                    );
+
+                let textNode;
+
+                while (
+                    (textNode = walker.nextNode())
+                ) {
+                    const value =
+                        textNode.nodeValue || "";
+
+                    const matched =
+                        value.match(
+                            /^(.*?)(\\s+vs\\s+)(.*)$/i
+                        );
+
+                    if (!matched) {
+                        continue;
+                    }
+
+                    const fragment =
+                        parentDocument
+                        .createDocumentFragment();
+
+                    fragment.appendChild(
+                        parentDocument.createTextNode(
+                            matched[1] + " "
+                        )
+                    );
+
+                    const vsSpan =
+                        parentDocument.createElement(
+                            "span"
+                        );
+
+                    vsSpan.className =
+                        "epl-desktop-vs-only";
+
+                    vsSpan.textContent = "vs";
+
+                    fragment.appendChild(vsSpan);
+
+                    fragment.appendChild(
+                        parentDocument.createTextNode(
+                            " " + matched[3]
+                        )
+                    );
+
+                    textNode.parentNode.replaceChild(
+                        fragment,
+                        textNode
+                    );
+
+                    heading.dataset.eplVsStyled = "1";
+
+                    break;
+                }
+            };
+
+            const applyStyle = () => {
+                parentDocument
+                    .querySelectorAll(
+                        headingSelector
+                    )
+                    .forEach(
+                        styleVsInHeading
+                    );
+            };
+
+            let updateScheduled = false;
+
+            const scheduleUpdate = () => {
+                if (updateScheduled) {
+                    return;
+                }
+
+                updateScheduled = true;
+
+                parentWindow.requestAnimationFrame(
+                    () => {
+                        updateScheduled = false;
+                        applyStyle();
+                    }
+                );
+            };
+
+            applyStyle();
+
+            const observer =
+                new parentWindow.MutationObserver(
+                    scheduleUpdate
+                );
+
+            observer.observe(
+                parentDocument.querySelector('[data-testid="stMain"]')
+                    || parentDocument.body,
+                {
+                    childList: true,
+                    subtree: true
+                }
+            );
+
+            parentWindow[observerKey] = observer;
+        })();
+        </script>
+        """)
 
 
 @st.dialog(" ")
@@ -19962,15 +20137,8 @@ def render_match_title(
         }
         """
     ):
-        st.markdown(
-            (
-                '<h3>'
-                f'{safe_home} '
-                '<span class="epl-desktop-vs-only">vs</span> '
-                f'{safe_away}'
-                '</h3>'
-            ),
-            unsafe_allow_html=True
+        st.subheader(
+            f"{home_display} vs {away_display}"
         )
     
         st.markdown(
