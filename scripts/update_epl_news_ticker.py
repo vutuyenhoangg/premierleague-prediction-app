@@ -1,19 +1,11 @@
 from __future__ import annotations
 
-import argparse
 import json
 import logging
 import os
 import re
 
-from datetime import (
-    date,
-    datetime,
-    time,
-    timedelta,
-    timezone,
-)
-
+from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -39,7 +31,7 @@ VN_TZ = ZoneInfo(
 
 MODEL_NAME = os.getenv(
     "GEMINI_NEWS_MODEL",
-    "gemini-2.5-flash",
+    "gemini-2.5-flash"
 ).strip()
 
 ALLOWED_CATEGORIES = {
@@ -58,54 +50,24 @@ ALLOWED_INFORMATION_STATUSES = {
     "monitoring",
 }
 
-UNCERTAIN_MARKERS = (
-    "được cho là",
-    "theo truyền thông anh",
-    "đang được theo dõi",
-    "chưa được xác nhận",
-    "chưa có xác nhận",
-)
 
-
-class TickerValidationError(
-    ValueError
-):
+class TickerValidationError(ValueError):
     pass
 
 
 # ============================================================
-# ARGUMENTS + ENVIRONMENT
+# ENVIRONMENT
 # ============================================================
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description=(
-            "Generate EPL news ticker "
-            "with Gemini and Google Search."
-        )
-    )
-
-    parser.add_argument(
-        "--edition",
-        choices=[
-            "morning",
-            "afternoon",
-        ],
-        required=True,
-    )
-
-    return parser.parse_args()
-
 
 def require_environment() -> tuple[str, str]:
     gemini_api_key = os.getenv(
         "GEMINI_API_KEY",
-        "",
+        ""
     ).strip()
 
     database_url = os.getenv(
         "DATABASE_URL",
-        "",
+        ""
     ).strip()
 
     missing_variables = []
@@ -135,86 +97,23 @@ def require_environment() -> tuple[str, str]:
 
 
 # ============================================================
-# TIME WINDOW
-# ============================================================
-
-def resolve_news_window(
-    edition: str,
-) -> tuple[
-    date,
-    datetime,
-    datetime,
-]:
-
-    current_vietnam_time = datetime.now(
-        VN_TZ
-    )
-
-    edition_date = (
-        current_vietnam_time.date()
-    )
-
-    if edition == "morning":
-        cutoff_time = datetime.combine(
-            edition_date,
-            time(
-                hour=5,
-                minute=0,
-            ),
-            tzinfo=VN_TZ,
-        )
-
-        coverage_start = datetime.combine(
-            edition_date
-            - timedelta(days=1),
-            time(
-                hour=13,
-                minute=0,
-            ),
-            tzinfo=VN_TZ,
-        )
-
-    else:
-        cutoff_time = datetime.combine(
-            edition_date,
-            time(
-                hour=13,
-                minute=0,
-            ),
-            tzinfo=VN_TZ,
-        )
-
-        coverage_start = datetime.combine(
-            edition_date,
-            time(
-                hour=5,
-                minute=0,
-            ),
-            tzinfo=VN_TZ,
-        )
-
-    return (
-        edition_date,
-        coverage_start,
-        cutoff_time,
-    )
-
-
-# ============================================================
 # DATABASE
 # ============================================================
 
 def build_engine(
-    database_url: str,
+    database_url: str
 ) -> Engine:
 
     return create_engine(
         database_url,
+
         pool_pre_ping=True,
         pool_recycle=1800,
+
         pool_size=1,
         max_overflow=1,
         pool_timeout=20,
+
         connect_args={
             "connect_timeout": 15,
             "options": (
@@ -226,18 +125,18 @@ def build_engine(
 
 
 def normalize_text(
-    value: Any,
+    value: Any
 ) -> str:
 
     return re.sub(
         r"\s+",
         " ",
-        str(value or ""),
+        str(value or "")
     ).strip()
 
 
 def load_previous_items(
-    engine: Engine,
+    engine: Engine
 ) -> list[str]:
 
     query = text(
@@ -259,10 +158,7 @@ def load_previous_items(
 
     raw_items = row.get("items")
 
-    if isinstance(
-        raw_items,
-        str,
-    ):
+    if isinstance(raw_items, str):
         try:
             raw_items = json.loads(
                 raw_items
@@ -270,19 +166,13 @@ def load_previous_items(
         except json.JSONDecodeError:
             return []
 
-    if not isinstance(
-        raw_items,
-        list,
-    ):
+    if not isinstance(raw_items, list):
         return []
 
     previous_items = []
 
     for raw_item in raw_items:
-        if not isinstance(
-            raw_item,
-            dict,
-        ):
+        if not isinstance(raw_item, dict):
             continue
 
         item_text = normalize_text(
@@ -302,22 +192,10 @@ def load_previous_items(
 # ============================================================
 
 def build_prompt(
-    edition: str,
-    coverage_start: datetime,
-    cutoff_time: datetime,
+    run_time_vietnam: datetime,
     previous_items: list[str],
     validation_feedback: list[str] | None = None,
 ) -> str:
-
-    current_vietnam_time = datetime.now(
-        VN_TZ
-    )
-
-    edition_label = (
-        "bản tin sáng"
-        if edition == "morning"
-        else "bản tin chiều"
-    )
 
     if previous_items:
         previous_items_text = "\n".join(
@@ -345,22 +223,28 @@ def build_prompt(
     return f"""
 Bạn là biên tập viên ticker cho ứng dụng dự đoán Premier League.
 
-THÔNG TIN BẢN TIN
+THỜI ĐIỂM CẬP NHẬT
 
-- Phiên bản: {edition_label}
-- Thời điểm hệ thống tại Việt Nam: {current_vietnam_time.isoformat()}
-- Khoảng thời gian ưu tiên: {coverage_start.isoformat()} đến {cutoff_time.isoformat()}
-- Thời điểm giới hạn tuyệt đối: {cutoff_time.isoformat()}
+- Thời điểm chạy hệ thống tại Việt Nam: {run_time_vietnam.isoformat()}
 
-NHIỆM VỤ
+MỤC TIÊU
 
 Bắt buộc sử dụng Google Search trước khi viết.
 
-Hãy tìm kiếm, kiểm tra và tổng hợp những tin tức nổi bật, mới nhất liên quan trực tiếp đến Premier League tính đến đúng thời điểm giới hạn tuyệt đối nêu trên.
+Hãy tìm kiếm, kiểm tra và tổng hợp từ 8 đến 10 tin tức nổi bật, mới nhất liên quan trực tiếp đến Premier League tại thời điểm hiện tại.
 
-Không sử dụng bất kỳ thông tin nào được công bố sau thời điểm giới hạn.
+Mục tiêu quan trọng nhất là nội dung phải mới, đáng chú ý và có giá trị đối với người theo dõi Premier League.
 
-Chọn từ 8 đến 10 tin có giá trị nhất đối với người theo dõi Premier League, đặc biệt là những thông tin có thể ảnh hưởng đến lực lượng, phong độ và kết quả các trận đấu.
+CÁCH XÁC ĐỊNH TIN MỚI
+
+- So sánh ngày và giờ công bố hoặc cập nhật của các nguồn.
+- Ưu tiên thông tin vừa được công bố hoặc vừa có diễn biến mới.
+- Ưu tiên các tin trong vòng 24 giờ gần nhất.
+- Có thể mở rộng phạm vi tìm kiếm nếu trong 24 giờ chưa có đủ tin đáng chú ý.
+- Không lấy bài viết cũ rồi mô tả như một diễn biến mới.
+- Nếu nhiều bài cùng nói về một sự kiện, chỉ chọn thông tin mới nhất và đầy đủ nhất.
+- Không chọn tin chỉ vì bài viết mới đăng lại nhưng nội dung thực tế đã cũ.
+- Không cố tạo đủ số lượng bằng các tin nhỏ, thiếu giá trị hoặc không còn mới.
 
 PHẠM VI NỘI DUNG
 
@@ -371,26 +255,23 @@ PHẠM VI NỘI DUNG
 3. Treo giò, án phạt và thay đổi danh sách thi đấu.
 4. Xác nhận mới từ huấn luyện viên hoặc câu lạc bộ.
 5. Thay đổi lịch thi đấu, giờ thi đấu hoặc sân đấu.
-6. Thay đổi huấn luyện viên hoặc tình hình nội bộ ảnh hưởng trực tiếp đến đội bóng.
-7. Chuyển nhượng đã được xác nhận hoặc được nhiều nguồn truyền thông uy tín tại Anh cùng đưa tin.
-8. Các diễn biến nổi bật khác liên quan trực tiếp đến Premier League.
+6. Thay đổi huấn luyện viên hoặc tình hình nội bộ ảnh hưởng đến đội bóng.
+7. Chuyển nhượng đã được xác nhận hoặc được nhiều nguồn uy tín tại Anh cùng đưa tin.
+8. Các diễn biến đáng chú ý khác liên quan trực tiếp đến Premier League.
 
 YÊU CẦU TÌM KIẾM
 
 - Chỉ chọn tin liên quan trực tiếp đến Premier League hoặc các câu lạc bộ đang thi đấu tại Premier League.
 - Ưu tiên nguồn chính thức của Premier League, câu lạc bộ và huấn luyện viên.
 - Ưu tiên các hãng truyền thông thể thao uy tín.
-- Ưu tiên thông tin được công bố trong khoảng thời gian yêu cầu.
-- Có thể mở rộng phạm vi tìm kiếm tối đa 24 giờ nếu chưa đủ tin nổi bật.
 - Không sử dụng bài đăng mạng xã hội chưa được xác minh làm nguồn duy nhất.
-- Không lấy bài viết cũ rồi mô tả như một diễn biến mới.
-- Không bịa phát biểu, chấn thương, con số, thời điểm hoặc trạng thái thương vụ.
+- Không bịa phát biểu, chấn thương, thời gian, con số hoặc trạng thái thương vụ.
 - Không đưa tin về giải đấu khác nếu không có liên hệ trực tiếp đến một câu lạc bộ Premier League.
-- Nếu một thông tin chưa chắc chắn, phải thể hiện rõ trạng thái chưa xác nhận.
+- Nếu thông tin chưa được xác nhận, phải thể hiện rõ trạng thái chưa chắc chắn.
 
 PHONG CÁCH TICKER
 
-Mỗi tin phải là một câu tiếng Việt hoàn chỉnh theo phong cách ticker bản tin thể thao truyền hình.
+Mỗi tin phải là một câu tiếng Việt hoàn chỉnh theo phong cách ticker của bản tin thể thao truyền hình.
 
 Mỗi câu phải có đủ:
 
@@ -398,13 +279,13 @@ Mỗi câu phải có đủ:
 - Diễn biến hoặc thông tin chính.
 - Bối cảnh, trạng thái xác nhận hoặc tác động đến đội bóng hay trận đấu.
 
-Không viết headline cụt như:
+Không viết kiểu headline cụt như:
 
 - Arsenal nhận tin dữ.
 - Chelsea chốt bom tấn.
 - Liverpool gặp biến lớn.
 
-Hãy viết thành câu có nội dung đầy đủ, tự nhiên và dễ đọc khi chạy ngang trên màn hình.
+Hãy viết thành câu đầy đủ, tự nhiên và dễ đọc khi chạy ngang trên màn hình.
 
 QUY TẮC BIÊN TẬP
 
@@ -412,41 +293,28 @@ QUY TẮC BIÊN TẬP
 - Mỗi tin dài từ 130 đến 220 ký tự, tính cả dấu cách.
 - Không dùng emoji, hashtag, markdown hoặc URL.
 - Không thêm tiêu đề riêng cho từng tin.
-- Không ghi URL hoặc danh sách nguồn trong nội dung ticker.
+- Không ghi URL hoặc tên nguồn trong câu ticker.
 - Không giật tít hoặc suy đoán quá mức.
-- Không sử dụng câu mở đầu rườm rà như “Theo thông tin mới nhất”.
-- Nếu tin chưa được xác nhận, phải dùng cách diễn đạt như “được cho là”, “theo truyền thông Anh”, “đang được theo dõi” hoặc “chưa được xác nhận”.
+- Không mở đầu rườm rà bằng các cụm như “Theo thông tin mới nhất”.
+- Nếu tin chưa được xác nhận, dùng các cụm như “được cho là”, “theo truyền thông Anh”, “đang được theo dõi” hoặc “chưa được xác nhận”.
 - Không biến tin đồn thành thông tin chính thức.
 - Không viết hai tin khác nhau về cùng một sự kiện.
 - Không để một câu lạc bộ chiếm phần lớn bản tin.
 - Tin chuyển nhượng chưa hoàn tất không được chiếm quá ba tin.
-- Ưu tiên tin có ảnh hưởng trực tiếp đến khả năng thi đấu và kết quả trận đấu.
+- Ưu tiên tin có ảnh hưởng trực tiếp đến lực lượng, phong độ hoặc kết quả trận đấu.
 
-CHỐNG LẶP
-
-Đây là các tin đang được hiển thị trong bản tin trước:
+BẢN TIN HIỆN ĐANG HIỂN THỊ
 
 {previous_items_text}
 
-Không lặp lại các tin trên nếu chưa có diễn biến mới rõ ràng.
+Hãy dùng danh sách trên để nhận biết những sự kiện đã cũ.
 
-Chỉ đưa lại một sự kiện khi có thông tin mới như:
+Ưu tiên diễn biến mới hơn bản tin hiện tại.
 
-- Có kết quả kiểm tra chấn thương.
-- Huấn luyện viên đưa ra xác nhận mới.
-- Cầu thủ trở lại tập luyện.
-- Thương vụ được hoàn tất.
-- Lịch thi đấu được thay đổi chính thức.
+Một sự kiện cũ chỉ được đưa lại khi:
 
-SẮP XẾP
-
-Sắp xếp theo mức độ quan trọng:
-
-1. Chấn thương, treo giò và khả năng ra sân.
-2. Thông tin lực lượng trước trận.
-3. Thay đổi lịch thi đấu hoặc huấn luyện viên.
-4. Tin chính thức từ câu lạc bộ.
-5. Chuyển nhượng và các diễn biến khác.
+- Vẫn là một trong những tin quan trọng nhất tại thời điểm hiện tại; hoặc
+- Đã có diễn biến mới như kết quả kiểm tra, xác nhận của huấn luyện viên, cầu thủ trở lại tập luyện, thương vụ hoàn tất hoặc lịch đấu thay đổi.
 
 ĐẦU RA
 
@@ -471,11 +339,11 @@ Cấu trúc bắt buộc:
 Trước khi trả kết quả, tự kiểm tra:
 
 - Có từ 8 đến 10 tin.
+- Các tin là những diễn biến mới và nổi bật nhất tại thời điểm tìm kiếm.
 - Mỗi tin dài từ 130 đến 220 ký tự.
 - Không có hai tin trùng ý.
 - Không có tin nào thiếu chủ thể.
 - Không có URL, markdown hoặc emoji.
-- Không sử dụng thông tin xuất hiện sau thời điểm giới hạn.
 - Tất cả tin đều liên quan trực tiếp đến Premier League.
 - Không biến thông tin chưa xác nhận thành sự thật.
 {feedback_text}
@@ -488,7 +356,7 @@ Trước khi trả kết quả, tự kiểm tra:
 
 def generate_with_google_search(
     client: genai.Client,
-    prompt: str,
+    prompt: str
 ):
 
     google_search_tool = types.Tool(
@@ -511,14 +379,14 @@ def generate_with_google_search(
 
 
 def response_used_google_search(
-    response,
+    response
 ) -> bool:
 
     candidates = (
         getattr(
             response,
             "candidates",
-            None,
+            None
         )
         or []
     )
@@ -527,7 +395,7 @@ def response_used_google_search(
         grounding_metadata = getattr(
             candidate,
             "grounding_metadata",
-            None,
+            None
         )
 
         if grounding_metadata is not None:
@@ -537,11 +405,11 @@ def response_used_google_search(
 
 
 # ============================================================
-# JSON PARSING
+# PARSE JSON
 # ============================================================
 
 def extract_json_payload(
-    response_text: str,
+    response_text: str
 ) -> dict:
 
     cleaned_text = str(
@@ -591,10 +459,7 @@ def extract_json_payload(
             f"JSON không hợp lệ: {error}"
         ) from error
 
-    if not isinstance(
-        payload,
-        dict,
-    ):
+    if not isinstance(payload, dict):
         raise TickerValidationError(
             "Kết quả gốc phải là JSON object."
         )
@@ -603,12 +468,12 @@ def extract_json_payload(
 
 
 # ============================================================
-# VALIDATION
+# VALIDATE
 # ============================================================
 
 def text_similarity(
     first_text: str,
-    second_text: str,
+    second_text: str
 ) -> float:
 
     return SequenceMatcher(
@@ -619,18 +484,14 @@ def text_similarity(
 
 
 def validate_ticker_items(
-    payload: dict,
-    previous_items: list[str],
+    payload: dict
 ) -> list[dict]:
 
     raw_items = payload.get(
         "items"
     )
 
-    if not isinstance(
-        raw_items,
-        list,
-    ):
+    if not isinstance(raw_items, list):
         raise TickerValidationError(
             "items phải là một array."
         )
@@ -646,12 +507,9 @@ def validate_ticker_items(
 
     for index, raw_item in enumerate(
         raw_items,
-        start=1,
+        start=1
     ):
-        if not isinstance(
-            raw_item,
-            dict,
-        ):
+        if not isinstance(raw_item, dict):
             errors.append(
                 f"Tin {index} không phải object."
             )
@@ -715,25 +573,6 @@ def validate_ticker_items(
                 "information_status không hợp lệ."
             )
 
-        if information_status in {
-            "reported",
-            "monitoring",
-        }:
-            lowered_text = (
-                ticker_text.casefold()
-            )
-
-            has_uncertain_marker = any(
-                marker in lowered_text
-                for marker in UNCERTAIN_MARKERS
-            )
-
-            if not has_uncertain_marker:
-                errors.append(
-                    f"Tin {index} chưa xác nhận "
-                    "nhưng thiếu cách diễn đạt thận trọng."
-                )
-
         normalized_items.append({
             "priority": index,
             "text": ticker_text,
@@ -748,7 +587,7 @@ def validate_ticker_items(
     ):
         for second_index in range(
             first_index + 1,
-            len(normalized_items),
+            len(normalized_items)
         ):
             similarity_score = text_similarity(
                 first_item["text"],
@@ -763,23 +602,6 @@ def validate_ticker_items(
                     f"tin {second_index + 1} "
                     "quá giống nhau."
                 )
-
-    for item_index, item in enumerate(
-        normalized_items,
-        start=1,
-    ):
-        for previous_text in previous_items:
-            similarity_score = text_similarity(
-                item["text"],
-                previous_text,
-            )
-
-            if similarity_score >= 0.95:
-                errors.append(
-                    f"Tin {item_index} lặp gần "
-                    "như nguyên văn bản tin trước."
-                )
-                break
 
     unconfirmed_transfers = sum(
         1
@@ -807,7 +629,7 @@ def validate_ticker_items(
 
 
 def validation_error_lines(
-    error: Exception,
+    error: Exception
 ) -> list[str]:
 
     return [
@@ -818,23 +640,18 @@ def validation_error_lines(
 
 
 # ============================================================
-# DATABASE PUBLISH
+# PUBLISH
 # ============================================================
 
 def publish_ticker(
     engine: Engine,
-    edition: str,
-    cutoff_time: datetime,
+    generated_at: datetime,
     items: list[dict],
 ):
 
-    generated_at = datetime.now(
-        timezone.utc
-    )
-
     items_json = json.dumps(
         items,
-        ensure_ascii=False,
+        ensure_ascii=False
     )
 
     ticker_text = "   ◆   ".join(
@@ -846,8 +663,6 @@ def publish_ticker(
         """
         INSERT INTO epl_news_ticker (
             id,
-            edition,
-            cutoff_time,
             generated_at,
             previous_items,
             items,
@@ -857,8 +672,6 @@ def publish_ticker(
         )
         VALUES (
             1,
-            :edition,
-            :cutoff_time,
             :generated_at,
             '[]'::jsonb,
             CAST(:items_json AS jsonb),
@@ -871,12 +684,6 @@ def publish_ticker(
         DO UPDATE SET
             previous_items =
                 epl_news_ticker.items,
-
-            edition =
-                EXCLUDED.edition,
-
-            cutoff_time =
-                EXCLUDED.cutoff_time,
 
             generated_at =
                 EXCLUDED.generated_at,
@@ -896,16 +703,10 @@ def publish_ticker(
     )
 
     params = {
-        "edition": edition,
-
-        "cutoff_time": (
-            cutoff_time.astimezone(
+        "generated_at": (
+            generated_at.astimezone(
                 timezone.utc
             )
-        ),
-
-        "generated_at": (
-            generated_at
         ),
 
         "items_json": items_json,
@@ -915,7 +716,9 @@ def publish_ticker(
         "model_name": MODEL_NAME,
 
         "updated_at": (
-            generated_at
+            generated_at.astimezone(
+                timezone.utc
+            )
         ),
     }
 
@@ -927,7 +730,7 @@ def publish_ticker(
 
 
 # ============================================================
-# MAIN PIPELINE
+# MAIN
 # ============================================================
 
 def main() -> int:
@@ -940,26 +743,18 @@ def main() -> int:
         ),
     )
 
-    args = parse_args()
-
     (
         gemini_api_key,
         database_url,
     ) = require_environment()
 
-    (
-        edition_date,
-        coverage_start,
-        cutoff_time,
-    ) = resolve_news_window(
-        args.edition
+    run_time_vietnam = datetime.now(
+        VN_TZ
     )
 
     LOGGER.info(
-        "Generating %s ticker for %s, cutoff=%s",
-        args.edition,
-        edition_date,
-        cutoff_time.isoformat(),
+        "Generating EPL ticker at %s",
+        run_time_vietnam.isoformat()
     )
 
     engine = build_engine(
@@ -982,13 +777,11 @@ def main() -> int:
         for attempt in range(1, 3):
             LOGGER.info(
                 "Gemini attempt %s/2",
-                attempt,
+                attempt
             )
 
             prompt = build_prompt(
-                edition=args.edition,
-                coverage_start=coverage_start,
-                cutoff_time=cutoff_time,
+                run_time_vietnam=run_time_vietnam,
                 previous_items=previous_items,
                 validation_feedback=(
                     validation_feedback
@@ -1020,8 +813,7 @@ def main() -> int:
                 )
 
                 final_items = validate_ticker_items(
-                    payload,
-                    previous_items,
+                    payload
                 )
 
                 break
@@ -1053,15 +845,13 @@ def main() -> int:
 
         publish_ticker(
             engine=engine,
-            edition=args.edition,
-            cutoff_time=cutoff_time,
+            generated_at=run_time_vietnam,
             items=final_items,
         )
 
         LOGGER.info(
-            "Published %s ticker with %s items.",
-            args.edition,
-            len(final_items),
+            "Published ticker with %s items.",
+            len(final_items)
         )
 
         return 0
