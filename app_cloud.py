@@ -3920,6 +3920,150 @@ def inject_main_page_lift_css():
         unsafe_allow_html=True
     )
 
+def inject_mobile_safari_stability_layer():
+    """Final mobile Safari layer; preserves zoom and application logic."""
+    st.markdown(
+        """
+        <style>
+        @media (max-width: 768px) {
+            html body div[class*="st-key-top_right_avatar_popover_shell"],
+            html body div[class*="st-key-daily_checkin_shortcut_button"],
+            html body #epl-mobile-checkin-fab,
+            html body div[class*="st-key-epl_news_ticker_host"] {
+                will-change: auto !important;
+                backface-visibility: visible !important;
+                -webkit-backface-visibility: visible !important;
+            }
+
+            html body div[class*="st-key-top_right_avatar_popover_shell"],
+            html body #epl-mobile-checkin-fab {
+                transform: none !important;
+            }
+
+            html body div[class*="st-key-top_right_avatar_popover_shell"].epl-avatar-dragging,
+            html body #epl-mobile-checkin-fab.epl-checkin-dragging {
+                will-change: left, top !important;
+            }
+
+            /* Pseudo-element này chỉ là shimmer trang trí, không phải viền trạng thái. */
+            html body div[class*="st-key-match_card_"]::before {
+                display: none !important;
+                animation: none !important;
+                filter: none !important;
+                -webkit-filter: none !important;
+                will-change: auto !important;
+            }
+
+            html body div[class*="st-key-match_card_"]::after {
+                transform: none !important;
+                filter: none !important;
+                -webkit-filter: none !important;
+                will-change: auto !important;
+            }
+
+            html body .epl-big-match-label,
+            html body div[class*="st-key-match_card_big_"] .epl-big-match-ribbon::before,
+            html body .epl-finished-score-wrap::after {
+                animation: none !important;
+                will-change: auto !important;
+            }
+
+            html body .epl-finished-score-value,
+            html body [class*="wc-prediction-feedback-popup-"],
+            html body div[class*="st-key-competition_stats_tabs"],
+            html body div[class*="st-key-prediction_leaderboard_tabs"] {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+            }
+
+            html[data-epl-pinch-zoom-active="true"] body
+            div[class*="st-key-epl_news_ticker_host"],
+            html[data-epl-pinch-zoom-active="true"] body
+            div[class*="st-key-top_right_avatar_popover_shell"],
+            html[data-epl-pinch-zoom-active="true"] body #epl-mobile-checkin-fab,
+            html[data-epl-pinch-zoom-active="true"] body
+            div[class*="st-key-match_card_"],
+            html[data-epl-pinch-zoom-active="true"] body
+            div[class*="st-key-match_card_"] *,
+            html[data-epl-pinch-zoom-active="true"] body
+            [class*="wc-prediction-feedback-popup-"] {
+                animation-play-state: paused !important;
+                transition: none !important;
+                will-change: auto !important;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    render_parent_script(
+        r"""
+        <script>
+        (() => {
+            const parentWindow = window.parent;
+            const parentDocument = parentWindow.document;
+            const key = "__eplMobilePinchZoomGuardV1";
+            const previous = parentWindow[key];
+
+            if (previous && typeof previous.cleanup === "function") {
+                try {
+                    previous.cleanup();
+                } catch (error) {
+                    console.warn("Could not clean up the previous pinch guard.", error);
+                }
+            }
+
+            const viewport = parentWindow.visualViewport;
+            if (!viewport) return;
+
+            let frame = 0;
+            let active = false;
+
+            const update = () => {
+                frame = 0;
+                const next = Math.abs(Number(viewport.scale || 1) - 1) > 0.01;
+                if (next === active) return;
+                active = next;
+
+                if (active) {
+                    parentDocument.documentElement.setAttribute(
+                        "data-epl-pinch-zoom-active",
+                        "true"
+                    );
+                } else {
+                    parentDocument.documentElement.removeAttribute(
+                        "data-epl-pinch-zoom-active"
+                    );
+                }
+            };
+
+            const schedule = () => {
+                if (frame) return;
+                frame = parentWindow.requestAnimationFrame(update);
+            };
+
+            viewport.addEventListener("resize", schedule, { passive: true });
+            parentWindow.addEventListener("pageshow", schedule, { passive: true });
+
+            const cleanup = () => {
+                parentWindow.cancelAnimationFrame(frame);
+                frame = 0;
+                viewport.removeEventListener("resize", schedule);
+                parentWindow.removeEventListener("pageshow", schedule);
+                parentDocument.documentElement.removeAttribute(
+                    "data-epl-pinch-zoom-active"
+                );
+            };
+
+            parentWindow[key] = { cleanup };
+            update();
+        })();
+        </script>
+        """
+    )
+
+
 def inject_mobile_prediction_score_row_css():
     """
     Chỉ chỉnh hàng nhập tỉ số trên giao diện điện thoại.
@@ -5993,7 +6137,8 @@ def inject_prediction_score_readonly_script():
                 );
 
             observer.observe(
-                parentDocument.body,
+                parentDocument.querySelector('[data-testid="stMain"]')
+                    || parentDocument.body,
                 {
                     childList: true,
                     subtree: true
@@ -7519,7 +7664,8 @@ def inject_desktop_match_vs_style():
                 );
 
             observer.observe(
-                parentDocument.body,
+                parentDocument.querySelector('[data-testid="stMain"]')
+                    || parentDocument.body,
                 {
                     childList: true,
                     subtree: true
@@ -8691,8 +8837,8 @@ def render_daily_checkin_shortcut_button(user_id: int):
         -webkit-touch-callout: none;
         -webkit-tap-highlight-color: transparent;
 
-        transform: translateZ(0);
-        will-change: left, top, transform;
+        transform: none;
+        will-change: auto;
 
         transition:
             transform 0.14s ease,
@@ -8828,7 +8974,14 @@ def render_daily_checkin_shortcut_button(user_id: int):
             oldController
             && typeof oldController.cleanup === "function"
         ) {
-            oldController.cleanup();
+            try {
+                oldController.cleanup();
+            } catch (error) {
+                console.warn(
+                    "Could not clean up the previous check-in controller.",
+                    error
+                );
+            }
         }
 
         const shellSelector =
@@ -8921,17 +9074,11 @@ def render_daily_checkin_shortcut_button(user_id: int):
         };
 
         const getViewportRect = () => {
-            const viewport = window.visualViewport;
-
-            if (viewport) {
-                return {
-                    left: viewport.offsetLeft,
-                    top: viewport.offsetTop,
-                    width: viewport.width,
-                    height: viewport.height
-                };
-            }
-
+            /*
+             * Giữ tọa độ theo layout viewport. visualViewport thay đổi ở
+             * từng frame pinch-zoom trên iOS và không nên điều khiển left/top
+             * của một FAB fixed.
+             */
             return {
                 left: 0,
                 top: 0,
@@ -9498,19 +9645,10 @@ def render_daily_checkin_shortcut_button(user_id: int):
                 { passive: true }
             );
 
-            if (window.visualViewport) {
-                window.visualViewport.addEventListener(
-                    "resize",
-                    keepInsideViewport,
-                    { passive: true }
-                );
-
-                window.visualViewport.addEventListener(
-                    "scroll",
-                    keepInsideViewport,
-                    { passive: true }
-                );
-            }
+            /*
+             * Không nghe visualViewport resize/scroll. Pinch-zoom phát các
+             * sự kiện này liên tục; layout viewport resize/orientation là đủ.
+             */
 
             window.requestAnimationFrame(
                 useSavedOrDefaultPosition
@@ -9573,18 +9711,6 @@ def render_daily_checkin_shortcut_button(user_id: int):
                     "orientationchange",
                     keepInsideViewport
                 );
-
-                if (window.visualViewport) {
-                    window.visualViewport.removeEventListener(
-                        "resize",
-                        keepInsideViewport
-                    );
-
-                    window.visualViewport.removeEventListener(
-                        "scroll",
-                        keepInsideViewport
-                    );
-                }
 
                 fab.remove();
             };
@@ -9880,7 +10006,8 @@ def render_daily_checkin_shortcut_button(user_id: int):
             );
 
             if (mutationObserver) {
-                layoutMutationObserver.disconnect();
+                mutationObserver.disconnect();
+                mutationObserver = null;
             }
 
             const staleFab =
@@ -9905,10 +10032,10 @@ def render_daily_checkin_shortcut_button(user_id: int):
         });
 
         mutationObserver.observe(
-            document.body,
+            nativeShell.parentElement || document.body,
             {
                 childList: true,
-                subtree: true
+                subtree: false
             }
         );
 
@@ -12807,7 +12934,11 @@ def render_avatar_popover(user: dict):
             touch-action: none;
             user-select: none;
             -webkit-user-select: none;
-            will-change: left, top;
+            will-change: auto;
+        }}
+
+        div[class*="st-key-top_right_avatar_popover_shell"].epl-avatar-dragging {{
+            will-change: left, top !important;
         }}
 
         div[class*="st-key-top_right_avatar_popover_shell"]
@@ -13225,7 +13356,14 @@ def render_avatar_popover(user: dict):
             && typeof oldController.cleanup
                 === "function"
         ) {
-            oldController.cleanup();
+            try {
+                oldController.cleanup();
+            } catch (error) {
+                console.warn(
+                    "Could not clean up the previous avatar controller.",
+                    error
+                );
+            }
         }
 
         const shell =
@@ -13792,14 +13930,6 @@ def render_avatar_popover(user: dict):
                 keepInsideAllowedArea
             );
 
-            if (window.visualViewport) {
-                window.visualViewport
-                    .removeEventListener(
-                        "resize",
-                        keepInsideAllowedArea
-                    );
-            }
-
             if (mutationObserver) {
                 mutationObserver.disconnect();
             }
@@ -13856,32 +13986,22 @@ def render_avatar_popover(user: dict):
             { passive: true }
         );
 
-        if (window.visualViewport) {
-                window.visualViewport
-                    .addEventListener(
-                        "resize",
-                        keepInsideAllowedArea,
-                        { passive: true }
-                    );
-        }
+        /* visualViewport.resize không được dùng để tránh pinch-zoom loop. */
 
         mutationObserver =
             new MutationObserver(
                 () => {
                     if (!shell.isConnected) {
                         cleanup();
-                        return;
                     }
-
-                    keepInsideAllowedArea();
                 }
             );
 
         mutationObserver.observe(
-            document.body,
+            shell.parentElement || document.body,
             {
                 childList: true,
-                subtree: true
+                subtree: false
             }
         );
 
@@ -34198,7 +34318,16 @@ def _build_epl_news_ticker_document(
             }
         }
 
+        .ticker-zoom-paused .ticker-track {
+            animation-play-state: paused !important;
+            will-change: auto !important;
+        }
+
         @media (max-width: 768px) {
+            .ticker-track {
+                will-change: auto;
+            }
+
             .ticker-label {
                 flex-basis: 72px;
 
@@ -34293,7 +34422,14 @@ def _build_epl_news_ticker_document(
                 oldController
                 && typeof oldController.cleanup === "function"
             ) {
-                oldController.cleanup();
+                try {
+                    oldController.cleanup();
+                } catch (error) {
+                    console.warn(
+                        "Could not clean up the previous ticker controller.",
+                        error
+                    );
+                }
             }
 
             const frameElement = window.frameElement;
@@ -34311,6 +34447,34 @@ def _build_epl_news_ticker_document(
             let animationFrame = 0;
             let cleaned = false;
             const delayedTimers = new Set();
+
+            const syncZoomAnimationState = () => {
+                const zoomActive = parentRoot.getAttribute(
+                    "data-epl-pinch-zoom-active"
+                ) === "true";
+
+                document.documentElement.classList.toggle(
+                    "ticker-zoom-paused",
+                    zoomActive
+                );
+            };
+
+            const zoomStateObserver =
+                new parentWindow.MutationObserver(
+                    syncZoomAnimationState
+                );
+
+            zoomStateObserver.observe(
+                parentRoot,
+                {
+                    attributes: true,
+                    attributeFilter: [
+                        "data-epl-pinch-zoom-active"
+                    ]
+                }
+            );
+
+            syncZoomAnimationState();
 
             const getVisibleRect = (element) => {
                 if (!element) {
@@ -34389,6 +34553,15 @@ def _build_epl_news_ticker_document(
                 );
 
             const syncLayout = () => {
+                const visualScale = Number(
+                    parentWindow.visualViewport?.scale || 1
+                );
+
+                /* Không ghi lại layout của iframe fixed trong lúc pinch-zoom. */
+                if (Math.abs(visualScale - 1) > 0.01) {
+                    return;
+                }
+
                 const isMobile =
                     parentWindow.matchMedia(
                         "(max-width: 768px)"
@@ -34622,15 +34795,6 @@ def _build_epl_news_ticker_document(
                 { passive: true }
             );
 
-            if (parentWindow.visualViewport) {
-                parentWindow.visualViewport
-                    .addEventListener(
-                        "resize",
-                        scheduleSync,
-                        { passive: true }
-                    );
-            }
-
             const cleanup = () => {
                 if (cleaned) {
                     return;
@@ -34648,7 +34812,11 @@ def _build_epl_news_ticker_document(
 
                 delayedTimers.clear();
 
-                mutationObserver.disconnect();
+                layoutMutationObserver.disconnect();
+                zoomStateObserver.disconnect();
+                document.documentElement.classList.remove(
+                    "ticker-zoom-paused"
+                );
 
                 if (resizeObserver) {
                     resizeObserver.disconnect();
@@ -34664,13 +34832,6 @@ def _build_epl_news_ticker_document(
                     scheduleSyncBurst
                 );
 
-                if (parentWindow.visualViewport) {
-                    parentWindow.visualViewport
-                        .removeEventListener(
-                            "resize",
-                            scheduleSync
-                        );
-                }
             };
 
             syncLayout();
@@ -35130,6 +35291,9 @@ def main():
         render_daily_checkin_shortcut_button(
             int(user["user_id"])
         )
+
+    # Gọi cuối để thắng cascade của ticker/avatar/card và bảo vệ pinch-zoom.
+    inject_mobile_safari_stability_layer()
 
     # Chỉ wrapper này được đẩy lên trên.
     # Avatar và nút điểm danh không nằm trong wrapper.
