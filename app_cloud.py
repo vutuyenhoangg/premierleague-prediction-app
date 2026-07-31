@@ -10977,7 +10977,31 @@ def inject_display_name_ui_css():
         div[class*="st-key-sidebar_display_name_row"]
         div[data-testid="stHorizontalBlock"] {
             align-items: center !important;
-            gap: 5px !important;
+            justify-content: flex-start !important;
+            gap: 4px !important;
+        }
+
+        /*
+         * Hai cột chỉ rộng đúng theo nội dung để biểu tượng bút nằm ngay
+         * sau tên, thay vì bị đẩy ra sát mép phải của sidebar.
+         */
+        section[data-testid="stSidebar"]
+        div[class*="st-key-sidebar_display_name_row"]
+        div[data-testid="stHorizontalBlock"]
+        > div[data-testid="stColumn"]:first-child {
+            flex: 0 1 auto !important;
+            width: auto !important;
+            min-width: 0 !important;
+            max-width: calc(100% - 22px) !important;
+        }
+
+        section[data-testid="stSidebar"]
+        div[class*="st-key-sidebar_display_name_row"]
+        div[data-testid="stHorizontalBlock"]
+        > div[data-testid="stColumn"]:last-child {
+            flex: 0 0 18px !important;
+            width: 18px !important;
+            min-width: 18px !important;
         }
 
         section[data-testid="stSidebar"]
@@ -10999,57 +11023,133 @@ def inject_display_name_ui_css():
 
         section[data-testid="stSidebar"]
         div[class*="st-key-sidebar_display_name_edit"] {
-            width: 29px !important;
-            min-width: 29px !important;
+            width: 18px !important;
+            min-width: 18px !important;
         }
 
         section[data-testid="stSidebar"]
         div[class*="st-key-sidebar_display_name_edit"]
         .stButton {
-            width: 29px !important;
+            width: 18px !important;
+            min-width: 18px !important;
+        }
+
+        /*
+         * Nút vẫn giữ vùng bấm để mở popup, nhưng mọi thành phần tạo
+         * "box" đều trong suốt. Phần nhìn thấy duy nhất là icon SVG.
+         */
+        section[data-testid="stSidebar"]
+        div[class*="st-key-sidebar_display_name_edit"]
+        button {
+            position: relative !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 18px !important;
+            min-width: 18px !important;
+            height: 28px !important;
+            min-height: 28px !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+            background: transparent !important;
+            background-color: transparent !important;
+            background-image: none !important;
+            color: #CBD5E1 !important;
+            box-shadow: none !important;
+            filter: none !important;
+            transform: none !important;
+            appearance: none !important;
+            -webkit-appearance: none !important;
         }
 
         section[data-testid="stSidebar"]
         div[class*="st-key-sidebar_display_name_edit"]
-        .stButton > button {
-            width: 29px !important;
-            min-width: 29px !important;
-            height: 29px !important;
-            min-height: 29px !important;
+        button::before {
+            content: "" !important;
+            display: block !important;
+            width: 14px !important;
+            height: 14px !important;
+            flex: 0 0 14px !important;
+            background-color: currentColor !important;
+            -webkit-mask:
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.87z'/%3E%3C/svg%3E")
+                center / contain no-repeat !important;
+            mask:
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.87z'/%3E%3C/svg%3E")
+                center / contain no-repeat !important;
+        }
+
+        section[data-testid="stSidebar"]
+        div[class*="st-key-sidebar_display_name_edit"]
+        button::after {
+            content: none !important;
+            display: none !important;
+        }
+
+        /*
+         * Giữ tên nút cho trình đọc màn hình nhưng không hiển thị chữ,
+         * nhờ đó icon không còn phụ thuộc vào font ký tự ✎.
+         */
+        section[data-testid="stSidebar"]
+        div[class*="st-key-sidebar_display_name_edit"]
+        button p {
+            position: absolute !important;
+            width: 1px !important;
+            height: 1px !important;
             padding: 0 !important;
-            border: 1px solid rgba(245, 197, 66, 0.18) !important;
-            border-radius: 9px !important;
-            background: rgba(255, 255, 255, 0.055) !important;
-            color: #CBD5E1 !important;
+            margin: -1px !important;
+            overflow: hidden !important;
+            clip: rect(0, 0, 0, 0) !important;
+            clip-path: inset(50%) !important;
+            white-space: nowrap !important;
+            border: 0 !important;
+        }
+
+        section[data-testid="stSidebar"]
+        div[class*="st-key-sidebar_display_name_edit"]
+        button:hover {
+            border: 0 !important;
+            background: transparent !important;
+            background-color: transparent !important;
+            color: #F5C542 !important;
             box-shadow: none !important;
             transform: none !important;
         }
 
         section[data-testid="stSidebar"]
         div[class*="st-key-sidebar_display_name_edit"]
-        .stButton > button p {
-            margin: 0 !important;
-            color: inherit !important;
-            font-family: Arial, sans-serif !important;
-            font-size: 16px !important;
-            font-weight: 700 !important;
-            line-height: 1 !important;
-            transform: translateY(-1px);
+        button:active {
+            border: 0 !important;
+            background: transparent !important;
+            color: #E7B82C !important;
+            box-shadow: none !important;
+            transform: none !important;
         }
 
         section[data-testid="stSidebar"]
         div[class*="st-key-sidebar_display_name_edit"]
-        .stButton > button:hover {
-            border-color: rgba(245, 197, 66, 0.62) !important;
-            background: rgba(245, 197, 66, 0.12) !important;
-            color: #F5C542 !important;
+        button:focus,
+        section[data-testid="stSidebar"]
+        div[class*="st-key-sidebar_display_name_edit"]
+        button:focus-visible {
+            border: 0 !important;
+            background: transparent !important;
+            box-shadow: none !important;
         }
 
         section[data-testid="stSidebar"]
         div[class*="st-key-sidebar_display_name_edit"]
-        .stButton > button:focus-visible {
-            outline: 2px solid rgba(245, 197, 66, 0.78) !important;
-            outline-offset: 2px !important;
+        button:focus {
+            outline: none !important;
+        }
+
+        section[data-testid="stSidebar"]
+        div[class*="st-key-sidebar_display_name_edit"]
+        button:focus-visible {
+            outline: 1px solid rgba(245, 197, 66, 0.82) !important;
+            outline-offset: 1px !important;
         }
 
         div[role="dialog"]:has(.epl-display-name-dialog-shell) {
@@ -11208,7 +11308,7 @@ def render_sidebar_display_name(user: dict) -> bool:
 
         with edit_column:
             return st.button(
-                "✎",
+                "Đổi tên hiển thị",
                 key="sidebar_display_name_edit",
                 help="Đổi tên hiển thị"
             )
