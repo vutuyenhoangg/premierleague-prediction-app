@@ -337,39 +337,62 @@ FINAL_POSTER_END_DATE = date(2026, 7, 20)
 FOOTER_PROJECT_URL = ""
 
 @st.cache_resource(show_spinner=False, max_entries=128)
+def _static_serving_is_enabled() -> bool:
+    """Return the effective Streamlit static-serving state.
+
+    This check keeps image rendering safe when ``./static`` exists but the
+    production config has not been loaded yet. In that situation the old
+    resolver returned a public URL that produced HTTP 404 and never reached
+    its Base64 fallback.
+    """
+    try:
+        return bool(st.get_option("server.enableStaticServing"))
+    except Exception:
+        raw_value = os.getenv(
+            "STREAMLIT_SERVER_ENABLE_STATIC_SERVING",
+            "false"
+        )
+        return str(raw_value).strip().lower() in {
+            "1", "true", "yes", "y", "on"
+        }
+
+
 @st.cache_resource(show_spinner=False, max_entries=128)
 def resolve_asset_src(asset_path: str) -> str:
-    """Resolve an asset without inflating every Streamlit rerun.
+    """Resolve UI assets without ever returning a known-broken local URL.
 
     Resolution order:
-    1. External/data URLs are returned unchanged.
-    2. Files in ``./static`` use Streamlit's same-origin static URL.
-    3. Legacy ``data/static`` files fall back to a cached Base64 data URI.
+    1. External URLs and data URIs are returned unchanged.
+    2. Files in ``./static`` use ``/app/static/...`` only when Streamlit
+       static serving is actually enabled.
+    3. Any existing local file falls back to a cached Base64 data URI.
 
-    With ``server.enableStaticServing=true`` and assets mirrored into
-    ``./static``, hero images, logos and backgrounds are browser-cacheable and
-    no longer travel inside every websocket delta.
+    Therefore images still render while ``config.toml`` is missing or while
+    Streamlit Cloud is rebooting with an old configuration.
     """
     if not asset_path:
         return ""
 
     asset_path = str(asset_path).strip()
 
-    if asset_path.startswith(("http://", "https://", "data:", "/app/static/")):
+    if asset_path.startswith(("http://", "https://", "data:")):
         return asset_path
 
     normalized_path = asset_path.replace("\\", "/").lstrip("./")
-    raw_path = Path(normalized_path)
 
+    # Convert an already-generated static URL back to a local candidate so the
+    # Base64 fallback still works when static serving is disabled.
+    if normalized_path.startswith("app/static/"):
+        normalized_path = "static/" + normalized_path[len("app/static/"):]
+
+    raw_path = Path(normalized_path)
     candidate_paths: list[Path] = []
 
     if raw_path.is_absolute():
         candidate_paths.append(raw_path)
     else:
-        # Direct path relative to the app.
         candidate_paths.append(BASE_DIR / raw_path)
 
-        # Map both legacy layouts to ./static for browser-cacheable delivery.
         if normalized_path.startswith("data/static/"):
             relative_static = normalized_path[len("data/static/"):]
             candidate_paths.insert(0, STATIC_DIR / relative_static)
@@ -382,14 +405,15 @@ def resolve_asset_src(asset_path: str) -> str:
             candidate_paths.append(STATIC_DIR / raw_path.name)
             candidate_paths.append(DATA_STATIC_DIR / raw_path.name)
 
-    # De-duplicate paths while keeping priority order.
     unique_candidates: list[Path] = []
     seen: set[str] = set()
     for candidate in candidate_paths:
-        key = str(candidate)
-        if key not in seen:
-            seen.add(key)
+        candidate_key = str(candidate)
+        if candidate_key not in seen:
+            seen.add(candidate_key)
             unique_candidates.append(candidate)
+
+    static_serving_enabled = _static_serving_is_enabled()
 
     for candidate_path in unique_candidates:
         if not candidate_path.exists() or not candidate_path.is_file():
@@ -402,16 +426,31 @@ def resolve_asset_src(asset_path: str) -> str:
         except (OSError, ValueError):
             relative_to_static = None
 
-        if relative_to_static is not None:
-            return f"{STATIC_URL_PREFIX}/{relative_to_static.as_posix()}"
+        if relative_to_static is not None and static_serving_enabled:
+            return (
+                f"{STATIC_URL_PREFIX}/"
+                f"{relative_to_static.as_posix()}"
+            )
 
-        # Compatibility fallback for legacy data/static repositories.
-        mime_type, _ = mimetypes.guess_type(str(candidate_path))
-        mime_type = mime_type or "image/png"
-        encoded = base64.b64encode(candidate_path.read_bytes()).decode("ascii")
-        return f"data:{mime_type};base64,{encoded}"
+        # Reliable compatibility fallback. This branch is also used when the
+        # file is present in ./static but static serving is currently off.
+        try:
+            mime_type, _ = mimetypes.guess_type(str(candidate_path))
+            mime_type = mime_type or "image/png"
+            encoded = base64.b64encode(
+                candidate_path.read_bytes()
+            ).decode("ascii")
+            return f"data:{mime_type};base64,{encoded}"
+        except OSError:
+            LOGGER.warning(
+                "Could not read local asset: %s",
+                candidate_path,
+                exc_info=True
+            )
 
-    return asset_path
+    # Returning an unresolved local path only creates a broken image. Let the
+    # caller use its visual fallback instead.
+    return ""
 
 
 
@@ -1331,7 +1370,6 @@ def load_avatar_catalog() -> tuple[str, ...]:
     return tuple(load_avatar_keys())
 
 
-@st.cache_resource(show_spinner=False, max_entries=2)
 @st.cache_resource(show_spinner=False, max_entries=2)
 def build_avatar_sprite_payload() -> tuple[str, int, int]:
     """Build one avatar sprite and prefer a static, browser-cached URL.
@@ -32686,7 +32724,10 @@ def _build_epl_news_ticker_document(
     div[class*="st-key-epl_news_ticker_host"]
     > :is(div[data-testid="stVerticalBlock"], div[data-testid="stVerticalBlockBorderWrapper"]),
     div[class*="st-key-epl_news_ticker_host"] div[data-testid="stVerticalBlock"],
-    div[class*="st-key-epl_news_ticker_host"] div[data-testid="stElementContainer"] {
+    div[class*="st-key-epl_news_ticker_host"] div[data-testid="stElementContainer"],
+    div[class*="st-key-epl_news_ticker_host"] div[data-testid="stHtml"],
+    div[class*="st-key-epl_news_ticker_host"] div[data-testid="stHtml"] > div,
+    div[class*="st-key-epl_news_ticker_host"] .stHtml {
         width: 100% !important;
         min-width: 0 !important;
         max-width: 100% !important;
@@ -32711,7 +32752,9 @@ def _build_epl_news_ticker_document(
         align-items: stretch;
         width: 100%;
         min-width: 0;
-        height: 100%;
+        height: var(--epl-news-ticker-header-height) !important;
+        min-height: var(--epl-news-ticker-header-height) !important;
+        max-height: var(--epl-news-ticker-header-height) !important;
         overflow: hidden;
         background: linear-gradient(90deg, #210027 0%, #37003C 48%, #26002D 100%);
         box-shadow: inset 0 -1px 0 rgba(255,255,255,.14), 0 5px 16px rgba(55,0,60,.16);
