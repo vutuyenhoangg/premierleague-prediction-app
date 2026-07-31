@@ -11669,6 +11669,136 @@ def inject_display_name_ui_css():
             transform: none !important;
         }
 
+        /* =====================================================
+           MOBILE: HIỂN THỊ TÊN NGƯỜI CHƠI TỐI ĐA 2 DÒNG
+           Giữ nguyên nút bút và toàn bộ chức năng đổi tên.
+           ===================================================== */
+        @media (max-width: 768px) {
+            section[data-testid="stSidebar"]
+            div[class*="st-key-sidebar_display_name_row"] {
+                margin: 2px 0 6px 0 !important;
+            }
+
+            section[data-testid="stSidebar"]
+            div[class*="st-key-sidebar_display_name_row"]
+            div[data-testid="stHorizontalBlock"] {
+                display: flex !important;
+                align-items: flex-start !important;
+                justify-content: flex-start !important;
+                gap: 4px !important;
+                width: 100% !important;
+                min-width: 0 !important;
+            }
+
+            /*
+             * Cột tên chiếm toàn bộ phần còn lại của hàng.
+             * Hỗ trợ cả DOM Streamlit cũ và mới.
+             */
+            section[data-testid="stSidebar"]
+            div[class*="st-key-sidebar_display_name_row"]
+            div[data-testid="stHorizontalBlock"]
+            > div[data-testid="stColumn"]:first-child,
+
+            section[data-testid="stSidebar"]
+            div[class*="st-key-sidebar_display_name_row"]
+            div[data-testid="stHorizontalBlock"]
+            > div[data-testid="column"]:first-child {
+                flex: 1 1 0 !important;
+                width: auto !important;
+                min-width: 0 !important;
+                max-width: none !important;
+                padding-left: 0 !important;
+                padding-right: 0 !important;
+            }
+
+            /*
+             * Cột bút chỉ giữ đúng 18px, không lấy thêm diện tích của tên.
+             */
+            section[data-testid="stSidebar"]
+            div[class*="st-key-sidebar_display_name_row"]
+            div[data-testid="stHorizontalBlock"]
+            > div[data-testid="stColumn"]:last-child,
+
+            section[data-testid="stSidebar"]
+            div[class*="st-key-sidebar_display_name_row"]
+            div[data-testid="stHorizontalBlock"]
+            > div[data-testid="column"]:last-child {
+                flex: 0 0 18px !important;
+                width: 18px !important;
+                min-width: 18px !important;
+                max-width: 18px !important;
+                padding-left: 0 !important;
+                padding-right: 0 !important;
+            }
+
+            /*
+             * Bỏ ép một dòng trên mobile.
+             * Hai dòng đủ để hiển thị gần như toàn bộ tên tối đa 50 ký tự,
+             * nhưng vẫn có dấu ba chấm nếu chuỗi quá dài.
+             */
+            section[data-testid="stSidebar"]
+            .epl-sidebar-greeting {
+                display: -webkit-box !important;
+                -webkit-box-orient: vertical !important;
+                -webkit-line-clamp: 2 !important;
+                line-clamp: 2 !important;
+
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: 100% !important;
+
+                min-height: 28px !important;
+                max-height: 38px !important;
+
+                margin: 0 !important;
+                padding: 4px 2px 3px 0 !important;
+
+                overflow: hidden !important;
+                white-space: normal !important;
+                text-overflow: ellipsis !important;
+                overflow-wrap: anywhere !important;
+                word-break: break-word !important;
+
+                color: #F8FAFC !important;
+                font-size: 14px !important;
+                line-height: 1.35 !important;
+            }
+
+            section[data-testid="stSidebar"]
+            .epl-sidebar-greeting strong {
+                color: #FFFFFF !important;
+                font-weight: 900 !important;
+                overflow-wrap: anywhere !important;
+                word-break: break-word !important;
+            }
+
+            /*
+             * Giữ nguyên hình dáng và chức năng của bút.
+             * Chỉ căn nó sát dòng đầu của lời chào.
+             */
+            section[data-testid="stSidebar"]
+            div[class*="st-key-sidebar_display_name_edit"],
+
+            section[data-testid="stSidebar"]
+            div[class*="st-key-sidebar_display_name_edit"]
+            .stButton {
+                width: 18px !important;
+                min-width: 18px !important;
+                max-width: 18px !important;
+            }
+
+            section[data-testid="stSidebar"]
+            div[class*="st-key-sidebar_display_name_edit"]
+            button {
+                width: 18px !important;
+                min-width: 18px !important;
+                max-width: 18px !important;
+                height: 28px !important;
+                min-height: 28px !important;
+                margin-top: 2px !important;
+            }
+        }
+
         @media (max-width: 480px) {
             div[role="dialog"]:has(.epl-display-name-dialog-shell) {
                 width: calc(100vw - 22px) !important;
