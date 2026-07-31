@@ -1772,8 +1772,12 @@ def inject_epl_theme():
         }}
         
         @media (max-width: 768px) {{
-            .block-container {{
-                padding-top: 4rem !important;
+            .block-container,
+            [data-testid="stMainBlockContainer"],
+            [data-testid="stAppViewBlockContainer"] {{
+                /* Chỉ chừa đúng chiều cao header/ticker mobile. */
+                padding-top: 56px !important;
+                margin-top: 0 !important;
             }}
         }}
 
@@ -3714,18 +3718,22 @@ def inject_epl_big_match_card_css():
 
 def inject_main_page_lift_css():
     """
-    Loại bỏ diện tích rỗng do các phần tử chèn CSS/JavaScript
-    và giữ nội dung tất cả các trang sát phía dưới header.
+    Loại bỏ khoảng trống giả ở đầu trang do các container chỉ chứa CSS,
+    JavaScript hoặc các widget đã được position: fixed.
+
+    Nội dung mobile bắt đầu ngay dưới header/ticker 56px, không bị cộng thêm
+    chiều cao của avatar, ticker, nút điểm danh hoặc các script bootstrap.
     """
     st.markdown(
         """
         <style>
-        /*
-         * Container này chỉ chứa CSS và JavaScript.
-         * Đưa nó ra khỏi luồng bố cục để không tạo khoảng trống.
-         */
+        /* =====================================================
+           BOOTSTRAP KHÔNG ĐƯỢC CHIẾM CHỖ TRONG LUỒNG TRANG
+           ===================================================== */
+
         div[class*="st-key-global_ui_bootstrap"],
-        div[class*="st-key-matches_page_ui_bootstrap"] {
+        div[class*="st-key-matches_page_ui_bootstrap"],
+        div[class*="st-key-daily_checkin_fab_script_host"] {
             position: absolute !important;
 
             top: 0 !important;
@@ -3742,59 +3750,107 @@ def inject_main_page_lift_css():
             margin: 0 !important;
             padding: 0 !important;
 
-            overflow: hidden !important;
+            overflow: visible !important;
+            pointer-events: none !important;
         }
 
         /*
-         * Xóa diện tích của wrapper Streamlit bên ngoài.
+         * Đưa cả wrapper Streamlit của các phần tử fixed/utility ra khỏi
+         * flex-flow. Nếu chỉ fixed phần tử con, wrapper rỗng vẫn bị tính gap.
          */
         div[data-testid="stElementContainer"]:has(
             div[class*="st-key-global_ui_bootstrap"]
         ),
         div[data-testid="stElementContainer"]:has(
             div[class*="st-key-matches_page_ui_bootstrap"]
+        ),
+        div[data-testid="stElementContainer"]:has(
+            div[class*="st-key-daily_checkin_fab_script_host"]
+        ),
+        div[data-testid="stElementContainer"]:has(
+            div[class*="st-key-top_right_avatar_popover_shell"]
+        ),
+        div[data-testid="stElementContainer"]:has(
+            div[class*="st-key-daily_checkin_shortcut_button"]
+        ),
+        div[data-testid="stElementContainer"]:has(
+            div[class*="st-key-epl_news_ticker_host"]
+        ),
+        div[data-testid="stFragment"]:has(
+            div[class*="st-key-epl_news_ticker_host"]
         ) {
             position: absolute !important;
 
             top: 0 !important;
             left: 0 !important;
 
-            width: 1px !important;
+            width: 0 !important;
             min-width: 0 !important;
+            max-width: 0 !important;
 
-            height: 1px !important;
+            height: 0 !important;
             min-height: 0 !important;
+            max-height: 0 !important;
 
             margin: 0 !important;
             padding: 0 !important;
 
-            overflow: hidden !important;
+            border: 0 !important;
+            overflow: visible !important;
         }
 
-        /*
-         * Không để khoảng cách giữa các phần tử CSS/JavaScript
-         * bên trong container tiếp tục cộng dồn.
-         */
         div[class*="st-key-global_ui_bootstrap"]
         div[data-testid="stVerticalBlock"],
         div[class*="st-key-matches_page_ui_bootstrap"]
+        div[data-testid="stVerticalBlock"],
+        div[class*="st-key-daily_checkin_fab_script_host"]
         div[data-testid="stVerticalBlock"] {
             min-height: 0 !important;
-
             gap: 0 !important;
-
             margin: 0 !important;
             padding: 0 !important;
         }
 
-        /*
-         * Bỏ hoàn toàn cách kéo nội dung bằng số âm.
-         */
+        /* =====================================================
+           NỘI DUNG CHÍNH KHÔNG CÓ KHOẢNG TRỐNG PHỤ
+           ===================================================== */
+
         div[class*="st-key-main_page_content_shell"] {
             position: relative !important;
-
             margin-top: 0 !important;
             padding-top: 0 !important;
+        }
+
+        div[class*="st-key-main_page_content_shell"]
+        > :is(
+            div[data-testid="stVerticalBlock"],
+            div[data-testid="stVerticalBlockBorderWrapper"]
+        ) {
+            margin-top: 0 !important;
+            padding-top: 0 !important;
+        }
+
+        div[class*="st-key-main_page_content_shell"]
+        div[data-testid="stElementContainer"]:first-child {
+            margin-top: 0 !important;
+        }
+
+        @media (max-width: 768px) {
+            [data-testid="stAppViewContainer"],
+            [data-testid="stMain"],
+            section.main,
+            main {
+                margin-top: 0 !important;
+                padding-top: 0 !important;
+            }
+
+            .block-container,
+            [data-testid="stMainBlockContainer"],
+            [data-testid="stAppViewBlockContainer"] {
+                /* Nội dung nằm sát dưới ticker/header 56px. */
+                padding-top: 56px !important;
+                margin-top: 0 !important;
+            }
         }
         </style>
         """,
@@ -8310,15 +8366,18 @@ def maybe_render_final_poster_popup(user_id: int) -> bool:
 
 def render_daily_checkin_shortcut_button(user_id: int):
     """
-    Nút điểm danh dạng float độc lập để mở lại popup điểm danh.
+    Hiển thị nút mở popup điểm danh.
 
-    Hỗ trợ kéo bằng:
-    - Chuột trên desktop.
-    - Pointer Events trên Android/iOS hiện đại.
-    - Touch Events dự phòng cho trình duyệt mobile cũ.
+    Desktop:
+    - Giữ nút Streamlit hiện tại.
+    - Nút fixed và kéo bằng Pointer Events giống cơ chế avatar.
 
-    Vị trí chỉ được giữ trong phiên trình duyệt hiện tại, không ghi database.
-    Chỉ gọi hàm này ở trang Lịch thi đấu & dự đoán.
+    Mobile:
+    - Widget Streamlit gốc được giữ làm cầu nối tới Python nhưng ẩn khỏi màn hình.
+    - Một nút FAB thật được portal trực tiếp vào document.body.
+    - FAB không phụ thuộc layout/wrapper của Streamlit nên có thể kéo ổn định
+      bằng Touch Events trên iOS/Android thực tế.
+    - Chạm nhanh mở popup; kéo không mở nhầm popup.
     """
     user_id = int(user_id)
 
@@ -8331,8 +8390,7 @@ def render_daily_checkin_shortcut_button(user_id: int):
          stroke="currentColor"
          stroke-width="1.5"
          stroke-linecap="round"
-         stroke-linejoin="round"
-         class="icon icon-tabler icons-tabler-outline icon-tabler-file-check">
+         stroke-linejoin="round">
       <path stroke="none" d="M0 0h24v24H0z" fill="none" />
       <path d="M14 3v4a1 1 0 0 0 1 1h4" />
       <path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2" />
@@ -8346,6 +8404,10 @@ def render_daily_checkin_shortcut_button(user_id: int):
 
     checkin_css = r"""
     <style>
+    /* =====================================================
+       DESKTOP: GIỮ NÚT STREAMLIT FIXED HIỆN TẠI
+       ===================================================== */
+
     div[class*="st-key-daily_checkin_shortcut_button"] {
         position: fixed !important;
         top: 148px !important;
@@ -8361,16 +8423,14 @@ def render_daily_checkin_shortcut_button(user_id: int):
         max-width: 46px !important;
         max-height: 46px !important;
 
-        padding: 0 !important;
         margin: 0 !important;
+        padding: 0 !important;
         overflow: visible !important;
 
         cursor: grab !important;
         touch-action: none !important;
-        overscroll-behavior: contain !important;
         user-select: none !important;
         -webkit-user-select: none !important;
-        -webkit-touch-callout: none !important;
         -webkit-tap-highlight-color: transparent !important;
 
         will-change: left, top;
@@ -8379,6 +8439,10 @@ def render_daily_checkin_shortcut_button(user_id: int):
     div[class*="st-key-daily_checkin_shortcut_button"] button {
         position: relative !important;
 
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+
         width: 46px !important;
         height: 46px !important;
         min-width: 46px !important;
@@ -8386,39 +8450,33 @@ def render_daily_checkin_shortcut_button(user_id: int):
         max-width: 46px !important;
         max-height: 46px !important;
 
-        padding: 0 !important;
         margin: 0 !important;
+        padding: 0 !important;
 
+        border: 0 !important;
         border-radius: 999px !important;
-        border: none !important;
-        outline: none !important;
+        outline: 0 !important;
 
-        background: rgba(255, 255, 255, 0.96) !important;
+        background: rgba(255, 255, 255, 0.97) !important;
+        color: transparent !important;
 
         box-shadow:
             0 10px 24px rgba(7, 17, 31, 0.14),
             0 0 0 1px rgba(15, 23, 42, 0.06) !important;
 
-        color: transparent !important;
         font-size: 0 !important;
         line-height: 0 !important;
-
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
 
         cursor: grab !important;
         overflow: visible !important;
         touch-action: none !important;
-        overscroll-behavior: contain !important;
         user-select: none !important;
         -webkit-user-select: none !important;
-        -webkit-touch-callout: none !important;
         -webkit-tap-highlight-color: transparent !important;
 
         transition:
-            box-shadow 0.18s ease,
-            background 0.18s ease !important;
+            background 0.18s ease,
+            box-shadow 0.18s ease !important;
     }
 
     div[class*="st-key-daily_checkin_shortcut_button"] button::before {
@@ -8430,44 +8488,48 @@ def render_daily_checkin_shortcut_button(user_id: int):
 
         background: #F5C542;
 
-        -webkit-mask: url("data:image/svg+xml;base64,__CHECKIN_ICON_BASE64__") center / contain no-repeat;
-        mask: url("data:image/svg+xml;base64,__CHECKIN_ICON_BASE64__") center / contain no-repeat;
+        -webkit-mask:
+            url("data:image/svg+xml;base64,__CHECKIN_ICON_BASE64__")
+            center / contain no-repeat;
+        mask:
+            url("data:image/svg+xml;base64,__CHECKIN_ICON_BASE64__")
+            center / contain no-repeat;
 
         pointer-events: none;
     }
 
     div[class*="st-key-daily_checkin_shortcut_button"] button::after {
         content: "Điểm danh";
-        position: absolute;
-        right: 58px;
-        top: 50%;
-        transform: translateY(-50%) translateX(8px);
 
-        opacity: 0;
-        pointer-events: none;
+        position: absolute;
+        top: 50%;
+        right: 58px;
 
         padding: 8px 11px;
-        border-radius: 999px;
 
+        border-radius: 999px;
         background: rgba(7, 17, 31, 0.94);
         color: #F8FAFC;
+
+        box-shadow: 0 10px 24px rgba(7, 17, 31, 0.22);
 
         font-size: 12px;
         font-weight: 850;
         line-height: 1;
         white-space: nowrap;
 
-        box-shadow: 0 10px 24px rgba(7, 17, 31, 0.22);
+        opacity: 0;
+        pointer-events: none;
 
+        transform: translateY(-50%) translateX(8px);
         transition:
             opacity 0.18s ease,
             transform 0.18s ease;
     }
 
-    @media (hover: hover) {
+    @media (hover: hover) and (min-width: 769px) {
         div[class*="st-key-daily_checkin_shortcut_button"] button:hover {
             background: #FFFFFF !important;
-
             box-shadow:
                 0 14px 30px rgba(7, 17, 31, 0.18),
                 0 0 0 4px rgba(245, 197, 66, 0.12) !important;
@@ -8477,10 +8539,6 @@ def render_daily_checkin_shortcut_button(user_id: int):
             opacity: 1;
             transform: translateY(-50%) translateX(0);
         }
-    }
-
-    div[class*="st-key-daily_checkin_shortcut_button"] button:active {
-        cursor: grabbing !important;
     }
 
     div[class*="st-key-daily_checkin_shortcut_button"].epl-checkin-dragging,
@@ -8503,38 +8561,186 @@ def render_daily_checkin_shortcut_button(user_id: int):
         line-height: 0 !important;
     }
 
+    /* =====================================================
+       MOBILE: ẨN WIDGET GỐC, DÙNG FAB PORTAL THẬT
+       ===================================================== */
+
     @media (max-width: 768px) {
         div[class*="st-key-daily_checkin_shortcut_button"] {
-            top: 76px !important;
-            right: 8px !important;
+            position: fixed !important;
+            top: 0 !important;
+            left: -10000px !important;
+            right: auto !important;
+            bottom: auto !important;
 
-            width: 44px !important;
-            height: 44px !important;
-            min-width: 44px !important;
-            min-height: 44px !important;
-            max-width: 44px !important;
-            max-height: 44px !important;
+            width: 1px !important;
+            height: 1px !important;
+            min-width: 1px !important;
+            min-height: 1px !important;
+            max-width: 1px !important;
+            max-height: 1px !important;
+
+            margin: 0 !important;
+            padding: 0 !important;
+
+            opacity: 0 !important;
+            overflow: hidden !important;
+            pointer-events: none !important;
         }
 
         div[class*="st-key-daily_checkin_shortcut_button"] button {
-            width: 44px !important;
-            height: 44px !important;
-            min-width: 44px !important;
-            min-height: 44px !important;
-            max-width: 44px !important;
-            max-height: 44px !important;
+            width: 1px !important;
+            height: 1px !important;
+            min-width: 1px !important;
+            min-height: 1px !important;
+            max-width: 1px !important;
+            max-height: 1px !important;
 
-            border: none !important;
-            outline: none !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+        }
+    }
+
+    /* FAB được JavaScript portal trực tiếp vào body. */
+    #epl-mobile-checkin-fab {
+        position: fixed;
+        z-index: 1000004;
+
+        display: none;
+        align-items: center;
+        justify-content: center;
+
+        width: 48px;
+        height: 48px;
+        min-width: 48px;
+        min-height: 48px;
+
+        margin: 0;
+        padding: 0;
+
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        border-radius: 999px;
+        outline: 0;
+
+        background:
+            radial-gradient(
+                circle at 34% 28%,
+                rgba(255, 255, 255, 1),
+                rgba(255, 255, 255, 0.98) 55%,
+                rgba(248, 250, 252, 0.96) 100%
+            );
+
+        box-shadow:
+            0 14px 30px rgba(7, 17, 31, 0.19),
+            0 3px 9px rgba(7, 17, 31, 0.10),
+            0 0 0 4px rgba(255, 255, 255, 0.46);
+
+        cursor: grab;
+        touch-action: none;
+        overscroll-behavior: contain;
+
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+        -webkit-tap-highlight-color: transparent;
+
+        transform: translateZ(0);
+        will-change: left, top, transform;
+
+        transition:
+            transform 0.14s ease,
+            box-shadow 0.14s ease,
+            background 0.14s ease;
+    }
+
+    #epl-mobile-checkin-fab::before {
+        content: "";
+
+        position: absolute;
+        inset: 5px;
+
+        border: 1px solid rgba(245, 197, 66, 0.34);
+        border-radius: inherit;
+
+        pointer-events: none;
+    }
+
+    #epl-mobile-checkin-fab::after {
+        content: "";
+
+        position: absolute;
+        right: 5px;
+        bottom: 5px;
+
+        width: 7px;
+        height: 7px;
+
+        border: 2px solid #FFFFFF;
+        border-radius: 999px;
+
+        background: #00A65A;
+        box-shadow: 0 2px 6px rgba(7, 17, 31, 0.18);
+
+        pointer-events: none;
+    }
+
+    #epl-mobile-checkin-fab .epl-mobile-checkin-fab-icon {
+        display: block;
+
+        width: 22px;
+        height: 22px;
+
+        background: #F5C542;
+
+        -webkit-mask:
+            url("data:image/svg+xml;base64,__CHECKIN_ICON_BASE64__")
+            center / contain no-repeat;
+        mask:
+            url("data:image/svg+xml;base64,__CHECKIN_ICON_BASE64__")
+            center / contain no-repeat;
+
+        pointer-events: none;
+    }
+
+    #epl-mobile-checkin-fab.is-pressed,
+    #epl-mobile-checkin-fab.is-dragging {
+        cursor: grabbing;
+        transform: scale(1.055) translateZ(0);
+        background: #FFFFFF;
+        box-shadow:
+            0 18px 38px rgba(7, 17, 31, 0.24),
+            0 0 0 5px rgba(245, 197, 66, 0.17);
+        transition: none;
+    }
+
+    #epl-mobile-checkin-fab:focus-visible {
+        outline: 3px solid rgba(245, 197, 66, 0.72);
+        outline-offset: 3px;
+    }
+
+    @media (max-width: 768px) {
+        #epl-mobile-checkin-fab {
+            display: flex;
+        }
+    }
+
+    @media (max-width: 390px) {
+        #epl-mobile-checkin-fab {
+            width: 46px;
+            height: 46px;
+            min-width: 46px;
+            min-height: 46px;
         }
 
-        div[class*="st-key-daily_checkin_shortcut_button"] button::before {
+        #epl-mobile-checkin-fab .epl-mobile-checkin-fab-icon {
             width: 21px;
             height: 21px;
         }
+    }
 
-        div[class*="st-key-daily_checkin_shortcut_button"] button::after {
-            display: none !important;
+    @media (prefers-reduced-motion: reduce) {
+        #epl-mobile-checkin-fab {
+            transition: none;
         }
     }
     </style>
@@ -8548,6 +8754,8 @@ def render_daily_checkin_shortcut_button(user_id: int):
         unsafe_allow_html=True
     )
 
+    # Nút này vẫn là điểm nối tới Python/st.dialog.
+    # Trên mobile nó được ẩn và FAB portal sẽ gọi .click() vào đây.
     shortcut_clicked = st.button(
         "Mở điểm danh",
         key="daily_checkin_shortcut_button",
@@ -8557,16 +8765,14 @@ def render_daily_checkin_shortcut_button(user_id: int):
     checkin_drag_script = r"""
     <script>
     (() => {
-        /*
-         * Script được chèn trực tiếp vào document chính bằng st.html.
-         * Cách này tránh lỗi touch/pointer của iframe components.html
-         * trên Safari/Chrome iOS thực tế.
-         */
         const controllerName =
-            "__eplCheckinDragController";
+            "__eplCheckinFloatControllerV3";
 
-        const positionName =
-            "__eplCheckinDragPosition";
+        const mobileStorageKey =
+            "epl_mobile_checkin_fab_position_v3";
+
+        const desktopPositionKey =
+            "__eplCheckinDesktopPositionV3";
 
         const oldController =
             window[controllerName];
@@ -8581,48 +8787,37 @@ def render_daily_checkin_shortcut_button(user_id: int):
         const shellSelector =
             'div[class*="st-key-daily_checkin_shortcut_button"]';
 
-        const shellCandidates = Array.from(
+        const nativeShell = Array.from(
             document.querySelectorAll(shellSelector)
-        );
-
-        const shell = shellCandidates
+        )
             .reverse()
             .find((candidate) => {
-                const style =
-                    window.getComputedStyle(candidate);
-
-                const rect =
-                    candidate.getBoundingClientRect();
-
                 return (
                     candidate.isConnected
-                    && style.display !== "none"
-                    && style.visibility !== "hidden"
-                    && Number(style.opacity || 1) !== 0
-                    && rect.width > 0
-                    && rect.height > 0
+                    && candidate.querySelector("button")
                 );
             });
 
-        if (!shell) {
+        if (!nativeShell) {
             return;
         }
 
-        const button = shell.querySelector("button");
+        const nativeButton =
+            nativeShell.querySelector("button");
 
-        if (!button) {
+        if (!nativeButton) {
             return;
         }
+
+        const mediaQuery = window.matchMedia(
+            "(max-width: 768px)"
+        );
 
         const edgeGap = 8;
-        const headerGap = 6;
-        const dragThreshold = 5;
+        const headerGap = 8;
+        const dragThreshold = 4;
 
-        let activePointer = null;
-        let activeTouch = null;
-        let dragStarted = false;
-        let suppressClickUntil = 0;
-        let resizeFrame = 0;
+        let modeCleanup = () => {};
         let mutationObserver = null;
         let cleaned = false;
 
@@ -8637,7 +8832,6 @@ def render_daily_checkin_shortcut_button(user_id: int):
             if (
                 style.display === "none"
                 || style.visibility === "hidden"
-                || Number(style.opacity || 1) === 0
             ) {
                 return null;
             }
@@ -8655,22 +8849,28 @@ def render_daily_checkin_shortcut_button(user_id: int):
             return rect;
         };
 
-        const getHeaderRect = () => {
+        const getHeaderBottom = () => {
+            let bottom = 0;
+
             const candidates =
                 document.querySelectorAll(
                     'header[data-testid="stHeader"], '
-                    + '[data-testid="stHeader"]'
+                    + '[data-testid="stHeader"], '
+                    + 'div[class*="st-key-epl_news_ticker_host"]'
                 );
 
             for (const candidate of candidates) {
                 const rect = getVisibleRect(candidate);
 
                 if (rect) {
-                    return rect;
+                    bottom = Math.max(
+                        bottom,
+                        rect.bottom
+                    );
                 }
             }
 
-            return null;
+            return bottom;
         };
 
         const getViewportRect = () => {
@@ -8697,56 +8897,7 @@ def render_daily_checkin_shortcut_button(user_id: int):
             };
         };
 
-        const getMovementBounds = () => {
-            const shellRect =
-                shell.getBoundingClientRect();
-
-            const viewportRect =
-                getViewportRect();
-
-            const headerRect =
-                getHeaderRect();
-
-            const minLeft =
-                viewportRect.left + edgeGap;
-
-            const viewportMinTop =
-                viewportRect.top + edgeGap;
-
-            const minTop = headerRect
-                ? Math.max(
-                    viewportMinTop,
-                    Math.ceil(
-                        headerRect.bottom + headerGap
-                    )
-                )
-                : viewportMinTop;
-
-            const maxLeft = Math.max(
-                minLeft,
-                viewportRect.left
-                + viewportRect.width
-                - shellRect.width
-                - edgeGap
-            );
-
-            const maxTop = Math.max(
-                minTop,
-                viewportRect.top
-                + viewportRect.height
-                - shellRect.height
-                - edgeGap
-            );
-
-            return {
-                minLeft,
-                minTop,
-                maxLeft,
-                maxTop
-            };
-        };
-
-        const clampNumber = (
+        const clamp = (
             value,
             minimum,
             maximum
@@ -8760,181 +8911,266 @@ def render_daily_checkin_shortcut_button(user_id: int):
             maximum
         );
 
+        const getBounds = (element) => {
+            const viewport = getViewportRect();
+            const rect = element.getBoundingClientRect();
+
+            const minLeft =
+                viewport.left + edgeGap;
+
+            const minTop = Math.max(
+                viewport.top + edgeGap,
+                getHeaderBottom() + headerGap
+            );
+
+            const maxLeft = Math.max(
+                minLeft,
+                viewport.left
+                + viewport.width
+                - rect.width
+                - edgeGap
+            );
+
+            const maxTop = Math.max(
+                minTop,
+                viewport.top
+                + viewport.height
+                - rect.height
+                - edgeGap
+            );
+
+            return {
+                minLeft,
+                minTop,
+                maxLeft,
+                maxTop
+            };
+        };
+
         const applyPosition = (
+            element,
             proposedLeft,
             proposedTop,
-            savePosition = true
+            saveMobile = false
         ) => {
-            const bounds = getMovementBounds();
+            const bounds = getBounds(element);
 
-            const left = clampNumber(
+            const left = clamp(
                 proposedLeft,
                 bounds.minLeft,
                 bounds.maxLeft
             );
 
-            const top = clampNumber(
+            const top = clamp(
                 proposedTop,
                 bounds.minTop,
                 bounds.maxTop
             );
 
-            shell.style.setProperty(
+            element.style.setProperty(
                 "left",
                 left + "px",
                 "important"
             );
 
-            shell.style.setProperty(
+            element.style.setProperty(
                 "top",
                 top + "px",
                 "important"
             );
 
-            shell.style.setProperty(
+            element.style.setProperty(
                 "right",
                 "auto",
                 "important"
             );
 
-            shell.style.setProperty(
+            element.style.setProperty(
                 "bottom",
                 "auto",
                 "important"
             );
 
-            if (savePosition) {
-                window[positionName] = {
-                    left,
-                    top
-                };
+            if (saveMobile) {
+                try {
+                    window.sessionStorage.setItem(
+                        mobileStorageKey,
+                        JSON.stringify({ left, top })
+                    );
+                } catch (error) {
+                    window.__eplMobileCheckinFabPosition = {
+                        left,
+                        top
+                    };
+                }
             }
+
+            return { left, top };
         };
 
-        const beginDrag = (
-            inputType,
-            inputId,
-            clientX,
-            clientY
-        ) => {
-            const shellRect =
-                shell.getBoundingClientRect();
-
-            const dragState = {
-                inputType,
-                inputId,
-                startX: clientX,
-                startY: clientY,
-                startLeft: shellRect.left,
-                startTop: shellRect.top
-            };
-
-            if (inputType === "pointer") {
-                activePointer = dragState;
-            } else {
-                activeTouch = dragState;
-            }
-
-            dragStarted = false;
-        };
-
-        const moveDrag = (
-            dragState,
-            clientX,
-            clientY,
-            event
-        ) => {
-            if (!dragState) {
-                return;
-            }
-
-            const deltaX =
-                clientX - dragState.startX;
-
-            const deltaY =
-                clientY - dragState.startY;
-
-            if (
-                !dragStarted
-                && Math.hypot(deltaX, deltaY)
-                    < dragThreshold
-            ) {
-                return;
-            }
-
-            dragStarted = true;
-
-            shell.classList.add(
-                "epl-checkin-dragging"
-            );
-
-            if (event && event.cancelable) {
-                event.preventDefault();
-            }
-
-            if (event) {
-                event.stopPropagation();
-            }
-
-            applyPosition(
-                dragState.startLeft + deltaX,
-                dragState.startTop + deltaY
-            );
-        };
-
-        const releasePointerCapture = (
-            pointerId
-        ) => {
-            if (
-                pointerId === null
-                || pointerId === undefined
-                || !button.releasePointerCapture
-            ) {
-                return;
-            }
-
+        const readMobilePosition = () => {
             try {
-                if (
-                    !button.hasPointerCapture
-                    || button.hasPointerCapture(pointerId)
-                ) {
-                    button.releasePointerCapture(pointerId);
+                const stored =
+                    window.sessionStorage.getItem(
+                        mobileStorageKey
+                    );
+
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+
+                    if (
+                        Number.isFinite(Number(parsed.left))
+                        && Number.isFinite(Number(parsed.top))
+                    ) {
+                        return {
+                            left: Number(parsed.left),
+                            top: Number(parsed.top)
+                        };
+                    }
                 }
             } catch (error) {
-                // Safari/WebView có thể tự giải phóng pointer capture.
+                // sessionStorage có thể bị chặn trong chế độ riêng tư.
             }
+
+            const fallback =
+                window.__eplMobileCheckinFabPosition;
+
+            if (
+                fallback
+                && Number.isFinite(Number(fallback.left))
+                && Number.isFinite(Number(fallback.top))
+            ) {
+                return {
+                    left: Number(fallback.left),
+                    top: Number(fallback.top)
+                };
+            }
+
+            return null;
         };
 
-        const finishDrag = (
-            inputType,
-            event
-        ) => {
-            const state = inputType === "pointer"
-                ? activePointer
-                : activeTouch;
-
-            if (!state) {
+        const triggerNativeButton = () => {
+            if (
+                !nativeButton.isConnected
+                || nativeButton.disabled
+            ) {
                 return;
             }
 
-            const completedDrag = dragStarted;
+            nativeButton.click();
+        };
 
-            if (inputType === "pointer") {
-                releasePointerCapture(state.inputId);
-                activePointer = null;
-            } else {
-                activeTouch = null;
+        const setupMobileFab = () => {
+            const staleFab =
+                document.getElementById(
+                    "epl-mobile-checkin-fab"
+                );
+
+            if (staleFab) {
+                staleFab.remove();
             }
 
-            dragStarted = false;
+            const fab = document.createElement("button");
 
-            shell.classList.remove(
-                "epl-checkin-dragging"
+            fab.id = "epl-mobile-checkin-fab";
+            fab.type = "button";
+            fab.setAttribute(
+                "aria-label",
+                "Mở điểm danh; giữ và kéo để di chuyển"
+            );
+            fab.setAttribute(
+                "title",
+                "Điểm danh"
             );
 
-            if (completedDrag) {
-                suppressClickUntil =
-                    Date.now() + 700;
+            const icon = document.createElement("span");
+            icon.className =
+                "epl-mobile-checkin-fab-icon";
+            icon.setAttribute("aria-hidden", "true");
+
+            fab.appendChild(icon);
+            document.body.appendChild(fab);
+
+            let activeTouch = null;
+            let activeMouse = null;
+            let dragStarted = false;
+            let ignoreClickUntil = 0;
+            let resizeFrame = 0;
+
+            const useSavedOrDefaultPosition = () => {
+                const saved = readMobilePosition();
+                const viewport = getViewportRect();
+                const rect = fab.getBoundingClientRect();
+
+                const defaultLeft =
+                    viewport.left
+                    + viewport.width
+                    - rect.width
+                    - edgeGap;
+
+                const defaultTop = Math.max(
+                    getHeaderBottom() + 14,
+                    viewport.top + 70
+                );
+
+                applyPosition(
+                    fab,
+                    saved ? saved.left : defaultLeft,
+                    saved ? saved.top : defaultTop,
+                    false
+                );
+            };
+
+            const beginDrag = (
+                inputType,
+                inputId,
+                clientX,
+                clientY
+            ) => {
+                const rect = fab.getBoundingClientRect();
+
+                const state = {
+                    inputType,
+                    inputId,
+                    startX: clientX,
+                    startY: clientY,
+                    startLeft: rect.left,
+                    startTop: rect.top
+                };
+
+                if (inputType === "touch") {
+                    activeTouch = state;
+                } else {
+                    activeMouse = state;
+                }
+
+                dragStarted = false;
+                fab.classList.add("is-pressed");
+            };
+
+            const moveDrag = (
+                state,
+                clientX,
+                clientY,
+                event
+            ) => {
+                if (!state) {
+                    return;
+                }
+
+                const deltaX = clientX - state.startX;
+                const deltaY = clientY - state.startY;
+
+                if (
+                    !dragStarted
+                    && Math.hypot(deltaX, deltaY)
+                        < dragThreshold
+                ) {
+                    return;
+                }
+
+                dragStarted = true;
+                fab.classList.add("is-dragging");
 
                 if (event && event.cancelable) {
                     event.preventDefault();
@@ -8943,169 +9179,643 @@ def render_daily_checkin_shortcut_button(user_id: int):
                 if (event) {
                     event.stopPropagation();
                 }
-            }
-        };
 
-        const onPointerDown = (event) => {
-            if (
-                event.button !== undefined
-                && event.button !== 0
-            ) {
-                return;
-            }
+                applyPosition(
+                    fab,
+                    state.startLeft + deltaX,
+                    state.startTop + deltaY,
+                    true
+                );
+            };
 
-            beginDrag(
-                "pointer",
-                event.pointerId,
-                event.clientX,
-                event.clientY
-            );
-
-            if (button.setPointerCapture) {
-                try {
-                    button.setPointerCapture(
-                        event.pointerId
-                    );
-                } catch (error) {
-                    // Không làm hỏng thao tác nếu WebView không capture được.
+            const finishTouch = (
+                event,
+                cancelled = false
+            ) => {
+                if (!activeTouch) {
+                    return;
                 }
-            }
-        };
 
-        const onPointerMove = (event) => {
-            if (
-                !activePointer
-                || activePointer.inputId
-                    !== event.pointerId
-            ) {
-                return;
-            }
+                const completedDrag = dragStarted;
 
-            moveDrag(
-                activePointer,
-                event.clientX,
-                event.clientY,
-                event
-            );
-        };
+                activeTouch = null;
+                dragStarted = false;
 
-        const onPointerEnd = (event) => {
-            if (
-                !activePointer
-                || activePointer.inputId
-                    !== event.pointerId
-            ) {
-                return;
-            }
+                fab.classList.remove(
+                    "is-pressed",
+                    "is-dragging"
+                );
 
-            finishDrag("pointer", event);
-        };
+                ignoreClickUntil = Date.now() + 700;
 
-        const findTouch = (
-            touchList,
-            identifier
-        ) => Array.from(touchList || [])
-            .find((touch) => {
-                return touch.identifier === identifier;
-            });
+                if (event && event.cancelable) {
+                    event.preventDefault();
+                }
 
-        const onTouchStart = (event) => {
-            if (activeTouch) {
-                return;
-            }
+                if (event) {
+                    event.stopPropagation();
+                }
 
-            const touch = event.changedTouches?.[0]
-                || event.touches?.[0];
+                if (!completedDrag && !cancelled) {
+                    triggerNativeButton();
+                }
+            };
 
-            if (!touch) {
-                return;
-            }
+            const finishMouse = (event) => {
+                if (!activeMouse) {
+                    return;
+                }
 
-            beginDrag(
-                "touch",
-                touch.identifier,
-                touch.clientX,
-                touch.clientY
-            );
-        };
+                const completedDrag = dragStarted;
 
-        const onTouchMove = (event) => {
-            if (!activeTouch) {
-                return;
-            }
+                activeMouse = null;
+                dragStarted = false;
 
-            const touch = findTouch(
-                event.touches,
-                activeTouch.inputId
-            );
+                fab.classList.remove(
+                    "is-pressed",
+                    "is-dragging"
+                );
 
-            if (!touch) {
-                return;
-            }
+                if (completedDrag) {
+                    ignoreClickUntil = Date.now() + 700;
 
-            moveDrag(
-                activeTouch,
-                touch.clientX,
-                touch.clientY,
-                event
-            );
-        };
+                    if (event && event.cancelable) {
+                        event.preventDefault();
+                    }
 
-        const onTouchEnd = (event) => {
-            if (!activeTouch) {
-                return;
-            }
+                    if (event) {
+                        event.stopPropagation();
+                    }
+                }
+            };
 
-            const endedTouch = findTouch(
-                event.changedTouches,
-                activeTouch.inputId
-            );
+            const findTouch = (
+                touchList,
+                identifier
+            ) => Array.from(touchList || [])
+                .find((touch) => {
+                    return touch.identifier === identifier;
+                });
 
-            if (
-                endedTouch
-                || event.type === "touchcancel"
-            ) {
-                finishDrag("touch", event);
-            }
-        };
+            const onTouchStart = (event) => {
+                if (activeTouch || event.touches.length > 1) {
+                    return;
+                }
 
-        const onClickCapture = (event) => {
-            if (
-                Date.now() >= suppressClickUntil
-            ) {
-                return;
-            }
+                const touch =
+                    event.changedTouches?.[0]
+                    || event.touches?.[0];
 
-            event.preventDefault();
-            event.stopPropagation();
-            event.stopImmediatePropagation();
-        };
+                if (!touch) {
+                    return;
+                }
 
-        const preventNativeDrag = (event) => {
-            event.preventDefault();
-        };
+                if (event.cancelable) {
+                    event.preventDefault();
+                }
 
-        const keepInsideAllowedArea = () => {
-            window.cancelAnimationFrame(
-                resizeFrame
-            );
+                event.stopPropagation();
 
-            resizeFrame =
-                window.requestAnimationFrame(
+                beginDrag(
+                    "touch",
+                    touch.identifier,
+                    touch.clientX,
+                    touch.clientY
+                );
+            };
+
+            const onTouchMove = (event) => {
+                if (!activeTouch) {
+                    return;
+                }
+
+                const touch = findTouch(
+                    event.touches,
+                    activeTouch.inputId
+                );
+
+                if (!touch) {
+                    return;
+                }
+
+                moveDrag(
+                    activeTouch,
+                    touch.clientX,
+                    touch.clientY,
+                    event
+                );
+            };
+
+            const onTouchEnd = (event) => {
+                if (!activeTouch) {
+                    return;
+                }
+
+                const endedTouch = findTouch(
+                    event.changedTouches,
+                    activeTouch.inputId
+                );
+
+                if (endedTouch) {
+                    finishTouch(event, false);
+                }
+            };
+
+            const onTouchCancel = (event) => {
+                finishTouch(event, true);
+            };
+
+            const onMouseDown = (event) => {
+                if (event.button !== 0 || activeMouse) {
+                    return;
+                }
+
+                beginDrag(
+                    "mouse",
+                    "mouse",
+                    event.clientX,
+                    event.clientY
+                );
+
+                event.preventDefault();
+                event.stopPropagation();
+            };
+
+            const onMouseMove = (event) => {
+                if (!activeMouse) {
+                    return;
+                }
+
+                moveDrag(
+                    activeMouse,
+                    event.clientX,
+                    event.clientY,
+                    event
+                );
+            };
+
+            const onMouseUp = (event) => {
+                finishMouse(event);
+            };
+
+            const onClick = (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+
+                if (Date.now() < ignoreClickUntil) {
+                    return;
+                }
+
+                triggerNativeButton();
+            };
+
+            const keepInsideViewport = () => {
+                window.cancelAnimationFrame(resizeFrame);
+
+                resizeFrame = window.requestAnimationFrame(
                     () => {
-                        if (!shell.isConnected) {
+                        if (!fab.isConnected) {
                             return;
                         }
 
-                        const currentRect =
-                            shell.getBoundingClientRect();
+                        const rect = fab.getBoundingClientRect();
 
                         applyPosition(
-                            currentRect.left,
-                            currentRect.top
+                            fab,
+                            rect.left,
+                            rect.top,
+                            true
                         );
                     }
                 );
+            };
+
+            fab.addEventListener(
+                "touchstart",
+                onTouchStart,
+                { passive: false }
+            );
+
+            document.addEventListener(
+                "touchmove",
+                onTouchMove,
+                {
+                    capture: true,
+                    passive: false
+                }
+            );
+
+            document.addEventListener(
+                "touchend",
+                onTouchEnd,
+                true
+            );
+
+            document.addEventListener(
+                "touchcancel",
+                onTouchCancel,
+                true
+            );
+
+            fab.addEventListener(
+                "mousedown",
+                onMouseDown
+            );
+
+            document.addEventListener(
+                "mousemove",
+                onMouseMove,
+                true
+            );
+
+            document.addEventListener(
+                "mouseup",
+                onMouseUp,
+                true
+            );
+
+            fab.addEventListener(
+                "click",
+                onClick
+            );
+
+            window.addEventListener(
+                "resize",
+                keepInsideViewport,
+                { passive: true }
+            );
+
+            window.addEventListener(
+                "orientationchange",
+                keepInsideViewport,
+                { passive: true }
+            );
+
+            if (window.visualViewport) {
+                window.visualViewport.addEventListener(
+                    "resize",
+                    keepInsideViewport,
+                    { passive: true }
+                );
+
+                window.visualViewport.addEventListener(
+                    "scroll",
+                    keepInsideViewport,
+                    { passive: true }
+                );
+            }
+
+            window.requestAnimationFrame(
+                useSavedOrDefaultPosition
+            );
+
+            return () => {
+                window.cancelAnimationFrame(resizeFrame);
+
+                fab.removeEventListener(
+                    "touchstart",
+                    onTouchStart
+                );
+
+                document.removeEventListener(
+                    "touchmove",
+                    onTouchMove,
+                    true
+                );
+
+                document.removeEventListener(
+                    "touchend",
+                    onTouchEnd,
+                    true
+                );
+
+                document.removeEventListener(
+                    "touchcancel",
+                    onTouchCancel,
+                    true
+                );
+
+                fab.removeEventListener(
+                    "mousedown",
+                    onMouseDown
+                );
+
+                document.removeEventListener(
+                    "mousemove",
+                    onMouseMove,
+                    true
+                );
+
+                document.removeEventListener(
+                    "mouseup",
+                    onMouseUp,
+                    true
+                );
+
+                fab.removeEventListener(
+                    "click",
+                    onClick
+                );
+
+                window.removeEventListener(
+                    "resize",
+                    keepInsideViewport
+                );
+
+                window.removeEventListener(
+                    "orientationchange",
+                    keepInsideViewport
+                );
+
+                if (window.visualViewport) {
+                    window.visualViewport.removeEventListener(
+                        "resize",
+                        keepInsideViewport
+                    );
+
+                    window.visualViewport.removeEventListener(
+                        "scroll",
+                        keepInsideViewport
+                    );
+                }
+
+                fab.remove();
+            };
+        };
+
+        const setupDesktopDrag = () => {
+            let activePointer = null;
+            let dragStarted = false;
+            let suppressClickUntil = 0;
+            let resizeFrame = 0;
+
+            const applyDesktopPosition = (
+                left,
+                top,
+                save = true
+            ) => {
+                const position = applyPosition(
+                    nativeShell,
+                    left,
+                    top,
+                    false
+                );
+
+                if (save) {
+                    window[desktopPositionKey] = position;
+                }
+            };
+
+            const onPointerDown = (event) => {
+                if (
+                    event.button !== undefined
+                    && event.button !== 0
+                ) {
+                    return;
+                }
+
+                const rect =
+                    nativeShell.getBoundingClientRect();
+
+                activePointer = {
+                    pointerId: event.pointerId,
+                    startX: event.clientX,
+                    startY: event.clientY,
+                    startLeft: rect.left,
+                    startTop: rect.top
+                };
+
+                dragStarted = false;
+            };
+
+            const onPointerMove = (event) => {
+                if (
+                    !activePointer
+                    || activePointer.pointerId
+                        !== event.pointerId
+                ) {
+                    return;
+                }
+
+                const deltaX =
+                    event.clientX - activePointer.startX;
+
+                const deltaY =
+                    event.clientY - activePointer.startY;
+
+                if (
+                    !dragStarted
+                    && Math.hypot(deltaX, deltaY)
+                        < 5
+                ) {
+                    return;
+                }
+
+                dragStarted = true;
+                nativeShell.classList.add(
+                    "epl-checkin-dragging"
+                );
+
+                if (event.cancelable) {
+                    event.preventDefault();
+                }
+
+                event.stopPropagation();
+
+                applyDesktopPosition(
+                    activePointer.startLeft + deltaX,
+                    activePointer.startTop + deltaY,
+                    true
+                );
+            };
+
+            const finishPointer = (event) => {
+                if (
+                    !activePointer
+                    || (
+                        event
+                        && event.pointerId
+                            !== activePointer.pointerId
+                    )
+                ) {
+                    return;
+                }
+
+                const completedDrag = dragStarted;
+
+                activePointer = null;
+                dragStarted = false;
+
+                nativeShell.classList.remove(
+                    "epl-checkin-dragging"
+                );
+
+                if (completedDrag) {
+                    suppressClickUntil = Date.now() + 600;
+
+                    if (event && event.cancelable) {
+                        event.preventDefault();
+                    }
+
+                    if (event) {
+                        event.stopPropagation();
+                    }
+                }
+            };
+
+            const onClickCapture = (event) => {
+                if (Date.now() >= suppressClickUntil) {
+                    return;
+                }
+
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+            };
+
+            const keepInsideViewport = () => {
+                window.cancelAnimationFrame(resizeFrame);
+
+                resizeFrame = window.requestAnimationFrame(
+                    () => {
+                        if (!nativeShell.isConnected) {
+                            return;
+                        }
+
+                        const rect =
+                            nativeShell.getBoundingClientRect();
+
+                        applyDesktopPosition(
+                            rect.left,
+                            rect.top,
+                            true
+                        );
+                    }
+                );
+            };
+
+            nativeButton.setAttribute(
+                "aria-label",
+                "Mở điểm danh; giữ và kéo để di chuyển"
+            );
+
+            nativeButton.setAttribute(
+                "draggable",
+                "false"
+            );
+
+            nativeButton.addEventListener(
+                "pointerdown",
+                onPointerDown
+            );
+
+            document.addEventListener(
+                "pointermove",
+                onPointerMove,
+                {
+                    capture: true,
+                    passive: false
+                }
+            );
+
+            document.addEventListener(
+                "pointerup",
+                finishPointer,
+                true
+            );
+
+            document.addEventListener(
+                "pointercancel",
+                finishPointer,
+                true
+            );
+
+            nativeShell.addEventListener(
+                "click",
+                onClickCapture,
+                true
+            );
+
+            window.addEventListener(
+                "resize",
+                keepInsideViewport,
+                { passive: true }
+            );
+
+            const saved = window[desktopPositionKey];
+
+            window.requestAnimationFrame(() => {
+                if (
+                    saved
+                    && Number.isFinite(Number(saved.left))
+                    && Number.isFinite(Number(saved.top))
+                ) {
+                    applyDesktopPosition(
+                        saved.left,
+                        saved.top,
+                        false
+                    );
+                } else {
+                    const rect =
+                        nativeShell.getBoundingClientRect();
+
+                    applyDesktopPosition(
+                        rect.left,
+                        rect.top,
+                        false
+                    );
+                }
+            });
+
+            return () => {
+                window.cancelAnimationFrame(resizeFrame);
+
+                nativeButton.removeEventListener(
+                    "pointerdown",
+                    onPointerDown
+                );
+
+                document.removeEventListener(
+                    "pointermove",
+                    onPointerMove,
+                    true
+                );
+
+                document.removeEventListener(
+                    "pointerup",
+                    finishPointer,
+                    true
+                );
+
+                document.removeEventListener(
+                    "pointercancel",
+                    finishPointer,
+                    true
+                );
+
+                nativeShell.removeEventListener(
+                    "click",
+                    onClickCapture,
+                    true
+                );
+
+                window.removeEventListener(
+                    "resize",
+                    keepInsideViewport
+                );
+            };
+        };
+
+        const setupCurrentMode = () => {
+            modeCleanup();
+
+            modeCleanup = mediaQuery.matches
+                ? setupMobileFab()
+                : setupDesktopDrag();
+        };
+
+        const onMediaChange = () => {
+            setupCurrentMode();
         };
 
         const cleanup = () => {
@@ -9115,241 +9825,37 @@ def render_daily_checkin_shortcut_button(user_id: int):
 
             cleaned = true;
 
-            window.cancelAnimationFrame(
-                resizeFrame
+            modeCleanup();
+
+            mediaQuery.removeEventListener(
+                "change",
+                onMediaChange
             );
-
-            button.removeEventListener(
-                "pointerdown",
-                onPointerDown,
-                true
-            );
-
-            document.removeEventListener(
-                "pointermove",
-                onPointerMove,
-                true
-            );
-
-            document.removeEventListener(
-                "pointerup",
-                onPointerEnd,
-                true
-            );
-
-            document.removeEventListener(
-                "pointercancel",
-                onPointerEnd,
-                true
-            );
-
-            button.removeEventListener(
-                "touchstart",
-                onTouchStart,
-                true
-            );
-
-            document.removeEventListener(
-                "touchmove",
-                onTouchMove,
-                true
-            );
-
-            document.removeEventListener(
-                "touchend",
-                onTouchEnd,
-                true
-            );
-
-            document.removeEventListener(
-                "touchcancel",
-                onTouchEnd,
-                true
-            );
-
-            shell.removeEventListener(
-                "click",
-                onClickCapture,
-                true
-            );
-
-            button.removeEventListener(
-                "dragstart",
-                preventNativeDrag
-            );
-
-            window.removeEventListener(
-                "resize",
-                keepInsideAllowedArea
-            );
-
-            window.removeEventListener(
-                "orientationchange",
-                keepInsideAllowedArea
-            );
-
-            if (window.visualViewport) {
-                window.visualViewport
-                    .removeEventListener(
-                        "resize",
-                        keepInsideAllowedArea
-                    );
-
-                window.visualViewport
-                    .removeEventListener(
-                        "scroll",
-                        keepInsideAllowedArea
-                    );
-            }
 
             if (mutationObserver) {
                 mutationObserver.disconnect();
             }
+
+            const staleFab =
+                document.getElementById(
+                    "epl-mobile-checkin-fab"
+                );
+
+            if (staleFab) {
+                staleFab.remove();
+            }
         };
 
-        button.setAttribute(
-            "title",
-            "Xem điểm danh"
+        mediaQuery.addEventListener(
+            "change",
+            onMediaChange
         );
 
-        button.setAttribute(
-            "aria-label",
-            "Xem điểm danh; giữ và kéo để di chuyển nút"
-        );
-
-        button.setAttribute(
-            "draggable",
-            "false"
-        );
-
-        shell.style.setProperty(
-            "touch-action",
-            "none",
-            "important"
-        );
-
-        button.style.setProperty(
-            "touch-action",
-            "none",
-            "important"
-        );
-
-        /*
-         * Dùng đúng một hệ sự kiện trên mỗi trình duyệt.
-         * iOS hiện đại dùng Pointer Events. Touch Events chỉ là fallback,
-         * tránh tình trạng pointerdown đã mở phiên kéo nhưng touchmove lại
-         * bị bỏ qua vì hai hệ sự kiện tranh nhau.
-         */
-        const supportsPointerEvents =
-            "PointerEvent" in window;
-
-        if (supportsPointerEvents) {
-            button.addEventListener(
-                "pointerdown",
-                onPointerDown,
-                {
-                    capture: true,
-                    passive: false
-                }
-            );
-
-            document.addEventListener(
-                "pointermove",
-                onPointerMove,
-                {
-                    capture: true,
-                    passive: false
-                }
-            );
-
-            document.addEventListener(
-                "pointerup",
-                onPointerEnd,
-                true
-            );
-
-            document.addEventListener(
-                "pointercancel",
-                onPointerEnd,
-                true
-            );
-        } else {
-            button.addEventListener(
-                "touchstart",
-                onTouchStart,
-                {
-                    capture: true,
-                    passive: true
-                }
-            );
-
-            document.addEventListener(
-                "touchmove",
-                onTouchMove,
-                {
-                    capture: true,
-                    passive: false
-                }
-            );
-
-            document.addEventListener(
-                "touchend",
-                onTouchEnd,
-                true
-            );
-
-            document.addEventListener(
-                "touchcancel",
-                onTouchEnd,
-                true
-            );
-        }
-
-        shell.addEventListener(
-            "click",
-            onClickCapture,
-            true
-        );
-
-        button.addEventListener(
-            "dragstart",
-            preventNativeDrag
-        );
-
-        window.addEventListener(
-            "resize",
-            keepInsideAllowedArea,
-            { passive: true }
-        );
-
-        window.addEventListener(
-            "orientationchange",
-            keepInsideAllowedArea,
-            { passive: true }
-        );
-
-        if (window.visualViewport) {
-            window.visualViewport
-                .addEventListener(
-                    "resize",
-                    keepInsideAllowedArea,
-                    { passive: true }
-                );
-
-            window.visualViewport
-                .addEventListener(
-                    "scroll",
-                    keepInsideAllowedArea,
-                    { passive: true }
-                );
-        }
-
-        mutationObserver =
-            new MutationObserver(() => {
-                if (!shell.isConnected) {
-                    cleanup();
-                }
-            });
+        mutationObserver = new MutationObserver(() => {
+            if (!nativeShell.isConnected) {
+                cleanup();
+            }
+        });
 
         mutationObserver.observe(
             document.body,
@@ -9359,35 +9865,7 @@ def render_daily_checkin_shortcut_button(user_id: int):
             }
         );
 
-        const savedPosition =
-            window[positionName];
-
-        window.requestAnimationFrame(() => {
-            if (
-                savedPosition
-                && Number.isFinite(
-                    Number(savedPosition.left)
-                )
-                && Number.isFinite(
-                    Number(savedPosition.top)
-                )
-            ) {
-                applyPosition(
-                    savedPosition.left,
-                    savedPosition.top,
-                    false
-                );
-            } else {
-                const currentRect =
-                    shell.getBoundingClientRect();
-
-                applyPosition(
-                    currentRect.left,
-                    currentRect.top,
-                    false
-                );
-            }
-        });
+        setupCurrentMode();
 
         window[controllerName] = {
             cleanup
@@ -9396,10 +9874,14 @@ def render_daily_checkin_shortcut_button(user_id: int):
     </script>
     """
 
-    st.html(
-        checkin_drag_script,
-        unsafe_allow_javascript=True
-    )
+    # Key riêng giúp inject_main_page_lift_css() loại wrapper script khỏi flow.
+    with st.container(
+        key="daily_checkin_fab_script_host"
+    ):
+        st.html(
+            checkin_drag_script,
+            unsafe_allow_javascript=True
+        )
 
     if shortcut_clicked:
         render_daily_checkin_dialog(user_id)
