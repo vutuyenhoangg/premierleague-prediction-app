@@ -32997,13 +32997,10 @@ def page_admin():
 )
 def load_latest_epl_news_ticker():
     """
-    Đọc bản ticker hiện tại từ Supabase.
+    Đọc bản ticker mới nhất từ Supabase.
 
-    Quy tắc an toàn:
-    - Ticker là tính năng phụ nên lỗi database không được làm sập app.
-    - Chỉ lấy bản tin còn mới trong NEWS_TICKER_MAX_AGE_HOURS.
-    - Hỗ trợ cột items là JSONB, chuỗi JSON, list[dict] hoặc list[str].
-    - Nếu items không dùng được thì thử đọc ticker_text làm phương án dự phòng.
+    Ticker là tính năng phụ. Nếu bảng hoặc dữ liệu gặp lỗi,
+    hàm trả về None để app chính vẫn tiếp tục hoạt động.
     """
 
     row = fetch_one(
@@ -33039,58 +33036,42 @@ def load_latest_epl_news_ticker():
 
     if isinstance(raw_items, str):
         try:
-            raw_items = json.loads(
-                raw_items
-            )
+            raw_items = json.loads(raw_items)
         except json.JSONDecodeError:
-            raw_items = None
+            raw_items = []
 
     ticker_items = []
 
     if isinstance(raw_items, list):
         for raw_item in raw_items:
             if isinstance(raw_item, dict):
-                raw_text = raw_item.get(
-                    "text",
-                    ""
-                )
+                raw_text = raw_item.get("text", "")
             else:
                 raw_text = raw_item
 
             item_text = re.sub(
                 r"\s+",
                 " ",
-                str(
-                    raw_text
-                    if raw_text is not None
-                    else ""
-                )
+                str(raw_text or "")
             ).strip()
 
             if item_text:
-                ticker_items.append(
-                    item_text
-                )
+                ticker_items.append(item_text)
 
+    # Fallback an toàn nếu items bị lỗi nhưng ticker_text vẫn còn.
     if not ticker_items:
-        ticker_text = re.sub(
+        raw_ticker_text = re.sub(
             r"\s+",
             " ",
-            str(
-                row.get(
-                    "ticker_text",
-                    ""
-                )
-                or ""
-            )
+            str(row.get("ticker_text") or "")
         ).strip()
 
-        if ticker_text:
+        if raw_ticker_text:
             ticker_items = [
                 item.strip()
                 for item in re.split(
-                    r"\s*◆\s*",
-                    ticker_text
+                    r"\s*[◆•]\s*",
+                    raw_ticker_text
                 )
                 if item.strip()
             ]
@@ -33103,99 +33084,140 @@ def load_latest_epl_news_ticker():
     return row
 
 
-def _format_epl_ticker_generated_label(
-    generated_at
-) -> str:
+def _render_epl_news_ticker_content():
     """
-    Chuẩn hóa thời điểm tạo ticker sang giờ Việt Nam.
-    Lỗi định dạng thời gian chỉ làm mất nhãn cập nhật,
-    không ảnh hưởng nội dung ticker.
+    Render ticker đè chính xác lên header mặc định của Streamlit.
+
+    Bố cục desktop:
+    - Chừa vùng bên trái cho nút Menu.
+    - Ticker bắt đầu từ sau vùng Menu và kéo tới sát mép phải.
+    - Che cụm Share, Favorite, Edit và các action mặc định bên phải.
+    - Chiều cao bằng đúng header mặc định của app.
+
+    Ticker được render trong iframe độc lập để CSS toàn cục của app
+    không thể làm vỡ layout hoặc animation.
     """
 
-    if not generated_at:
-        return ""
+    if not NEWS_TICKER_ENABLED:
+        return
 
     try:
-        parsed_datetime = generated_at
-
-        if isinstance(
-            parsed_datetime,
-            str
-        ):
-            parsed_datetime = (
-                datetime.fromisoformat(
-                    parsed_datetime.replace(
-                        "Z",
-                        "+00:00"
-                    )
-                )
-            )
-
-        if not isinstance(
-            parsed_datetime,
-            datetime
-        ):
-            return ""
-
-        if parsed_datetime.tzinfo is None:
-            parsed_datetime = (
-                parsed_datetime.replace(
-                    tzinfo=timezone.utc
-                )
-            )
-
-        vietnam_datetime = (
-            parsed_datetime.astimezone(
-                timezone(
-                    timedelta(hours=7)
-                )
-            )
-        )
-
-        return vietnam_datetime.strftime(
-            "%H:%M %d/%m"
-        )
+        ticker_data = load_latest_epl_news_ticker()
 
     except Exception:
-        return ""
+        LOGGER.exception(
+            "Failed to load EPL news ticker."
+        )
+        return
 
+    if not ticker_data:
+        return
 
-def _build_epl_news_ticker_document(
-    ticker_items: list[str],
-    generated_at
-) -> str:
-    """
-    Tạo một tài liệu HTML độc lập cho components.html.
+    ticker_items = []
 
-    Ticker được render trong iframe riêng để:
-    - Không bị Markdown chia vỡ cấu trúc HTML.
-    - Không bị CSS toàn cục của app ghi đè.
-    - Không bị các DOM observer khác trong app chỉnh sửa text.
-    """
+    for raw_item in ticker_data.get("items", []):
+        item_text = re.sub(
+            r"\s+",
+            " ",
+            str(raw_item or "")
+        ).strip()
+
+        if item_text:
+            ticker_items.append(item_text)
+
+    if not ticker_items:
+        return
 
     safe_items = [
         html.escape(
-            re.sub(
-                r"\s+",
-                " ",
-                str(item)
-            ).strip(),
+            item,
             quote=False
         )
         for item in ticker_items
-        if str(item).strip()
     ]
 
-    if not safe_items:
-        return ""
+    total_characters = sum(
+        len(item)
+        for item in ticker_items
+    )
 
-    item_markup = "".join(
+    # Tốc độ chạy tự điều chỉnh theo độ dài toàn bộ bản tin.
+    animation_duration = max(
+        105,
+        min(
+            230,
+            round(total_characters / 7)
+        )
+    )
+
+    generated_at = ticker_data.get(
+        "generated_at"
+    )
+
+    generated_label = ""
+
+    if generated_at:
+        try:
+            if isinstance(
+                generated_at,
+                str
+            ):
+                generated_at = (
+                    datetime.fromisoformat(
+                        generated_at.replace(
+                            "Z",
+                            "+00:00"
+                        )
+                    )
+                )
+
+            if isinstance(
+                generated_at,
+                datetime
+            ):
+                if generated_at.tzinfo is None:
+                    generated_at = (
+                        generated_at.replace(
+                            tzinfo=timezone.utc
+                        )
+                    )
+
+                generated_vietnam = (
+                    generated_at.astimezone(
+                        timezone(
+                            timedelta(hours=7)
+                        )
+                    )
+                )
+
+                generated_label = (
+                    generated_vietnam.strftime(
+                        "%H:%M %d/%m"
+                    )
+                )
+
+        except Exception:
+            generated_label = ""
+
+    aria_label = "Tin tức Premier League mới nhất"
+
+    if generated_label:
+        aria_label += (
+            f", cập nhật lúc {generated_label}"
+        )
+
+    safe_aria_label = html.escape(
+        aria_label,
+        quote=True
+    )
+
+    ticker_items_html = "".join(
         (
-            '<span class="ticker-item">'
+            '<span class="epl-header-ticker-item">'
             f'{item}'
             '</span>'
             '<span '
-            'class="ticker-separator" '
+            'class="epl-header-ticker-separator" '
             'aria-hidden="true">'
             '◆'
             '</span>'
@@ -33203,93 +33225,191 @@ def _build_epl_news_ticker_document(
         for item in safe_items
     )
 
-    group_markup = (
-        '<div class="ticker-group">'
-        f'{item_markup}'
+    # Hai group giống nhau để vòng chạy nối liền, không bị giật.
+    ticker_groups_html = (
+        '<div class="epl-header-ticker-group">'
+        f'{ticker_items_html}'
         '</div>'
-    )
-
-    track_markup = (
-        f'{group_markup}'
         '<div '
-        'class="ticker-group" '
+        'class="epl-header-ticker-group" '
         'aria-hidden="true">'
-        f'{item_markup}'
+        f'{ticker_items_html}'
         '</div>'
     )
 
-    total_characters = sum(
-        len(item)
-        for item in ticker_items
-    )
+    # CSS này chạy ở document cha của Streamlit.
+    # Host được fixed và element gốc trong flow bị collapse về 0px.
+    parent_layout_css = """
+    <style>
+    :root {
+        --epl-default-header-height: 60px;
+        --epl-ticker-menu-reserve: 142px;
+    }
 
-    animation_duration = max(
-        90,
-        min(
-            210,
-            round(
-                total_characters / 7
-            )
-        )
-    )
+    /* Giữ header mặc định đúng chiều cao thiết kế. */
+    header[data-testid="stHeader"],
+    [data-testid="stHeader"] {
+        min-height: var(--epl-default-header-height) !important;
+        height: var(--epl-default-header-height) !important;
+    }
 
-    generated_label = (
-        _format_epl_ticker_generated_label(
-            generated_at
-        )
-    )
+    /* Wrapper gốc không được chiếm một hàng trong nội dung app. */
+    div[data-testid="stElementContainer"]:has(
+        div[class*="st-key-epl_news_ticker_host"]
+    ) {
+        position: static !important;
 
-    accessible_label = (
-        "Tin tức Premier League mới nhất"
-    )
+        width: 0 !important;
+        min-width: 0 !important;
+        max-width: 0 !important;
 
-    if generated_label:
-        accessible_label += (
-            f", cập nhật lúc {generated_label}"
-        )
+        height: 0 !important;
+        min-height: 0 !important;
+        max-height: 0 !important;
 
-    safe_accessible_label = html.escape(
-        accessible_label,
-        quote=True
-    )
+        margin: 0 !important;
+        padding: 0 !important;
 
-    return f"""
+        overflow: visible !important;
+    }
+
+    /* Ticker chiếm toàn bộ header, trừ vùng Menu bên trái. */
+    div[class*="st-key-epl_news_ticker_host"] {
+        position: fixed !important;
+
+        top: 0 !important;
+        left: var(--epl-ticker-menu-reserve) !important;
+        right: 0 !important;
+
+        width: auto !important;
+        min-width: 0 !important;
+        max-width: none !important;
+
+        height: var(--epl-default-header-height) !important;
+        min-height: var(--epl-default-header-height) !important;
+        max-height: var(--epl-default-header-height) !important;
+
+        margin: 0 !important;
+        padding: 0 !important;
+
+        overflow: hidden !important;
+
+        background: #24002A !important;
+
+        border: 0 !important;
+        border-radius: 4px 0 0 4px !important;
+
+        box-shadow:
+            0 5px 16px rgba(55, 0, 60, 0.20) !important;
+
+        z-index: 2147483000 !important;
+
+        pointer-events: auto !important;
+        isolation: isolate !important;
+        transform: none !important;
+    }
+
+    div[class*="st-key-epl_news_ticker_host"]
+    > div[data-testid="stVerticalBlock"],
+
+    div[class*="st-key-epl_news_ticker_host"]
+    > div[data-testid="stVerticalBlockBorderWrapper"],
+
+    div[class*="st-key-epl_news_ticker_host"]
+    div[data-testid="stVerticalBlock"] {
+        width: 100% !important;
+        height: 100% !important;
+        min-height: 0 !important;
+
+        gap: 0 !important;
+
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    div[class*="st-key-epl_news_ticker_host"]
+    div[data-testid="stElementContainer"] {
+        width: 100% !important;
+        height: 100% !important;
+
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    div[class*="st-key-epl_news_ticker_host"] iframe {
+        display: block !important;
+
+        width: 100% !important;
+        min-width: 100% !important;
+        max-width: 100% !important;
+
+        height: var(--epl-default-header-height) !important;
+        min-height: var(--epl-default-header-height) !important;
+        max-height: var(--epl-default-header-height) !important;
+
+        margin: 0 !important;
+        padding: 0 !important;
+
+        border: 0 !important;
+        outline: 0 !important;
+
+        background: #24002A !important;
+
+        pointer-events: auto !important;
+    }
+
+    /* Không để action mặc định bên phải nổi lên trên ticker. */
+    header[data-testid="stHeader"]
+    :is(
+        [data-testid="stToolbar"],
+        [data-testid="stToolbarActions"],
+        [data-testid="stHeaderActionElements"],
+        [data-testid="stStatusWidget"],
+        [data-testid="stAppDeployButton"]
+    ) {
+        z-index: 1 !important;
+    }
+
+    @media (max-width: 768px) {
+        :root {
+            --epl-default-header-height: 56px;
+            --epl-ticker-menu-reserve: 64px;
+        }
+
+        div[class*="st-key-epl_news_ticker_host"] {
+            border-radius: 0 !important;
+        }
+    }
+    </style>
+    """
+
+    ticker_document = f"""
     <!doctype html>
     <html lang="vi">
     <head>
-        <meta charset="utf-8">
+        <meta charset="utf-8" />
         <meta
             name="viewport"
             content="width=device-width, initial-scale=1"
-        >
+        />
 
         <style>
         :root {{
-            color-scheme: light;
-        }}
-
-        * {{
-            box-sizing: border-box;
+            --ticker-duration: {animation_duration}s;
+            --ticker-height: 60px;
         }}
 
         html,
         body {{
             width: 100%;
-            height: 100%;
+            height: var(--ticker-height);
 
             margin: 0;
             padding: 0;
 
             overflow: hidden;
 
-            background: transparent;
-        }}
-
-        body {{
-            display: flex;
-            align-items: flex-start;
-
-            padding: 4px 0 7px 0;
+            background: #24002A;
 
             font-family:
                 system-ui,
@@ -33299,234 +33419,208 @@ def _build_epl_news_ticker_document(
                 sans-serif;
         }}
 
-        .ticker-shell {{
-            --ticker-duration:
-                {animation_duration}s;
+        * {{
+            box-sizing: border-box;
+        }}
+
+        .epl-header-ticker-shell {{
+            position: relative;
 
             display: flex;
-            align-items: stretch;
+            align-items: center;
 
             width: 100%;
             min-width: 0;
 
-            height: 40px;
-            min-height: 40px;
+            height: var(--ticker-height);
+            min-height: var(--ticker-height);
 
             margin: 0;
-            padding: 0;
+            padding: 0 18px 0 30px;
 
             overflow: hidden;
 
             background:
+                radial-gradient(
+                    circle at 88% 0%,
+                    rgba(91, 15, 99, 0.34),
+                    transparent 34%
+                ),
                 linear-gradient(
                     90deg,
-                    #210027 0%,
+                    #210026 0%,
                     #37003C 48%,
-                    #26002D 100%
+                    #210026 100%
                 );
 
-            border:
-                1px solid
-                rgba(55, 0, 60, 0.34);
-
-            border-radius: 11px;
+            border: 0;
+            border-radius: 4px 0 0 4px;
 
             box-shadow:
-                0 7px 18px
-                rgba(55, 0, 60, 0.16),
-                inset 0 1px 0
-                rgba(255, 255, 255, 0.12);
+                inset 0 1px 0 rgba(255, 255, 255, 0.08),
+                inset 0 -1px 0 rgba(255, 255, 255, 0.04);
 
             user-select: none;
             -webkit-user-select: none;
         }}
 
-        .ticker-label {{
-            position: relative;
-            z-index: 2;
-
+        .epl-header-ticker-label {{
             display: inline-flex;
             align-items: center;
             justify-content: center;
 
-            flex:
-                0 0 76px;
+            flex: 0 0 auto;
 
-            width: 76px;
-            min-width: 76px;
-            max-width: 76px;
+            gap: 7px;
 
-            height: 40px;
-
-            gap: 6px;
+            width: 86px;
+            min-width: 86px;
+            height: 38px;
 
             margin: 0;
-            padding:
-                0 13px 0 10px;
+            padding: 0 14px;
 
             background:
                 linear-gradient(
                     135deg,
-                    #FF2882 0%,
-                    #D90D69 100%
+                    #FF2C86 0%,
+                    #E41473 100%
                 );
 
             color: #FFFFFF;
 
-            clip-path:
-                polygon(
-                    0 0,
-                    calc(100% - 12px) 0,
-                    100% 50%,
-                    calc(100% - 12px) 100%,
-                    0 100%
-                );
+            border:
+                1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 999px;
 
-            font-size: 10px;
-            font-weight: 900;
+            box-shadow:
+                0 7px 18px rgba(255, 40, 130, 0.22),
+                inset 0 1px 0 rgba(255, 255, 255, 0.18);
+
+            font-size: 12px;
+            font-weight: 950;
             line-height: 1;
-
-            letter-spacing: 0.075em;
-
+            letter-spacing: 0.055em;
             text-transform: uppercase;
             white-space: nowrap;
+
+            z-index: 3;
         }}
 
-        .ticker-label-dot {{
-            display: block;
-
-            flex:
-                0 0 6px;
-
+        .epl-header-ticker-label-dot {{
             width: 6px;
             height: 6px;
 
+            flex: 0 0 6px;
+
             background: #00FF85;
 
-            transform:
-                rotate(45deg);
+            transform: rotate(45deg);
 
             box-shadow:
-                0 0 8px
-                rgba(0, 255, 133, 0.62);
+                0 0 7px rgba(0, 255, 133, 0.64);
         }}
 
-        .ticker-label-text {{
-            display: inline-block;
+        .epl-header-ticker-divider {{
+            width: 1px;
+            min-width: 1px;
+            height: 28px;
 
-            color: #FFFFFF;
+            margin: 0 30px;
 
-            white-space: nowrap;
+            background:
+                linear-gradient(
+                    180deg,
+                    transparent,
+                    rgba(245, 197, 66, 0.86),
+                    transparent
+                );
+
+            box-shadow:
+                0 0 8px rgba(245, 197, 66, 0.12);
         }}
 
-        .ticker-viewport {{
+        .epl-header-ticker-viewport {{
             position: relative;
 
-            display: block;
-
-            flex:
-                1 1 auto;
+            flex: 1 1 auto;
 
             width: auto;
             min-width: 0;
-
-            height: 40px;
-
-            margin: 0;
-            padding: 0;
+            height: var(--ticker-height);
 
             overflow: hidden;
         }}
 
-        .ticker-track {{
+        .epl-header-ticker-track {{
             display: flex;
             align-items: center;
 
             width: max-content;
             min-width: max-content;
-
-            height: 40px;
-
-            margin: 0;
-            padding: 0;
+            height: var(--ticker-height);
 
             will-change: transform;
 
             animation:
-                tickerMove
+                eplHeaderTickerMove
                 var(--ticker-duration)
                 linear
                 infinite;
         }}
 
-        .ticker-group {{
+        .epl-header-ticker-group {{
             display: inline-flex;
             align-items: center;
 
-            flex:
-                0 0 auto;
+            flex: 0 0 auto;
 
             width: max-content;
             min-width: max-content;
+            height: var(--ticker-height);
 
-            height: 40px;
-
-            margin: 0;
-            padding:
-                0 30px 0 22px;
+            padding-right: 32px;
         }}
 
-        .ticker-item {{
+        .epl-header-ticker-item {{
             display: inline-block;
-
-            flex:
-                0 0 auto;
-
-            margin: 0;
-            padding: 0;
+            flex: 0 0 auto;
 
             color: #FFFFFF;
+            -webkit-text-fill-color: #FFFFFF;
 
             font-size: 13px;
-            font-weight: 650;
+            font-weight: 700;
             line-height: 1.2;
-
             letter-spacing: 0.002em;
 
-            opacity: 1;
-            visibility: visible;
             white-space: nowrap;
         }}
 
-        .ticker-separator {{
+        .epl-header-ticker-separator {{
             display: inline-flex;
             align-items: center;
             justify-content: center;
 
-            flex:
-                0 0 auto;
+            flex: 0 0 auto;
 
-            margin:
-                0 20px;
-            padding: 0;
+            margin: 0 22px;
 
             color: #00FF85;
+            -webkit-text-fill-color: #00FF85;
 
             font-size: 7px;
-            font-weight: 900;
+            font-weight: 950;
             line-height: 1;
-
-            opacity: 1;
-            visibility: visible;
 
             filter:
                 drop-shadow(
                     0 0 5px
-                    rgba(0, 255, 133, 0.52)
+                    rgba(0, 255, 133, 0.50)
                 );
         }}
 
-        @keyframes tickerMove {{
+        @keyframes eplHeaderTickerMove {{
             from {{
                 transform:
                     translate3d(
@@ -33547,76 +33641,61 @@ def _build_epl_news_ticker_document(
         }}
 
         @media (max-width: 768px) {{
-            body {{
-                padding-top: 3px;
-                padding-bottom: 6px;
+            :root {{
+                --ticker-height: 56px;
             }}
 
-            .ticker-shell {{
-                height: 35px;
-                min-height: 35px;
-
-                border-radius: 9px;
+            .epl-header-ticker-shell {{
+                padding: 0 10px 0 10px;
+                border-radius: 0;
             }}
 
-            .ticker-label {{
-                flex-basis: 62px;
-
-                width: 62px;
-                min-width: 62px;
-                max-width: 62px;
-
-                height: 35px;
+            .epl-header-ticker-label {{
+                width: 66px;
+                min-width: 66px;
+                height: 34px;
 
                 gap: 5px;
 
-                padding:
-                    0 9px 0 7px;
+                padding: 0 10px;
 
-                font-size: 7.6px;
-                letter-spacing: 0.045em;
+                font-size: 9.5px;
+                letter-spacing: 0.035em;
             }}
 
-            .ticker-label-dot {{
-                flex-basis: 5px;
-
+            .epl-header-ticker-label-dot {{
                 width: 5px;
                 height: 5px;
+                flex-basis: 5px;
             }}
 
-            .ticker-viewport,
-            .ticker-track,
-            .ticker-group {{
-                height: 35px;
+            .epl-header-ticker-divider {{
+                height: 24px;
+                margin: 0 16px;
             }}
 
-            .ticker-group {{
-                padding:
-                    0 22px 0 17px;
-            }}
-
-            .ticker-item {{
+            .epl-header-ticker-item {{
                 font-size: 11.5px;
             }}
 
-            .ticker-separator {{
-                margin:
-                    0 15px;
-
+            .epl-header-ticker-separator {{
+                margin: 0 15px;
                 font-size: 6px;
+            }}
+
+            .epl-header-ticker-group {{
+                padding-right: 24px;
             }}
         }}
 
-        @media (
-            prefers-reduced-motion: reduce
-        ) {{
-            .ticker-track {{
-                animation: none;
-                transform: none;
+        @media (prefers-reduced-motion: reduce) {{
+            .epl-header-ticker-track {{
+                animation: none !important;
+                transform: none !important;
             }}
 
-            .ticker-group:nth-child(2) {{
-                display: none;
+            .epl-header-ticker-group:nth-child(2) {{
+                display: none !important;
             }}
         }}
         </style>
@@ -33624,163 +33703,260 @@ def _build_epl_news_ticker_document(
 
     <body>
         <div
-            class="ticker-shell"
+            class="epl-header-ticker-shell"
             role="region"
-            aria-label="{safe_accessible_label}"
-            title="{safe_accessible_label}"
+            aria-label="{safe_aria_label}"
+            title="{safe_aria_label}"
         >
             <div
-                class="ticker-label"
+                class="epl-header-ticker-label"
                 aria-hidden="true"
             >
                 <span
-                    class="ticker-label-dot"
+                    class="epl-header-ticker-label-dot"
                 ></span>
 
-                <span
-                    class="ticker-label-text"
-                >
-                    NEWS
-                </span>
+                <span>NEWS</span>
             </div>
 
+            <span
+                class="epl-header-ticker-divider"
+                aria-hidden="true"
+            ></span>
+
             <div
-                class="ticker-viewport"
+                class="epl-header-ticker-viewport"
             >
                 <div
-                    class="ticker-track"
+                    class="epl-header-ticker-track"
+                    aria-hidden="true"
                 >
-                    {track_markup}
+                    {ticker_groups_html}
                 </div>
             </div>
         </div>
+
+        <script>
+        (() => {{
+            const parentWindow = window.parent;
+            const parentDocument = parentWindow.document;
+            const controllerKey =
+                "__eplHeaderTickerController";
+
+            const previousController =
+                parentWindow[controllerKey];
+
+            if (
+                previousController
+                && typeof previousController.cleanup
+                    === "function"
+            ) {{
+                previousController.cleanup();
+            }}
+
+            const frame = window.frameElement;
+
+            if (!frame) {{
+                return;
+            }}
+
+            const host = frame.closest(
+                'div[class*="st-key-epl_news_ticker_host"]'
+            );
+
+            const elementContainer = host
+                ? host.closest(
+                    'div[data-testid="stElementContainer"]'
+                )
+                : null;
+
+            const mediaQuery = parentWindow.matchMedia(
+                "(max-width: 768px)"
+            );
+
+            const applyLayout = () => {{
+                const isMobile = mediaQuery.matches;
+                const headerHeight = isMobile ? 56 : 60;
+                const menuReserve = isMobile ? 64 : 142;
+
+                if (elementContainer) {{
+                    elementContainer.style.setProperty(
+                        "height",
+                        "0px",
+                        "important"
+                    );
+                    elementContainer.style.setProperty(
+                        "min-height",
+                        "0px",
+                        "important"
+                    );
+                    elementContainer.style.setProperty(
+                        "margin",
+                        "0px",
+                        "important"
+                    );
+                    elementContainer.style.setProperty(
+                        "padding",
+                        "0px",
+                        "important"
+                    );
+                    elementContainer.style.setProperty(
+                        "overflow",
+                        "visible",
+                        "important"
+                    );
+                }}
+
+                if (host) {{
+                    host.style.setProperty(
+                        "position",
+                        "fixed",
+                        "important"
+                    );
+                    host.style.setProperty(
+                        "top",
+                        "0px",
+                        "important"
+                    );
+                    host.style.setProperty(
+                        "left",
+                        `${{menuReserve}}px`,
+                        "important"
+                    );
+                    host.style.setProperty(
+                        "right",
+                        "0px",
+                        "important"
+                    );
+                    host.style.setProperty(
+                        "width",
+                        "auto",
+                        "important"
+                    );
+                    host.style.setProperty(
+                        "height",
+                        `${{headerHeight}}px`,
+                        "important"
+                    );
+                    host.style.setProperty(
+                        "min-height",
+                        `${{headerHeight}}px`,
+                        "important"
+                    );
+                    host.style.setProperty(
+                        "max-height",
+                        `${{headerHeight}}px`,
+                        "important"
+                    );
+                    host.style.setProperty(
+                        "margin",
+                        "0px",
+                        "important"
+                    );
+                    host.style.setProperty(
+                        "padding",
+                        "0px",
+                        "important"
+                    );
+                    host.style.setProperty(
+                        "overflow",
+                        "hidden",
+                        "important"
+                    );
+                    host.style.setProperty(
+                        "z-index",
+                        "2147483000",
+                        "important"
+                    );
+                    host.style.setProperty(
+                        "pointer-events",
+                        "auto",
+                        "important"
+                    );
+                }}
+
+                frame.style.setProperty(
+                    "width",
+                    "100%",
+                    "important"
+                );
+                frame.style.setProperty(
+                    "height",
+                    `${{headerHeight}}px`,
+                    "important"
+                );
+                frame.style.setProperty(
+                    "min-height",
+                    `${{headerHeight}}px`,
+                    "important"
+                );
+                frame.style.setProperty(
+                    "max-height",
+                    `${{headerHeight}}px`,
+                    "important"
+                );
+                frame.style.setProperty(
+                    "border",
+                    "0",
+                    "important"
+                );
+            }};
+
+            let resizeFrame = 0;
+
+            const scheduleLayout = () => {{
+                if (resizeFrame) {{
+                    parentWindow.cancelAnimationFrame(
+                        resizeFrame
+                    );
+                }}
+
+                resizeFrame = (
+                    parentWindow.requestAnimationFrame(
+                        applyLayout
+                    )
+                );
+            }};
+
+            mediaQuery.addEventListener(
+                "change",
+                scheduleLayout
+            );
+
+            parentWindow.addEventListener(
+                "resize",
+                scheduleLayout
+            );
+
+            applyLayout();
+
+            parentWindow[controllerKey] = {{
+                cleanup: () => {{
+                    mediaQuery.removeEventListener(
+                        "change",
+                        scheduleLayout
+                    );
+
+                    parentWindow.removeEventListener(
+                        "resize",
+                        scheduleLayout
+                    );
+
+                    if (resizeFrame) {{
+                        parentWindow.cancelAnimationFrame(
+                            resizeFrame
+                        );
+                    }}
+                }}
+            }};
+        }})();
+        </script>
     </body>
     </html>
     """
 
-
-def _render_epl_news_ticker_content():
-    """
-    Render ticker trong iframe độc lập bằng components.html.
-
-    Đây là phần sửa chính cho lỗi thanh ticker có khung nhưng không có chữ:
-    st.markdown trước đó có thể chia vỡ HTML lồng nhau và CSS của app có thể
-    tác động vào cấu trúc ticker. Iframe tách hoàn toàn ticker khỏi hai nguồn
-    xung đột đó.
-    """
-
-    if not NEWS_TICKER_ENABLED:
-        return
-
-    try:
-        ticker_data = (
-            load_latest_epl_news_ticker()
-        )
-
-    except Exception:
-        LOGGER.exception(
-            "Failed to load EPL news ticker."
-        )
-        return
-
-    if not ticker_data:
-        return
-
-    ticker_items = ticker_data.get(
-        "items",
-        []
-    )
-
-    if not ticker_items:
-        return
-
-    ticker_document = (
-        _build_epl_news_ticker_document(
-            ticker_items=ticker_items,
-            generated_at=ticker_data.get(
-                "generated_at"
-            )
-        )
-    )
-
-    if not ticker_document:
-        return
-
-    ticker_host_css = """
-    <style>
-    :root {
-        --epl-streamlit-header-height: 3.75rem;
-    }
-
-    /*
-     * Kéo riêng ticker lên đúng một chiều cao header mặc định
-     * mà không làm thay đổi vị trí hero và nội dung trang bên dưới.
-     */
-    div[class*="st-key-epl_news_ticker_host"] {
-        position: relative !important;
-        z-index: 1000001 !important;
-
-        width: 100% !important;
-        max-width: 100% !important;
-
-        margin-top:
-            calc(-1 * var(--epl-streamlit-header-height)) !important;
-        margin-bottom: 12px !important;
-
-        padding: 0 !important;
-
-        overflow: visible !important;
-    }
-
-    div[class*="st-key-epl_news_ticker_host"]
-    > :is(
-        div[data-testid="stVerticalBlock"],
-        div[data-testid="stVerticalBlockBorderWrapper"]
-    ) {
-        width: 100% !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        gap: 0 !important;
-        overflow: visible !important;
-    }
-
-    div[class*="st-key-epl_news_ticker_host"]
-    div[data-testid="stElementContainer"] {
-        width: 100% !important;
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-
-    div[class*="st-key-epl_news_ticker_host"] iframe {
-        display: block !important;
-        width: 100% !important;
-        height: 52px !important;
-
-        margin: 0 !important;
-        padding: 0 !important;
-
-        border: 0 !important;
-        background: transparent !important;
-    }
-
-    @media (max-width: 768px) {
-        :root {
-            --epl-streamlit-header-height: 3.5rem;
-        }
-
-        div[class*="st-key-epl_news_ticker_host"] {
-            margin-bottom: 10px !important;
-        }
-
-        div[class*="st-key-epl_news_ticker_host"] iframe {
-            height: 44px !important;
-        }
-    }
-    </style>
-    """
-
     st.markdown(
-        ticker_host_css,
+        parent_layout_css,
         unsafe_allow_html=True
     )
 
@@ -33789,7 +33965,7 @@ def _render_epl_news_ticker_content():
     ):
         components.html(
             ticker_document,
-            height=52,
+            height=60,
             scrolling=False
         )
 
@@ -33799,10 +33975,12 @@ def _render_epl_news_ticker_content():
 )
 def render_epl_news_ticker():
     """
-    Tự kiểm tra bản tin mới mà không rerun toàn bộ app.
+    Kiểm tra và cập nhật ticker mà không rerun toàn bộ app.
     """
 
     _render_epl_news_ticker_content()
+
+
 
 def render_footer():
     if FOOTER_PROJECT_URL:
