@@ -8557,9 +8557,11 @@ def render_daily_checkin_shortcut_button(user_id: int):
     checkin_drag_script = r"""
     <script>
     (() => {
-        const parentWindow = window.parent;
-        const parentDocument = parentWindow.document;
-
+        /*
+         * Script được chèn trực tiếp vào document chính bằng st.html.
+         * Cách này tránh lỗi touch/pointer của iframe components.html
+         * trên Safari/Chrome iOS thực tế.
+         */
         const controllerName =
             "__eplCheckinDragController";
 
@@ -8567,7 +8569,7 @@ def render_daily_checkin_shortcut_button(user_id: int):
             "__eplCheckinDragPosition";
 
         const oldController =
-            parentWindow[controllerName];
+            window[controllerName];
 
         if (
             oldController
@@ -8580,21 +8582,23 @@ def render_daily_checkin_shortcut_button(user_id: int):
             'div[class*="st-key-daily_checkin_shortcut_button"]';
 
         const shellCandidates = Array.from(
-            parentDocument.querySelectorAll(shellSelector)
+            document.querySelectorAll(shellSelector)
         );
 
         const shell = shellCandidates
             .reverse()
             .find((candidate) => {
                 const style =
-                    parentWindow.getComputedStyle(candidate);
+                    window.getComputedStyle(candidate);
 
                 const rect =
                     candidate.getBoundingClientRect();
 
                 return (
-                    style.display !== "none"
+                    candidate.isConnected
+                    && style.display !== "none"
                     && style.visibility !== "hidden"
+                    && Number(style.opacity || 1) !== 0
                     && rect.width > 0
                     && rect.height > 0
                 );
@@ -8614,10 +8618,12 @@ def render_daily_checkin_shortcut_button(user_id: int):
         const headerGap = 6;
         const dragThreshold = 5;
 
-        let activeDrag = null;
+        let activePointer = null;
+        let activeTouch = null;
         let dragStarted = false;
         let suppressClickUntil = 0;
         let resizeFrame = 0;
+        let mutationObserver = null;
         let cleaned = false;
 
         const getVisibleRect = (element) => {
@@ -8626,12 +8632,12 @@ def render_daily_checkin_shortcut_button(user_id: int):
             }
 
             const style =
-                parentWindow.getComputedStyle(element);
+                window.getComputedStyle(element);
 
             if (
                 style.display === "none"
                 || style.visibility === "hidden"
-                || style.opacity === "0"
+                || Number(style.opacity || 1) === 0
             ) {
                 return null;
             }
@@ -8651,7 +8657,7 @@ def render_daily_checkin_shortcut_button(user_id: int):
 
         const getHeaderRect = () => {
             const candidates =
-                parentDocument.querySelectorAll(
+                document.querySelectorAll(
                     'header[data-testid="stHeader"], '
                     + '[data-testid="stHeader"]'
                 );
@@ -8668,15 +8674,14 @@ def render_daily_checkin_shortcut_button(user_id: int):
         };
 
         const getViewportRect = () => {
-            const visualViewport =
-                parentWindow.visualViewport;
+            const viewport = window.visualViewport;
 
-            if (visualViewport) {
+            if (viewport) {
                 return {
-                    left: visualViewport.offsetLeft,
-                    top: visualViewport.offsetTop,
-                    width: visualViewport.width,
-                    height: visualViewport.height
+                    left: viewport.offsetLeft,
+                    top: viewport.offsetTop,
+                    width: viewport.width,
+                    height: viewport.height
                 };
             }
 
@@ -8684,11 +8689,11 @@ def render_daily_checkin_shortcut_button(user_id: int):
                 left: 0,
                 top: 0,
                 width:
-                    parentDocument.documentElement.clientWidth
-                    || parentWindow.innerWidth,
+                    document.documentElement.clientWidth
+                    || window.innerWidth,
                 height:
-                    parentDocument.documentElement.clientHeight
-                    || parentWindow.innerHeight
+                    document.documentElement.clientHeight
+                    || window.innerHeight
             };
         };
 
@@ -8702,21 +8707,23 @@ def render_daily_checkin_shortcut_button(user_id: int):
             const headerRect =
                 getHeaderRect();
 
-            const viewportLeft =
+            const minLeft =
                 viewportRect.left + edgeGap;
 
-            const viewportTop =
+            const viewportMinTop =
                 viewportRect.top + edgeGap;
 
-            const minimumTop = headerRect
+            const minTop = headerRect
                 ? Math.max(
-                    viewportTop,
-                    Math.ceil(headerRect.bottom + headerGap)
+                    viewportMinTop,
+                    Math.ceil(
+                        headerRect.bottom + headerGap
+                    )
                 )
-                : viewportTop;
+                : viewportMinTop;
 
             const maxLeft = Math.max(
-                viewportLeft,
+                minLeft,
                 viewportRect.left
                 + viewportRect.width
                 - shellRect.width
@@ -8724,7 +8731,7 @@ def render_daily_checkin_shortcut_button(user_id: int):
             );
 
             const maxTop = Math.max(
-                minimumTop,
+                minTop,
                 viewportRect.top
                 + viewportRect.height
                 - shellRect.height
@@ -8732,8 +8739,8 @@ def render_daily_checkin_shortcut_button(user_id: int):
             );
 
             return {
-                minLeft: viewportLeft,
-                minTop: minimumTop,
+                minLeft,
+                minTop,
                 maxLeft,
                 maxTop
             };
@@ -8797,7 +8804,7 @@ def render_daily_checkin_shortcut_button(user_id: int):
             );
 
             if (savePosition) {
-                parentWindow[positionName] = {
+                window[positionName] = {
                     left,
                     top
                 };
@@ -8806,45 +8813,46 @@ def render_daily_checkin_shortcut_button(user_id: int):
 
         const beginDrag = (
             inputType,
-            pointerId,
+            inputId,
             clientX,
             clientY
         ) => {
             const shellRect =
                 shell.getBoundingClientRect();
 
-            activeDrag = {
+            const dragState = {
                 inputType,
-                pointerId,
+                inputId,
                 startX: clientX,
                 startY: clientY,
                 startLeft: shellRect.left,
                 startTop: shellRect.top
             };
 
+            if (inputType === "pointer") {
+                activePointer = dragState;
+            } else {
+                activeTouch = dragState;
+            }
+
             dragStarted = false;
         };
 
         const moveDrag = (
-            inputType,
-            pointerId,
+            dragState,
             clientX,
             clientY,
             event
         ) => {
-            if (
-                !activeDrag
-                || activeDrag.inputType !== inputType
-                || activeDrag.pointerId !== pointerId
-            ) {
+            if (!dragState) {
                 return;
             }
 
             const deltaX =
-                clientX - activeDrag.startX;
+                clientX - dragState.startX;
 
             const deltaY =
-                clientY - activeDrag.startY;
+                clientY - dragState.startY;
 
             if (
                 !dragStarted
@@ -8860,59 +8868,79 @@ def render_daily_checkin_shortcut_button(user_id: int):
                 "epl-checkin-dragging"
             );
 
-            if (event) {
+            if (event && event.cancelable) {
                 event.preventDefault();
+            }
+
+            if (event) {
                 event.stopPropagation();
             }
 
             applyPosition(
-                activeDrag.startLeft + deltaX,
-                activeDrag.startTop + deltaY
+                dragState.startLeft + deltaX,
+                dragState.startTop + deltaY
             );
         };
 
-        const finishDrag = (event) => {
-            if (!activeDrag) {
+        const releasePointerCapture = (
+            pointerId
+        ) => {
+            if (
+                pointerId === null
+                || pointerId === undefined
+                || !button.releasePointerCapture
+            ) {
+                return;
+            }
+
+            try {
+                if (
+                    !button.hasPointerCapture
+                    || button.hasPointerCapture(pointerId)
+                ) {
+                    button.releasePointerCapture(pointerId);
+                }
+            } catch (error) {
+                // Safari/WebView có thể tự giải phóng pointer capture.
+            }
+        };
+
+        const finishDrag = (
+            inputType,
+            event
+        ) => {
+            const state = inputType === "pointer"
+                ? activePointer
+                : activeTouch;
+
+            if (!state) {
                 return;
             }
 
             const completedDrag = dragStarted;
-            const completedPointerId =
-                activeDrag.pointerId;
 
-            activeDrag = null;
+            if (inputType === "pointer") {
+                releasePointerCapture(state.inputId);
+                activePointer = null;
+            } else {
+                activeTouch = null;
+            }
+
             dragStarted = false;
 
             shell.classList.remove(
                 "epl-checkin-dragging"
             );
 
-            if (
-                completedPointerId !== null
-                && button.releasePointerCapture
-            ) {
-                try {
-                    if (
-                        button.hasPointerCapture
-                        && button.hasPointerCapture(
-                            completedPointerId
-                        )
-                    ) {
-                        button.releasePointerCapture(
-                            completedPointerId
-                        );
-                    }
-                } catch (error) {
-                    // Pointer capture có thể đã tự giải phóng.
-                }
-            }
-
             if (completedDrag) {
                 suppressClickUntil =
-                    Date.now() + 650;
+                    Date.now() + 700;
+
+                if (event && event.cancelable) {
+                    event.preventDefault();
+                }
 
                 if (event) {
-                    event.preventDefault();
                     event.stopPropagation();
                 }
             }
@@ -8939,56 +8967,55 @@ def render_daily_checkin_shortcut_button(user_id: int):
                         event.pointerId
                     );
                 } catch (error) {
-                    // Một số WebView không hỗ trợ capture đầy đủ.
+                    // Không làm hỏng thao tác nếu WebView không capture được.
                 }
             }
         };
 
         const onPointerMove = (event) => {
+            if (
+                !activePointer
+                || activePointer.inputId
+                    !== event.pointerId
+            ) {
+                return;
+            }
+
             moveDrag(
-                "pointer",
-                event.pointerId,
+                activePointer,
                 event.clientX,
                 event.clientY,
                 event
             );
         };
 
-        const onPointerUp = (event) => {
+        const onPointerEnd = (event) => {
             if (
-                activeDrag
-                && activeDrag.inputType === "pointer"
-                && activeDrag.pointerId
-                    === event.pointerId
+                !activePointer
+                || activePointer.inputId
+                    !== event.pointerId
             ) {
-                finishDrag(event);
-            }
-        };
-
-        const getPrimaryTouch = (event) => {
-            if (
-                event.touches
-                && event.touches.length
-            ) {
-                return event.touches[0];
-            }
-
-            if (
-                event.changedTouches
-                && event.changedTouches.length
-            ) {
-                return event.changedTouches[0];
-            }
-
-            return null;
-        };
-
-        const onTouchStart = (event) => {
-            if (activeDrag) {
                 return;
             }
 
-            const touch = getPrimaryTouch(event);
+            finishDrag("pointer", event);
+        };
+
+        const findTouch = (
+            touchList,
+            identifier
+        ) => Array.from(touchList || [])
+            .find((touch) => {
+                return touch.identifier === identifier;
+            });
+
+        const onTouchStart = (event) => {
+            if (activeTouch) {
+                return;
+            }
+
+            const touch = event.changedTouches?.[0]
+                || event.touches?.[0];
 
             if (!touch) {
                 return;
@@ -9003,21 +9030,13 @@ def render_daily_checkin_shortcut_button(user_id: int):
         };
 
         const onTouchMove = (event) => {
-            if (
-                !activeDrag
-                || activeDrag.inputType !== "touch"
-            ) {
+            if (!activeTouch) {
                 return;
             }
 
-            const touches = Array.from(
-                event.touches || []
-            );
-
-            const touch = touches.find(
-                (item) =>
-                    item.identifier
-                    === activeDrag.pointerId
+            const touch = findTouch(
+                event.touches,
+                activeTouch.inputId
             );
 
             if (!touch) {
@@ -9025,8 +9044,7 @@ def render_daily_checkin_shortcut_button(user_id: int):
             }
 
             moveDrag(
-                "touch",
-                touch.identifier,
+                activeTouch,
                 touch.clientX,
                 touch.clientY,
                 event
@@ -9034,26 +9052,20 @@ def render_daily_checkin_shortcut_button(user_id: int):
         };
 
         const onTouchEnd = (event) => {
-            if (
-                !activeDrag
-                || activeDrag.inputType !== "touch"
-            ) {
+            if (!activeTouch) {
                 return;
             }
 
-            const changedTouches = Array.from(
-                event.changedTouches || []
+            const endedTouch = findTouch(
+                event.changedTouches,
+                activeTouch.inputId
             );
 
-            const matchingTouch =
-                changedTouches.find(
-                    (item) =>
-                        item.identifier
-                        === activeDrag.pointerId
-                );
-
-            if (matchingTouch || event.type === "touchcancel") {
-                finishDrag(event);
+            if (
+                endedTouch
+                || event.type === "touchcancel"
+            ) {
+                finishDrag("touch", event);
             }
         };
 
@@ -9069,14 +9081,22 @@ def render_daily_checkin_shortcut_button(user_id: int):
             event.stopImmediatePropagation();
         };
 
+        const preventNativeDrag = (event) => {
+            event.preventDefault();
+        };
+
         const keepInsideAllowedArea = () => {
-            parentWindow.cancelAnimationFrame(
+            window.cancelAnimationFrame(
                 resizeFrame
             );
 
             resizeFrame =
-                parentWindow.requestAnimationFrame(
+                window.requestAnimationFrame(
                     () => {
+                        if (!shell.isConnected) {
+                            return;
+                        }
+
                         const currentRect =
                             shell.getBoundingClientRect();
 
@@ -9095,51 +9115,53 @@ def render_daily_checkin_shortcut_button(user_id: int):
 
             cleaned = true;
 
-            parentWindow.cancelAnimationFrame(
+            window.cancelAnimationFrame(
                 resizeFrame
             );
 
             button.removeEventListener(
                 "pointerdown",
-                onPointerDown
+                onPointerDown,
+                true
             );
 
-            parentDocument.removeEventListener(
+            document.removeEventListener(
                 "pointermove",
                 onPointerMove,
                 true
             );
 
-            parentDocument.removeEventListener(
+            document.removeEventListener(
                 "pointerup",
-                onPointerUp,
+                onPointerEnd,
                 true
             );
 
-            parentDocument.removeEventListener(
+            document.removeEventListener(
                 "pointercancel",
-                onPointerUp,
+                onPointerEnd,
                 true
             );
 
             button.removeEventListener(
                 "touchstart",
-                onTouchStart
+                onTouchStart,
+                true
             );
 
-            parentDocument.removeEventListener(
+            document.removeEventListener(
                 "touchmove",
                 onTouchMove,
                 true
             );
 
-            parentDocument.removeEventListener(
+            document.removeEventListener(
                 "touchend",
                 onTouchEnd,
                 true
             );
 
-            parentDocument.removeEventListener(
+            document.removeEventListener(
                 "touchcancel",
                 onTouchEnd,
                 true
@@ -9151,28 +9173,37 @@ def render_daily_checkin_shortcut_button(user_id: int):
                 true
             );
 
-            parentWindow.removeEventListener(
+            button.removeEventListener(
+                "dragstart",
+                preventNativeDrag
+            );
+
+            window.removeEventListener(
                 "resize",
                 keepInsideAllowedArea
             );
 
-            parentWindow.removeEventListener(
+            window.removeEventListener(
                 "orientationchange",
                 keepInsideAllowedArea
             );
 
-            if (parentWindow.visualViewport) {
-                parentWindow.visualViewport
+            if (window.visualViewport) {
+                window.visualViewport
                     .removeEventListener(
                         "resize",
                         keepInsideAllowedArea
                     );
 
-                parentWindow.visualViewport
+                window.visualViewport
                     .removeEventListener(
                         "scroll",
                         keepInsideAllowedArea
                     );
+            }
+
+            if (mutationObserver) {
+                mutationObserver.disconnect();
             }
         };
 
@@ -9186,10 +9217,9 @@ def render_daily_checkin_shortcut_button(user_id: int):
             "Xem điểm danh; giữ và kéo để di chuyển nút"
         );
 
-        button.style.setProperty(
-            "touch-action",
-            "none",
-            "important"
+        button.setAttribute(
+            "draggable",
+            "false"
         );
 
         shell.style.setProperty(
@@ -9198,64 +9228,82 @@ def render_daily_checkin_shortcut_button(user_id: int):
             "important"
         );
 
-        button.addEventListener(
-            "pointerdown",
-            onPointerDown
-        );
-
-        parentDocument.addEventListener(
-            "pointermove",
-            onPointerMove,
-            {
-                capture: true,
-                passive: false
-            }
-        );
-
-        parentDocument.addEventListener(
-            "pointerup",
-            onPointerUp,
-            true
-        );
-
-        parentDocument.addEventListener(
-            "pointercancel",
-            onPointerUp,
-            true
+        button.style.setProperty(
+            "touch-action",
+            "none",
+            "important"
         );
 
         /*
-         * Touch fallback đặc biệt quan trọng với một số iOS WebView.
-         * Các listener passive:false cho phép chặn cuộn trang khi đã kéo.
+         * Dùng đúng một hệ sự kiện trên mỗi trình duyệt.
+         * iOS hiện đại dùng Pointer Events. Touch Events chỉ là fallback,
+         * tránh tình trạng pointerdown đã mở phiên kéo nhưng touchmove lại
+         * bị bỏ qua vì hai hệ sự kiện tranh nhau.
          */
-        button.addEventListener(
-            "touchstart",
-            onTouchStart,
-            {
-                passive: true
-            }
-        );
+        const supportsPointerEvents =
+            "PointerEvent" in window;
 
-        parentDocument.addEventListener(
-            "touchmove",
-            onTouchMove,
-            {
-                capture: true,
-                passive: false
-            }
-        );
+        if (supportsPointerEvents) {
+            button.addEventListener(
+                "pointerdown",
+                onPointerDown,
+                {
+                    capture: true,
+                    passive: false
+                }
+            );
 
-        parentDocument.addEventListener(
-            "touchend",
-            onTouchEnd,
-            true
-        );
+            document.addEventListener(
+                "pointermove",
+                onPointerMove,
+                {
+                    capture: true,
+                    passive: false
+                }
+            );
 
-        parentDocument.addEventListener(
-            "touchcancel",
-            onTouchEnd,
-            true
-        );
+            document.addEventListener(
+                "pointerup",
+                onPointerEnd,
+                true
+            );
+
+            document.addEventListener(
+                "pointercancel",
+                onPointerEnd,
+                true
+            );
+        } else {
+            button.addEventListener(
+                "touchstart",
+                onTouchStart,
+                {
+                    capture: true,
+                    passive: true
+                }
+            );
+
+            document.addEventListener(
+                "touchmove",
+                onTouchMove,
+                {
+                    capture: true,
+                    passive: false
+                }
+            );
+
+            document.addEventListener(
+                "touchend",
+                onTouchEnd,
+                true
+            );
+
+            document.addEventListener(
+                "touchcancel",
+                onTouchEnd,
+                true
+            );
+        }
 
         shell.addEventListener(
             "click",
@@ -9263,27 +9311,32 @@ def render_daily_checkin_shortcut_button(user_id: int):
             true
         );
 
-        parentWindow.addEventListener(
+        button.addEventListener(
+            "dragstart",
+            preventNativeDrag
+        );
+
+        window.addEventListener(
             "resize",
             keepInsideAllowedArea,
             { passive: true }
         );
 
-        parentWindow.addEventListener(
+        window.addEventListener(
             "orientationchange",
             keepInsideAllowedArea,
             { passive: true }
         );
 
-        if (parentWindow.visualViewport) {
-            parentWindow.visualViewport
+        if (window.visualViewport) {
+            window.visualViewport
                 .addEventListener(
                     "resize",
                     keepInsideAllowedArea,
                     { passive: true }
                 );
 
-            parentWindow.visualViewport
+            window.visualViewport
                 .addEventListener(
                     "scroll",
                     keepInsideAllowedArea,
@@ -9291,10 +9344,25 @@ def render_daily_checkin_shortcut_button(user_id: int):
                 );
         }
 
-        const savedPosition =
-            parentWindow[positionName];
+        mutationObserver =
+            new MutationObserver(() => {
+                if (!shell.isConnected) {
+                    cleanup();
+                }
+            });
 
-        parentWindow.requestAnimationFrame(() => {
+        mutationObserver.observe(
+            document.body,
+            {
+                childList: true,
+                subtree: true
+            }
+        );
+
+        const savedPosition =
+            window[positionName];
+
+        window.requestAnimationFrame(() => {
             if (
                 savedPosition
                 && Number.isFinite(
@@ -9321,17 +9389,16 @@ def render_daily_checkin_shortcut_button(user_id: int):
             }
         });
 
-        parentWindow[controllerName] = {
+        window[controllerName] = {
             cleanup
         };
     })();
     </script>
     """
 
-    components.html(
+    st.html(
         checkin_drag_script,
-        height=0,
-        scrolling=False
+        unsafe_allow_javascript=True
     )
 
     if shortcut_clicked:
@@ -33233,6 +33300,19 @@ def _build_epl_news_ticker_document(
             box-sizing: border-box;
         }
 
+        /*
+         * Safari/Chrome trên iPhone có cơ chế tự phóng đại chữ trong iframe
+         * khi nội dung là một dòng dài. Chrome DevTools trên máy tính không
+         * mô phỏng chính xác cơ chế này. Cố định text-size-adjust để cỡ chữ
+         * luôn bám đúng font-size CSS đã khai báo.
+         */
+        html,
+        body,
+        body * {
+            -webkit-text-size-adjust: 100% !important;
+            text-size-adjust: 100% !important;
+        }
+
         html,
         body {
             width: 100%;
@@ -33479,8 +33559,11 @@ def _build_epl_news_ticker_document(
 
                 padding: 0 12px 0 9px;
 
-                font-size: 8.5px;
+                font-size: 8.5px !important;
                 letter-spacing: 0.05em;
+
+                -webkit-text-size-adjust: 100% !important;
+                text-size-adjust: 100% !important;
             }
 
             .ticker-label-dot {
@@ -33494,8 +33577,12 @@ def _build_epl_news_ticker_document(
             }
 
             .ticker-item {
-                font-size: 11.5px;
+                font-size: 11.5px !important;
                 font-weight: 700;
+                line-height: 1.15 !important;
+
+                -webkit-text-size-adjust: 100% !important;
+                text-size-adjust: 100% !important;
             }
 
             .ticker-separator {
