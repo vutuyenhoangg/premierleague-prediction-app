@@ -132,10 +132,18 @@ CACHE_MAX_SCORING_RUNS = 32
 CACHE_MAX_DAILY_CHECKIN = 128
 PREDICTION_REVISION_MAX_USERS = 1024
 
-# Prefer same-origin static URLs. This avoids repeatedly sending large Base64
-# strings through Streamlit deltas on every rerun. The resolver keeps a Base64
-# fallback, so the app still works if static serving has not been enabled yet.
-STATIC_URL_PREFIX = "/app/static"
+# Static files remain the preferred source folder. For Streamlit 1.58 on
+# Community Cloud, the default delivery mode is "embedded" because raw static
+# URLs can fail silently in custom HTML/CSS while still reporting the server
+# option as enabled. Local files are read once through cache and embedded as
+# data URIs, so UI images cannot become broken after deploy/reboot.
+#
+# You can later switch to "static" with the environment variable
+# EPL_STATIC_ASSET_DELIVERY=static after verifying direct /app/static URLs.
+STATIC_URL_PREFIX = "app/static"
+STATIC_ASSET_DELIVERY = str(
+    os.getenv("EPL_STATIC_ASSET_DELIVERY", "embedded")
+).strip().lower()
 STATIC_DIR = BASE_DIR / "static"
 DATA_STATIC_DIR = BASE_DIR / "data" / "static"
 
@@ -426,7 +434,11 @@ def resolve_asset_src(asset_path: str) -> str:
         except (OSError, ValueError):
             relative_to_static = None
 
-        if relative_to_static is not None and static_serving_enabled:
+        if (
+            relative_to_static is not None
+            and static_serving_enabled
+            and STATIC_ASSET_DELIVERY == "static"
+        ):
             return (
                 f"{STATIC_URL_PREFIX}/"
                 f"{relative_to_static.as_posix()}"
@@ -1125,7 +1137,11 @@ def get_default_filter_date_for_season(available_dates: list[date]) -> date:
 
 st.set_page_config(
     page_title="EPL Prediction Arena",
-    page_icon="static/epl-app-icon.png",
+    page_icon=(
+        str(STATIC_DIR / "epl-app-icon.png")
+        if (STATIC_DIR / "epl-app-icon.png").is_file()
+        else "⚽"
+    ),
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -1166,12 +1182,9 @@ def render_parent_script(script_html: str):
     )
 
 def get_avatar_dir() -> Path:
-    """
-    Xác định đúng thư mục avatar.
-    Ưu tiên data/static/avatars.
-    """
-    primary_dir = BASE_DIR / "data" / "static" / "avatars"
-    fallback_dir = BASE_DIR / "static" / "avatars"
+    """Return the avatar directory, preferring the new root static folder."""
+    primary_dir = STATIC_DIR / "avatars"
+    fallback_dir = DATA_STATIC_DIR / "avatars"
 
     if primary_dir.exists() and primary_dir.is_dir():
         return primary_dir
@@ -1372,11 +1385,11 @@ def load_avatar_catalog() -> tuple[str, ...]:
 
 @st.cache_resource(show_spinner=False, max_entries=2)
 def build_avatar_sprite_payload() -> tuple[str, int, int]:
-    """Build one avatar sprite and prefer a static, browser-cached URL.
+    """Build one compressed avatar sprite and return a cached data URI.
 
-    A versioned filename prevents stale browser caches after avatar updates.
-    If the static directory is not writable, the previous Base64 fallback is
-    retained, so this optimization cannot disable the avatar picker.
+    Streamlit static serving does not provide a browser image MIME type for
+    generated WebP files, so a static WebP sprite can appear as empty circles.
+    One cached data URI is reliable while still replacing 80 separate images.
     """
     avatar_keys = load_avatar_catalog()
     if not avatar_keys:
@@ -1447,37 +1460,17 @@ def build_avatar_sprite_payload() -> tuple[str, int, int]:
             ("|".join(version_parts)).encode("utf-8") + payload[:2048]
         ).hexdigest()[:16]
 
-        try:
-            generated_dir = STATIC_DIR / "generated"
-            generated_dir.mkdir(parents=True, exist_ok=True)
-            generated_name = f"epl-avatar-sprite-{version_hash}{output_suffix}"
-            generated_path = generated_dir / generated_name
-
-            if not generated_path.exists() or generated_path.stat().st_size != len(payload):
-                temporary_path = generated_path.with_suffix(generated_path.suffix + ".tmp")
-                temporary_path.write_bytes(payload)
-                temporary_path.replace(generated_path)
-
-            # Remove only obsolete generated avatar sprites, never user assets.
-            for old_path in generated_dir.glob("epl-avatar-sprite-*"):
-                if old_path != generated_path:
-                    try:
-                        old_path.unlink()
-                    except OSError:
-                        pass
-
-            return (
-                f"{STATIC_URL_PREFIX}/generated/{generated_name}",
-                columns,
-                rows
-            )
-        except OSError:
-            encoded = base64.b64encode(payload).decode("ascii")
-            return (
-                f"data:{output_mime_type};base64,{encoded}",
-                columns,
-                rows
-            )
+        # Do not serve the generated sprite through Streamlit's static route.
+        # Streamlit serves unsupported extensions such as .webp as text/plain
+        # with nosniff, which makes browsers reject the image. Runtime-generated
+        # files are also not guaranteed to persist on Community Cloud. A single
+        # cached data URI is reliable and still avoids 80 independent payloads.
+        encoded = base64.b64encode(payload).decode("ascii")
+        return (
+            f"data:{output_mime_type};base64,{encoded}",
+            columns,
+            rows
+        )
 
     except Exception:
         LOGGER.warning(
