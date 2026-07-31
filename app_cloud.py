@@ -8311,7 +8311,13 @@ def maybe_render_final_poster_popup(user_id: int) -> bool:
 def render_daily_checkin_shortcut_button(user_id: int):
     """
     Nút điểm danh dạng float độc lập để mở lại popup điểm danh.
-    Có thể kéo nút trong vùng nội dung; vị trí không được lưu qua lần tải trang.
+
+    Hỗ trợ kéo bằng:
+    - Chuột trên desktop.
+    - Pointer Events trên Android/iOS hiện đại.
+    - Touch Events dự phòng cho trình duyệt mobile cũ.
+
+    Vị trí chỉ được giữ trong phiên trình duyệt hiện tại, không ghi database.
     Chỉ gọi hàm này ở trang Lịch thi đấu & dự đoán.
     """
     user_id = int(user_id)
@@ -8338,191 +8344,207 @@ def render_daily_checkin_shortcut_button(user_id: int):
         daily_checkin_icon_svg.encode("utf-8")
     ).decode("utf-8")
 
-    st.markdown(
-        f"""
-        <style>
-        div[class*="st-key-daily_checkin_shortcut_button"] {{
-            position: fixed !important;
-            top: 148px !important;
-            right: 45px !important;
-            z-index: 999998 !important;
+    checkin_css = r"""
+    <style>
+    div[class*="st-key-daily_checkin_shortcut_button"] {
+        position: fixed !important;
+        top: 148px !important;
+        right: 45px !important;
+        left: auto !important;
+        bottom: auto !important;
+        z-index: 1000003 !important;
 
-            width: 46px !important;
-            height: 46px !important;
-            min-width: 46px !important;
-            min-height: 46px !important;
-            max-width: 46px !important;
-            max-height: 46px !important;
+        width: 46px !important;
+        height: 46px !important;
+        min-width: 46px !important;
+        min-height: 46px !important;
+        max-width: 46px !important;
+        max-height: 46px !important;
 
-            padding: 0 !important;
-            margin: 0 !important;
-            overflow: visible !important;
-            cursor: grab !important;
-            touch-action: none !important;
-            user-select: none !important;
-            -webkit-user-select: none !important;
-            will-change: left, top;
-        }}
+        padding: 0 !important;
+        margin: 0 !important;
+        overflow: visible !important;
 
-        div[class*="st-key-daily_checkin_shortcut_button"] button {{
-            position: relative !important;
+        cursor: grab !important;
+        touch-action: none !important;
+        overscroll-behavior: contain !important;
+        user-select: none !important;
+        -webkit-user-select: none !important;
+        -webkit-touch-callout: none !important;
+        -webkit-tap-highlight-color: transparent !important;
 
-            width: 46px !important;
-            height: 46px !important;
-            min-width: 46px !important;
-            min-height: 46px !important;
-            max-width: 46px !important;
-            max-height: 46px !important;
+        will-change: left, top;
+    }
 
-            padding: 0 !important;
-            margin: 0 !important;
+    div[class*="st-key-daily_checkin_shortcut_button"] button {
+        position: relative !important;
 
-            border-radius: 999px !important;
-            border: none !important;
-            outline: none !important;
+        width: 46px !important;
+        height: 46px !important;
+        min-width: 46px !important;
+        min-height: 46px !important;
+        max-width: 46px !important;
+        max-height: 46px !important;
 
-            background: rgba(255, 255, 255, 0.96) !important;
+        padding: 0 !important;
+        margin: 0 !important;
 
-            box-shadow:
-                0 10px 24px rgba(7, 17, 31, 0.14),
-                0 0 0 1px rgba(15, 23, 42, 0.06) !important;
+        border-radius: 999px !important;
+        border: none !important;
+        outline: none !important;
 
-            color: transparent !important;
-            font-size: 0 !important;
-            line-height: 0 !important;
+        background: rgba(255, 255, 255, 0.96) !important;
 
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
+        box-shadow:
+            0 10px 24px rgba(7, 17, 31, 0.14),
+            0 0 0 1px rgba(15, 23, 42, 0.06) !important;
 
-            cursor: grab !important;
-            overflow: visible !important;
-            touch-action: none !important;
-            user-select: none !important;
-            -webkit-user-select: none !important;
+        color: transparent !important;
+        font-size: 0 !important;
+        line-height: 0 !important;
 
-            transition:
-                box-shadow 0.18s ease,
-                background 0.18s ease !important;
-        }}
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
 
-        div[class*="st-key-daily_checkin_shortcut_button"] button::before {{
-            content: "";
-            display: block;
+        cursor: grab !important;
+        overflow: visible !important;
+        touch-action: none !important;
+        overscroll-behavior: contain !important;
+        user-select: none !important;
+        -webkit-user-select: none !important;
+        -webkit-touch-callout: none !important;
+        -webkit-tap-highlight-color: transparent !important;
 
-            width: 23px;
-            height: 23px;
+        transition:
+            box-shadow 0.18s ease,
+            background 0.18s ease !important;
+    }
 
-            background: #F5C542;
+    div[class*="st-key-daily_checkin_shortcut_button"] button::before {
+        content: "";
+        display: block;
 
-            -webkit-mask: url("data:image/svg+xml;base64,{daily_checkin_icon_base64}") center / contain no-repeat;
-            mask: url("data:image/svg+xml;base64,{daily_checkin_icon_base64}") center / contain no-repeat;
+        width: 23px;
+        height: 23px;
 
-            pointer-events: none;
-        }}
+        background: #F5C542;
 
-        div[class*="st-key-daily_checkin_shortcut_button"] button::after {{
-            content: "Điểm danh";
-            position: absolute;
-            right: 58px;
-            top: 50%;
-            transform: translateY(-50%) translateX(8px);
+        -webkit-mask: url("data:image/svg+xml;base64,__CHECKIN_ICON_BASE64__") center / contain no-repeat;
+        mask: url("data:image/svg+xml;base64,__CHECKIN_ICON_BASE64__") center / contain no-repeat;
 
-            opacity: 0;
-            pointer-events: none;
+        pointer-events: none;
+    }
 
-            padding: 8px 11px;
-            border-radius: 999px;
+    div[class*="st-key-daily_checkin_shortcut_button"] button::after {
+        content: "Điểm danh";
+        position: absolute;
+        right: 58px;
+        top: 50%;
+        transform: translateY(-50%) translateX(8px);
 
-            background: rgba(7, 17, 31, 0.94);
-            color: #F8FAFC;
+        opacity: 0;
+        pointer-events: none;
 
-            font-size: 12px;
-            font-weight: 850;
-            line-height: 1;
-            white-space: nowrap;
+        padding: 8px 11px;
+        border-radius: 999px;
 
-            box-shadow: 0 10px 24px rgba(7, 17, 31, 0.22);
+        background: rgba(7, 17, 31, 0.94);
+        color: #F8FAFC;
 
-            transition:
-                opacity 0.18s ease,
-                transform 0.18s ease;
-        }}
+        font-size: 12px;
+        font-weight: 850;
+        line-height: 1;
+        white-space: nowrap;
 
-        div[class*="st-key-daily_checkin_shortcut_button"] button:hover {{
+        box-shadow: 0 10px 24px rgba(7, 17, 31, 0.22);
+
+        transition:
+            opacity 0.18s ease,
+            transform 0.18s ease;
+    }
+
+    @media (hover: hover) {
+        div[class*="st-key-daily_checkin_shortcut_button"] button:hover {
             background: #FFFFFF !important;
 
             box-shadow:
                 0 14px 30px rgba(7, 17, 31, 0.18),
                 0 0 0 4px rgba(245, 197, 66, 0.12) !important;
-        }}
+        }
 
-        div[class*="st-key-daily_checkin_shortcut_button"] button:hover::after {{
+        div[class*="st-key-daily_checkin_shortcut_button"] button:hover::after {
             opacity: 1;
             transform: translateY(-50%) translateX(0);
-        }}
+        }
+    }
 
-        div[class*="st-key-daily_checkin_shortcut_button"] button:active {{
-            cursor: grabbing !important;
-        }}
+    div[class*="st-key-daily_checkin_shortcut_button"] button:active {
+        cursor: grabbing !important;
+    }
 
-        div[class*="st-key-daily_checkin_shortcut_button"].epl-checkin-dragging,
-        div[class*="st-key-daily_checkin_shortcut_button"].epl-checkin-dragging * {{
-            cursor: grabbing !important;
-        }}
+    div[class*="st-key-daily_checkin_shortcut_button"].epl-checkin-dragging,
+    div[class*="st-key-daily_checkin_shortcut_button"].epl-checkin-dragging * {
+        cursor: grabbing !important;
+    }
 
-        div[class*="st-key-daily_checkin_shortcut_button"].epl-checkin-dragging
-        button {{
-            transition: none !important;
-            box-shadow:
-                0 16px 34px rgba(7, 17, 31, 0.22),
-                0 0 0 5px rgba(245, 197, 66, 0.14) !important;
-        }}
+    div[class*="st-key-daily_checkin_shortcut_button"].epl-checkin-dragging button {
+        transition: none !important;
+        box-shadow:
+            0 16px 34px rgba(7, 17, 31, 0.22),
+            0 0 0 5px rgba(245, 197, 66, 0.14) !important;
+    }
 
-        div[class*="st-key-daily_checkin_shortcut_button"] button * {{
+    div[class*="st-key-daily_checkin_shortcut_button"] button * {
+        display: none !important;
+        visibility: hidden !important;
+        color: transparent !important;
+        font-size: 0 !important;
+        line-height: 0 !important;
+    }
+
+    @media (max-width: 768px) {
+        div[class*="st-key-daily_checkin_shortcut_button"] {
+            top: 76px !important;
+            right: 8px !important;
+
+            width: 44px !important;
+            height: 44px !important;
+            min-width: 44px !important;
+            min-height: 44px !important;
+            max-width: 44px !important;
+            max-height: 44px !important;
+        }
+
+        div[class*="st-key-daily_checkin_shortcut_button"] button {
+            width: 44px !important;
+            height: 44px !important;
+            min-width: 44px !important;
+            min-height: 44px !important;
+            max-width: 44px !important;
+            max-height: 44px !important;
+
+            border: none !important;
+            outline: none !important;
+        }
+
+        div[class*="st-key-daily_checkin_shortcut_button"] button::before {
+            width: 21px;
+            height: 21px;
+        }
+
+        div[class*="st-key-daily_checkin_shortcut_button"] button::after {
             display: none !important;
-            visibility: hidden !important;
-            color: transparent !important;
-            font-size: 0 !important;
-            line-height: 0 !important;
-        }}
+        }
+    }
+    </style>
+    """.replace(
+        "__CHECKIN_ICON_BASE64__",
+        daily_checkin_icon_base64
+    )
 
-        @media (max-width: 768px) {{
-            div[class*="st-key-daily_checkin_shortcut_button"] {{
-                top: 77px !important;
-                right: 5px !important;
-
-                width: 40px !important;
-                height: 40px !important;
-                min-width: 40px !important;
-                min-height: 40px !important;
-                max-width: 40px !important;
-                max-height: 40px !important;
-            }}
-
-            div[class*="st-key-daily_checkin_shortcut_button"] button {{
-                width: 40px !important;
-                height: 40px !important;
-                min-width: 40px !important;
-                min-height: 40px !important;
-                max-width: 40px !important;
-                max-height: 40px !important;
-
-                border: none !important;
-                outline: none !important;
-            }}
-
-            div[class*="st-key-daily_checkin_shortcut_button"] button::before {{
-                width: 20px;
-                height: 20px;
-            }}
-
-            div[class*="st-key-daily_checkin_shortcut_button"] button::after {{
-                display: none !important;
-            }}
-        }}
-        </style>
-        """,
+    st.markdown(
+        checkin_css,
         unsafe_allow_html=True
     )
 
@@ -8532,35 +8554,57 @@ def render_daily_checkin_shortcut_button(user_id: int):
         help="Xem điểm danh hàng ngày"
     )
 
-    checkin_drag_script = """
+    checkin_drag_script = r"""
     <script>
     (() => {
+        const parentWindow = window.parent;
+        const parentDocument = parentWindow.document;
+
         const controllerName =
             "__eplCheckinDragController";
 
+        const positionName =
+            "__eplCheckinDragPosition";
+
         const oldController =
-            window[controllerName];
+            parentWindow[controllerName];
 
         if (
             oldController
-            && typeof oldController.cleanup
-                === "function"
+            && typeof oldController.cleanup === "function"
         ) {
             oldController.cleanup();
         }
 
-        const shell =
-            document.querySelector(
-                'div[class*="st-key-'
-                + 'daily_checkin_shortcut_button"]'
-            );
+        const shellSelector =
+            'div[class*="st-key-daily_checkin_shortcut_button"]';
+
+        const shellCandidates = Array.from(
+            parentDocument.querySelectorAll(shellSelector)
+        );
+
+        const shell = shellCandidates
+            .reverse()
+            .find((candidate) => {
+                const style =
+                    parentWindow.getComputedStyle(candidate);
+
+                const rect =
+                    candidate.getBoundingClientRect();
+
+                return (
+                    style.display !== "none"
+                    && style.visibility !== "hidden"
+                    && rect.width > 0
+                    && rect.height > 0
+                );
+            });
 
         if (!shell) {
             return;
         }
 
-        const button =
-            shell.querySelector("button");
+        const button = shell.querySelector("button");
 
         if (!button) {
             return;
@@ -8568,27 +8612,26 @@ def render_daily_checkin_shortcut_button(user_id: int):
 
         const edgeGap = 8;
         const headerGap = 6;
-        const dragThreshold = 6;
+        const dragThreshold = 5;
 
-        let activePointer = null;
+        let activeDrag = null;
         let dragStarted = false;
         let suppressClickUntil = 0;
         let resizeFrame = 0;
         let cleaned = false;
 
-        const getVisibleRect = (
-            element
-        ) => {
+        const getVisibleRect = (element) => {
             if (!element) {
                 return null;
             }
 
             const style =
-                window.getComputedStyle(element);
+                parentWindow.getComputedStyle(element);
 
             if (
                 style.display === "none"
                 || style.visibility === "hidden"
+                || style.opacity === "0"
             ) {
                 return null;
             }
@@ -8608,14 +8651,13 @@ def render_daily_checkin_shortcut_button(user_id: int):
 
         const getHeaderRect = () => {
             const candidates =
-                document.querySelectorAll(
+                parentDocument.querySelectorAll(
                     'header[data-testid="stHeader"], '
                     + '[data-testid="stHeader"]'
                 );
 
             for (const candidate of candidates) {
-                const rect =
-                    getVisibleRect(candidate);
+                const rect = getVisibleRect(candidate);
 
                 if (rect) {
                     return rect;
@@ -8625,46 +8667,73 @@ def render_daily_checkin_shortcut_button(user_id: int):
             return null;
         };
 
+        const getViewportRect = () => {
+            const visualViewport =
+                parentWindow.visualViewport;
+
+            if (visualViewport) {
+                return {
+                    left: visualViewport.offsetLeft,
+                    top: visualViewport.offsetTop,
+                    width: visualViewport.width,
+                    height: visualViewport.height
+                };
+            }
+
+            return {
+                left: 0,
+                top: 0,
+                width:
+                    parentDocument.documentElement.clientWidth
+                    || parentWindow.innerWidth,
+                height:
+                    parentDocument.documentElement.clientHeight
+                    || parentWindow.innerHeight
+            };
+        };
+
         const getMovementBounds = () => {
             const shellRect =
                 shell.getBoundingClientRect();
 
+            const viewportRect =
+                getViewportRect();
+
             const headerRect =
                 getHeaderRect();
 
-            const minimumTop =
-                headerRect
-                ? Math.ceil(
-                    headerRect.bottom
-                    + headerGap
+            const viewportLeft =
+                viewportRect.left + edgeGap;
+
+            const viewportTop =
+                viewportRect.top + edgeGap;
+
+            const minimumTop = headerRect
+                ? Math.max(
+                    viewportTop,
+                    Math.ceil(headerRect.bottom + headerGap)
                 )
-                : edgeGap;
+                : viewportTop;
 
-            const maxLeft =
-                Math.max(
-                    edgeGap,
-                    window.innerWidth
-                    - shellRect.width
-                    - edgeGap
-                );
+            const maxLeft = Math.max(
+                viewportLeft,
+                viewportRect.left
+                + viewportRect.width
+                - shellRect.width
+                - edgeGap
+            );
 
-            const maxTop =
-                Math.max(
-                    edgeGap,
-                    window.innerHeight
-                    - shellRect.height
-                    - edgeGap
-                );
+            const maxTop = Math.max(
+                minimumTop,
+                viewportRect.top
+                + viewportRect.height
+                - shellRect.height
+                - edgeGap
+            );
 
             return {
-                minLeft: edgeGap,
-                minTop: Math.min(
-                    Math.max(
-                        edgeGap,
-                        minimumTop
-                    ),
-                    maxTop
-                ),
+                minLeft: viewportLeft,
+                minTop: minimumTop,
                 maxLeft,
                 maxTop
             };
@@ -8686,24 +8755,22 @@ def render_daily_checkin_shortcut_button(user_id: int):
 
         const applyPosition = (
             proposedLeft,
-            proposedTop
+            proposedTop,
+            savePosition = true
         ) => {
-            const bounds =
-                getMovementBounds();
+            const bounds = getMovementBounds();
 
-            const left =
-                clampNumber(
-                    proposedLeft,
-                    bounds.minLeft,
-                    bounds.maxLeft
-                );
+            const left = clampNumber(
+                proposedLeft,
+                bounds.minLeft,
+                bounds.maxLeft
+            );
 
-            const top =
-                clampNumber(
-                    proposedTop,
-                    bounds.minTop,
-                    bounds.maxTop
-                );
+            const top = clampNumber(
+                proposedTop,
+                bounds.minTop,
+                bounds.maxTop
+            );
 
             shell.style.setProperty(
                 "left",
@@ -8728,58 +8795,29 @@ def render_daily_checkin_shortcut_button(user_id: int):
                 "auto",
                 "important"
             );
+
+            if (savePosition) {
+                parentWindow[positionName] = {
+                    left,
+                    top
+                };
+            }
         };
 
-        const stopDragging = (
-            event
+        const beginDrag = (
+            inputType,
+            pointerId,
+            clientX,
+            clientY
         ) => {
-            if (!activePointer) {
-                return;
-            }
-
-            if (
-                event
-                && event.pointerId
-                    !== activePointer.pointerId
-            ) {
-                return;
-            }
-
-            if (dragStarted) {
-                suppressClickUntil =
-                    Date.now() + 500;
-
-                if (event) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                }
-            }
-
-            activePointer = null;
-            dragStarted = false;
-
-            shell.classList.remove(
-                "epl-checkin-dragging"
-            );
-        };
-
-        const onPointerDown = (
-            event
-        ) => {
-            if (
-                event.button !== undefined
-                && event.button !== 0
-            ) {
-                return;
-            }
-
             const shellRect =
                 shell.getBoundingClientRect();
 
-            activePointer = {
-                pointerId: event.pointerId,
-                startX: event.clientX,
-                startY: event.clientY,
+            activeDrag = {
+                inputType,
+                pointerId,
+                startX: clientX,
+                startY: clientY,
                 startLeft: shellRect.left,
                 startTop: shellRect.top
             };
@@ -8787,31 +8825,31 @@ def render_daily_checkin_shortcut_button(user_id: int):
             dragStarted = false;
         };
 
-        const onPointerMove = (
+        const moveDrag = (
+            inputType,
+            pointerId,
+            clientX,
+            clientY,
             event
         ) => {
             if (
-                !activePointer
-                || event.pointerId
-                    !== activePointer.pointerId
+                !activeDrag
+                || activeDrag.inputType !== inputType
+                || activeDrag.pointerId !== pointerId
             ) {
                 return;
             }
 
             const deltaX =
-                event.clientX
-                - activePointer.startX;
+                clientX - activeDrag.startX;
 
             const deltaY =
-                event.clientY
-                - activePointer.startY;
+                clientY - activeDrag.startY;
 
             if (
                 !dragStarted
-                && Math.hypot(
-                    deltaX,
-                    deltaY
-                ) < dragThreshold
+                && Math.hypot(deltaX, deltaY)
+                    < dragThreshold
             ) {
                 return;
             }
@@ -8822,35 +8860,206 @@ def render_daily_checkin_shortcut_button(user_id: int):
                 "epl-checkin-dragging"
             );
 
-            event.preventDefault();
-            event.stopPropagation();
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
 
             applyPosition(
-                activePointer.startLeft
-                    + deltaX,
-                activePointer.startTop
-                    + deltaY
+                activeDrag.startLeft + deltaX,
+                activeDrag.startTop + deltaY
             );
         };
 
-        const onPointerUp = (
-            event
-        ) => {
-            stopDragging(event);
-        };
+        const finishDrag = (event) => {
+            if (!activeDrag) {
+                return;
+            }
 
-        const onPointerCancel = (
-            event
-        ) => {
-            stopDragging(event);
-        };
+            const completedDrag = dragStarted;
+            const completedPointerId =
+                activeDrag.pointerId;
 
-        const onClickCapture = (
-            event
-        ) => {
+            activeDrag = null;
+            dragStarted = false;
+
+            shell.classList.remove(
+                "epl-checkin-dragging"
+            );
+
             if (
-                Date.now()
-                >= suppressClickUntil
+                completedPointerId !== null
+                && button.releasePointerCapture
+            ) {
+                try {
+                    if (
+                        button.hasPointerCapture
+                        && button.hasPointerCapture(
+                            completedPointerId
+                        )
+                    ) {
+                        button.releasePointerCapture(
+                            completedPointerId
+                        );
+                    }
+                } catch (error) {
+                    // Pointer capture có thể đã tự giải phóng.
+                }
+            }
+
+            if (completedDrag) {
+                suppressClickUntil =
+                    Date.now() + 650;
+
+                if (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+            }
+        };
+
+        const onPointerDown = (event) => {
+            if (
+                event.button !== undefined
+                && event.button !== 0
+            ) {
+                return;
+            }
+
+            beginDrag(
+                "pointer",
+                event.pointerId,
+                event.clientX,
+                event.clientY
+            );
+
+            if (button.setPointerCapture) {
+                try {
+                    button.setPointerCapture(
+                        event.pointerId
+                    );
+                } catch (error) {
+                    // Một số WebView không hỗ trợ capture đầy đủ.
+                }
+            }
+        };
+
+        const onPointerMove = (event) => {
+            moveDrag(
+                "pointer",
+                event.pointerId,
+                event.clientX,
+                event.clientY,
+                event
+            );
+        };
+
+        const onPointerUp = (event) => {
+            if (
+                activeDrag
+                && activeDrag.inputType === "pointer"
+                && activeDrag.pointerId
+                    === event.pointerId
+            ) {
+                finishDrag(event);
+            }
+        };
+
+        const getPrimaryTouch = (event) => {
+            if (
+                event.touches
+                && event.touches.length
+            ) {
+                return event.touches[0];
+            }
+
+            if (
+                event.changedTouches
+                && event.changedTouches.length
+            ) {
+                return event.changedTouches[0];
+            }
+
+            return null;
+        };
+
+        const onTouchStart = (event) => {
+            if (activeDrag) {
+                return;
+            }
+
+            const touch = getPrimaryTouch(event);
+
+            if (!touch) {
+                return;
+            }
+
+            beginDrag(
+                "touch",
+                touch.identifier,
+                touch.clientX,
+                touch.clientY
+            );
+        };
+
+        const onTouchMove = (event) => {
+            if (
+                !activeDrag
+                || activeDrag.inputType !== "touch"
+            ) {
+                return;
+            }
+
+            const touches = Array.from(
+                event.touches || []
+            );
+
+            const touch = touches.find(
+                (item) =>
+                    item.identifier
+                    === activeDrag.pointerId
+            );
+
+            if (!touch) {
+                return;
+            }
+
+            moveDrag(
+                "touch",
+                touch.identifier,
+                touch.clientX,
+                touch.clientY,
+                event
+            );
+        };
+
+        const onTouchEnd = (event) => {
+            if (
+                !activeDrag
+                || activeDrag.inputType !== "touch"
+            ) {
+                return;
+            }
+
+            const changedTouches = Array.from(
+                event.changedTouches || []
+            );
+
+            const matchingTouch =
+                changedTouches.find(
+                    (item) =>
+                        item.identifier
+                        === activeDrag.pointerId
+                );
+
+            if (matchingTouch || event.type === "touchcancel") {
+                finishDrag(event);
+            }
+        };
+
+        const onClickCapture = (event) => {
+            if (
+                Date.now() >= suppressClickUntil
             ) {
                 return;
             }
@@ -8861,16 +9070,15 @@ def render_daily_checkin_shortcut_button(user_id: int):
         };
 
         const keepInsideAllowedArea = () => {
-            cancelAnimationFrame(
+            parentWindow.cancelAnimationFrame(
                 resizeFrame
             );
 
             resizeFrame =
-                requestAnimationFrame(
+                parentWindow.requestAnimationFrame(
                     () => {
                         const currentRect =
-                            shell
-                                .getBoundingClientRect();
+                            shell.getBoundingClientRect();
 
                         applyPosition(
                             currentRect.left,
@@ -8887,7 +9095,7 @@ def render_daily_checkin_shortcut_button(user_id: int):
 
             cleaned = true;
 
-            cancelAnimationFrame(
+            parentWindow.cancelAnimationFrame(
                 resizeFrame
             );
 
@@ -8896,21 +9104,44 @@ def render_daily_checkin_shortcut_button(user_id: int):
                 onPointerDown
             );
 
-            document.removeEventListener(
+            parentDocument.removeEventListener(
                 "pointermove",
                 onPointerMove,
                 true
             );
 
-            document.removeEventListener(
+            parentDocument.removeEventListener(
                 "pointerup",
                 onPointerUp,
                 true
             );
 
-            document.removeEventListener(
+            parentDocument.removeEventListener(
                 "pointercancel",
-                onPointerCancel,
+                onPointerUp,
+                true
+            );
+
+            button.removeEventListener(
+                "touchstart",
+                onTouchStart
+            );
+
+            parentDocument.removeEventListener(
+                "touchmove",
+                onTouchMove,
+                true
+            );
+
+            parentDocument.removeEventListener(
+                "touchend",
+                onTouchEnd,
+                true
+            );
+
+            parentDocument.removeEventListener(
+                "touchcancel",
+                onTouchEnd,
                 true
             );
 
@@ -8920,15 +9151,26 @@ def render_daily_checkin_shortcut_button(user_id: int):
                 true
             );
 
-            window.removeEventListener(
+            parentWindow.removeEventListener(
                 "resize",
                 keepInsideAllowedArea
             );
 
-            if (window.visualViewport) {
-                window.visualViewport
+            parentWindow.removeEventListener(
+                "orientationchange",
+                keepInsideAllowedArea
+            );
+
+            if (parentWindow.visualViewport) {
+                parentWindow.visualViewport
                     .removeEventListener(
                         "resize",
+                        keepInsideAllowedArea
+                    );
+
+                parentWindow.visualViewport
+                    .removeEventListener(
+                        "scroll",
                         keepInsideAllowedArea
                     );
             }
@@ -8941,8 +9183,19 @@ def render_daily_checkin_shortcut_button(user_id: int):
 
         button.setAttribute(
             "aria-label",
-            "Xem điểm danh; giữ và kéo "
-            + "để di chuyển nút"
+            "Xem điểm danh; giữ và kéo để di chuyển nút"
+        );
+
+        button.style.setProperty(
+            "touch-action",
+            "none",
+            "important"
+        );
+
+        shell.style.setProperty(
+            "touch-action",
+            "none",
+            "important"
         );
 
         button.addEventListener(
@@ -8950,7 +9203,7 @@ def render_daily_checkin_shortcut_button(user_id: int):
             onPointerDown
         );
 
-        document.addEventListener(
+        parentDocument.addEventListener(
             "pointermove",
             onPointerMove,
             {
@@ -8959,15 +9212,48 @@ def render_daily_checkin_shortcut_button(user_id: int):
             }
         );
 
-        document.addEventListener(
+        parentDocument.addEventListener(
             "pointerup",
             onPointerUp,
             true
         );
 
-        document.addEventListener(
+        parentDocument.addEventListener(
             "pointercancel",
-            onPointerCancel,
+            onPointerUp,
+            true
+        );
+
+        /*
+         * Touch fallback đặc biệt quan trọng với một số iOS WebView.
+         * Các listener passive:false cho phép chặn cuộn trang khi đã kéo.
+         */
+        button.addEventListener(
+            "touchstart",
+            onTouchStart,
+            {
+                passive: true
+            }
+        );
+
+        parentDocument.addEventListener(
+            "touchmove",
+            onTouchMove,
+            {
+                capture: true,
+                passive: false
+            }
+        );
+
+        parentDocument.addEventListener(
+            "touchend",
+            onTouchEnd,
+            true
+        );
+
+        parentDocument.addEventListener(
+            "touchcancel",
+            onTouchEnd,
             true
         );
 
@@ -8977,33 +9263,77 @@ def render_daily_checkin_shortcut_button(user_id: int):
             true
         );
 
-        window.addEventListener(
+        parentWindow.addEventListener(
             "resize",
             keepInsideAllowedArea,
             { passive: true }
         );
 
-        if (window.visualViewport) {
-            window.visualViewport
+        parentWindow.addEventListener(
+            "orientationchange",
+            keepInsideAllowedArea,
+            { passive: true }
+        );
+
+        if (parentWindow.visualViewport) {
+            parentWindow.visualViewport
                 .addEventListener(
                     "resize",
                     keepInsideAllowedArea,
                     { passive: true }
                 );
+
+            parentWindow.visualViewport
+                .addEventListener(
+                    "scroll",
+                    keepInsideAllowedArea,
+                    { passive: true }
+                );
         }
 
-        window[controllerName] = {
+        const savedPosition =
+            parentWindow[positionName];
+
+        parentWindow.requestAnimationFrame(() => {
+            if (
+                savedPosition
+                && Number.isFinite(
+                    Number(savedPosition.left)
+                )
+                && Number.isFinite(
+                    Number(savedPosition.top)
+                )
+            ) {
+                applyPosition(
+                    savedPosition.left,
+                    savedPosition.top,
+                    false
+                );
+            } else {
+                const currentRect =
+                    shell.getBoundingClientRect();
+
+                applyPosition(
+                    currentRect.left,
+                    currentRect.top,
+                    false
+                );
+            }
+        });
+
+        parentWindow[controllerName] = {
             cleanup
         };
     })();
     </script>
     """
 
-    st.html(
+    components.html(
         checkin_drag_script,
-        unsafe_allow_javascript=True
+        height=0,
+        scrolling=False
     )
-    
+
     if shortcut_clicked:
         render_daily_checkin_dialog(user_id)
 
@@ -13577,7 +13907,6 @@ def get_user_star_usage(user_id: int, exclude_match_id: int | None = None) -> di
     ) in {
         "Dự đoán của tôi",
         "Bảng xếp hạng",
-        "Phân tích tổng quan",
         "Admin"
     }
 
@@ -32385,367 +32714,6 @@ def page_leaderboard():
         )
         st.rerun()
 
-def page_dashboard():
-    import plotly.express as px
-
-    render_page_title(
-        "Bảng phân tích tổng quan",
-        "Phân tích tổng quan hiệu suất dự đoán, điểm số và độ chính xác của tất cả người chơi."
-    )
-
-    score_all_predictions(get_selected_season_slug())
-
-    leaderboard = build_leaderboard_df(get_selected_season_slug())
-    predictions = load_predictions(get_selected_season_slug())
-
-    if leaderboard.empty:
-        st.info("Chưa đủ dữ liệu để vẽ dashboard.")
-        return
-
-    # =========================
-    # KPI calculations
-    # =========================
-    total_players = len(leaderboard)
-
-    highest_score = int(leaderboard["total_points"].max()) if total_players > 0 else 0
-
-    avg_total_points = (
-        float(leaderboard["total_points"].mean())
-        if total_players > 0 else 0.0
-    )
-
-    scored_points = pd.to_numeric(
-        predictions.get("points", pd.Series(dtype="float")),
-        errors="coerce"
-    )
-
-    scored_prediction_count = int(scored_points.notna().sum())
-
-    if scored_prediction_count == 0:
-        avg_points_per_match_all = 0.0
-    else:
-        avg_points_per_match_all = float(
-            scored_points.fillna(0).sum() / scored_prediction_count
-        )
-
-    total_result_checkable = int(leaderboard["result_prediction_checkable"].sum())
-    total_result_correct = int(leaderboard["result_prediction_correct"].sum())
-
-    if total_result_checkable == 0:
-        overall_result_rate = 0.0
-    else:
-        overall_result_rate = total_result_correct / total_result_checkable
-
-    total_exact_checkable = int(leaderboard["num_scored"].sum())
-    total_exact_correct = int(leaderboard["exact_score_count"].sum())
-
-    if total_exact_checkable == 0:
-        overall_exact_rate = 0.0
-    else:
-        overall_exact_rate = total_exact_correct / total_exact_checkable
-
-    # =========================
-    # KPI cards: 2 rows x 3 cards
-    # =========================
-    row1_col1, row1_col2, row1_col3 = st.columns(3)
-    row2_col1, row2_col2, row2_col3 = st.columns(3)
-
-    with row1_col1:
-        st.metric("Tổng số người chơi", total_players)
-
-    with row1_col2:
-        st.metric("Điểm cao nhất", highest_score)
-
-    with row1_col3:
-        st.metric("Điểm trung bình", f"{avg_total_points:.1f}")
-
-    with row2_col1:
-        st.metric("Điểm trung bình/trận", f"{avg_points_per_match_all:.1f}")
-
-    with row2_col2:
-        st.metric("% Đúng kết quả TB", f"{overall_result_rate * 100:.1f}%")
-
-    with row2_col3:
-        st.metric("% Đúng tỉ số TB", f"{overall_exact_rate * 100:.1f}%")
-
-    st.markdown("---")
-
-    # =========================
-    # Charts
-    # =========================
-    total_score_values = pd.to_numeric(
-        leaderboard["total_points"],
-        errors="coerce"
-    ).fillna(0)
-
-    score_min = int(total_score_values.min())
-    score_max = int(total_score_values.max())
-    score_axis_min = min(0.0, score_min * 1.16)
-    score_axis_max = max(1.0, score_max * 1.16)
-    score_color_min = min(0, score_min)
-    score_color_max = max(1, score_max)
-
-    # Plotly không cho phép kích thước điểm âm. Dịch toàn bộ miền điểm
-    # sang số dương nhưng vẫn giữ nguyên thứ tự lớn/nhỏ giữa người chơi.
-    leaderboard["score_bubble_size"] = (
-        total_score_values
-        - score_min
-        + 1
-    ).astype(float)
-
-    custom_score_scale = [
-        [0.00, "#DC2626"],   # đỏ
-        [0.45, "#2563EB"],   # xanh dương
-        [1.00, "#07111F"]    # xanh đậm giống sidebar
-    ]
-
-    plotly_chart_config = {
-        "displayModeBar": False,
-        "displaylogo": False,
-        "responsive": True
-    }
-    
-    points_scope = st.radio(
-        "Hiển thị biểu đồ điểm",
-        options=["Top 10", "Tất cả"],
-        index=0,
-        horizontal=True,
-        key="dashboard_points_scope"
-    )
-    
-    top_points = leaderboard.sort_values(
-        ["total_points", "exact_score_count", "correct_outcome_count"],
-        ascending=[False, False, False]
-    ).copy()
-    
-    if points_scope == "Top 10":
-        top_points = top_points.head(10)
-    
-    def get_rank_bar_color(rank_value: int) -> str:
-        if rank_value == 1:
-            return "#F5C542"   # Top 1 - vàng
-        if rank_value == 2:
-            return "#CBD5E1"   # Top 2 - bạc
-        if rank_value == 3:
-            return "#CD7F32"   # Top 3 - đồng
-        return "#2563EB"       # Người chơi còn lại
-    
-    def get_rank_name_color(rank_value: int) -> str:
-        if rank_value == 1:
-            return "#78350F"
-        if rank_value == 2:
-            return "#334155"
-        if rank_value == 3:
-            return "#431407"
-        return "#334155"
-    
-    top_points["bar_color"] = top_points["rank"].apply(
-        lambda rank: get_rank_bar_color(int(rank))
-    )
-    
-    points_chart_height = max(
-        430,
-        135 + len(top_points) * 42
-    )
-    
-    points_chart_title = (
-        "Top 10 điểm theo người chơi"
-        if points_scope == "Top 10"
-        else "Tổng điểm theo người chơi"
-    )
-    
-    fig_points = px.bar(
-        top_points,
-        x="total_points",
-        y="display_name",
-        orientation="h",
-        title=points_chart_title,
-        labels={
-            "display_name": "Người chơi",
-            "total_points": "Điểm"
-        },
-        text="total_points",
-        custom_data=[
-            "rank",
-            "prediction_points",
-            "base_points",
-            "star_bonus_points",
-            "round_champion_bonus_points",
-            "round_champion_count",
-            "hope_stars_used",
-            "super_stars_used"
-        ]
-    )
-    
-    fig_points.update_traces(
-        marker_color=top_points["bar_color"].tolist(),
-        marker_line_width=0,
-        opacity=0.94,
-        textposition="outside",
-        textfont=dict(
-            color="#07111F",
-            size=12
-        ),
-        cliponaxis=False,
-        hovertemplate=(
-            "<b>#%{customdata[0]} %{y}</b><br>"
-            "Tổng điểm = %{x}<br>"
-            "Điểm dự đoán = %{customdata[1]}<br>"
-            "Điểm gốc = %{customdata[2]}<br>"
-            "Điểm bổ trợ = %{customdata[3]}<br>"
-            "Thưởng vòng = %{customdata[4]} "
-            "(%{customdata[5]} lần VĐ vòng)<br>"
-            "⭐ Ngôi sao hy vọng đã dùng = %{customdata[6]}<br>"
-            "✨ Siêu sao đã dùng = %{customdata[7]}"
-            "<extra></extra>"
-        )
-    )
-    
-    fig_points.update_layout(
-        height=points_chart_height,
-        plot_bgcolor="rgba(0,0,0,0)",
-        paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(
-            color="#07111F"
-        ),
-        title=dict(
-            font=dict(
-                size=17,
-                color="#07111F"
-            )
-        ),
-        xaxis_title="Điểm",
-        yaxis_title="",
-        showlegend=False,
-        hovermode="closest",
-        dragmode=False,
-        bargap=0.28,
-        margin=dict(
-            l=230,
-            r=80,
-            t=76,
-            b=46
-        )
-    )
-    
-    fig_points.update_xaxes(
-        showgrid=True,
-        gridcolor="rgba(15,23,42,0.08)",
-        zeroline=False,
-        range=[score_axis_min, score_axis_max]
-    )
-    
-    fig_points.update_yaxes(
-        showticklabels=False,
-        autorange="reversed"
-    )
-    
-    for _, player_row in top_points.iterrows():
-        rank_value = int(player_row["rank"])
-        player_name = html.escape(str(player_row["display_name"]))
-        name_color = get_rank_name_color(rank_value)
-    
-        fig_points.add_annotation(
-            x=0,
-            y=player_row["display_name"],
-            xref="paper",
-            yref="y",
-            text=f"<b>#{rank_value} {player_name}</b>",
-            showarrow=False,
-            xanchor="right",
-            xshift=-12,
-            align="right",
-            font=dict(
-                color=name_color,
-                size=13
-            )
-        )
-    
-    st.caption(
-        "Di chuột vào từng thanh để xem chi tiết điểm. Chọn “Tất cả” để xem toàn bộ người chơi và cuộn xuống dưới nếu danh sách dài."
-    )
-    
-    st.plotly_chart(
-        fig_points,
-        use_container_width=True,
-        config=plotly_chart_config
-    )
-
-    fig_accuracy = px.scatter(
-        leaderboard,
-        x="result_prediction_rate",
-        y="exact_score_rate",
-        size="score_bubble_size",
-        hover_name="display_name",
-        custom_data=[
-            "total_points",
-            "prediction_points",
-            "base_points",
-            "star_bonus_points",
-            "round_champion_bonus_points",
-            "round_champion_count",
-            "hope_stars_used",
-            "super_stars_used"
-        ],
-        title="Độ chính xác kết quả vs độ chính xác tỉ số",
-        labels={
-            "result_prediction_rate": "% Đúng kết quả",
-            "exact_score_rate": "% Đúng hoàn toàn tỉ số",
-            "total_points": "Điểm",
-            "score_bubble_size": "Quy mô điểm"
-        },
-        color="total_points",
-        color_continuous_scale=custom_score_scale,
-        range_color=(score_color_min, score_color_max)
-    )
-
-    fig_accuracy.update_xaxes(tickformat=".1%")
-    fig_accuracy.update_yaxes(tickformat=".1%")
-
-    fig_accuracy.update_traces(
-        hovertemplate=(
-            "<b>%{hovertext}</b><br>"
-            "% Đúng kết quả = %{x:.1%}<br>"
-            "% Đúng hoàn toàn tỉ số = %{y:.1%}<br>"
-            "Tổng điểm = %{customdata[0]}<br>"
-            "Điểm dự đoán = %{customdata[1]}<br>"
-            "Điểm gốc = %{customdata[2]}<br>"
-            "Điểm bổ trợ = %{customdata[3]}<br>"
-            "Thưởng vòng = %{customdata[4]} "
-            "(%{customdata[5]} lần VĐ vòng)<br>"
-            "⭐ Ngôi sao hy vọng đã dùng = %{customdata[6]}<br>"
-            "✨ Siêu sao đã dùng = %{customdata[7]}"
-            "<extra></extra>"
-        ),
-        marker=dict(
-            line=dict(
-                width=1,
-                color="rgba(7,17,31,0.28)"
-            )
-        ),
-        opacity=0.88
-    )
-
-    fig_accuracy.update_layout(
-        plot_bgcolor="rgba(0,0,0,0)",
-        paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#07111F"),
-        coloraxis_colorbar=dict(
-            title="Điểm",
-            tickfont=dict(color="#64748B")
-        )
-    )
-
-    fig_accuracy.update_layout(
-        dragmode=False
-    )
-    
-    st.plotly_chart(
-        fig_accuracy,
-        use_container_width=True,
-        config=plotly_chart_config
-    )
-
 
 def page_admin():
     render_page_title(
@@ -33165,12 +33133,11 @@ def _build_epl_news_ticker_document(
     generated_at
 ) -> str:
     """
-    Tạo một tài liệu HTML độc lập cho components.html.
+    Tạo tài liệu HTML độc lập cho components.html.
 
-    Ticker được render trong iframe riêng để:
-    - Không bị Markdown chia vỡ cấu trúc HTML.
-    - Không bị CSS toàn cục của app ghi đè.
-    - Không bị các DOM observer khác trong app chỉnh sửa text.
+    Ticker được render trong iframe riêng để không bị CSS hoặc DOM observer
+    của Streamlit làm vỡ cấu trúc. Script bên trong iframe chỉ đo header,
+    nút Menu và sidebar rồi đồng bộ vị trí host ở cửa sổ cha.
     """
 
     safe_items = [
@@ -33194,9 +33161,7 @@ def _build_epl_news_ticker_document(
             '<span class="ticker-item">'
             f'{item}'
             '</span>'
-            '<span '
-            'class="ticker-separator" '
-            'aria-hidden="true">'
+            '<span class="ticker-separator" aria-hidden="true">'
             '◆'
             '</span>'
         )
@@ -33211,9 +33176,7 @@ def _build_epl_news_ticker_document(
 
     track_markup = (
         f'{group_markup}'
-        '<div '
-        'class="ticker-group" '
-        'aria-hidden="true">'
+        '<div class="ticker-group" aria-hidden="true">'
         f'{item_markup}'
         '</div>'
     )
@@ -33227,9 +33190,7 @@ def _build_epl_news_ticker_document(
         90,
         min(
             210,
-            round(
-                total_characters / 7
-            )
+            round(total_characters / 7)
         )
     )
 
@@ -33253,43 +33214,41 @@ def _build_epl_news_ticker_document(
         quote=True
     )
 
-    return f"""
+    ticker_document = r"""
     <!doctype html>
     <html lang="vi">
     <head>
         <meta charset="utf-8">
         <meta
             name="viewport"
-            content="width=device-width, initial-scale=1"
+            content="width=device-width, initial-scale=1, viewport-fit=cover"
         >
 
         <style>
-        :root {{
+        :root {
             color-scheme: light;
-        }}
+        }
 
-        * {{
+        * {
             box-sizing: border-box;
-        }}
+        }
 
         html,
-        body {{
+        body {
             width: 100%;
             height: 100%;
+            min-height: 100%;
 
             margin: 0;
             padding: 0;
 
             overflow: hidden;
-
             background: transparent;
-        }}
+        }
 
-        body {{
+        body {
             display: flex;
-            align-items: flex-start;
-
-            padding: 4px 0 7px 0;
+            align-items: stretch;
 
             font-family:
                 system-ui,
@@ -33297,20 +33256,18 @@ def _build_epl_news_ticker_document(
                 BlinkMacSystemFont,
                 "Segoe UI",
                 sans-serif;
-        }}
+        }
 
-        .ticker-shell {{
-            --ticker-duration:
-                {animation_duration}s;
+        .ticker-shell {
+            --ticker-duration: __TICKER_DURATION__s;
 
             display: flex;
             align-items: stretch;
 
             width: 100%;
             min-width: 0;
-
-            height: 40px;
-            min-height: 40px;
+            height: 100%;
+            min-height: 100%;
 
             margin: 0;
             padding: 0;
@@ -33325,23 +33282,18 @@ def _build_epl_news_ticker_document(
                     #26002D 100%
                 );
 
-            border:
-                1px solid
-                rgba(55, 0, 60, 0.34);
-
-            border-radius: 11px;
+            border: 0;
+            border-radius: 0;
 
             box-shadow:
-                0 7px 18px
-                rgba(55, 0, 60, 0.16),
-                inset 0 1px 0
-                rgba(255, 255, 255, 0.12);
+                inset 0 -1px 0 rgba(255, 255, 255, 0.14),
+                0 5px 16px rgba(55, 0, 60, 0.16);
 
             user-select: none;
             -webkit-user-select: none;
-        }}
+        }
 
-        .ticker-label {{
+        .ticker-label {
             position: relative;
             z-index: 2;
 
@@ -33349,20 +33301,17 @@ def _build_epl_news_ticker_document(
             align-items: center;
             justify-content: center;
 
-            flex:
-                0 0 76px;
+            flex: 0 0 92px;
 
-            width: 76px;
-            min-width: 76px;
-            max-width: 76px;
+            width: 92px;
+            min-width: 92px;
+            max-width: 92px;
+            height: 100%;
 
-            height: 40px;
-
-            gap: 6px;
+            gap: 7px;
 
             margin: 0;
-            padding:
-                0 13px 0 10px;
+            padding: 0 18px 0 13px;
 
             background:
                 linear-gradient(
@@ -33376,76 +33325,66 @@ def _build_epl_news_ticker_document(
             clip-path:
                 polygon(
                     0 0,
-                    calc(100% - 12px) 0,
+                    calc(100% - 14px) 0,
                     100% 50%,
-                    calc(100% - 12px) 100%,
+                    calc(100% - 14px) 100%,
                     0 100%
                 );
 
-            font-size: 10px;
-            font-weight: 900;
+            font-size: 11px;
+            font-weight: 950;
             line-height: 1;
-
             letter-spacing: 0.075em;
-
             text-transform: uppercase;
             white-space: nowrap;
-        }}
+        }
 
-        .ticker-label-dot {{
+        .ticker-label-dot {
             display: block;
 
-            flex:
-                0 0 6px;
+            flex: 0 0 6px;
 
             width: 6px;
             height: 6px;
 
             background: #00FF85;
 
-            transform:
-                rotate(45deg);
+            transform: rotate(45deg);
 
             box-shadow:
-                0 0 8px
-                rgba(0, 255, 133, 0.62);
-        }}
+                0 0 8px rgba(0, 255, 133, 0.62);
+        }
 
-        .ticker-label-text {{
+        .ticker-label-text {
             display: inline-block;
-
             color: #FFFFFF;
-
             white-space: nowrap;
-        }}
+        }
 
-        .ticker-viewport {{
+        .ticker-viewport {
             position: relative;
 
             display: block;
 
-            flex:
-                1 1 auto;
+            flex: 1 1 auto;
 
             width: auto;
             min-width: 0;
-
-            height: 40px;
+            height: 100%;
 
             margin: 0;
             padding: 0;
 
             overflow: hidden;
-        }}
+        }
 
-        .ticker-track {{
+        .ticker-track {
             display: flex;
             align-items: center;
 
             width: max-content;
             min-width: max-content;
-
-            height: 40px;
+            height: 100%;
 
             margin: 0;
             padding: 0;
@@ -33457,57 +33396,50 @@ def _build_epl_news_ticker_document(
                 var(--ticker-duration)
                 linear
                 infinite;
-        }}
+        }
 
-        .ticker-group {{
+        .ticker-group {
             display: inline-flex;
             align-items: center;
 
-            flex:
-                0 0 auto;
+            flex: 0 0 auto;
 
             width: max-content;
             min-width: max-content;
-
-            height: 40px;
+            height: 100%;
 
             margin: 0;
-            padding:
-                0 30px 0 22px;
-        }}
+            padding: 0 34px 0 25px;
+        }
 
-        .ticker-item {{
+        .ticker-item {
             display: inline-block;
 
-            flex:
-                0 0 auto;
+            flex: 0 0 auto;
 
             margin: 0;
             padding: 0;
 
             color: #FFFFFF;
 
-            font-size: 13px;
-            font-weight: 650;
+            font-size: 13.5px;
+            font-weight: 700;
             line-height: 1.2;
-
             letter-spacing: 0.002em;
 
             opacity: 1;
             visibility: visible;
             white-space: nowrap;
-        }}
+        }
 
-        .ticker-separator {{
+        .ticker-separator {
             display: inline-flex;
             align-items: center;
             justify-content: center;
 
-            flex:
-                0 0 auto;
+            flex: 0 0 auto;
 
-            margin:
-                0 20px;
+            margin: 0 21px;
             padding: 0;
 
             color: #00FF85;
@@ -33521,104 +33453,67 @@ def _build_epl_news_ticker_document(
 
             filter:
                 drop-shadow(
-                    0 0 5px
-                    rgba(0, 255, 133, 0.52)
+                    0 0 5px rgba(0, 255, 133, 0.52)
                 );
-        }}
+        }
 
-        @keyframes tickerMove {{
-            from {{
-                transform:
-                    translate3d(
-                        0,
-                        0,
-                        0
-                    );
-            }}
+        @keyframes tickerMove {
+            from {
+                transform: translate3d(0, 0, 0);
+            }
 
-            to {{
-                transform:
-                    translate3d(
-                        -50%,
-                        0,
-                        0
-                    );
-            }}
-        }}
+            to {
+                transform: translate3d(-50%, 0, 0);
+            }
+        }
 
-        @media (max-width: 768px) {{
-            body {{
-                padding-top: 3px;
-                padding-bottom: 6px;
-            }}
+        @media (max-width: 768px) {
+            .ticker-label {
+                flex-basis: 72px;
 
-            .ticker-shell {{
-                height: 35px;
-                min-height: 35px;
-
-                border-radius: 9px;
-            }}
-
-            .ticker-label {{
-                flex-basis: 62px;
-
-                width: 62px;
-                min-width: 62px;
-                max-width: 62px;
-
-                height: 35px;
+                width: 72px;
+                min-width: 72px;
+                max-width: 72px;
 
                 gap: 5px;
 
-                padding:
-                    0 9px 0 7px;
+                padding: 0 12px 0 9px;
 
-                font-size: 7.6px;
-                letter-spacing: 0.045em;
-            }}
+                font-size: 8.5px;
+                letter-spacing: 0.05em;
+            }
 
-            .ticker-label-dot {{
+            .ticker-label-dot {
                 flex-basis: 5px;
-
                 width: 5px;
                 height: 5px;
-            }}
+            }
 
-            .ticker-viewport,
-            .ticker-track,
-            .ticker-group {{
-                height: 35px;
-            }}
+            .ticker-group {
+                padding: 0 24px 0 18px;
+            }
 
-            .ticker-group {{
-                padding:
-                    0 22px 0 17px;
-            }}
-
-            .ticker-item {{
+            .ticker-item {
                 font-size: 11.5px;
-            }}
+                font-weight: 700;
+            }
 
-            .ticker-separator {{
-                margin:
-                    0 15px;
-
+            .ticker-separator {
+                margin: 0 15px;
                 font-size: 6px;
-            }}
-        }}
+            }
+        }
 
-        @media (
-            prefers-reduced-motion: reduce
-        ) {{
-            .ticker-track {{
+        @media (prefers-reduced-motion: reduce) {
+            .ticker-track {
                 animation: none;
                 transform: none;
-            }}
+            }
 
-            .ticker-group:nth-child(2) {{
+            .ticker-group:nth-child(2) {
                 display: none;
-            }}
-        }}
+            }
+        }
         </style>
     </head>
 
@@ -33626,47 +33521,445 @@ def _build_epl_news_ticker_document(
         <div
             class="ticker-shell"
             role="region"
-            aria-label="{safe_accessible_label}"
-            title="{safe_accessible_label}"
+            aria-label="__ACCESSIBLE_LABEL__"
+            title="__ACCESSIBLE_LABEL__"
         >
             <div
                 class="ticker-label"
                 aria-hidden="true"
             >
-                <span
-                    class="ticker-label-dot"
-                ></span>
-
-                <span
-                    class="ticker-label-text"
-                >
-                    NEWS
-                </span>
+                <span class="ticker-label-dot"></span>
+                <span class="ticker-label-text">NEWS</span>
             </div>
 
-            <div
-                class="ticker-viewport"
-            >
-                <div
-                    class="ticker-track"
-                >
-                    {track_markup}
+            <div class="ticker-viewport">
+                <div class="ticker-track">
+                    __TRACK_MARKUP__
                 </div>
             </div>
         </div>
+
+        <script>
+        (() => {
+            const parentWindow = window.parent;
+            const parentDocument = parentWindow.document;
+            const parentRoot = parentDocument.documentElement;
+
+            const controllerName =
+                "__eplNewsTickerLayoutController";
+
+            const oldController =
+                parentWindow[controllerName];
+
+            if (
+                oldController
+                && typeof oldController.cleanup === "function"
+            ) {
+                oldController.cleanup();
+            }
+
+            const frameElement = window.frameElement;
+
+            const host = frameElement
+                ? frameElement.closest(
+                    'div[class*="st-key-epl_news_ticker_host"]'
+                )
+                : null;
+
+            if (!host || !frameElement) {
+                return;
+            }
+
+            let animationFrame = 0;
+            let cleaned = false;
+            const delayedTimers = new Set();
+
+            const getVisibleRect = (element) => {
+                if (!element) {
+                    return null;
+                }
+
+                const style =
+                    parentWindow.getComputedStyle(element);
+
+                if (
+                    style.display === "none"
+                    || style.visibility === "hidden"
+                    || style.opacity === "0"
+                ) {
+                    return null;
+                }
+
+                const rect =
+                    element.getBoundingClientRect();
+
+                if (
+                    rect.width <= 0
+                    || rect.height <= 0
+                    || rect.right <= 0
+                    || rect.left >= parentWindow.innerWidth
+                ) {
+                    return null;
+                }
+
+                return rect;
+            };
+
+            const getFirstVisibleRect = (selector) => {
+                const candidates =
+                    parentDocument.querySelectorAll(selector);
+
+                for (const candidate of candidates) {
+                    const rect = getVisibleRect(candidate);
+
+                    if (rect) {
+                        return rect;
+                    }
+                }
+
+                return null;
+            };
+
+            const getHeaderRect = () =>
+                getFirstVisibleRect(
+                    'header[data-testid="stHeader"], '
+                    + '[data-testid="stHeader"]'
+                );
+
+            const getSidebarRect = () => {
+                const sidebarRect =
+                    getFirstVisibleRect(
+                        'section[data-testid="stSidebar"]'
+                    );
+
+                if (
+                    !sidebarRect
+                    || sidebarRect.width < 80
+                    || sidebarRect.right <= 1
+                ) {
+                    return null;
+                }
+
+                return sidebarRect;
+            };
+
+            const getMenuRect = () =>
+                getFirstVisibleRect(
+                    '[data-testid="stExpandSidebarButton"], '
+                    + '[data-testid="stSidebarCollapsedControl"], '
+                    + '[data-testid="stSidebarCollapseButton"]'
+                );
+
+            const syncLayout = () => {
+                const isMobile =
+                    parentWindow.matchMedia(
+                        "(max-width: 768px)"
+                    ).matches;
+
+                const viewportWidth =
+                    parentDocument.documentElement.clientWidth
+                    || parentWindow.innerWidth;
+
+                const headerRect = getHeaderRect();
+                const sidebarRect = getSidebarRect();
+                const menuRect = getMenuRect();
+
+                const fallbackHeight = isMobile
+                    ? 56
+                    : 60;
+
+                const headerHeight = Math.max(
+                    48,
+                    Math.round(
+                        headerRect
+                            ? headerRect.height
+                            : fallbackHeight
+                    )
+                );
+
+                const headerTop = Math.max(
+                    0,
+                    Math.round(
+                        headerRect
+                            ? headerRect.top
+                            : 0
+                    )
+                );
+
+                let leftOffset = 108;
+
+                if (sidebarRect) {
+                    leftOffset = Math.ceil(
+                        sidebarRect.right
+                    );
+                } else if (menuRect) {
+                    leftOffset = Math.ceil(
+                        menuRect.right + 8
+                    );
+                }
+
+                leftOffset = Math.max(
+                    0,
+                    Math.min(
+                        leftOffset,
+                        viewportWidth - 72
+                    )
+                );
+
+                const availableWidth =
+                    viewportWidth - leftOffset;
+
+                host.style.setProperty(
+                    "position",
+                    "fixed",
+                    "important"
+                );
+
+                host.style.setProperty(
+                    "top",
+                    headerTop + "px",
+                    "important"
+                );
+
+                host.style.setProperty(
+                    "left",
+                    leftOffset + "px",
+                    "important"
+                );
+
+                host.style.setProperty(
+                    "right",
+                    "0px",
+                    "important"
+                );
+
+                host.style.setProperty(
+                    "width",
+                    "auto",
+                    "important"
+                );
+
+                host.style.setProperty(
+                    "height",
+                    headerHeight + "px",
+                    "important"
+                );
+
+                host.style.setProperty(
+                    "visibility",
+                    availableWidth >= 72
+                        ? "visible"
+                        : "hidden",
+                    "important"
+                );
+
+                frameElement.style.setProperty(
+                    "width",
+                    "100%",
+                    "important"
+                );
+
+                frameElement.style.setProperty(
+                    "height",
+                    headerHeight + "px",
+                    "important"
+                );
+
+                parentRoot.style.setProperty(
+                    "--epl-news-ticker-header-height",
+                    headerHeight + "px"
+                );
+
+                parentRoot.style.setProperty(
+                    "--epl-news-ticker-left",
+                    leftOffset + "px"
+                );
+            };
+
+            const scheduleSync = () => {
+                parentWindow.cancelAnimationFrame(
+                    animationFrame
+                );
+
+                animationFrame =
+                    parentWindow.requestAnimationFrame(
+                        syncLayout
+                    );
+            };
+
+            const scheduleSyncBurst = () => {
+                scheduleSync();
+
+                for (const delay of [80, 180, 320, 520]) {
+                    const timer = parentWindow.setTimeout(
+                        () => {
+                            delayedTimers.delete(timer);
+                            scheduleSync();
+                        },
+                        delay
+                    );
+
+                    delayedTimers.add(timer);
+                }
+            };
+
+            const mutationObserver =
+                new parentWindow.MutationObserver(
+                    scheduleSyncBurst
+                );
+
+            mutationObserver.observe(
+                parentDocument.body,
+                {
+                    childList: true,
+                    subtree: true,
+                    attributes: true,
+                    attributeFilter: [
+                        "class",
+                        "aria-expanded"
+                    ]
+                }
+            );
+
+            const resizeObserver =
+                "ResizeObserver" in parentWindow
+                ? new parentWindow.ResizeObserver(
+                    scheduleSync
+                )
+                : null;
+
+            if (resizeObserver) {
+                const resizeTargets = [
+                    parentDocument.querySelector(
+                        'header[data-testid="stHeader"], '
+                        + '[data-testid="stHeader"]'
+                    ),
+                    parentDocument.querySelector(
+                        'section[data-testid="stSidebar"]'
+                    ),
+                    parentDocument.querySelector(
+                        '[data-testid="stExpandSidebarButton"], '
+                        + '[data-testid="stSidebarCollapsedControl"], '
+                        + '[data-testid="stSidebarCollapseButton"]'
+                    )
+                ].filter(Boolean);
+
+                resizeTargets.forEach((target) => {
+                    resizeObserver.observe(target);
+                });
+            }
+
+            parentWindow.addEventListener(
+                "resize",
+                scheduleSyncBurst,
+                { passive: true }
+            );
+
+            parentWindow.addEventListener(
+                "orientationchange",
+                scheduleSyncBurst,
+                { passive: true }
+            );
+
+            if (parentWindow.visualViewport) {
+                parentWindow.visualViewport
+                    .addEventListener(
+                        "resize",
+                        scheduleSyncBurst,
+                        { passive: true }
+                    );
+
+                parentWindow.visualViewport
+                    .addEventListener(
+                        "scroll",
+                        scheduleSync,
+                        { passive: true }
+                    );
+            }
+
+            const cleanup = () => {
+                if (cleaned) {
+                    return;
+                }
+
+                cleaned = true;
+
+                parentWindow.cancelAnimationFrame(
+                    animationFrame
+                );
+
+                delayedTimers.forEach((timer) => {
+                    parentWindow.clearTimeout(timer);
+                });
+
+                delayedTimers.clear();
+
+                mutationObserver.disconnect();
+
+                if (resizeObserver) {
+                    resizeObserver.disconnect();
+                }
+
+                parentWindow.removeEventListener(
+                    "resize",
+                    scheduleSyncBurst
+                );
+
+                parentWindow.removeEventListener(
+                    "orientationchange",
+                    scheduleSyncBurst
+                );
+
+                if (parentWindow.visualViewport) {
+                    parentWindow.visualViewport
+                        .removeEventListener(
+                            "resize",
+                            scheduleSyncBurst
+                        );
+
+                    parentWindow.visualViewport
+                        .removeEventListener(
+                            "scroll",
+                            scheduleSync
+                        );
+                }
+            };
+
+            syncLayout();
+            scheduleSyncBurst();
+
+            parentWindow[controllerName] = {
+                cleanup
+            };
+        })();
+        </script>
     </body>
     </html>
     """
 
+    return (
+        ticker_document
+        .replace(
+            "__TICKER_DURATION__",
+            str(animation_duration)
+        )
+        .replace(
+            "__ACCESSIBLE_LABEL__",
+            safe_accessible_label
+        )
+        .replace(
+            "__TRACK_MARKUP__",
+            track_markup
+        )
+    )
 
 def _render_epl_news_ticker_content():
     """
-    Render ticker trong iframe độc lập bằng components.html.
+    Render ticker trong iframe độc lập và đặt host cố định lên toàn bộ header.
 
-    Đây là phần sửa chính cho lỗi thanh ticker có khung nhưng không có chữ:
-    st.markdown trước đó có thể chia vỡ HTML lồng nhau và CSS của app có thể
-    tác động vào cấu trúc ticker. Iframe tách hoàn toàn ticker khỏi hai nguồn
-    xung đột đó.
+    Phần bên trái được chừa đúng theo nút Menu. Khi sidebar mở, script trong
+    ticker tự đo mép phải sidebar và dịch ticker theo, vì vậy ticker không đè
+    lên nút Menu nhưng vẫn che toàn bộ cụm Share/Favorite/Edit bên phải.
     """
 
     if not NEWS_TICKER_ENABLED:
@@ -33706,74 +33999,110 @@ def _render_epl_news_ticker_content():
     if not ticker_document:
         return
 
-    ticker_host_css = """
+    ticker_host_css = r"""
     <style>
     :root {
-        --epl-streamlit-header-height: 3.75rem;
+        --epl-news-ticker-header-height: 60px;
+        --epl-news-ticker-left: 108px;
     }
 
-    /*
-     * Kéo riêng ticker lên đúng một chiều cao header mặc định
-     * mà không làm thay đổi vị trí hero và nội dung trang bên dưới.
-     */
+    /* Header gốc ở dưới ticker. */
+    header[data-testid="stHeader"],
+    [data-testid="stHeader"] {
+        z-index: 1000000 !important;
+    }
+
+    /* Ticker che toàn bộ phần header còn lại tới sát mép phải viewport. */
     div[class*="st-key-epl_news_ticker_host"] {
-        position: relative !important;
-        z-index: 1000001 !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: var(--epl-news-ticker-left) !important;
+        right: 0 !important;
+        bottom: auto !important;
 
-        width: 100% !important;
-        max-width: 100% !important;
+        z-index: 1000002 !important;
 
-        margin-top:
-            calc(-1 * var(--epl-streamlit-header-height)) !important;
-        margin-bottom: 12px !important;
+        width: auto !important;
+        min-width: 0 !important;
+        max-width: none !important;
 
+        height: var(--epl-news-ticker-header-height) !important;
+        min-height: var(--epl-news-ticker-header-height) !important;
+        max-height: var(--epl-news-ticker-header-height) !important;
+
+        margin: 0 !important;
         padding: 0 !important;
 
-        overflow: visible !important;
+        overflow: hidden !important;
+        pointer-events: auto !important;
     }
 
     div[class*="st-key-epl_news_ticker_host"]
     > :is(
         div[data-testid="stVerticalBlock"],
         div[data-testid="stVerticalBlockBorderWrapper"]
-    ) {
-        width: 100% !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        gap: 0 !important;
-        overflow: visible !important;
-    }
-
+    ),
+    div[class*="st-key-epl_news_ticker_host"]
+    div[data-testid="stVerticalBlock"],
     div[class*="st-key-epl_news_ticker_host"]
     div[data-testid="stElementContainer"] {
         width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+
+        height: 100% !important;
+        min-height: 100% !important;
+        max-height: 100% !important;
+
         margin: 0 !important;
         padding: 0 !important;
+        gap: 0 !important;
+
+        overflow: hidden !important;
     }
 
     div[class*="st-key-epl_news_ticker_host"] iframe {
         display: block !important;
+
         width: 100% !important;
-        height: 52px !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+
+        height: 100% !important;
+        min-height: 100% !important;
+        max-height: 100% !important;
 
         margin: 0 !important;
         padding: 0 !important;
 
         border: 0 !important;
+        border-radius: 0 !important;
         background: transparent !important;
+    }
+
+    /* Sidebar và nút Menu luôn nằm trên ticker. */
+    section[data-testid="stSidebar"] {
+        z-index: 1000005 !important;
+    }
+
+    [data-testid="stExpandSidebarButton"],
+    [data-testid="stSidebarCollapsedControl"],
+    [data-testid="stSidebarCollapseButton"],
+    [data-testid="stExpandSidebarButton"] button,
+    [data-testid="stSidebarCollapsedControl"] button,
+    [data-testid="stSidebarCollapseButton"] button,
+    section[data-testid="stSidebar"]
+    button[data-testid="stBaseButton-headerNoPadding"],
+    section[data-testid="stSidebar"]
+    button[kind="headerNoPadding"] {
+        position: relative !important;
+        z-index: 1000006 !important;
     }
 
     @media (max-width: 768px) {
         :root {
-            --epl-streamlit-header-height: 3.5rem;
-        }
-
-        div[class*="st-key-epl_news_ticker_host"] {
-            margin-bottom: 10px !important;
-        }
-
-        div[class*="st-key-epl_news_ticker_host"] iframe {
-            height: 44px !important;
+            --epl-news-ticker-header-height: 56px;
+            --epl-news-ticker-left: 108px;
         }
     }
     </style>
@@ -33789,7 +34118,7 @@ def _render_epl_news_ticker_content():
     ):
         components.html(
             ticker_document,
-            height=52,
+            height=64,
             scrolling=False
         )
 
@@ -33960,8 +34289,7 @@ def main():
             "Lịch thi đấu & dự đoán",
             "Dự đoán của tôi",
             "Bảng xếp hạng",
-            "Thống kê giải đấu",
-            "Phân tích tổng quan"
+            "Thống kê giải đấu"
         ]
 
         if user["role"] == "admin":
@@ -34067,7 +34395,6 @@ def main():
             "Dự đoán của tôi": page_my_predictions,
             "Bảng xếp hạng": page_leaderboard,
             "Thống kê giải đấu": page_competition_stats,
-            "Phân tích tổng quan": page_dashboard,
             "Admin": page_admin
         }
 
