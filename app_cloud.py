@@ -3724,83 +3724,79 @@ def inject_epl_big_match_card_css():
 
 def inject_main_page_lift_css():
     """
-    Xóa triệt để khoảng trống giả trước nội dung chính trên mobile.
+    Khôi phục nguyên trạng bố cục desktop của phiên bản trước, đồng thời giữ
+    cơ chế xóa khoảng trống triệt để chỉ dành riêng cho mobile.
 
-    Nguyên nhân không chỉ là padding của block-container. Những widget fixed
-    như avatar, ticker và nút điểm danh vẫn có các wrapper cấp cao nằm trong
-    stVerticalBlock của Streamlit. Wrapper con có thể đã position: fixed hoặc
-    cao 0, nhưng slot cấp cao và `gap` của stVerticalBlock vẫn tiếp tục chiếm
-    diện tích trong luồng trang.
+    Desktop (>= 769px):
+    - Sử dụng đúng CSS và flow trước bản sửa khoảng trống gần nhất.
+    - Không gắn class nén layout, không xóa gap của stVerticalBlock cấp cao.
 
-    Cách xử lý:
-    - CSS đặt kích thước dự phòng cho các utility wrapper.
-    - JavaScript tìm đúng slot trực tiếp của từng utility trong block chính.
-    - Đưa toàn bộ các slot đó ra khỏi normal flow.
-    - Xóa riêng gap của block cấp cao, không tác động gap bên trong nội dung.
-    - Đồng bộ lại sau mọi Streamlit rerun/fragment rerender.
+    Mobile (<= 768px):
+    - Tìm đúng các slot utility/fixed còn chiếm diện tích.
+    - Đưa chúng ra khỏi normal flow.
+    - Xóa gap thừa trước main_page_content_shell.
+    - Đồng bộ sau Streamlit rerun và thay đổi viewport.
     """
     st.markdown(
         """
         <style>
         /* =====================================================
-           UTILITY/FIXED ELEMENT KHÔNG ĐƯỢC CHIẾM CHỖ
+           PHẦN DÙNG CHUNG, GIỮ ĐÚNG HÀNH VI CỦA BẢN TRƯỚC
            ===================================================== */
 
         div[class*="st-key-global_ui_bootstrap"],
         div[class*="st-key-matches_page_ui_bootstrap"],
         div[class*="st-key-daily_checkin_fab_script_host"] {
             position: absolute !important;
+
             top: 0 !important;
             left: 0 !important;
 
-            width: 0 !important;
+            width: 1px !important;
             min-width: 0 !important;
-            max-width: 0 !important;
+            max-width: 1px !important;
 
-            height: 0 !important;
+            height: 1px !important;
             min-height: 0 !important;
-            max-height: 0 !important;
+            max-height: 1px !important;
 
             margin: 0 !important;
             padding: 0 !important;
-            border: 0 !important;
 
             overflow: visible !important;
+            pointer-events: none !important;
         }
 
         /*
-         * Class này được JavaScript gắn vào đúng flex item trực tiếp của
-         * stVerticalBlock cấp cao. Đây mới là lớp thực sự tạo khoảng trống.
+         * Đây là cơ chế wrapper nguyên bản của phiên bản trước.
+         * Nó tiếp tục được giữ cho desktop để giao diện không thay đổi.
          */
-        .epl-top-level-utility-slot {
-            position: absolute !important;
-            top: 0 !important;
-            left: 0 !important;
-
-            width: 0 !important;
-            min-width: 0 !important;
-            max-width: 0 !important;
-
-            height: 0 !important;
-            min-height: 0 !important;
-            max-height: 0 !important;
-
-            flex: 0 0 0 !important;
-
-            margin: 0 !important;
-            padding: 0 !important;
-            border: 0 !important;
-
-            overflow: visible !important;
-        }
-
-        .epl-top-level-utility-slot
-        > :is(
-            div[data-testid="stElementContainer"],
-            div[data-testid="stFragment"],
-            div[data-testid="stVerticalBlockBorderWrapper"],
-            div[data-testid="stVerticalBlock"]
+        div[data-testid="stElementContainer"]:has(
+            div[class*="st-key-global_ui_bootstrap"]
+        ),
+        div[data-testid="stElementContainer"]:has(
+            div[class*="st-key-matches_page_ui_bootstrap"]
+        ),
+        div[data-testid="stElementContainer"]:has(
+            div[class*="st-key-daily_checkin_fab_script_host"]
+        ),
+        div[data-testid="stElementContainer"]:has(
+            div[class*="st-key-top_right_avatar_popover_shell"]
+        ),
+        div[data-testid="stElementContainer"]:has(
+            div[class*="st-key-daily_checkin_shortcut_button"]
+        ),
+        div[data-testid="stElementContainer"]:has(
+            div[class*="st-key-epl_news_ticker_host"]
+        ),
+        div[data-testid="stFragment"]:has(
+            div[class*="st-key-epl_news_ticker_host"]
         ) {
+            position: absolute !important;
+
+            top: 0 !important;
+            left: 0 !important;
+
             width: 0 !important;
             min-width: 0 !important;
             max-width: 0 !important;
@@ -3811,41 +3807,25 @@ def inject_main_page_lift_css():
 
             margin: 0 !important;
             padding: 0 !important;
-            border: 0 !important;
 
+            border: 0 !important;
             overflow: visible !important;
         }
 
-        /*
-         * Chỉ block cấp cao chứa utility slots và main_page_content_shell
-         * được bỏ gap. Các block bên trong trang vẫn giữ nguyên khoảng cách.
-         */
-        .epl-main-top-vertical-block {
-            position: relative !important;
+        div[class*="st-key-global_ui_bootstrap"]
+        div[data-testid="stVerticalBlock"],
+        div[class*="st-key-matches_page_ui_bootstrap"]
+        div[data-testid="stVerticalBlock"],
+        div[class*="st-key-daily_checkin_fab_script_host"]
+        div[data-testid="stVerticalBlock"] {
+            min-height: 0 !important;
             gap: 0 !important;
-            row-gap: 0 !important;
-            column-gap: 0 !important;
-            margin-top: 0 !important;
-            padding-top: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
         }
-
-        .epl-main-content-flow-slot {
-            width: 100% !important;
-            min-width: 0 !important;
-            max-width: 100% !important;
-            margin-top: 0 !important;
-            padding-top: 0 !important;
-        }
-
-        /* =====================================================
-           NỘI DUNG CHÍNH KHÔNG CÓ KHOẢNG TRỐNG PHỤ
-           ===================================================== */
 
         div[class*="st-key-main_page_content_shell"] {
             position: relative !important;
-            width: 100% !important;
-            min-width: 0 !important;
-            max-width: 100% !important;
             margin-top: 0 !important;
             padding-top: 0 !important;
         }
@@ -3862,10 +3842,92 @@ def inject_main_page_lift_css():
         div[class*="st-key-main_page_content_shell"]
         div[data-testid="stElementContainer"]:first-child {
             margin-top: 0 !important;
-            padding-top: 0 !important;
         }
 
+        /* =====================================================
+           MOBILE ONLY: NÉN TRIỆT ĐỂ CÁC SLOT RỖNG
+           Tuyệt đối không áp dụng các rule này cho desktop.
+           ===================================================== */
+
         @media (max-width: 768px) {
+            div[class*="st-key-global_ui_bootstrap"],
+            div[class*="st-key-matches_page_ui_bootstrap"],
+            div[class*="st-key-daily_checkin_fab_script_host"] {
+                width: 0 !important;
+                min-width: 0 !important;
+                max-width: 0 !important;
+
+                height: 0 !important;
+                min-height: 0 !important;
+                max-height: 0 !important;
+
+                border: 0 !important;
+            }
+
+            /*
+             * JavaScript chỉ gắn class này khi viewport là mobile.
+             */
+            .epl-top-level-utility-slot {
+                position: absolute !important;
+                top: 0 !important;
+                left: 0 !important;
+
+                width: 0 !important;
+                min-width: 0 !important;
+                max-width: 0 !important;
+
+                height: 0 !important;
+                min-height: 0 !important;
+                max-height: 0 !important;
+
+                flex: 0 0 0 !important;
+
+                margin: 0 !important;
+                padding: 0 !important;
+                border: 0 !important;
+
+                overflow: visible !important;
+            }
+
+            .epl-top-level-utility-slot
+            > :is(
+                div[data-testid="stElementContainer"],
+                div[data-testid="stFragment"],
+                div[data-testid="stVerticalBlockBorderWrapper"],
+                div[data-testid="stVerticalBlock"]
+            ) {
+                width: 0 !important;
+                min-width: 0 !important;
+                max-width: 0 !important;
+
+                height: 0 !important;
+                min-height: 0 !important;
+                max-height: 0 !important;
+
+                margin: 0 !important;
+                padding: 0 !important;
+                border: 0 !important;
+
+                overflow: visible !important;
+            }
+
+            .epl-main-top-vertical-block {
+                position: relative !important;
+                gap: 0 !important;
+                row-gap: 0 !important;
+                column-gap: 0 !important;
+                margin-top: 0 !important;
+                padding-top: 0 !important;
+            }
+
+            .epl-main-content-flow-slot {
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: 100% !important;
+                margin-top: 0 !important;
+                padding-top: 0 !important;
+            }
+
             html,
             body,
             [data-testid="stAppViewContainer"],
@@ -3879,16 +3941,22 @@ def inject_main_page_lift_css():
             .block-container,
             [data-testid="stMainBlockContainer"],
             [data-testid="stAppViewBlockContainer"] {
-                /*
-                 * Không dùng 56px cố định. Ticker ghi chiều cao header thật
-                 * vào CSS variable, nhờ đó mobile thật và trình giả lập đều
-                 * có cùng khoảng cách.
-                 */
                 padding-top: calc(
                     var(--epl-news-ticker-header-height, 56px)
                     + 8px
                 ) !important;
                 margin-top: 0 !important;
+            }
+
+            div[class*="st-key-main_page_content_shell"] {
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: 100% !important;
+            }
+
+            div[class*="st-key-main_page_content_shell"]
+            div[data-testid="stElementContainer"]:first-child {
+                padding-top: 0 !important;
             }
 
             div[class*="st-key-main_page_content_shell"]
@@ -3907,18 +3975,27 @@ def inject_main_page_lift_css():
         (() => {
             const parentWindow = window.parent;
             const parentDocument = parentWindow.document;
+            const mobileQuery = parentWindow.matchMedia(
+                "(max-width: 768px)"
+            );
 
             const controllerKey =
-                "__eplMainTopFlowCompactorV2";
+                "__eplMainTopFlowCompactorV3MobileOnly";
 
-            const oldController =
-                parentWindow[controllerKey];
+            const legacyControllerKeys = [
+                "__eplMainTopFlowCompactorV2",
+                controllerKey
+            ];
 
-            if (
-                oldController
-                && typeof oldController.cleanup === "function"
-            ) {
-                oldController.cleanup();
+            for (const key of legacyControllerKeys) {
+                const oldController = parentWindow[key];
+
+                if (
+                    oldController
+                    && typeof oldController.cleanup === "function"
+                ) {
+                    oldController.cleanup();
+                }
             }
 
             const utilitySelectors = [
@@ -3934,7 +4011,7 @@ def inject_main_page_lift_css():
             let cleaned = false;
             const delayedTimers = new Set();
 
-            const clearOldClasses = () => {
+            const clearCompactorClasses = () => {
                 parentDocument
                     .querySelectorAll(
                         ".epl-top-level-utility-slot"
@@ -4020,8 +4097,17 @@ def inject_main_page_lift_css():
                 );
             };
 
-            const compactTopFlow = () => {
+            const compactMobileTopFlow = () => {
                 if (cleaned) {
+                    return;
+                }
+
+                /*
+                 * Quan trọng: desktop phải trở về nguyên trạng.
+                 * Không gắn bất kỳ class nén layout nào khi rộng > 768px.
+                 */
+                if (!mobileQuery.matches) {
+                    clearCompactorClasses();
                     return;
                 }
 
@@ -4041,7 +4127,7 @@ def inject_main_page_lift_css():
                     return;
                 }
 
-                clearOldClasses();
+                clearCompactorClasses();
 
                 topVerticalBlock.classList.add(
                     "epl-main-top-vertical-block"
@@ -4092,11 +4178,28 @@ def inject_main_page_lift_css():
 
                 animationFrame =
                     parentWindow.requestAnimationFrame(
-                        compactTopFlow
+                        compactMobileTopFlow
                     );
             };
 
+            const clearDelayedTimers = () => {
+                delayedTimers.forEach((timer) => {
+                    parentWindow.clearTimeout(timer);
+                });
+                delayedTimers.clear();
+            };
+
             const scheduleCompactBurst = () => {
+                clearDelayedTimers();
+
+                if (!mobileQuery.matches) {
+                    parentWindow.cancelAnimationFrame(
+                        animationFrame
+                    );
+                    clearCompactorClasses();
+                    return;
+                }
+
                 scheduleCompact();
 
                 for (const delay of [60, 160, 320, 620]) {
@@ -4114,7 +4217,11 @@ def inject_main_page_lift_css():
 
             const observer =
                 new parentWindow.MutationObserver(
-                    scheduleCompact
+                    () => {
+                        if (mobileQuery.matches) {
+                            scheduleCompact();
+                        }
+                    }
                 );
 
             observer.observe(
@@ -4125,22 +4232,35 @@ def inject_main_page_lift_css():
                 }
             );
 
+            const viewportHandler = () => {
+                scheduleCompactBurst();
+            };
+
+            const mediaHandler = () => {
+                scheduleCompactBurst();
+            };
+
             parentWindow.addEventListener(
                 "resize",
-                scheduleCompactBurst,
+                viewportHandler,
                 { passive: true }
             );
 
             parentWindow.addEventListener(
                 "orientationchange",
-                scheduleCompactBurst,
+                viewportHandler,
                 { passive: true }
+            );
+
+            mobileQuery.addEventListener(
+                "change",
+                mediaHandler
             );
 
             if (parentWindow.visualViewport) {
                 parentWindow.visualViewport.addEventListener(
                     "resize",
-                    scheduleCompactBurst,
+                    viewportHandler,
                     { passive: true }
                 );
             }
@@ -4158,35 +4278,40 @@ def inject_main_page_lift_css():
                     animationFrame
                 );
 
-                delayedTimers.forEach((timer) => {
-                    parentWindow.clearTimeout(timer);
-                });
-                delayedTimers.clear();
+                clearDelayedTimers();
+                clearCompactorClasses();
 
                 parentWindow.removeEventListener(
                     "resize",
-                    scheduleCompactBurst
+                    viewportHandler
                 );
 
                 parentWindow.removeEventListener(
                     "orientationchange",
-                    scheduleCompactBurst
+                    viewportHandler
+                );
+
+                mobileQuery.removeEventListener(
+                    "change",
+                    mediaHandler
                 );
 
                 if (parentWindow.visualViewport) {
                     parentWindow.visualViewport
                         .removeEventListener(
                             "resize",
-                            scheduleCompactBurst
+                            viewportHandler
                         );
                 }
             };
 
             parentWindow[controllerKey] = {
                 cleanup,
-                compactTopFlow
+                compactMobileTopFlow
             };
 
+            /* Xóa class còn sót từ bản trước trước khi áp dụng viewport mới. */
+            clearCompactorClasses();
             scheduleCompactBurst();
         })();
         </script>
