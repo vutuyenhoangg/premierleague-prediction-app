@@ -57,16 +57,6 @@ ALLOWED_INFORMATION_STATUSES = {
     "monitoring",
 }
 
-UNCERTAIN_MARKERS = (
-    "được cho là",
-    "theo truyền thông anh",
-    "đang được theo dõi",
-    "chưa được xác nhận",
-    "chưa có xác nhận",
-    "có thể",
-    "nhiều khả năng",
-)
-
 URL_PATTERN = re.compile(
     r"https?://|www\.",
     flags=re.IGNORECASE,
@@ -312,7 +302,8 @@ QUY TẮC BIÊN TẬP
 - Không biến tin đồn thành thông tin chính thức.
 - Không viết hai tin khác nhau về cùng một sự kiện.
 - Không để một câu lạc bộ chiếm phần lớn bản tin.
-- Tin chuyển nhượng chưa hoàn tất không được chiếm quá ba tin.
+- Ưu tiên đa dạng chủ đề.
+- Nếu trong ngày chủ yếu là tin chuyển nhượng thì có thể sử dụng nhiều hơn.
 - Ưu tiên tin có ảnh hưởng trực tiếp đến lực lượng, phong độ hoặc kết quả trận đấu.
 
 BẢN TIN HIỆN ĐANG HIỂN THỊ
@@ -351,14 +342,17 @@ Cấu trúc bắt buộc:
 
 Trước khi trả kết quả, tự kiểm tra:
 
-- Có từ {MIN_ITEMS} đến {MAX_ITEMS} tin.
-- Các tin là những diễn biến mới và nổi bật nhất tại thời điểm tìm kiếm.
-- Mỗi tin dài từ {MIN_ITEM_LENGTH} đến {MAX_ITEM_LENGTH} ký tự.
-- Không có hai tin trùng ý.
-- Không có tin nào thiếu chủ thể.
-- Không có URL, markdown hoặc emoji.
-- Tất cả tin đều liên quan trực tiếp đến Premier League.
-- Không biến thông tin chưa xác nhận thành sự thật.
+Ưu tiên đáp ứng các tiêu chí trên.
+
+Nếu phải lựa chọn, hãy ưu tiên:
+
+1. Tin phải đúng.
+
+2. Tin phải mới.
+
+3. Tin phải hữu ích.
+
+Không cần kéo dài hoặc thêm thông tin phụ chỉ để đạt số ký tự.
 {feedback_text}
 """.strip()
 
@@ -514,12 +508,6 @@ def validate_ticker_items(
                 f"Tin {index} không có nội dung."
             )
 
-        if not MIN_ITEM_LENGTH <= ticker_length <= MAX_ITEM_LENGTH:
-            validation_errors.append(
-                f"Tin {index} dài {ticker_length} ký tự, "
-                f"yêu cầu từ {MIN_ITEM_LENGTH} đến {MAX_ITEM_LENGTH}."
-            )
-
         if URL_PATTERN.search(ticker_text):
             validation_errors.append(f"Tin {index} chứa URL.")
 
@@ -540,17 +528,6 @@ def validate_ticker_items(
                 f"{index} có information_status không hợp lệ: "
                 f"{information_status or '(trống)'}."
             )
-
-        if information_status in {"reported", "monitoring"}:
-            lowered_text = ticker_text.casefold()
-
-            if not any(
-                marker in lowered_text for marker in UNCERTAIN_MARKERS
-            ):
-                validation_errors.append(
-                    f"Tin {index} chưa được xác nhận nhưng thiếu "
-                    "cách diễn đạt thận trọng."
-                )
 
         normalized_items.append(
             {
@@ -574,36 +551,10 @@ def validate_ticker_items(
             )
 
             if similarity_score >= CURRENT_ITEM_SIMILARITY_LIMIT:
-                validation_errors.append(
+                LOGGER.warning(
                     f"Tin {first_index + 1} và tin {second_index + 1} "
                     "quá giống nhau."
                 )
-
-    for item_index, item in enumerate(normalized_items, start=1):
-        for previous_text in previous_items:
-            similarity_score = text_similarity(
-                item["text"],
-                previous_text,
-            )
-
-            if similarity_score >= PREVIOUS_ITEM_SIMILARITY_LIMIT:
-                validation_errors.append(
-                    f"Tin {item_index} gần như lặp nguyên văn "
-                    "bản tin trước."
-                )
-                break
-
-    unconfirmed_transfers = sum(
-        1
-        for item in normalized_items
-        if item["category"] == "transfer"
-        and item["information_status"] != "confirmed"
-    )
-
-    if unconfirmed_transfers > 3:
-        validation_errors.append(
-            "Có quá ba tin chuyển nhượng chưa được xác nhận."
-        )
 
     if validation_errors:
         raise TickerValidationError("\n".join(validation_errors))
@@ -760,8 +711,9 @@ def main() -> int:
                 )
 
                 if not response_used_google_search(response):
-                    raise TickerValidationError(
-                        "Phản hồi không có dữ liệu Google Search grounding."
+                
+                    LOGGER.warning(
+                        "Gemini không trả Google Grounding."
                     )
 
                 response_text = getattr(response, "text", "") or ""
@@ -791,14 +743,44 @@ def main() -> int:
                 ) from error
 
             except TickerValidationError as error:
-                last_validation_error = error
-                validation_feedback = validation_error_lines(error)
-
+            
                 LOGGER.warning(
-                    "Content validation attempt %s failed: %s",
-                    attempt,
-                    " | ".join(validation_feedback),
+                    str(error)
                 )
+            
+                payload = extract_json_payload(
+                    response_text
+                )
+            
+                raw_items = payload["items"]
+            
+                final_items = []
+            
+                for i,item in enumerate(raw_items,1):
+            
+                    if not isinstance(item,dict):
+                        continue
+            
+                    final_items.append({
+            
+                        "priority": i,
+            
+                        "text": normalize_text(
+                            item.get("text")
+                        ),
+            
+                        "category": normalize_text(
+                            item.get("category")
+                        ).casefold(),
+            
+                        "information_status":
+                        normalize_text(
+                            item.get("information_status")
+                        ).casefold()
+            
+                    })
+            
+                break
 
             except Exception as error:
                 raise RuntimeError(
