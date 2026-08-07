@@ -47,6 +47,7 @@ REQUEST_TIMEOUT_SECONDS = 30
 MATCH_COLUMNS = [
     "match_id",
     "source_match_id",
+    "season_slug",
     "round_name",
     "stage_type",
     "is_knockout",
@@ -180,6 +181,12 @@ MATCH_LINE_RE = re.compile(
     r"(\d+)-(\d+)"
     r"(?:\s*\((\d+)-(\d+)\))?"
     r"\s+(.+?)\s*$"
+)
+# Trận CHƯA đá: openfootball dùng chữ "v" thay cho tỉ số, ví dụ:
+# "20:00  Arsenal FC              v Coventry City FC"
+UNPLAYED_MATCH_LINE_RE = re.compile(
+    r"^(?:(\d{1,2}:\d{2})\s+)?"
+    r"(.+?)\s+v\s+(.+?)\s*$"
 )
 GOAL_ITEM_RE = re.compile(
     r"([A-Za-zÀ-ÖØ-öø-ÿ.'\-]+(?:\s+[A-Za-zÀ-ÖØ-öø-ÿ.'\-]+)*)\s+"
@@ -364,6 +371,31 @@ def parse_openfootball_matches(
                 "away_score": int(away_score),
                 "ht_home": int(ht_home) if ht_home is not None else None,
                 "ht_away": int(ht_away) if ht_away is not None else None,
+                "raw_goals": "",
+            }
+            continue
+
+        # Không khớp dòng có tỉ số -> thử dòng CHƯA đá (dùng "v").
+        # Phải thử SAU pattern có tỉ số, vì "Team A  2-1  Team B" cũng
+        # có khoảng trắng bao quanh có thể trông giống nếu thử trước.
+        unplayed_match = UNPLAYED_MATCH_LINE_RE.match(line)
+        if unplayed_match and current_date is not None:
+            flush_pending()
+            time_str, home_name, away_name = unplayed_match.groups()
+
+            if time_str:
+                current_time = time_str
+
+            pending = {
+                "round": current_round,
+                "date": current_date,
+                "time": current_time or "15:00",
+                "home_name": home_name.strip(),
+                "away_name": away_name.strip(),
+                "home_score": None,
+                "away_score": None,
+                "ht_home": None,
+                "ht_away": None,
                 "raw_goals": "",
             }
             continue
@@ -657,6 +689,7 @@ def normalize_matches(
             {
                 "match_id": match_id,
                 "source_match_id": source_match_id,
+                "season_slug": SEASON_SLUG,
                 "round_name": round_name,
                 "stage_type": "league",
                 "is_knockout": False,
