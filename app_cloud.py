@@ -33765,10 +33765,241 @@ def page_leaderboard():
         st.rerun()
 
 
+def delete_match_score(match_id: int):
+    """
+    Xoá tỉ số của 1 trận — đưa trận về trạng thái CHƯA ĐÁ.
+
+    Không xoá bản thân trận đấu (lịch thi đấu vẫn giữ nguyên), chỉ xoá
+    kết quả. Điểm mọi dự đoán liên quan tới trận này cũng được đưa về 0
+    vì trận không còn kết quả để tính điểm. Danh sách cầu thủ ghi bàn của
+    trận cũng bị xoá theo, vì một trận chưa đá thì không thể có người ghi
+    bàn.
+
+    Dữ liệu này vẫn có thể bị ghi đè bình thường ở lần crawl kế tiếp,
+    giống hệt tỉ số/scorer do crawler tự ghi — không cần thêm cờ đặc biệt
+    nào ở phía crawler.
+    """
+    match = get_match_by_id(match_id)
+
+    if match is None:
+        raise ValueError("Không tìm thấy trận đấu.")
+
+    execute_sql(
+        """
+        UPDATE matches
+        SET
+            score_ft_home = NULL,
+            score_ft_away = NULL,
+            score_et_home = NULL,
+            score_et_away = NULL,
+            score_pen_home = NULL,
+            score_pen_away = NULL,
+            home_score_for_prediction = NULL,
+            away_score_for_prediction = NULL,
+            winner_team_id = NULL,
+            winner_team_name = NULL,
+            is_finished = FALSE
+        WHERE match_id = :match_id
+        """,
+        {
+            "match_id": match_id
+        }
+    )
+
+    execute_sql(
+        """
+        UPDATE predictions
+        SET
+            base_points = 0,
+            star_bonus_points = 0,
+            points = 0
+        WHERE match_id = :match_id
+        """,
+        {
+            "match_id": match_id
+        }
+    )
+
+    execute_sql(
+        """
+        DELETE FROM match_goals
+        WHERE match_id = :match_id
+        """,
+        {
+            "match_id": match_id
+        }
+    )
+
+    clear_data_cache()
+
+
+def load_match_goals_for_editor(match_id: int) -> pd.DataFrame:
+    """
+    Nạp danh sách cầu thủ ghi bàn của 1 trận, đúng cột cần cho
+    st.data_editor ở trang Admin.
+    """
+    editor_columns = [
+        "team_side",
+        "player_name",
+        "minute",
+        "is_penalty",
+        "is_own_goal"
+    ]
+
+    rows = read_sql(
+        """
+        SELECT
+            team_side,
+            player_name,
+            minute,
+            is_penalty,
+            is_own_goal
+        FROM match_goals
+        WHERE match_id = :match_id
+        ORDER BY goal_key ASC
+        """,
+        {
+            "match_id": int(match_id)
+        }
+    )
+
+    if rows.empty:
+        return pd.DataFrame(columns=editor_columns)
+
+    rows["is_penalty"] = rows["is_penalty"].map(to_bool)
+    rows["is_own_goal"] = rows["is_own_goal"].map(to_bool)
+
+    return rows[editor_columns].reset_index(drop=True)
+
+
+def save_match_goals(
+    match_id: int,
+    home_team_id,
+    home_team_name: str,
+    away_team_id,
+    away_team_name: str,
+    edited_df: pd.DataFrame
+) -> int:
+    """
+    Ghi đè toàn bộ danh sách ghi bàn của 1 trận theo đúng nội dung admin
+    vừa chỉnh sửa trên bảng.
+
+    Chiến lược: XOÁ HẾT rồi GHI LẠI — giống hệt cách crawler tự động ghi
+    dữ liệu (xem write_match_goals ở crawl_epl_data_combined.py) — để
+    hành vi ghi đè khi crawl chạy lại luôn nhất quán và admin không cần
+    lo việc merge/diff dòng nào đổi dòng nào.
+
+    goal_key sinh ra có tiền tố "admin:" để không bao giờ trùng với
+    goal_key do crawler sinh ra (tiền tố "openfootball:"), và để dễ nhận
+    ra đây là dòng admin tự thêm nếu cần kiểm tra sau này.
+    """
+    match = get_match_by_id(match_id)
+
+    if match is None:
+        raise ValueError("Không tìm thấy trận đấu.")
+
+    clean_rows = []
+
+    for _, row in edited_df.iterrows():
+        raw_player_name = row.get("player_name")
+
+        player_name = (
+            ""
+            if raw_player_name is None or pd.isna(raw_player_name)
+            else str(raw_player_name).strip()
+        )
+
+        if not player_name:
+            # Dòng trống (thường là dòng mới thêm nhưng chưa nhập gì).
+            continue
+
+        raw_team_side = row.get("team_side")
+
+        team_side = (
+            ""
+            if raw_team_side is None or pd.isna(raw_team_side)
+            else str(raw_team_side).strip()
+        )
+
+        if team_side not in ("home", "away"):
+            raise ValueError(
+                f"Cầu thủ '{player_name}' chưa chọn đội "
+                "(cột Đội phải là home hoặc away)."
+            )
+
+        is_penalty = to_bool(row.get("is_penalty"))
+        is_own_goal = to_bool(row.get("is_own_goal"))
+
+        if is_penalty and is_own_goal:
+            raise ValueError(
+                f"Cầu thủ '{player_name}': một bàn thắng không thể vừa là "
+                "phạt đền vừa là phản lưới nhà cùng lúc."
+            )
+
+        raw_minute = row.get("minute")
+
+        minute = (
+            None
+            if raw_minute is None or pd.isna(raw_minute)
+            else (str(raw_minute).strip() or None)
+        )
+
+        if team_side == "home":
+            team_id = home_team_id
+            team_name = home_team_name
+        else:
+            team_id = away_team_id
+            team_name = away_team_name
+
+        clean_rows.append(
+            {
+                "goal_key": f"admin:{match_id}:{secrets.token_hex(6)}",
+                "match_id": int(match_id),
+                "team_id": (
+                    int(team_id)
+                    if team_id is not None and not pd.isna(team_id)
+                    else None
+                ),
+                "team_name": team_name,
+                "team_side": team_side,
+                "player_name": player_name,
+                "minute": minute,
+                "is_penalty": is_penalty,
+                "is_own_goal": is_own_goal
+            }
+        )
+
+    execute_sql(
+        "DELETE FROM match_goals WHERE match_id = :match_id",
+        {
+            "match_id": int(match_id)
+        }
+    )
+
+    if clean_rows:
+        execute_many(
+            """
+            INSERT INTO match_goals (
+                goal_key, match_id, team_id, team_name, team_side,
+                player_name, minute, is_penalty, is_own_goal
+            )
+            VALUES (
+                :goal_key, :match_id, :team_id, :team_name, :team_side,
+                :player_name, :minute, :is_penalty, :is_own_goal
+            )
+            """,
+            clean_rows
+        )
+
+    clear_data_cache()
+
+    return len(clean_rows)
+
+
 def page_admin():
     render_page_title(
         "Admin",
-        "Cập nhật kết quả trận đấu và chấm điểm lại toàn bộ dự đoán."
+        "Quản lý tỉ số, cầu thủ ghi bàn và chấm điểm dự đoán."
     )
 
     user = st.session_state["user"]
@@ -33777,232 +34008,411 @@ def page_admin():
         st.error("Bạn không có quyền truy cập trang này.")
         return
 
-    matches = load_matches(get_selected_season_slug())
+    season_slug = get_selected_season_slug()
+    matches = load_matches(season_slug)
     users = load_users()
-    predictions = load_predictions(get_selected_season_slug())
+    predictions = load_predictions(season_slug)
 
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.metric("Matches", len(matches))
+        st.metric("Trận đấu", len(matches))
 
     with col2:
-        st.metric("Users", len(users))
+        st.metric("Người dùng", len(users))
 
     with col3:
-        st.metric("Predictions", len(predictions))
+        st.metric("Dự đoán", len(predictions))
 
     st.markdown("---")
 
-    with stylable_container(
-        key="admin_update_card",
-        css_styles="""
-        {
-            background: rgba(255,255,255,0.94);
-            border: 1px solid rgba(15,23,42,0.08);
-            border-radius: 22px;
-            padding: 20px;
-            box-shadow: 0 14px 34px rgba(15,23,42,0.08);
-        }
-        """
-    ):
-        st.subheader("Cập nhật kết quả trận đấu")
+    if matches.empty:
+        st.warning("Chưa có dữ liệu trận đấu.")
+        return
 
-        if matches.empty:
-            st.warning("Chưa có dữ liệu trận đấu.")
-            return
+    matches = matches.sort_values("kickoff_time_utc_dt").copy()
 
-        matches = (
-            matches
-            .sort_values("kickoff_time_utc_dt")
-            .copy()
+    # ============================================================
+    # BỘ LỌC TÌM TRẬN — thay cho 1 dropdown phẳng 380 trận cho đỡ khó tìm.
+    # ============================================================
+    st.subheader("Tìm trận đấu")
+
+    filter_col1, filter_col2, filter_col3 = st.columns([1.2, 1, 1.6])
+
+    with filter_col1:
+        round_options = ["Tất cả các vòng"] + sorted(
+            matches["round_name"].dropna().unique().tolist(),
+            key=get_prediction_round_sort_key
+        )
+        selected_round = st.selectbox(
+            "Vòng đấu",
+            round_options,
+            key="admin_filter_round"
         )
 
-        matches["match_label"] = matches.apply(
-            lambda row: (
-                f"#{row['match_id']} | "
-                f"{row.get('kickoff_date_display_vietnam', row.get('kickoff_date_vietnam', ''))} "
-                f"{row.get('kickoff_time_vietnam', '')} | "
-                f"{row['home_team_name']} vs {row['away_team_name']} | "
-                f"{row['round_name']}"
-            ),
-            axis=1
+    with filter_col2:
+        status_options = ["Tất cả", "Đã có kết quả", "Chưa đá"]
+        selected_status = st.selectbox(
+            "Trạng thái",
+            status_options,
+            key="admin_filter_status"
         )
 
-        selected_label = st.selectbox(
-            "Chọn trận cần cập nhật kết quả",
-            matches["match_label"].tolist()
+    with filter_col3:
+        search_text = st.text_input(
+            "Tìm theo tên đội",
+            placeholder="Ví dụ: Arsenal",
+            key="admin_filter_search"
         )
 
-        selected_match = matches[matches["match_label"] == selected_label].iloc[0]
+    filtered = matches.copy()
 
-        match_id = int(selected_match["match_id"])
+    if selected_round != "Tất cả các vòng":
+        filtered = filtered[filtered["round_name"] == selected_round]
 
-        home_name = selected_match["home_team_name"]
-        away_name = selected_match["away_team_name"]
+    is_finished_mask = filtered["is_finished"].map(to_bool)
 
-        home_team_id = to_optional_int(selected_match.get("home_team_id"))
-        away_team_id = to_optional_int(selected_match.get("away_team_id"))
+    if selected_status == "Đã có kết quả":
+        filtered = filtered[is_finished_mask]
+    elif selected_status == "Chưa đá":
+        filtered = filtered[~is_finished_mask]
 
-        is_knockout = to_bool(selected_match.get("is_knockout"))
+    if search_text.strip():
+        needle = search_text.strip().casefold()
+        filtered = filtered[
+            filtered["home_team_name"].str.casefold().str.contains(needle, na=False)
+            | filtered["away_team_name"].str.casefold().str.contains(needle, na=False)
+        ]
 
-        st.markdown(f"### {home_name} vs {away_name}")
+    if filtered.empty:
+        st.info("Không có trận nào khớp bộ lọc đang chọn.")
+        return
 
+    def format_admin_match_option(row) -> str:
+        finished = to_bool(row.get("is_finished"))
+        status_icon = "✅" if finished else "⏳"
+
+        score_text = ""
+        if finished:
+            score_text = (
+                f" ({to_optional_int(row.get('score_ft_home'))}-"
+                f"{to_optional_int(row.get('score_ft_away'))})"
+            )
+
+        return (
+            f"{status_icon} #{int(row['match_id'])} | "
+            f"{row.get('kickoff_date_display_vietnam', row.get('kickoff_date_vietnam', ''))} "
+            f"{row.get('kickoff_time_vietnam', '')} | "
+            f"{row['home_team_name']} vs {row['away_team_name']}{score_text} | "
+            f"{row['round_name']}"
+        )
+
+    filtered = filtered.copy()
+    filtered["match_label"] = filtered.apply(format_admin_match_option, axis=1)
+
+    st.caption(f"Tìm được {len(filtered)} trận khớp bộ lọc.")
+
+    selected_label = st.selectbox(
+        "Chọn trận cần quản lý",
+        filtered["match_label"].tolist(),
+        key="admin_selected_match_label"
+    )
+
+    selected_match = filtered[filtered["match_label"] == selected_label].iloc[0]
+
+    match_id = int(selected_match["match_id"])
+    home_name = selected_match["home_team_name"]
+    away_name = selected_match["away_team_name"]
+    home_team_id = to_optional_int(selected_match.get("home_team_id"))
+    away_team_id = to_optional_int(selected_match.get("away_team_id"))
+    is_knockout = to_bool(selected_match.get("is_knockout"))
+    is_finished = to_bool(selected_match.get("is_finished"))
+
+    st.markdown("---")
+
+    status_badge = "🟢 Đã có kết quả" if is_finished else "🟡 Chưa đá"
+
+    st.markdown(f"### {home_name} vs {away_name}")
+    st.caption(
+        f"{status_badge}  ·  {selected_match.get('round_name')}  ·  "
+        f"{selected_match.get('kickoff_date_display_vietnam', selected_match.get('kickoff_date_vietnam', ''))} "
+        f"{selected_match.get('kickoff_time_vietnam', '')}"
+    )
+
+    tab_score, tab_scorers = st.tabs(
+        ["⚽ Tỉ số trận đấu", "🎯 Cầu thủ ghi bàn"]
+    )
+
+    # ============================================================
+    # TAB 1 — TỈ SỐ TRẬN ĐẤU
+    # ============================================================
+    with tab_score:
+        with stylable_container(
+            key="admin_update_card",
+            css_styles="""
+            {
+                background: rgba(255,255,255,0.94);
+                border: 1px solid rgba(15,23,42,0.08);
+                border-radius: 22px;
+                padding: 20px;
+                box-shadow: 0 14px 34px rgba(15,23,42,0.08);
+            }
+            """
+        ):
+            current_ft_home = to_optional_int(selected_match.get("score_ft_home"))
+            current_ft_away = to_optional_int(selected_match.get("score_ft_away"))
+
+            current_et_home = to_optional_int(selected_match.get("score_et_home"))
+            current_et_away = to_optional_int(selected_match.get("score_et_away"))
+
+            current_pen_home = to_optional_int(selected_match.get("score_pen_home"))
+            current_pen_away = to_optional_int(selected_match.get("score_pen_away"))
+
+            with st.form(f"update_match_result_form_{match_id}"):
+                st.markdown("#### Tỉ số full-time")
+
+                col_ft_home, col_ft_away = st.columns(2)
+
+                with col_ft_home:
+                    score_ft_home = st.number_input(
+                        f"FT - {home_name}",
+                        min_value=0,
+                        max_value=30,
+                        value=current_ft_home if current_ft_home is not None else 0,
+                        step=1
+                    )
+
+                with col_ft_away:
+                    score_ft_away = st.number_input(
+                        f"FT - {away_name}",
+                        min_value=0,
+                        max_value=30,
+                        value=current_ft_away if current_ft_away is not None else 0,
+                        step=1
+                    )
+
+                score_et_home = None
+                score_et_away = None
+                score_pen_home = None
+                score_pen_away = None
+                winner_team_id = None
+
+                if is_knockout:
+                    st.markdown("#### Knockout options")
+
+                    use_extra_time = st.checkbox(
+                        "Trận có hiệp phụ",
+                        value=current_et_home is not None and current_et_away is not None
+                    )
+
+                    if use_extra_time:
+                        col_et_home, col_et_away = st.columns(2)
+
+                        with col_et_home:
+                            score_et_home = st.number_input(
+                                f"ET - {home_name}",
+                                min_value=0,
+                                max_value=30,
+                                value=current_et_home if current_et_home is not None else int(score_ft_home),
+                                step=1
+                            )
+
+                        with col_et_away:
+                            score_et_away = st.number_input(
+                                f"ET - {away_name}",
+                                min_value=0,
+                                max_value=30,
+                                value=current_et_away if current_et_away is not None else int(score_ft_away),
+                                step=1
+                            )
+
+                        final_home_for_game = score_et_home if score_et_home is not None else score_ft_home
+                        final_away_for_game = score_et_away if score_et_away is not None else score_ft_away
+
+                        if final_home_for_game == final_away_for_game:
+                            use_penalties = st.checkbox(
+                                "Trận phân định bằng penalty",
+                                value=current_pen_home is not None and current_pen_away is not None
+                            )
+
+                            if use_penalties:
+                                col_pen_home, col_pen_away = st.columns(2)
+
+                                with col_pen_home:
+                                    score_pen_home = st.number_input(
+                                        f"Penalty - {home_name}",
+                                        min_value=0,
+                                        max_value=30,
+                                        value=current_pen_home if current_pen_home is not None else 0,
+                                        step=1
+                                    )
+
+                                with col_pen_away:
+                                    score_pen_away = st.number_input(
+                                        f"Penalty - {away_name}",
+                                        min_value=0,
+                                        max_value=30,
+                                        value=current_pen_away if current_pen_away is not None else 0,
+                                        step=1
+                                    )
+
+                            winner_options = {
+                                home_name: home_team_id,
+                                away_name: away_team_id
+                            }
+
+                            current_winner_team_id = to_optional_int(selected_match.get("winner_team_id"))
+                            default_index = 1 if current_winner_team_id == away_team_id else 0
+
+                            selected_winner = st.radio(
+                                "Chọn đội thắng chung cuộc",
+                                options=list(winner_options.keys()),
+                                index=default_index,
+                                horizontal=True
+                            )
+
+                            winner_team_id = winner_options[selected_winner]
+
+                submitted = st.form_submit_button(
+                    "💾 Lưu tỉ số và chấm điểm",
+                    use_container_width=True
+                )
+
+                if submitted:
+                    try:
+                        update_match_result(
+                            match_id=match_id,
+                            score_ft_home=int(score_ft_home),
+                            score_ft_away=int(score_ft_away),
+                            score_et_home=int(score_et_home) if score_et_home is not None else None,
+                            score_et_away=int(score_et_away) if score_et_away is not None else None,
+                            score_pen_home=int(score_pen_home) if score_pen_home is not None else None,
+                            score_pen_away=int(score_pen_away) if score_pen_away is not None else None,
+                            winner_team_id=winner_team_id
+                        )
+
+                        st.success("Đã cập nhật tỉ số và chấm điểm lại dự đoán.")
+                        st.rerun()
+
+                    except ValueError as e:
+                        st.error(str(e))
+
+        if is_finished:
+            st.markdown("")
+
+            with st.expander("⚠️ Xoá tỉ số trận này (đặt lại về chưa đá)"):
+                st.warning(
+                    "Thao tác này sẽ xoá tỉ số, đưa trận về trạng thái CHƯA "
+                    "ĐÁ, xoá luôn danh sách cầu thủ ghi bàn của trận, và đưa "
+                    "điểm mọi dự đoán liên quan tới trận này về 0. "
+                    "Không thể hoàn tác."
+                )
+
+                confirm_delete = st.checkbox(
+                    "Tôi hiểu và muốn xoá tỉ số trận này",
+                    key=f"confirm_delete_score_{match_id}"
+                )
+
+                if st.button(
+                    "🗑️ Xoá tỉ số",
+                    disabled=not confirm_delete,
+                    key=f"delete_score_btn_{match_id}"
+                ):
+                    try:
+                        delete_match_score(match_id)
+                        st.success("Đã xoá tỉ số trận đấu.")
+                        st.rerun()
+                    except ValueError as e:
+                        st.error(str(e))
+
+    # ============================================================
+    # TAB 2 — CẦU THỦ GHI BÀN
+    # ============================================================
+    with tab_scorers:
         st.caption(
-            f"{selected_match.get('round_name')} | "
-            f"{selected_match.get('kickoff_date_display_vietnam', selected_match.get('kickoff_date_vietnam', ''))} "
-            f"{selected_match.get('kickoff_time_vietnam', '')}"
+            "Chỉnh sửa trực tiếp trên bảng: sửa ô bằng cách bấm vào, thêm "
+            "dòng mới bằng dấu **+** ở cuối bảng, xoá dòng bằng cách chọn "
+            "dòng rồi bấm biểu tượng thùng rác. Nhớ bấm **Lưu danh sách ghi "
+            "bàn** bên dưới để ghi thật vào database — chỉnh trên bảng chưa "
+            "tự lưu."
         )
 
-        current_ft_home = to_optional_int(selected_match.get("score_ft_home"))
-        current_ft_away = to_optional_int(selected_match.get("score_ft_away"))
+        st.caption(f"🏠 home = **{home_name}**   ·   🚩 away = **{away_name}**")
 
-        current_et_home = to_optional_int(selected_match.get("score_et_home"))
-        current_et_away = to_optional_int(selected_match.get("score_et_away"))
+        goals_df = load_match_goals_for_editor(match_id)
 
-        current_pen_home = to_optional_int(selected_match.get("score_pen_home"))
-        current_pen_away = to_optional_int(selected_match.get("score_pen_away"))
+        edited_goals_df = st.data_editor(
+            goals_df,
+            key=f"goal_editor_{match_id}",
+            num_rows="dynamic",
+            use_container_width=True,
+            column_config={
+                "team_side": st.column_config.SelectboxColumn(
+                    "Đội",
+                    options=["home", "away"],
+                    required=True,
+                    width="small"
+                ),
+                "player_name": st.column_config.TextColumn(
+                    "Cầu thủ ghi bàn",
+                    required=True,
+                    width="medium"
+                ),
+                "minute": st.column_config.TextColumn(
+                    "Phút",
+                    width="small",
+                    help="Ví dụ: 37' hoặc 90+4'"
+                ),
+                "is_penalty": st.column_config.CheckboxColumn(
+                    "Phạt đền",
+                    width="small"
+                ),
+                "is_own_goal": st.column_config.CheckboxColumn(
+                    "Phản lưới",
+                    width="small"
+                )
+            }
+        )
 
-        with st.form("update_match_result_form"):
-            st.markdown("#### Tỉ số full-time")
-
-            col_ft_home, col_ft_away = st.columns(2)
-
-            with col_ft_home:
-                score_ft_home = st.number_input(
-                    f"FT - {home_name}",
-                    min_value=0,
-                    max_value=30,
-                    value=current_ft_home if current_ft_home is not None else 0,
-                    step=1
+        if st.button(
+            "💾 Lưu danh sách ghi bàn",
+            key=f"save_goals_btn_{match_id}",
+            use_container_width=True
+        ):
+            try:
+                saved_count = save_match_goals(
+                    match_id=match_id,
+                    home_team_id=home_team_id,
+                    home_team_name=home_name,
+                    away_team_id=away_team_id,
+                    away_team_name=away_name,
+                    edited_df=edited_goals_df
                 )
 
-            with col_ft_away:
-                score_ft_away = st.number_input(
-                    f"FT - {away_name}",
-                    min_value=0,
-                    max_value=30,
-                    value=current_ft_away if current_ft_away is not None else 0,
-                    step=1
-                )
+                st.success(f"Đã lưu {saved_count} bàn thắng cho trận này.")
+                st.rerun()
 
-            score_et_home = None
-            score_et_away = None
-            score_pen_home = None
-            score_pen_away = None
-            winner_team_id = None
-
-            if is_knockout:
-                st.markdown("#### Knockout options")
-
-                use_extra_time = st.checkbox(
-                    "Trận có hiệp phụ",
-                    value=current_et_home is not None and current_et_away is not None
-                )
-
-                if use_extra_time:
-                    col_et_home, col_et_away = st.columns(2)
-
-                    with col_et_home:
-                        score_et_home = st.number_input(
-                            f"ET - {home_name}",
-                            min_value=0,
-                            max_value=30,
-                            value=current_et_home if current_et_home is not None else int(score_ft_home),
-                            step=1
-                        )
-
-                    with col_et_away:
-                        score_et_away = st.number_input(
-                            f"ET - {away_name}",
-                            min_value=0,
-                            max_value=30,
-                            value=current_et_away if current_et_away is not None else int(score_ft_away),
-                            step=1
-                        )
-
-                final_home_for_game = score_et_home if score_et_home is not None else score_ft_home
-                final_away_for_game = score_et_away if score_et_away is not None else score_ft_away
-
-                if final_home_for_game == final_away_for_game:
-                    use_penalties = st.checkbox(
-                        "Trận phân định bằng penalty",
-                        value=current_pen_home is not None and current_pen_away is not None
-                    )
-
-                    if use_penalties:
-                        col_pen_home, col_pen_away = st.columns(2)
-
-                        with col_pen_home:
-                            score_pen_home = st.number_input(
-                                f"Penalty - {home_name}",
-                                min_value=0,
-                                max_value=30,
-                                value=current_pen_home if current_pen_home is not None else 0,
-                                step=1
-                            )
-
-                        with col_pen_away:
-                            score_pen_away = st.number_input(
-                                f"Penalty - {away_name}",
-                                min_value=0,
-                                max_value=30,
-                                value=current_pen_away if current_pen_away is not None else 0,
-                                step=1
-                            )
-
-                    winner_options = {
-                        home_name: home_team_id,
-                        away_name: away_team_id
-                    }
-
-                    current_winner_team_id = to_optional_int(selected_match.get("winner_team_id"))
-                    default_index = 0
-
-                    if current_winner_team_id == away_team_id:
-                        default_index = 1
-
-                    selected_winner = st.radio(
-                        "Chọn đội thắng chung cuộc",
-                        options=list(winner_options.keys()),
-                        index=default_index,
-                        horizontal=True
-                    )
-
-                    winner_team_id = winner_options[selected_winner]
-
-            submitted = st.form_submit_button("Lưu kết quả và chấm điểm")
-
-            if submitted:
-                try:
-                    update_match_result(
-                        match_id=match_id,
-                        score_ft_home=int(score_ft_home),
-                        score_ft_away=int(score_ft_away),
-                        score_et_home=int(score_et_home) if score_et_home is not None else None,
-                        score_et_away=int(score_et_away) if score_et_away is not None else None,
-                        score_pen_home=int(score_pen_home) if score_pen_home is not None else None,
-                        score_pen_away=int(score_pen_away) if score_pen_away is not None else None,
-                        winner_team_id=winner_team_id
-                    )
-
-                    st.success("Đã cập nhật kết quả và chấm điểm lại dự đoán.")
-                    st.rerun()
-
-                except ValueError as e:
-                    st.error(str(e))
+            except ValueError as e:
+                st.error(str(e))
 
     st.markdown("---")
 
-    if st.button("Chấm điểm lại toàn bộ dự đoán", use_container_width=True):
-        score_all_predictions.clear()
-        score_all_predictions(
-            get_selected_season_slug()
+    with st.expander("🔄 Chấm điểm lại toàn bộ dự đoán (toàn giải)"):
+        st.caption(
+            "Dùng khi nghi ngờ điểm bị lệch trên diện rộng, ví dụ sau khi "
+            "sửa luật tính điểm. Không cần bấm nếu chỉ vừa sửa 1 trận — nút "
+            "Lưu tỉ số ở trên đã tự chấm lại đúng trận đó rồi."
         )
-        build_leaderboard_df.clear()
-        st.success(
-            "Đã chấm lại toàn bộ dự đoán theo luật mới."
-        )
+
+        if st.button("Chấm điểm lại toàn bộ dự đoán", use_container_width=True):
+            score_all_predictions.clear()
+            score_all_predictions(
+                get_selected_season_slug()
+            )
+            build_leaderboard_df.clear()
+            st.success(
+                "Đã chấm lại toàn bộ dự đoán theo luật mới."
+            )
 
 # ============================================================
 # EPL NEWS TICKER
