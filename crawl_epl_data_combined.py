@@ -3,33 +3,17 @@ from pathlib import Path
 import hashlib
 import json
 import os
-import random
 import re
 import time
 import unicodedata
 from collections import Counter
-from dataclasses import dataclass
 import datetime as dt
-from datetime import datetime, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-
-# curl_cffi mô phỏng đúng TLS/HTTP2 fingerprint (JA3/JA4) của trình duyệt
-# thật. Đây là điểm khác biệt quan trọng so với `requests` thường: kể cả
-# khi header giống hệt browser, thư viện `requests`/urllib3 vẫn có một
-# "chữ ký" TLS ClientHello rất dễ nhận diện, và trong 2026 Akamai (hạ tầng
-# đứng sau site.api.espn.com) đã đẩy mạnh việc chặn dựa trên chữ ký này.
-# Nếu chưa cài curl_cffi, code sẽ tự động fallback về `requests` như cũ.
-try:
-    from curl_cffi import requests as curl_requests
-
-    _HAS_CURL_CFFI = True
-except ImportError:  # pragma: no cover - optional dependency
-    _HAS_CURL_CFFI = False
 from sqlalchemy import (
     MetaData,
     Table,
@@ -47,8 +31,8 @@ from sqlalchemy.pool import NullPool
 COMPETITION_KEY = "epl"
 SEASON_SLUG = os.getenv("EPL_SEASON_SLUG", "2026-27").strip()
 
-SOURCE_TIMEZONE = "Europe/London"
 TARGET_TIMEZONE = "Asia/Ho_Chi_Minh"
+SOURCE_TIMEZONE = "Europe/London"
 
 EXPECTED_TEAM_COUNT = 20
 EXPECTED_MATCH_COUNT = 380
@@ -56,11 +40,7 @@ EXPECTED_MATCHDAYS = set(range(1, 39))
 
 BASE_DIR = Path(__file__).resolve().parent
 
-TEAM_METADATA_PATH = (
-    BASE_DIR
-    / "data"
-    / "epl_team_metadata.json"
-)
+TEAM_METADATA_PATH = BASE_DIR / "data" / "epl_team_metadata.json"
 
 REQUEST_TIMEOUT_SECONDS = 30
 
@@ -108,140 +88,303 @@ RESULT_STATE_COLUMNS = [
 ]
 
 
-
-# Header giả lập trình duyệt thật (Chrome trên Windows) thay vì UA tuỳ biến
-# "EPL-Prediction-Arena-Crawler/1.0" — UA tự đặt tên là dấu hiệu bot rất rõ
-# ràng đối với các hệ thống chống bot như Akamai/Cloudflare.
-ESPN_BROWSER_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-    ),
-    "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Referer": "https://www.espn.com/soccer/scoreboard/_/league/eng.1",
-    "Origin": "https://www.espn.com",
-    "Sec-Fetch-Site": "same-site",
-    "Sec-Fetch-Mode": "cors",
-    "Sec-Fetch-Dest": "empty",
-    "Cache-Control": "no-cache",
-}
-
-# Các status code coi là "có thể thử lại": 429/5xx là lỗi tạm thời kinh
-# điển, còn 403 được thêm vào vì với ESPN nó thường là bot-block có thể
-# đến rồi đi theo từng request/IP trong pool luân phiên của GitHub Actions,
-# chứ không phải lỗi logic — nên đáng thử lại vài lần trước khi bỏ cuộc.
-ESPN_RETRYABLE_STATUS = {403, 429, 500, 502, 503, 504}
-ESPN_MAX_ATTEMPTS = 5
+# ============================================================
+# OPENFOOTBALL (github.com/openfootball/england) — NGUỒN CHÍNH
+# ============================================================
+# File text tĩnh, public domain, nằm ngay trên raw.githubusercontent.com.
+# Không cần key, không có cơ chế chống bot nào (đây chỉ là 1 file text
+# trên CDN của GitHub) — không bao giờ bị chặn khi chạy trên GitHub
+# Actions. Bản mở rộng của file này gộp CẢ lịch thi đấu, tỉ số, VÀ ai
+# ghi bàn/phút/phạt đền/phản lưới trong đúng 1 file, nên Task 1 và
+# Task 2 giờ gộp làm một, chỉ cần đúng 1 HTTP request cho cả mùa.
+OPENFOOTBALL_BASE_URL = os.getenv(
+    "OPENFOOTBALL_BASE_URL",
+    "https://raw.githubusercontent.com/openfootball/england/master",
+).strip().rstrip("/")
+OPENFOOTBALL_FILE_PATH = os.getenv(
+    "OPENFOOTBALL_FILE_PATH",
+    f"{SEASON_SLUG}/1-premierleague.txt",
+).strip().lstrip("/")
+OPENFOOTBALL_URL = f"{OPENFOOTBALL_BASE_URL}/{OPENFOOTBALL_FILE_PATH}"
+OPENFOOTBALL_MAX_ATTEMPTS = 4
 
 
-def create_http_session():
-    if _HAS_CURL_CFFI:
-        # impersonate="chrome124" khiến TLS/HTTP2 fingerprint giống hệt
-        # Chrome thật, né được kiểu chặn theo JA3/JA4 mà `requests` thường
-        # không thể né dù header có đúng đến đâu.
-        session = curl_requests.Session(impersonate="chrome124")
-    else:
-        retry = Retry(
-            total=3,
-            connect=3,
-            read=3,
-            status=0,  # tự xử lý retry cho status ở _espn_get_with_retry
-            backoff_factor=1,
-            allowed_methods=frozenset(["GET"]),
-            raise_on_status=False,
-        )
-        session = requests.Session()
-        session.mount("https://", HTTPAdapter(max_retries=retry))
-
-    session.headers.update(ESPN_BROWSER_HEADERS)
+def create_http_session() -> requests.Session:
+    retry = Retry(
+        total=3,
+        connect=3,
+        read=3,
+        status=3,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=frozenset(["GET"]),
+        raise_on_status=False,
+    )
+    session = requests.Session()
+    session.mount("https://", HTTPAdapter(max_retries=retry))
+    session.headers.update(
+        {
+            "User-Agent": "EPL-Prediction-Arena-Crawler/2.0",
+            "Accept": "text/plain",
+        }
+    )
     return session
 
 
 HTTP_SESSION = create_http_session()
 
 
-def _describe_block_response(response: Any) -> None:
-    """In ra dấu hiệu nhận diện WAF (Cloudflare/Akamai/DataDome/...) để
-    lần chặn tiếp theo (nếu có) sẽ để lại bằng chứng rõ ràng trong log
-    của GitHub Actions, thay vì chỉ có một dòng 403 trơ trụi."""
-
-    print("---- ESPN block diagnostics ----")
-    try:
-        print("Status:", response.status_code)
-        print("URL:", getattr(response, "url", "?"))
-        headers = response.headers or {}
-        for key in (
-            "server",
-            "cf-ray",
-            "cf-mitigated",
-            "x-akamai-request-id",
-            "akamai-grn",
-            "x-datadome",
-            "via",
-            "x-cache",
-        ):
-            if key in headers:
-                print(f"{key}:", headers[key])
-        body_preview = (response.text or "")[:500]
-        print("Body preview:", body_preview)
-    except Exception as exc:  # noqa: BLE001 - best-effort diagnostics
-        print("(không đọc được chi tiết response):", exc)
-    print("---------------------------------")
-
-
-def _espn_get_with_retry(
-    url: str, params: dict[str, Any]
-) -> Any:
-    """GET tới ESPN kèm retry + backoff-jitter, retry cả với 403 (bot
-    block tạm thời), và in diagnostics chi tiết nếu vẫn thất bại sau khi
-    hết lượt thử."""
-
-    last_response = None
+def fetch_openfootball_text() -> str:
     last_exc: Exception | None = None
 
-    for attempt in range(1, ESPN_MAX_ATTEMPTS + 1):
+    for attempt in range(1, OPENFOOTBALL_MAX_ATTEMPTS + 1):
         try:
             response = HTTP_SESSION.get(
-                url,
-                params=params,
+                OPENFOOTBALL_URL,
                 timeout=REQUEST_TIMEOUT_SECONDS,
             )
-        except Exception as exc:  # lỗi mạng/kết nối
+            response.raise_for_status()
+            return response.text
+        except Exception as exc:  # noqa: BLE001
             last_exc = exc
-            last_response = None
-        else:
-            if response.status_code == 200:
-                return response
-            last_response = response
-            last_exc = None
-            if response.status_code not in ESPN_RETRYABLE_STATUS:
-                _describe_block_response(response)
-                response.raise_for_status()
-
-        if attempt == ESPN_MAX_ATTEMPTS:
-            break
-
-        wait_seconds = min(60, 2 ** attempt) + random.uniform(0, 1.5)
-        reason = (
-            f"HTTP {last_response.status_code}"
-            if last_response is not None
-            else repr(last_exc)
-        )
-        print(
-            f"[ESPN] Lần thử {attempt}/{ESPN_MAX_ATTEMPTS} thất bại "
-            f"({reason}). Thử lại sau {wait_seconds:.1f}s..."
-        )
-        time.sleep(wait_seconds)
-
-    if last_response is not None:
-        _describe_block_response(last_response)
-        last_response.raise_for_status()
+            if attempt == OPENFOOTBALL_MAX_ATTEMPTS:
+                break
+            wait_seconds = 2 ** attempt
+            print(
+                f"[openfootball] Lần thử {attempt}/{OPENFOOTBALL_MAX_ATTEMPTS} "
+                f"thất bại ({exc}). Thử lại sau {wait_seconds}s..."
+            )
+            time.sleep(wait_seconds)
 
     raise RuntimeError(
-        "Không kết nối được tới ESPN sau "
-        f"{ESPN_MAX_ATTEMPTS} lần thử."
+        f"Không tải được {OPENFOOTBALL_URL} sau "
+        f"{OPENFOOTBALL_MAX_ATTEMPTS} lần thử."
     ) from last_exc
+
+
+# ------------------------------------------------------------
+# Parser cho định dạng Football.TXT (bản mở rộng có scorer)
+# ------------------------------------------------------------
+MONTHS = {
+    "Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
+    "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12,
+}
+
+ROUND_LINE_RE = re.compile(r"^▪\s*(.+?)\s*$")
+DATE_LINE_RE = re.compile(
+    r"^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\w{3})\s+(\d{1,2})(?:\s+(\d{4}))?$"
+)
+MATCH_LINE_RE = re.compile(
+    r"^(?:(\d{1,2}:\d{2})\s+)?"
+    r"(.+?)\s+"
+    r"(\d+)-(\d+)"
+    r"(?:\s*\((\d+)-(\d+)\))?"
+    r"\s+(.+?)\s*$"
+)
+GOAL_ITEM_RE = re.compile(
+    r"([A-Za-zÀ-ÖØ-öø-ÿ.'\-]+(?:\s+[A-Za-zÀ-ÖØ-öø-ÿ.'\-]+)*)\s+"
+    r"((?:\d+(?:\+\d+)?'(?:\((?:p|og)\))?\s*,?\s*)+)"
+)
+GOAL_MINUTE_RE = re.compile(r"(\d+(?:\+\d+)?)'(\((p|og)\))?")
+
+
+def parse_round_number(round_text: str) -> int | None:
+    match = re.search(r"(\d+)\s*$", round_text)
+    return int(match.group(1)) if match else None
+
+
+def infer_year(
+    month: int,
+    season_start_year: int,
+    last_year: int,
+    last_month: int | None,
+) -> int:
+    if last_month is None:
+        return season_start_year
+
+    if month < last_month - 6:
+        return last_year + 1
+
+    return last_year
+
+
+def normalize_player_name(raw_name: str) -> str:
+    """Nguồn gốc không nhất quán: có tên viết HOA TOÀN BỘ họ
+    ("MOHAMED SALAH"), có tên viết thường bình thường ("Federico
+    Chiesa"). Chuẩn hoá về dạng Viết Hoa Chữ Cái Đầu cho đồng nhất.
+    str.title() coi dấu cách/gạch ngang/nháy đơn là ranh giới từ nên
+    xử lý đúng cả tên ghép ("Hudson-Odoi", "O'Riley", "Van De Ven")."""
+
+    return re.sub(r"\s+", " ", raw_name).strip().title()
+
+
+def parse_goal_side(text_block: str) -> list[dict[str, Any]]:
+    goals: list[dict[str, Any]] = []
+
+    for item_match in GOAL_ITEM_RE.finditer(text_block):
+        player_name = normalize_player_name(item_match.group(1).strip())
+        minutes_raw = item_match.group(2)
+
+        for minute_match in GOAL_MINUTE_RE.finditer(minutes_raw):
+            minute = minute_match.group(1)
+            flag = minute_match.group(3)
+
+            goals.append(
+                {
+                    "player_name": player_name,
+                    "minute": f"{minute}'",
+                    "is_penalty": flag == "p",
+                    "is_own_goal": flag == "og",
+                }
+            )
+
+    return goals
+
+
+def parse_goal_block(
+    raw: str,
+    home_score: int,
+    away_score: int,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    raw = raw.strip()
+
+    if raw.startswith("("):
+        raw = raw[1:]
+
+    if raw.endswith(")"):
+        raw = raw[:-1]
+
+    parts = [p.strip() for p in raw.split(";")]
+
+    if len(parts) >= 2:
+        return parse_goal_side(parts[0]), parse_goal_side(parts[1])
+
+    only_side_goals = parse_goal_side(parts[0]) if parts[0] else []
+
+    # Chỉ 1 phía ghi bàn trong trận — xác định đó là home hay away dựa
+    # vào tỉ số (đội có bàn thắng ắt phải là đội có score > 0).
+    if away_score > 0 and home_score == 0:
+        return [], only_side_goals
+
+    return only_side_goals, []
+
+
+def parse_openfootball_matches(
+    text_content: str,
+    season_start_year: int,
+) -> list[dict[str, Any]]:
+    matches: list[dict[str, Any]] = []
+
+    current_round: int | None = None
+    current_date: dt.date | None = None
+    current_time: str | None = None
+    last_year = season_start_year
+    last_month: int | None = None
+
+    pending: dict[str, Any] | None = None
+    goal_buffer: list[str] = []
+    collecting_goals = False
+
+    def flush_pending() -> None:
+        nonlocal pending, goal_buffer, collecting_goals
+
+        if pending is None:
+            return
+
+        pending["raw_goals"] = " ".join(goal_buffer).strip()
+        matches.append(pending)
+        pending = None
+        goal_buffer = []
+        collecting_goals = False
+
+    for raw_line in text_content.splitlines():
+        line = raw_line.strip()
+
+        if not line or line.startswith("=") or line.startswith("#"):
+            continue
+
+        round_match = ROUND_LINE_RE.match(line)
+        if round_match:
+            flush_pending()
+            current_round = parse_round_number(round_match.group(1))
+            continue
+
+        date_match = DATE_LINE_RE.match(line)
+        if date_match:
+            flush_pending()
+            month_abbr, day, year_str = date_match.groups()
+            month = MONTHS[month_abbr]
+            year = (
+                int(year_str)
+                if year_str
+                else infer_year(month, season_start_year, last_year, last_month)
+            )
+            current_date = dt.date(year, month, int(day))
+            last_year = year
+            last_month = month
+            current_time = None
+            continue
+
+        if collecting_goals:
+            goal_buffer.append(line)
+            if line.rstrip().endswith(")"):
+                flush_pending()
+            continue
+
+        if line.startswith("("):
+            collecting_goals = True
+            goal_buffer.append(line)
+            if line.count("(") == line.count(")") and line.rstrip().endswith(")"):
+                flush_pending()
+            continue
+
+        match_line = MATCH_LINE_RE.match(line)
+        if match_line and current_date is not None:
+            flush_pending()
+            (
+                time_str,
+                home_name,
+                home_score,
+                away_score,
+                ht_home,
+                ht_away,
+                away_name,
+            ) = match_line.groups()
+
+            if time_str:
+                current_time = time_str
+
+            pending = {
+                "round": current_round,
+                "date": current_date,
+                "time": current_time or "15:00",
+                "home_name": home_name.strip(),
+                "away_name": away_name.strip(),
+                "home_score": int(home_score),
+                "away_score": int(away_score),
+                "ht_home": int(ht_home) if ht_home is not None else None,
+                "ht_away": int(ht_away) if ht_away is not None else None,
+                "raw_goals": "",
+            }
+            continue
+
+    flush_pending()
+
+    for match in matches:
+        home_goals: list[dict[str, Any]] = []
+        away_goals: list[dict[str, Any]] = []
+
+        if match["raw_goals"]:
+            home_goals, away_goals = parse_goal_block(
+                match["raw_goals"],
+                match["home_score"],
+                match["away_score"],
+            )
+
+        match["home_goals"] = home_goals
+        match["away_goals"] = away_goals
+
+    return matches
 
 
 def normalize_text(value: Any) -> str | None:
@@ -253,145 +396,13 @@ def normalize_text(value: Any) -> str | None:
 
 
 def canonical_key_text(value: str) -> str:
-    return " ".join(
-        unicodedata.normalize("NFKC", value).casefold().split()
-    )
+    return " ".join(unicodedata.normalize("NFKC", value).casefold().split())
 
 
 def stable_postgres_integer(namespace: str, value: str) -> int:
-    digest = hashlib.sha256(
-        f"{namespace}|{value}".encode("utf-8")
-    ).digest()
-
-    number = int.from_bytes(
-        digest[:4],
-        byteorder="big",
-        signed=False,
-    ) & 0x7FFFFFFF
-
+    digest = hashlib.sha256(f"{namespace}|{value}".encode("utf-8")).digest()
+    number = int.from_bytes(digest[:4], byteorder="big", signed=False) & 0x7FFFFFFF
     return number or 1
-
-
-def translate_round_name(value: Any) -> str | None:
-    round_text = normalize_text(value)
-
-    if not round_text:
-        return None
-
-    match = re.fullmatch(
-        r"matchday\s+(\d+)",
-        round_text,
-        flags=re.IGNORECASE,
-    )
-
-    if match:
-        return f"Vòng {int(match.group(1))}"
-
-    return round_text
-
-
-def parse_matchday(round_name: str | None) -> int | None:
-    if not round_name:
-        return None
-
-    match = re.search(r"(\d+)\s*$", round_name)
-
-    if not match:
-        return None
-
-    return int(match.group(1))
-
-
-def to_optional_score(value: Any) -> int | None:
-    if value is None or value == "":
-        return None
-
-    if isinstance(value, bool):
-        raise TypeError(f"Tỉ số không hợp lệ: {value!r}")
-
-    try:
-        score = int(value)
-    except (TypeError, ValueError) as exc:
-        raise TypeError(
-            f"Tỉ số không hợp lệ: {value!r}"
-        ) from exc
-
-    if score < 0:
-        raise ValueError(f"Tỉ số không được âm: {score}")
-
-    return score
-
-
-def parse_score_pair(
-    score_value: Any,
-) -> tuple[int | None, int | None]:
-    if score_value is None:
-        return None, None
-
-    pair = score_value
-
-    if isinstance(score_value, dict):
-        pair = None
-
-        for key in ("ft", "fulltime", "full_time"):
-            if key in score_value:
-                pair = score_value.get(key)
-                break
-
-        if pair is None:
-            return None, None
-
-    if isinstance(pair, dict):
-        return (
-            to_optional_score(
-                pair.get("home", pair.get("team1"))
-            ),
-            to_optional_score(
-                pair.get("away", pair.get("team2"))
-            ),
-        )
-
-    if isinstance(pair, (list, tuple)) and len(pair) >= 2:
-        return (
-            to_optional_score(pair[0]),
-            to_optional_score(pair[1]),
-        )
-
-    return None, None
-
-
-def parse_kickoff(
-    date_value: Any,
-    time_value: Any,
-) -> tuple[datetime, datetime]:
-    date_text = normalize_text(date_value)
-    time_text = normalize_text(time_value)
-
-    if not date_text or not time_text:
-        raise ValueError(
-            f"Thiếu date/time: date={date_text!r}, time={time_text!r}"
-        )
-
-    try:
-        naive_datetime = datetime.strptime(
-            f"{date_text} {time_text}",
-            "%Y-%m-%d %H:%M",
-        )
-    except ValueError as exc:
-        raise ValueError(
-            f"Không parse được kickoff: {date_text} {time_text}"
-        ) from exc
-
-    london_datetime = naive_datetime.replace(
-        tzinfo=ZoneInfo(SOURCE_TIMEZONE)
-    )
-
-    utc_datetime = london_datetime.astimezone(timezone.utc)
-    vietnam_datetime = london_datetime.astimezone(
-        ZoneInfo(TARGET_TIMEZONE)
-    )
-
-    return utc_datetime, vietnam_datetime
 
 
 def weekday_vietnamese(weekday_en: str) -> str:
@@ -409,20 +420,14 @@ def weekday_vietnamese(weekday_en: str) -> str:
 def load_team_metadata() -> dict[str, dict[str, Any]]:
     if not TEAM_METADATA_PATH.exists():
         raise FileNotFoundError(
-            f"Không tìm thấy metadata đội bóng: "
-            f"{TEAM_METADATA_PATH}"
+            f"Không tìm thấy metadata đội bóng: {TEAM_METADATA_PATH}"
         )
 
-    with TEAM_METADATA_PATH.open(
-        "r",
-        encoding="utf-8"
-    ) as file:
+    with TEAM_METADATA_PATH.open("r", encoding="utf-8") as file:
         metadata = json.load(file)
 
     if not isinstance(metadata, dict):
-        raise TypeError(
-            "epl_team_metadata.json phải là JSON object."
-        )
+        raise TypeError("epl_team_metadata.json phải là JSON object.")
 
     normalized_metadata = {}
 
@@ -433,424 +438,16 @@ def load_team_metadata() -> dict[str, dict[str, Any]]:
             continue
 
         if not isinstance(values, dict):
-            raise TypeError(
-                f"Metadata của {clean_team_name} "
-                f"không phải object."
-            )
+            raise TypeError(f"Metadata của {clean_team_name} không phải object.")
 
         normalized_metadata[clean_team_name] = {
-            "short_name": normalize_text(
-                values.get("short_name")
-            ),
-            "logo_path": normalize_text(
-                values.get("logo_path")
-            ),
-            "stadium_name": normalize_text(
-                values.get("stadium_name")
-            ),
-            "stadium_city": normalize_text(
-                values.get("stadium_city")
-            ),
+            "short_name": normalize_text(values.get("short_name")),
+            "logo_path": normalize_text(values.get("logo_path")),
+            "stadium_name": normalize_text(values.get("stadium_name")),
+            "stadium_city": normalize_text(values.get("stadium_city")),
         }
 
     return normalized_metadata
-
-def get_espn_team_display_name(
-    competitor: dict[str, Any],
-) -> str | None:
-    team = competitor.get("team") or {}
-    return normalize_text(
-        team.get("displayName")
-        or team.get("name")
-        or team.get("shortDisplayName")
-        or team.get("abbreviation")
-    )
-
-
-def build_team_name_lookup(
-    team_names: list[str] | set[str],
-) -> dict[str, str]:
-    return {
-        clean_espn_text(team_name): team_name
-        for team_name in team_names
-    }
-
-
-def resolve_team_name_from_metadata(
-    source_name: str | None,
-    metadata_lookup: dict[str, str],
-) -> str:
-    clean_name = normalize_text(source_name)
-
-    if not clean_name:
-        raise ValueError("ESPN event thiếu tên đội.")
-
-    key = clean_espn_text(clean_name)
-    resolved_name = metadata_lookup.get(key)
-
-    if not resolved_name:
-        raise KeyError(
-            f"Đội ESPN chưa map được metadata: {clean_name}"
-        )
-
-    return resolved_name
-
-
-def parse_espn_event_datetime(
-    event: dict[str, Any],
-) -> tuple[datetime, datetime, datetime]:
-    event_date = normalize_text(event.get("date"))
-
-    if not event_date:
-        raise ValueError(
-            f"ESPN event {event.get('id')} thiếu date."
-        )
-
-    kickoff_utc = datetime.fromisoformat(
-        event_date.replace("Z", "+00:00")
-    )
-
-    if kickoff_utc.tzinfo is None:
-        kickoff_utc = kickoff_utc.replace(tzinfo=timezone.utc)
-
-    kickoff_utc = kickoff_utc.astimezone(timezone.utc)
-    kickoff_source = kickoff_utc.astimezone(
-        ZoneInfo(SOURCE_TIMEZONE)
-    )
-    kickoff_vietnam = kickoff_utc.astimezone(
-        ZoneInfo(TARGET_TIMEZONE)
-    )
-
-    return kickoff_utc, kickoff_source, kickoff_vietnam
-
-
-def get_espn_matchday_number(
-    event: dict[str, Any],
-    fallback_order: int,
-) -> int:
-    week = event.get("week") or {}
-
-    for key in ("number", "weekNumber"):
-        value = week.get(key)
-
-        if value not in (None, ""):
-            return int(value)
-
-    season = event.get("season") or {}
-    value = season.get("type")
-
-    if isinstance(value, dict):
-        week_value = value.get("week")
-        if week_value not in (None, ""):
-            return int(week_value)
-
-    return ((fallback_order - 1) // 10) + 1
-
-
-def get_espn_event_status_completed(
-    event: dict[str, Any],
-) -> bool:
-    status_type = ((event.get("status") or {}).get("type") or {})
-
-    if bool(status_type.get("completed")):
-        return True
-
-    competitions = event.get("competitions") or []
-
-    if competitions:
-        competition_status = (
-            (competitions[0].get("status") or {}).get("type") or {}
-        )
-        return bool(competition_status.get("completed"))
-
-    return False
-
-
-def parse_espn_competitor_score(
-    competitor: dict[str, Any],
-) -> int | None:
-    value = competitor.get("score")
-
-    if value in (None, ""):
-        return None
-
-    return to_optional_score(value)
-
-
-def extract_espn_venue(
-    event: dict[str, Any],
-) -> tuple[str | None, str | None]:
-    competitions = event.get("competitions") or []
-
-    if not competitions:
-        return None, None
-
-    venue = competitions[0].get("venue") or {}
-    venue_name = normalize_text(
-        venue.get("fullName")
-        or venue.get("name")
-    )
-    address = venue.get("address") or {}
-    city = normalize_text(address.get("city"))
-
-    return venue_name, city
-
-
-def build_teams(
-    raw_matches: list[dict[str, Any]],
-    team_metadata: dict[str, dict[str, Any]],
-) -> tuple[list[dict[str, Any]], dict[str, int]]:
-    metadata_lookup = build_team_name_lookup(
-        set(team_metadata)
-    )
-    team_names: set[str] = set()
-
-    for event in raw_matches:
-        home, away = get_espn_competitors(event)
-        team_names.add(
-            resolve_team_name_from_metadata(
-                get_espn_team_display_name(home),
-                metadata_lookup,
-            )
-        )
-        team_names.add(
-            resolve_team_name_from_metadata(
-                get_espn_team_display_name(away),
-                metadata_lookup,
-            )
-        )
-
-    missing_metadata = sorted(
-        team_name
-        for team_name in team_names
-        if team_name not in team_metadata
-    )
-
-    if missing_metadata:
-        raise RuntimeError(
-            "Các đội chưa có metadata:\n- "
-            + "\n- ".join(missing_metadata)
-        )
-
-    records: list[dict[str, Any]] = []
-
-    for team_name in sorted(
-        team_names,
-        key=str.casefold
-    ):
-        metadata = team_metadata[team_name]
-
-        records.append(
-            {
-                "team_id": stable_postgres_integer(
-                    "epl-team-v1",
-                    canonical_key_text(team_name),
-                ),
-                "team_name": team_name,
-                "short_name": metadata.get(
-                    "short_name"
-                ),
-                "logo_path": metadata.get(
-                    "logo_path"
-                ),
-                "stadium_name": metadata.get(
-                    "stadium_name"
-                ),
-                "stadium_city": metadata.get(
-                    "stadium_city"
-                ),
-            }
-        )
-
-    ids = [
-        record["team_id"]
-        for record in records
-    ]
-
-    if len(ids) != len(set(ids)):
-        raise RuntimeError(
-            "Phát hiện hash collision ở team_id."
-        )
-
-    name_to_id = {
-        record["team_name"]: record["team_id"]
-        for record in records
-    }
-
-    return records, name_to_id
-
-
-def normalize_matches(
-    raw_matches: list[dict[str, Any]],
-    team_name_to_id: dict[str, int],
-) -> tuple[list[dict[str, Any]], list[int]]:
-    records: list[dict[str, Any]] = []
-    matchdays: list[int] = []
-    team_name_lookup = build_team_name_lookup(
-        set(team_name_to_id)
-    )
-
-    sorted_events = sorted(
-        raw_matches,
-        key=lambda event: (
-            str(event.get("date") or ""),
-            str(event.get("id") or ""),
-        ),
-    )
-
-    for source_order, event in enumerate(
-        sorted_events,
-        start=1,
-    ):
-        espn_event_id = normalize_text(event.get("id"))
-
-        if not espn_event_id:
-            raise ValueError("ESPN event thiếu id.")
-
-        home, away = get_espn_competitors(event)
-        home_name = resolve_team_name_from_metadata(
-            get_espn_team_display_name(home),
-            team_name_lookup,
-        )
-        away_name = resolve_team_name_from_metadata(
-            get_espn_team_display_name(away),
-            team_name_lookup,
-        )
-
-        matchday = get_espn_matchday_number(
-            event,
-            source_order,
-        )
-        round_name = f"Vòng {matchday}"
-
-        context = (
-            f"espn_event_id={espn_event_id}, "
-            f"round={round_name!r}, "
-            f"home={home_name!r}, away={away_name!r}"
-        )
-
-        if home_name == away_name:
-            raise ValueError(
-                f"Đội nhà và đội khách trùng nhau: {context}"
-            )
-
-        kickoff_utc, kickoff_source, kickoff_vietnam = (
-            parse_espn_event_datetime(event)
-        )
-
-        is_finished = get_espn_event_status_completed(event)
-        score_home = (
-            parse_espn_competitor_score(home)
-            if is_finished
-            else None
-        )
-        score_away = (
-            parse_espn_competitor_score(away)
-            if is_finished
-            else None
-        )
-
-        if is_finished and (
-            score_home is None or score_away is None
-        ):
-            raise ValueError(
-                f"Trận đã kết thúc nhưng thiếu tỉ số: {context}"
-            )
-
-        winner_name = None
-
-        if is_finished:
-            if score_home > score_away:
-                winner_name = home_name
-            elif score_away > score_home:
-                winner_name = away_name
-
-        winner_id = (
-            team_name_to_id[winner_name]
-            if winner_name is not None
-            else None
-        )
-
-        venue_name, city = extract_espn_venue(event)
-
-        source_match_id = espn_event_id
-        match_id = stable_postgres_integer(
-            "epl-match-v1",
-            "|".join(
-                [
-                    COMPETITION_KEY,
-                    SEASON_SLUG,
-                    source_match_id,
-                ]
-            ),
-        )
-
-        matchdays.append(matchday)
-
-        records.append(
-            {
-                "match_id": match_id,
-                "source_match_id": source_match_id,
-                "round_name": round_name,
-                "stage_type": "league",
-                "is_knockout": False,
-                "date_source": kickoff_source.strftime("%Y-%m-%d"),
-                "time_source": kickoff_source.strftime("%H:%M"),
-                "kickoff_time_utc": kickoff_utc.isoformat(),
-                "kickoff_datetime_vietnam": (
-                    kickoff_vietnam.isoformat()
-                ),
-                "kickoff_date_vietnam": (
-                    kickoff_vietnam.strftime("%Y-%m-%d")
-                ),
-                "kickoff_date_display_vietnam": (
-                    kickoff_vietnam.strftime("%d/%m/%Y")
-                ),
-                "kickoff_time_vietnam": (
-                    kickoff_vietnam.strftime("%H:%M")
-                ),
-                "kickoff_weekday_vietnam": (
-                    weekday_vietnamese(
-                        kickoff_vietnam.strftime("%A")
-                    )
-                ),
-                "kickoff_display_vietnam": (
-                    kickoff_vietnam.strftime(
-                        "%H:%M, %d/%m/%Y"
-                    )
-                ),
-                "home_team_id": team_name_to_id[home_name],
-                "home_team_name": home_name,
-                "away_team_id": team_name_to_id[away_name],
-                "away_team_name": away_name,
-                "venue": venue_name,
-                "city": city,
-                "score_ft_home": score_home,
-                "score_ft_away": score_away,
-                "score_et_home": None,
-                "score_et_away": None,
-                "score_pen_home": None,
-                "score_pen_away": None,
-                "home_score_for_prediction": (
-                    score_home if is_finished else None
-                ),
-                "away_score_for_prediction": (
-                    score_away if is_finished else None
-                ),
-                "is_finished": is_finished,
-                "winner_team_id": winner_id,
-                "winner_team_name": winner_name,
-            }
-        )
-
-    records.sort(
-        key=lambda row: (
-            row["kickoff_time_utc"],
-            row["match_id"],
-        )
-    )
-
-    return records, matchdays
 
 
 TEAM_NAME_ALIASES = {
@@ -862,6 +459,7 @@ TEAM_NAME_ALIASES = {
     "brighton": "brighton",
     "brighton and hove albion": "brighton",
     "brighton hove albion": "brighton",
+    "burnley": "burnley",
     "chelsea": "chelsea",
     "crystal palace": "crystal palace",
     "everton": "everton",
@@ -891,6 +489,219 @@ TEAM_NAME_ALIASES = {
 }
 
 
+def clean_team_text(value: Any) -> str:
+    if value is None:
+        return ""
+
+    cleaned = str(value).strip().lower()
+    cleaned = unicodedata.normalize("NFKD", cleaned)
+    cleaned = "".join(ch for ch in cleaned if not unicodedata.combining(ch))
+    cleaned = cleaned.replace("&", "and")
+    cleaned = re.sub(r"\b(fc|afc|football club)\b", "", cleaned)
+    cleaned = re.sub(r"[^a-z0-9]+", " ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return TEAM_NAME_ALIASES.get(cleaned, cleaned)
+
+
+def build_team_name_lookup(team_names: list[str] | set[str]) -> dict[str, str]:
+    return {clean_team_text(name): name for name in team_names}
+
+
+def resolve_team_name_from_metadata(
+    source_name: str | None,
+    metadata_lookup: dict[str, str],
+) -> str:
+    clean_name = normalize_text(source_name)
+
+    if not clean_name:
+        raise ValueError("Fixture thiếu tên đội.")
+
+    key = clean_team_text(clean_name)
+    resolved_name = metadata_lookup.get(key)
+
+    if not resolved_name:
+        raise KeyError(
+            f"Đội chưa map được metadata: {clean_name} "
+            f"(key chuẩn hoá: {key!r}). Thêm alias vào "
+            f"TEAM_NAME_ALIASES hoặc sửa epl_team_metadata.json."
+        )
+
+    return resolved_name
+
+
+def build_teams(
+    raw_matches: list[dict[str, Any]],
+    team_metadata: dict[str, dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    metadata_lookup = build_team_name_lookup(set(team_metadata))
+    team_names: set[str] = set()
+
+    for match in raw_matches:
+        team_names.add(
+            resolve_team_name_from_metadata(match["home_name"], metadata_lookup)
+        )
+        team_names.add(
+            resolve_team_name_from_metadata(match["away_name"], metadata_lookup)
+        )
+
+    missing_metadata = sorted(
+        name for name in team_names if name not in team_metadata
+    )
+
+    if missing_metadata:
+        raise RuntimeError(
+            "Các đội chưa có metadata:\n- " + "\n- ".join(missing_metadata)
+        )
+
+    records: list[dict[str, Any]] = []
+
+    for team_name in sorted(team_names, key=str.casefold):
+        metadata = team_metadata[team_name]
+        records.append(
+            {
+                "team_id": stable_postgres_integer(
+                    "epl-team-v1", canonical_key_text(team_name)
+                ),
+                "team_name": team_name,
+                "short_name": metadata.get("short_name"),
+                "logo_path": metadata.get("logo_path"),
+                "stadium_name": metadata.get("stadium_name"),
+                "stadium_city": metadata.get("stadium_city"),
+            }
+        )
+
+    ids = [record["team_id"] for record in records]
+
+    if len(ids) != len(set(ids)):
+        raise RuntimeError("Phát hiện hash collision ở team_id.")
+
+    name_to_id = {record["team_name"]: record["team_id"] for record in records}
+
+    return records, name_to_id
+
+
+def normalize_matches(
+    raw_matches: list[dict[str, Any]],
+    team_name_to_id: dict[str, int],
+) -> tuple[list[dict[str, Any]], list[int]]:
+    records: list[dict[str, Any]] = []
+    matchdays: list[int] = []
+    team_name_lookup = build_team_name_lookup(set(team_name_to_id))
+
+    sorted_matches = sorted(
+        raw_matches,
+        key=lambda m: (
+            m["date"].isoformat(),
+            m["time"] or "",
+            m["home_name"],
+        ),
+    )
+
+    for source_order, match in enumerate(sorted_matches, start=1):
+        home_name = resolve_team_name_from_metadata(
+            match["home_name"], team_name_lookup
+        )
+        away_name = resolve_team_name_from_metadata(
+            match["away_name"], team_name_lookup
+        )
+
+        if home_name == away_name:
+            raise ValueError(
+                f"Đội nhà và đội khách trùng nhau tại: {match}"
+            )
+
+        matchday = match["round"] or ((source_order - 1) // 10) + 1
+        round_name = f"Vòng {matchday}"
+
+        naive_kickoff = dt.datetime.combine(
+            match["date"],
+            dt.datetime.strptime(match["time"], "%H:%M").time(),
+        )
+        kickoff_source = naive_kickoff.replace(tzinfo=ZoneInfo(SOURCE_TIMEZONE))
+        kickoff_utc = kickoff_source.astimezone(dt.timezone.utc)
+        kickoff_vietnam = kickoff_utc.astimezone(ZoneInfo(TARGET_TIMEZONE))
+
+        score_home = match["home_score"]
+        score_away = match["away_score"]
+
+        # File chỉ chứa trận đã có kết quả (kể cả 0-0) — nếu tương lai
+        # nguồn thêm trận chưa đá (không có tỉ số), coi None là chưa đá.
+        is_finished = score_home is not None and score_away is not None
+
+        winner_name = None
+        if is_finished:
+            if score_home > score_away:
+                winner_name = home_name
+            elif score_away > score_home:
+                winner_name = away_name
+
+        winner_id = (
+            team_name_to_id[winner_name] if winner_name is not None else None
+        )
+
+        source_match_id = "|".join(
+            [
+                match["date"].isoformat(),
+                clean_team_text(home_name),
+                clean_team_text(away_name),
+            ]
+        )
+        match_id = stable_postgres_integer(
+            "epl-match-v1",
+            "|".join([COMPETITION_KEY, SEASON_SLUG, source_match_id]),
+        )
+
+        matchdays.append(matchday)
+
+        records.append(
+            {
+                "match_id": match_id,
+                "source_match_id": source_match_id,
+                "round_name": round_name,
+                "stage_type": "league",
+                "is_knockout": False,
+                "date_source": kickoff_source.strftime("%Y-%m-%d"),
+                "time_source": kickoff_source.strftime("%H:%M"),
+                "kickoff_time_utc": kickoff_utc.isoformat(),
+                "kickoff_datetime_vietnam": kickoff_vietnam.isoformat(),
+                "kickoff_date_vietnam": kickoff_vietnam.strftime("%Y-%m-%d"),
+                "kickoff_date_display_vietnam": kickoff_vietnam.strftime(
+                    "%d/%m/%Y"
+                ),
+                "kickoff_time_vietnam": kickoff_vietnam.strftime("%H:%M"),
+                "kickoff_weekday_vietnam": weekday_vietnamese(
+                    kickoff_vietnam.strftime("%A")
+                ),
+                "kickoff_display_vietnam": kickoff_vietnam.strftime(
+                    "%H:%M, %d/%m/%Y"
+                ),
+                "home_team_id": team_name_to_id[home_name],
+                "home_team_name": home_name,
+                "away_team_id": team_name_to_id[away_name],
+                "away_team_name": away_name,
+                "venue": None,
+                "city": None,
+                "score_ft_home": score_home,
+                "score_ft_away": score_away,
+                "score_et_home": None,
+                "score_et_away": None,
+                "score_pen_home": None,
+                "score_pen_away": None,
+                "home_score_for_prediction": score_home if is_finished else None,
+                "away_score_for_prediction": score_away if is_finished else None,
+                "is_finished": is_finished,
+                "winner_team_id": winner_id,
+                "winner_team_name": winner_name,
+                "_home_goals": match["home_goals"],
+                "_away_goals": match["away_goals"],
+            }
+        )
+
+    records.sort(key=lambda row: (row["kickoff_time_utc"], row["match_id"]))
+
+    return records, matchdays
+
+
 def validate_dataset(
     teams: list[dict[str, Any]],
     matches: list[dict[str, Any]],
@@ -899,14 +710,10 @@ def validate_dataset(
     errors: list[str] = []
 
     if len(teams) != EXPECTED_TEAM_COUNT:
-        errors.append(
-            f"Số đội={len(teams)}, kỳ vọng={EXPECTED_TEAM_COUNT}."
-        )
+        errors.append(f"Số đội={len(teams)}, kỳ vọng={EXPECTED_TEAM_COUNT}.")
 
     if len(matches) != EXPECTED_MATCH_COUNT:
-        errors.append(
-            f"Số trận={len(matches)}, kỳ vọng={EXPECTED_MATCH_COUNT}."
-        )
+        errors.append(f"Số trận={len(matches)}, kỳ vọng={EXPECTED_MATCH_COUNT}.")
 
     match_ids = [row["match_id"] for row in matches]
     source_ids = [row["source_match_id"] for row in matches]
@@ -921,12 +728,10 @@ def validate_dataset(
 
     if observed_matchdays != EXPECTED_MATCHDAYS:
         errors.append(
-            "Vòng đấu không đủ 1 đến 38. "
-            f"Đang có: {sorted(observed_matchdays)}"
+            f"Vòng đấu không đủ 1-38. Đang có: {sorted(observed_matchdays)}"
         )
 
     matchday_counts = Counter(matchdays)
-
     invalid_round_counts = {
         round_no: count
         for round_no, count in matchday_counts.items()
@@ -934,18 +739,10 @@ def validate_dataset(
     }
 
     if invalid_round_counts:
-        errors.append(
-            "Một số vòng không có đúng 10 trận: "
-            f"{invalid_round_counts}"
-        )
+        errors.append(f"Một số vòng không đúng 10 trận: {invalid_round_counts}")
 
-    home_counts = Counter(
-        row["home_team_name"] for row in matches
-    )
-    away_counts = Counter(
-        row["away_team_name"] for row in matches
-    )
-
+    home_counts = Counter(row["home_team_name"] for row in matches)
+    away_counts = Counter(row["away_team_name"] for row in matches)
     invalid_team_schedules = {}
 
     for team in teams:
@@ -954,39 +751,33 @@ def validate_dataset(
         away_count = away_counts[name]
 
         if home_count != 19 or away_count != 19:
-            invalid_team_schedules[name] = {
-                "home": home_count,
-                "away": away_count,
-            }
+            invalid_team_schedules[name] = {"home": home_count, "away": away_count}
 
     if invalid_team_schedules:
         errors.append(
             "Lịch sân nhà/sân khách không hợp lệ: "
-            + json.dumps(
-                invalid_team_schedules,
-                ensure_ascii=False,
-            )
+            + json.dumps(invalid_team_schedules, ensure_ascii=False)
         )
 
     for row in matches:
-        if (
-            row["score_ft_home"] is None
-        ) != (
-            row["score_ft_away"] is None
-        ):
+        if (row["score_ft_home"] is None) != (row["score_ft_away"] is None):
+            errors.append(f"Tỉ số thiếu một phía tại match_id={row['match_id']}")
+
+        expected_goals = (row["score_ft_home"] or 0) + (row["score_ft_away"] or 0)
+        parsed_goals = len(row["_home_goals"]) + len(row["_away_goals"])
+
+        if row["is_finished"] and expected_goals != parsed_goals:
             errors.append(
-                f"Tỉ số thiếu một phía tại match_id={row['match_id']}"
+                f"Lệch số bàn tại match_id={row['match_id']} "
+                f"({row['home_team_name']} {row['score_ft_home']}-"
+                f"{row['score_ft_away']} {row['away_team_name']}): "
+                f"kỳ vọng {expected_goals}, parse được {parsed_goals}"
             )
 
     if errors:
-        raise RuntimeError(
-            "DATA VALIDATION FAILED:\n- "
-            + "\n- ".join(errors)
-        )
+        raise RuntimeError("DATA VALIDATION FAILED:\n- " + "\n- ".join(errors))
 
-    finished_count = sum(
-        1 for row in matches if row["is_finished"]
-    )
+    finished_count = sum(1 for row in matches if row["is_finished"])
 
     print("Validation thành công")
     print("Số đội:", len(teams))
@@ -997,52 +788,30 @@ def validate_dataset(
 
 
 def get_database_url() -> str:
-    database_url = os.getenv(
-        "DATABASE_URL",
-        "",
-    ).strip()
+    database_url = os.getenv("DATABASE_URL", "").strip()
 
     if not database_url:
-        raise RuntimeError(
-            "Thiếu environment variable DATABASE_URL."
-        )
+        raise RuntimeError("Thiếu environment variable DATABASE_URL.")
 
     parsed = make_url(database_url)
 
     if parsed.drivername != "postgresql+psycopg2":
-        raise RuntimeError(
-            "DATABASE_URL phải dùng postgresql+psycopg2."
-        )
+        raise RuntimeError("DATABASE_URL phải dùng postgresql+psycopg2.")
 
     if parsed.port != 5432:
-        raise RuntimeError(
-            "DATABASE_URL phải dùng Session Pooler port 5432."
-        )
+        raise RuntimeError("DATABASE_URL phải dùng Session Pooler port 5432.")
 
     return database_url
 
 
 def ensure_database_schema(engine) -> None:
-    required_tables = {
-        "teams",
-        "matches",
-        "predictions",
-    }
-
+    required_tables = {"teams", "matches", "predictions"}
     inspector = inspect(engine)
-    public_tables = set(
-        inspector.get_table_names(schema="public")
-    )
-
-    missing_tables = sorted(
-        required_tables - public_tables
-    )
+    public_tables = set(inspector.get_table_names(schema="public"))
+    missing_tables = sorted(required_tables - public_tables)
 
     if missing_tables:
-        raise RuntimeError(
-            "Database còn thiếu bảng: "
-            + ", ".join(missing_tables)
-        )
+        raise RuntimeError("Database còn thiếu bảng: " + ", ".join(missing_tables))
 
     expected_columns = {
         "teams": {
@@ -1066,32 +835,21 @@ def ensure_database_schema(engine) -> None:
         },
     }
 
-    for table_name, required_columns in (
-        expected_columns.items()
-    ):
+    for table_name, required_columns in expected_columns.items():
         actual_columns = {
             column["name"]
-            for column in inspector.get_columns(
-                table_name,
-                schema="public",
-            )
+            for column in inspector.get_columns(table_name, schema="public")
         }
-
-        missing_columns = sorted(
-            required_columns - actual_columns
-        )
+        missing_columns = sorted(required_columns - actual_columns)
 
         if missing_columns:
             raise RuntimeError(
-                f"Bảng {table_name} thiếu cột: "
-                + ", ".join(missing_columns)
+                f"Bảng {table_name} thiếu cột: " + ", ".join(missing_columns)
             )
 
+
 def result_state(row: dict[str, Any]) -> tuple[Any, ...]:
-    return tuple(
-        row.get(column)
-        for column in RESULT_STATE_COLUMNS
-    )
+    return tuple(row.get(column) for column in RESULT_STATE_COLUMNS)
 
 
 def get_existing_result_states(
@@ -1101,22 +859,14 @@ def get_existing_result_states(
 ) -> dict[int, tuple[Any, ...]]:
     statement = select(
         matches_table.c.match_id,
-        *[
-            matches_table.c[column]
-            for column in RESULT_STATE_COLUMNS
-        ],
-    ).where(
-        matches_table.c.match_id.in_(match_ids)
-    )
+        *[matches_table.c[column] for column in RESULT_STATE_COLUMNS],
+    ).where(matches_table.c.match_id.in_(match_ids))
 
     existing = {}
 
-    for row in connection.execute(
-        statement
-    ).mappings():
+    for row in connection.execute(statement).mappings():
         existing[int(row["match_id"])] = tuple(
-            row[column]
-            for column in RESULT_STATE_COLUMNS
+            row[column] for column in RESULT_STATE_COLUMNS
         )
 
     return existing
@@ -1125,10 +875,8 @@ def get_existing_result_states(
 def get_outcome(home_score: int, away_score: int) -> str:
     if home_score > away_score:
         return "HOME_WIN"
-
     if home_score < away_score:
         return "AWAY_WIN"
-
     return "DRAW"
 
 
@@ -1138,15 +886,11 @@ def calculate_base_points(
     actual_home: int,
     actual_away: int,
 ) -> int:
-    if (
-        predicted_home == actual_home
-        and predicted_away == actual_away
-    ):
+    if predicted_home == actual_home and predicted_away == actual_away:
         return 3
 
-    if (
-        get_outcome(predicted_home, predicted_away)
-        == get_outcome(actual_home, actual_away)
+    if get_outcome(predicted_home, predicted_away) == get_outcome(
+        actual_home, actual_away
     ):
         return 1
 
@@ -1155,18 +899,10 @@ def calculate_base_points(
 
 def star_multiplier(star_type: Any) -> int:
     normalized = str(star_type or "none").strip().lower()
-
-    return {
-        "none": 1,
-        "hope": 2,
-        "super": 3,
-    }.get(normalized, 1)
+    return {"none": 1, "hope": 2, "super": 3}.get(normalized, 1)
 
 
-def rescore_predictions(
-    connection,
-    changed_match_ids: list[int],
-) -> int:
+def rescore_predictions(connection, changed_match_ids: list[int]) -> int:
     if not changed_match_ids:
         return 0
 
@@ -1181,32 +917,21 @@ def rescore_predictions(
             m.away_score_for_prediction,
             m.is_finished
         FROM predictions AS p
-        JOIN matches AS m
-          ON m.match_id = p.match_id
+        JOIN matches AS m ON m.match_id = p.match_id
         WHERE p.match_id IN :match_ids
         """
-    ).bindparams(
-        bindparam(
-            "match_ids",
-            expanding=True,
-        )
-    )
+    ).bindparams(bindparam("match_ids", expanding=True))
 
     updates = []
 
     for row in connection.execute(
-        statement,
-        {"match_ids": changed_match_ids},
+        statement, {"match_ids": changed_match_ids}
     ).mappings():
         if not bool(row["is_finished"]):
             continue
 
-        actual_home = row[
-            "home_score_for_prediction"
-        ]
-        actual_away = row[
-            "away_score_for_prediction"
-        ]
+        actual_home = row["home_score_for_prediction"]
+        actual_away = row["away_score_for_prediction"]
 
         if actual_home is None or actual_away is None:
             continue
@@ -1217,19 +942,13 @@ def rescore_predictions(
             int(actual_home),
             int(actual_away),
         )
-
-        multiplier = star_multiplier(
-            row["star_type"]
-        )
-
+        multiplier = star_multiplier(row["star_type"])
         final_points = base_points * multiplier
         bonus_points = final_points - base_points
 
         updates.append(
             {
-                "prediction_id": int(
-                    row["prediction_id"]
-                ),
+                "prediction_id": int(row["prediction_id"]),
                 "base_points": base_points,
                 "star_bonus_points": bonus_points,
                 "points": final_points,
@@ -1243,8 +962,7 @@ def rescore_predictions(
         text(
             """
             UPDATE predictions
-            SET
-                base_points = :base_points,
+            SET base_points = :base_points,
                 star_bonus_points = :star_bonus_points,
                 points = :points
             WHERE prediction_id = :prediction_id
@@ -1261,420 +979,96 @@ def sync_database(
     matches: list[dict[str, Any]],
 ) -> dict[str, int]:
     database_url = get_database_url()
-
     engine = create_engine(
         database_url,
         poolclass=NullPool,
         pool_pre_ping=True,
-        connect_args={
-            "connect_timeout": 20,
-        },
+        connect_args={"connect_timeout": 20},
     )
 
     try:
         ensure_database_schema(engine)
 
         metadata = MetaData()
-        teams_table = Table(
-            "teams",
-            metadata,
-            autoload_with=engine,
-        )
-        matches_table = Table(
-            "matches",
-            metadata,
-            autoload_with=engine,
-        )
+        teams_table = Table("teams", metadata, autoload_with=engine)
+        matches_table = Table("matches", metadata, autoload_with=engine)
+
+        # Bỏ 2 field nội bộ (_home_goals/_away_goals) trước khi insert
+        # vào bảng matches — chúng chỉ dùng để ghi bảng match_goals.
+        clean_matches = [
+            {k: v for k, v in row.items() if not k.startswith("_")}
+            for row in matches
+        ]
 
         with engine.begin() as connection:
             existing_states = get_existing_result_states(
                 connection,
                 matches_table,
-                [row["match_id"] for row in matches],
+                [row["match_id"] for row in clean_matches],
             )
 
             changed_match_ids = []
 
-            for row in matches:
-                old_state = existing_states.get(
-                    row["match_id"]
-                )
+            for row in clean_matches:
+                old_state = existing_states.get(row["match_id"])
                 new_state = result_state(row)
 
                 if old_state != new_state:
-                    changed_match_ids.append(
-                        row["match_id"]
-                    )
+                    changed_match_ids.append(row["match_id"])
 
-            team_insert = pg_insert(
-                teams_table
-            ).values(teams)
-
-            team_upsert = (
-                team_insert
-                .on_conflict_do_update(
-                    index_elements=[
-                        teams_table.c.team_id
-                    ],
-                    set_={
-                        "team_name": (
-                            team_insert.excluded.team_name
-                        ),
-                        "short_name": (
-                            team_insert.excluded.short_name
-                        ),
-                        "logo_path": (
-                            team_insert.excluded.logo_path
-                        ),
-                        "stadium_name": (
-                            team_insert.excluded.stadium_name
-                        ),
-                        "stadium_city": (
-                            team_insert.excluded.stadium_city
-                        ),
-                    },
-                )
+            team_insert = pg_insert(teams_table).values(teams)
+            team_upsert = team_insert.on_conflict_do_update(
+                index_elements=[teams_table.c.team_id],
+                set_={
+                    "team_name": team_insert.excluded.team_name,
+                    "short_name": team_insert.excluded.short_name,
+                    "logo_path": team_insert.excluded.logo_path,
+                    "stadium_name": team_insert.excluded.stadium_name,
+                    "stadium_city": team_insert.excluded.stadium_city,
+                },
             )
-
             connection.execute(team_upsert)
 
-            match_insert = pg_insert(
-                matches_table
-            ).values(matches)
-
-            match_upsert = (
-                match_insert
-                .on_conflict_do_update(
-                    index_elements=[
-                        matches_table.c.match_id
-                    ],
-                    set_={
-                        column: getattr(
-                            match_insert.excluded,
-                            column,
-                        )
-                        for column in MATCH_COLUMNS
-                        if column != "match_id"
-                    },
-                )
+            match_insert = pg_insert(matches_table).values(clean_matches)
+            match_upsert = match_insert.on_conflict_do_update(
+                index_elements=[matches_table.c.match_id],
+                set_={
+                    column: getattr(match_insert.excluded, column)
+                    for column in MATCH_COLUMNS
+                    if column != "match_id"
+                },
             )
-
             connection.execute(match_upsert)
 
-            rescored_predictions = (
-                rescore_predictions(
-                    connection,
-                    changed_match_ids,
-                )
+            rescored_predictions = rescore_predictions(
+                connection, changed_match_ids
             )
 
-            database_counts = connection.execute(
-                text(
-                    """
-                    SELECT
-                        (SELECT COUNT(*) FROM teams)
-                            AS teams,
-                        (SELECT COUNT(*) FROM matches)
-                            AS matches,
-                        (SELECT COUNT(*) FROM predictions)
-                            AS predictions
-                    """
+            database_counts = (
+                connection.execute(
+                    text(
+                        """
+                        SELECT
+                            (SELECT COUNT(*) FROM teams) AS teams,
+                            (SELECT COUNT(*) FROM matches) AS matches,
+                            (SELECT COUNT(*) FROM predictions) AS predictions
+                        """
+                    )
                 )
-            ).mappings().one()
+                .mappings()
+                .one()
+            )
 
         return {
             "teams": int(database_counts["teams"]),
             "matches": int(database_counts["matches"]),
-            "predictions": int(
-                database_counts["predictions"]
-            ),
-            "changed_matches": len(
-                changed_match_ids
-            ),
-            "rescored_predictions": (
-                rescored_predictions
-            ),
+            "predictions": int(database_counts["predictions"]),
+            "changed_matches": len(changed_match_ids),
+            "rescored_predictions": rescored_predictions,
         }
 
     finally:
         engine.dispose()
-
-
-ESPN_SCOREBOARD_URL = (
-    "https://site.api.espn.com/apis/site/v2/sports/"
-    "soccer/eng.1/scoreboard"
-)
-ESPN_SUMMARY_URL = (
-    "https://site.api.espn.com/apis/site/v2/sports/"
-    "soccer/eng.1/summary"
-)
-ESPN_SEASON_SEED_DATE = os.getenv(
-    "ESPN_SEASON_SEED_DATE",
-    "20260815",
-).strip()
-ESPN_SEASON_START_DATE = os.getenv(
-    "ESPN_SEASON_START_DATE",
-    "20260801",
-).strip()
-ESPN_SEASON_END_DATE = os.getenv(
-    "ESPN_SEASON_END_DATE",
-    "20270531",
-).strip()
-ESPN_RECENT_DAYS = int(
-    os.getenv(
-        "ESPN_RECENT_DAYS",
-        os.getenv("RECENT_DAYS", "3"),
-    )
-)
-ESPN_FORCE_REFRESH = os.getenv(
-    "ESPN_FORCE_REFRESH",
-    os.getenv("FORCE_REFRESH", "false"),
-).strip().casefold() == "true"
-
-
-@dataclass(frozen=True)
-class EspnMatchMeta:
-    espn_event_id: str
-    match_date_vietnam: str
-    raw_name: str | None
-    home_team_name: str
-    away_team_name: str
-    home_espn_team_id: str
-    away_espn_team_id: str
-    home_score: int
-    away_score: int
-
-
-def fetch_espn_scoreboard(date_yyyymmdd: str) -> dict[str, Any]:
-    response = _espn_get_with_retry(
-        ESPN_SCOREBOARD_URL,
-        params={"dates": date_yyyymmdd},
-    )
-
-    try:
-        payload = response.json()
-    except ValueError as exc:
-        raise RuntimeError(
-            "ESPN scoreboard không trả JSON hợp lệ."
-        ) from exc
-
-    if not isinstance(payload, dict):
-        raise TypeError("ESPN scoreboard top-level phải là object.")
-
-    return payload
-
-
-def normalize_espn_date_param(value: str) -> str:
-    clean_value = value.strip()
-
-    if re.fullmatch(r"\d{8}", clean_value):
-        return clean_value
-
-    return dt.date.fromisoformat(clean_value).strftime("%Y%m%d")
-
-
-def resolve_espn_season_dates() -> list[str]:
-    explicit_dates = os.getenv(
-        "ESPN_TASK1_DATES",
-        "",
-    ).strip()
-
-    if explicit_dates:
-        return sorted(
-            {
-                normalize_espn_date_param(part)
-                for part in explicit_dates.split(",")
-                if part.strip()
-            }
-        )
-
-    scoreboard = fetch_espn_scoreboard(ESPN_SEASON_SEED_DATE)
-    leagues = scoreboard.get("leagues") or []
-
-    if not leagues:
-        raise RuntimeError("ESPN response không có league calendar.")
-
-    calendar = leagues[0].get("calendar") or []
-    dates = sorted(
-        {
-            str(item)[:10].replace("-", "")
-            for item in calendar
-            if item
-        }
-    )
-
-    if not dates:
-        raise RuntimeError("ESPN calendar rỗng.")
-
-    start_date = yyyymmdd_to_date(
-        normalize_espn_date_param(ESPN_SEASON_START_DATE)
-    )
-    end_date = yyyymmdd_to_date(
-        normalize_espn_date_param(ESPN_SEASON_END_DATE)
-    )
-
-    season_dates = [
-        value
-        for value in dates
-        if start_date <= yyyymmdd_to_date(value) <= end_date
-    ]
-
-    if not season_dates:
-        raise RuntimeError(
-            "Không tìm thấy ngày thi đấu EPL trong khoảng mùa "
-            f"{ESPN_SEASON_START_DATE} đến {ESPN_SEASON_END_DATE}."
-        )
-
-    return season_dates
-
-
-def download_espn_season_events() -> list[dict[str, Any]]:
-    dates = resolve_espn_season_dates()
-    events_by_id: dict[str, dict[str, Any]] = {}
-
-    print("Số ngày ESPN của cả mùa cần tải:", len(dates))
-
-    for index, date_yyyymmdd in enumerate(dates, start=1):
-        print(
-            "Đang tải ESPN fixture/score",
-            f"{index}/{len(dates)}:",
-            date_yyyymmdd,
-        )
-        scoreboard = fetch_espn_scoreboard(date_yyyymmdd)
-
-        for event in scoreboard.get("events") or []:
-            event_id = normalize_text(event.get("id"))
-
-            if not event_id:
-                continue
-
-            events_by_id[event_id] = event
-
-    events = sorted(
-        events_by_id.values(),
-        key=lambda event: (
-            str(event.get("date") or ""),
-            str(event.get("id") or ""),
-        ),
-    )
-
-    if not events:
-        raise RuntimeError("Không tải được trận nào từ ESPN.")
-
-    print("Số trận ESPN tải được:", len(events))
-    return events
-
-
-def fetch_espn_summary(event_id: str) -> dict[str, Any]:
-    response = _espn_get_with_retry(
-        ESPN_SUMMARY_URL,
-        params={"event": event_id},
-    )
-
-    try:
-        payload = response.json()
-    except ValueError as exc:
-        raise RuntimeError(
-            "ESPN summary không trả JSON hợp lệ."
-        ) from exc
-
-    if not isinstance(payload, dict):
-        raise TypeError("ESPN summary top-level phải là object.")
-
-    return payload
-
-
-def date_to_yyyymmdd(value: dt.date) -> str:
-    return value.strftime("%Y%m%d")
-
-
-def yyyymmdd_to_date(value: str) -> dt.date:
-    return dt.datetime.strptime(value, "%Y%m%d").date()
-
-
-def resolve_espn_dates() -> list[str]:
-    explicit_dates = os.getenv("SYNC_DATES", "").strip()
-
-    if explicit_dates:
-        return sorted(
-            {
-                dt.date.fromisoformat(part.strip()).strftime("%Y%m%d")
-                for part in explicit_dates.split(",")
-                if part.strip()
-            }
-        )
-
-    scoreboard = fetch_espn_scoreboard(ESPN_SEASON_SEED_DATE)
-    leagues = scoreboard.get("leagues") or []
-
-    if not leagues:
-        raise RuntimeError("ESPN response không có league calendar.")
-
-    calendar = leagues[0].get("calendar") or []
-    dates = sorted(
-        {
-            str(item)[:10].replace("-", "")
-            for item in calendar
-            if item
-        }
-    )
-
-    if not dates:
-        raise RuntimeError("ESPN calendar rỗng.")
-
-    today = dt.datetime.now(
-        ZoneInfo(TARGET_TIMEZONE)
-    ).date()
-    cutoff = today - dt.timedelta(days=ESPN_RECENT_DAYS)
-
-    return [
-        value
-        for value in dates
-        if cutoff <= yyyymmdd_to_date(value) <= today
-    ]
-
-
-def clean_espn_text(value: Any) -> str:
-    if value is None:
-        return ""
-
-    cleaned = str(value).strip().lower()
-    cleaned = unicodedata.normalize("NFKD", cleaned)
-    cleaned = "".join(
-        ch
-        for ch in cleaned
-        if not unicodedata.combining(ch)
-    )
-    cleaned = cleaned.replace("&", "and")
-    cleaned = re.sub(
-        r"\b(fc|afc|football club)\b",
-        "",
-        cleaned,
-    )
-    cleaned = re.sub(r"[^a-z0-9]+", " ", cleaned)
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    return TEAM_NAME_ALIASES.get(cleaned, cleaned)
-
-
-def parse_db_date(value: Any) -> str | None:
-    if value is None:
-        return None
-
-    if isinstance(value, dt.datetime):
-        return value.date().isoformat()
-
-    if isinstance(value, dt.date):
-        return value.isoformat()
-
-    value = str(value).strip()
-
-    if not value:
-        return None
-
-    try:
-        return dt.date.fromisoformat(value[:10]).isoformat()
-    except ValueError:
-        return value[:10]
 
 
 def ensure_match_goals_table(engine) -> None:
@@ -1706,10 +1100,7 @@ def ensure_match_goals_table(engine) -> None:
     inspector = inspect(engine)
     actual_columns = {
         column["name"]
-        for column in inspector.get_columns(
-            "match_goals",
-            schema="public",
-        )
+        for column in inspector.get_columns("match_goals", schema="public")
     }
     required_columns = {
         "goal_key",
@@ -1726,460 +1117,60 @@ def ensure_match_goals_table(engine) -> None:
 
     if missing_columns:
         raise RuntimeError(
-            "Bảng match_goals thiếu cột: "
-            + ", ".join(missing_columns)
+            "Bảng match_goals thiếu cột: " + ", ".join(missing_columns)
         )
 
     print("Đã kiểm tra bảng match_goals.")
 
 
-def load_db_matches_for_goals(engine) -> list[dict[str, Any]]:
-    query = text(
-        """
-        SELECT
-            match_id,
-            source_match_id,
-            kickoff_date_vietnam,
-            home_team_id,
-            home_team_name,
-            away_team_id,
-            away_team_name,
-            home_score_for_prediction,
-            away_score_for_prediction,
-            is_finished
-        FROM public.matches
-        """
-    )
-
-    with engine.connect() as connection:
-        rows = [
-            dict(row)
-            for row in connection.execute(query).mappings()
-        ]
-
-    for row in rows:
-        row["_source_match_id_key"] = str(
-            row.get("source_match_id") or ""
-        ).strip()
-        row["_kickoff_date_key"] = parse_db_date(
-            row.get("kickoff_date_vietnam")
-        )
-        row["_home_key"] = clean_espn_text(
-            row.get("home_team_name")
-        )
-        row["_away_key"] = clean_espn_text(
-            row.get("away_team_name")
-        )
-
-    print("Số trận load từ DB để sync scorer:", len(rows))
-    return rows
-
-
-def load_existing_goal_state(engine) -> dict[int, dict[str, int]]:
-    query = text(
-        """
-        SELECT
-            match_id,
-            COUNT(*) AS goal_count,
-            COUNT(*) FILTER (
-                WHERE minute IS NOT NULL
-                AND minute <> ''
-                AND RIGHT(minute, 1) <> CHR(39)
-            ) AS bad_minute_count
-        FROM public.match_goals
-        GROUP BY match_id
-        """
-    )
-
-    with engine.connect() as connection:
-        rows = connection.execute(query).mappings()
-
-        return {
-            int(row["match_id"]): {
-                "goal_count": int(row["goal_count"]),
-                "bad_minute_count": int(row["bad_minute_count"]),
-            }
-            for row in rows
-        }
-
-
-def get_espn_competitors(
-    event: dict[str, Any],
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    competitions = event.get("competitions") or []
-
-    if not competitions:
-        raise RuntimeError(
-            f"ESPN event {event.get('id')} không có competitions."
-        )
-
-    competitors = competitions[0].get("competitors") or []
-    home = next(
-        (
-            item
-            for item in competitors
-            if item.get("homeAway") == "home"
-        ),
-        None,
-    )
-    away = next(
-        (
-            item
-            for item in competitors
-            if item.get("homeAway") == "away"
-        ),
-        None,
-    )
-
-    if not home or not away:
-        raise RuntimeError(
-            f"ESPN event {event.get('id')} thiếu home/away."
-        )
-
-    return home, away
-
-
-def get_espn_match_meta(event: dict[str, Any]) -> EspnMatchMeta:
-    home, away = get_espn_competitors(event)
-
-    event_datetime_utc = dt.datetime.fromisoformat(
-        str(event["date"]).replace("Z", "+00:00")
-    )
-    event_date_vietnam = event_datetime_utc.astimezone(
-        ZoneInfo(TARGET_TIMEZONE)
-    ).date().isoformat()
-
-    home_team = home.get("team") or {}
-    away_team = away.get("team") or {}
-
-    return EspnMatchMeta(
-        espn_event_id=str(event.get("id")),
-        match_date_vietnam=event_date_vietnam,
-        raw_name=event.get("name"),
-        home_team_name=str(
-            home_team.get("displayName")
-            or home_team.get("name")
-            or ""
-        ),
-        away_team_name=str(
-            away_team.get("displayName")
-            or away_team.get("name")
-            or ""
-        ),
-        home_espn_team_id=str(home_team.get("id")),
-        away_espn_team_id=str(away_team.get("id")),
-        home_score=int(home.get("score") or 0),
-        away_score=int(away.get("score") or 0),
-    )
-
-
-def find_db_match_for_espn(
-    meta: EspnMatchMeta,
-    db_matches: list[dict[str, Any]],
-) -> tuple[dict[str, Any] | None, str]:
-    by_source_id = [
-        row
-        for row in db_matches
-        if row["_source_match_id_key"] == meta.espn_event_id
-    ]
-
-    if len(by_source_id) == 1:
-        return by_source_id[0], "source_match_id"
-
-    home_key = clean_espn_text(meta.home_team_name)
-    away_key = clean_espn_text(meta.away_team_name)
-
-    candidates = [
-        row
-        for row in db_matches
-        if row["_kickoff_date_key"] == meta.match_date_vietnam
-        and row["_home_key"] == home_key
-        and row["_away_key"] == away_key
-    ]
-
-    if len(candidates) == 1:
-        return candidates[0], "date_and_teams"
-
-    if len(candidates) > 1:
-        return None, f"ambiguous:{len(candidates)}"
-
-    return None, "unmatched"
-
-
-def is_completed_espn_event(event: dict[str, Any]) -> bool:
-    status_type = ((event.get("status") or {}).get("type") or {})
-    return bool(status_type.get("completed"))
-
-
-def is_espn_goal_event(item: dict[str, Any]) -> bool:
-    type_obj = item.get("type") or {}
-    type_text = str(type_obj.get("text", "")).lower()
-    type_type = str(type_obj.get("type", "")).lower()
-    short_text = str(item.get("shortText", "")).lower()
-
-    if "missed" in type_text or "missed" in short_text:
-        return False
-
-    return bool(
-        item.get("scoringPlay") is True
-        and (
-            "goal" in type_text
-            or "goal" in type_type
-            or "penalty - scored" in type_text
-        )
-    )
-
-
-def parse_espn_goal_minute(value: Any) -> str | None:
-    if value is None:
-        return None
-
-    minute = str(value).strip()
-
-    if not minute:
-        return None
-
-    minute = minute.replace("'", "").replace("’", "").replace("′", "")
-    minute = re.sub(r"\s+", "", minute)
-
-    return f"{minute}'"
-
-
-def detect_espn_goal_flags(item: dict[str, Any]) -> tuple[bool, bool]:
-    type_text = str((item.get("type") or {}).get("text", "")).lower()
-    event_text = str(item.get("text", "")).lower()
-    short_text = str(item.get("shortText", "")).lower()
-    full_text = f"{type_text} {event_text} {short_text}"
-
-    is_own_goal = bool(item.get("ownGoal")) or "own goal" in full_text
-    is_penalty = bool(item.get("penaltyKick")) or "penalty - scored" in full_text
-
-    return is_penalty, is_own_goal
-
-
-def get_espn_player_name(item: dict[str, Any]) -> str:
-    participants = item.get("participants") or []
-
-    for participant in participants:
-        athlete = participant.get("athlete") or {}
-        name = athlete.get("displayName") or athlete.get("shortName")
-
-        if name:
-            return str(name).strip()
-
-    text_value = str(item.get("text") or item.get("shortText") or "").strip()
-    fallback = text_value.split("(")[0].strip()
-
-    return fallback or "Unknown"
-
-
-def parse_espn_goals_for_match(
-    event: dict[str, Any],
-    db_match: dict[str, Any],
-    meta: EspnMatchMeta,
-) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
-    summary = fetch_espn_summary(meta.espn_event_id)
-    rows: list[dict[str, Any]] = []
-    side_counts = {"home": 0, "away": 0}
-
-    for item in summary.get("keyEvents") or []:
-        if not is_espn_goal_event(item):
-            continue
-
-        team = item.get("team") or {}
-        espn_team_id = (
-            str(team.get("id"))
-            if team.get("id") is not None
-            else None
-        )
-
-        if espn_team_id == meta.home_espn_team_id:
-            team_side = "home"
-            team_id = db_match.get("home_team_id")
-            team_name = db_match.get("home_team_name")
-        elif espn_team_id == meta.away_espn_team_id:
-            team_side = "away"
-            team_id = db_match.get("away_team_id")
-            team_name = db_match.get("away_team_name")
-        else:
-            continue
-
-        side_counts[team_side] += 1
-
-        source_event_id = item.get("id")
-        fallback_goal_index = len(rows) + 1
-        goal_key = (
-            f"espn:{meta.espn_event_id}:"
-            f"{source_event_id or fallback_goal_index}"
-        )
-        is_penalty, is_own_goal = detect_espn_goal_flags(item)
-
-        rows.append(
-            {
-                "goal_key": goal_key,
-                "match_id": int(db_match["match_id"]),
-                "team_id": int(team_id) if team_id is not None else None,
-                "team_name": str(team_name),
-                "team_side": team_side,
-                "player_name": get_espn_player_name(item),
-                "minute": parse_espn_goal_minute(
-                    (item.get("clock") or {}).get("displayValue")
-                ),
-                "is_penalty": is_penalty,
-                "is_own_goal": is_own_goal,
-            }
-        )
-
-    expected_total = meta.home_score + meta.away_score
-
-    if len(rows) == expected_total:
-        return rows, None
-
-    return rows, {
-        "espn_event_id": meta.espn_event_id,
-        "match_id": db_match.get("match_id"),
-        "match": meta.raw_name,
-        "score": f"{meta.home_score}-{meta.away_score}",
-        "expected_goals": expected_total,
-        "parsed_goals": len(rows),
-        "home_parsed": side_counts["home"],
-        "away_parsed": side_counts["away"],
-    }
-
-
-def crawl_espn_match_goals(
-    engine,
-    dates: list[str],
-) -> tuple[
-    list[dict[str, Any]],
-    list[dict[str, Any]],
-    list[dict[str, Any]],
-    list[dict[str, Any]],
-    list[dict[str, Any]],
-]:
-    db_matches = load_db_matches_for_goals(engine)
-    existing_goal_state = load_existing_goal_state(engine)
-
+def build_goal_rows(matches: list[dict[str, Any]]) -> list[dict[str, Any]]:
     goal_rows: list[dict[str, Any]] = []
-    matched_matches: list[dict[str, Any]] = []
-    skipped_matches: list[dict[str, Any]] = []
-    unmatched_matches: list[dict[str, Any]] = []
-    problem_matches: list[dict[str, Any]] = []
 
-    for index, date_yyyymmdd in enumerate(dates, start=1):
-        print(
-            "Đang tải ESPN scoreboard",
-            f"{index}/{len(dates)}:",
-            date_yyyymmdd,
-        )
-        scoreboard = fetch_espn_scoreboard(date_yyyymmdd)
+    for match in matches:
+        if not match["is_finished"]:
+            continue
 
-        for event in scoreboard.get("events") or []:
-            if not is_completed_espn_event(event):
-                continue
+        match_id = match["match_id"]
 
-            meta = get_espn_match_meta(event)
-            db_match, match_method = find_db_match_for_espn(
-                meta,
-                db_matches,
+        for index, goal in enumerate(match["_home_goals"], start=1):
+            goal_rows.append(
+                {
+                    "goal_key": f"openfootball:{match_id}:home:{index}",
+                    "match_id": match_id,
+                    "team_id": match["home_team_id"],
+                    "team_name": match["home_team_name"],
+                    "team_side": "home",
+                    "player_name": goal["player_name"],
+                    "minute": goal["minute"],
+                    "is_penalty": goal["is_penalty"],
+                    "is_own_goal": goal["is_own_goal"],
+                }
             )
 
-            if db_match is None:
-                unmatched_matches.append(
-                    {
-                        "espn_event_id": meta.espn_event_id,
-                        "match_date_vietnam": meta.match_date_vietnam,
-                        "home_team": meta.home_team_name,
-                        "away_team": meta.away_team_name,
-                        "score": f"{meta.home_score}-{meta.away_score}",
-                        "reason": match_method,
-                    }
-                )
-                continue
-
-            match_id = int(db_match["match_id"])
-            expected_total = meta.home_score + meta.away_score
-            existing_state = existing_goal_state.get(
-                match_id,
-                {"goal_count": 0, "bad_minute_count": 0},
-            )
-            existing_total = existing_state["goal_count"]
-            bad_minute_count = existing_state["bad_minute_count"]
-
-            match_record = {
-                "match_id": match_id,
-                "espn_event_id": meta.espn_event_id,
-                "home_score": meta.home_score,
-                "away_score": meta.away_score,
-                "home_team_name": db_match.get("home_team_name"),
-                "away_team_name": db_match.get("away_team_name"),
-                "match_method": match_method,
-            }
-
-            if expected_total == 0:
-                if (
-                    not ESPN_FORCE_REFRESH
-                    and existing_total == 0
-                ):
-                    skipped_matches.append(
-                        {
-                            **match_record,
-                            "skip_reason": "zero_goal_match",
-                        }
-                    )
-                    continue
-
-                matched_matches.append(match_record)
-                continue
-
-            if (
-                not ESPN_FORCE_REFRESH
-                and existing_total == expected_total
-                and bad_minute_count == 0
-            ):
-                skipped_matches.append(
-                    {
-                        **match_record,
-                        "skip_reason": "existing_goal_count_matches_score",
-                    }
-                )
-                continue
-
-            rows, problem = parse_espn_goals_for_match(
-                event,
-                db_match,
-                meta,
+        for index, goal in enumerate(match["_away_goals"], start=1):
+            goal_rows.append(
+                {
+                    "goal_key": f"openfootball:{match_id}:away:{index}",
+                    "match_id": match_id,
+                    "team_id": match["away_team_id"],
+                    "team_name": match["away_team_name"],
+                    "team_side": "away",
+                    "player_name": goal["player_name"],
+                    "minute": goal["minute"],
+                    "is_penalty": goal["is_penalty"],
+                    "is_own_goal": goal["is_own_goal"],
+                }
             )
 
-            if problem:
-                problem_matches.append(problem)
-                continue
-
-            matched_matches.append(match_record)
-            goal_rows.extend(rows)
-
-    return (
-        goal_rows,
-        matched_matches,
-        skipped_matches,
-        unmatched_matches,
-        problem_matches,
-    )
+    return goal_rows
 
 
-def write_espn_match_goals(
+def write_match_goals(
     engine,
     goal_rows: list[dict[str, Any]],
-    matched_matches: list[dict[str, Any]],
+    finished_match_ids: list[int],
 ) -> None:
-    match_ids = sorted(
-        {
-            int(match["match_id"])
-            for match in matched_matches
-        }
-    )
-
-    if not match_ids:
+    if not finished_match_ids:
         print("Không có trận nào cần ghi scorer.")
         return
 
@@ -2190,10 +1181,8 @@ def write_espn_match_goals(
                 DELETE FROM public.match_goals
                 WHERE match_id IN :match_ids
                 """
-            ).bindparams(
-                bindparam("match_ids", expanding=True)
-            ),
-            {"match_ids": match_ids},
+            ).bindparams(bindparam("match_ids", expanding=True)),
+            {"match_ids": finished_match_ids},
         )
 
         if goal_rows:
@@ -2201,136 +1190,53 @@ def write_espn_match_goals(
                 text(
                     """
                     INSERT INTO public.match_goals (
-                        goal_key,
-                        match_id,
-                        team_id,
-                        team_name,
-                        team_side,
-                        player_name,
-                        minute,
-                        is_penalty,
-                        is_own_goal
+                        goal_key, match_id, team_id, team_name, team_side,
+                        player_name, minute, is_penalty, is_own_goal
                     )
                     VALUES (
-                        :goal_key,
-                        :match_id,
-                        :team_id,
-                        :team_name,
-                        :team_side,
-                        :player_name,
-                        :minute,
-                        :is_penalty,
-                        :is_own_goal
+                        :goal_key, :match_id, :team_id, :team_name, :team_side,
+                        :player_name, :minute, :is_penalty, :is_own_goal
                     )
                     """
                 ),
                 goal_rows,
             )
 
-    print("Số trận đã thay scorer:", len(match_ids))
+    print("Số trận đã ghi/refresh scorer:", len(finished_match_ids))
     print("Số dòng scorer đã insert:", len(goal_rows))
-
-
-def sync_espn_match_goals() -> dict[str, int]:
-    database_url = get_database_url()
-    engine = create_engine(
-        database_url,
-        poolclass=NullPool,
-        pool_pre_ping=True,
-        connect_args={
-            "connect_timeout": 20,
-        },
-    )
-
-    try:
-        ensure_match_goals_table(engine)
-        dates = resolve_espn_dates()
-        print("Số ngày ESPN cần kiểm tra:", len(dates))
-
-        (
-            goal_rows,
-            matched_matches,
-            skipped_matches,
-            unmatched_matches,
-            problem_matches,
-        ) = crawl_espn_match_goals(engine, dates)
-
-        print("Số trận scorer sẽ ghi DB:", len(matched_matches))
-        print("Số trận scorer đã skip:", len(skipped_matches))
-        print("Số dòng scorer parse được:", len(goal_rows))
-        print("Số trận ESPN không map được:", len(unmatched_matches))
-        print("Số trận ESPN bị lệch số bàn:", len(problem_matches))
-
-        if unmatched_matches:
-            print("Một số trận không map được:")
-            for row in unmatched_matches[:10]:
-                print(row)
-
-        if problem_matches:
-            print("Một số trận lệch số bàn, sẽ không ghi partial scorer:")
-            for row in problem_matches[:10]:
-                print(row)
-
-        write_espn_match_goals(
-            engine,
-            goal_rows,
-            matched_matches,
-        )
-
-        with engine.connect() as connection:
-            total_goals = connection.execute(
-                text("SELECT COUNT(*) FROM public.match_goals")
-            ).scalar_one()
-
-        return {
-            "matched_matches": len(matched_matches),
-            "skipped_matches": len(skipped_matches),
-            "goal_rows": len(goal_rows),
-            "unmatched_matches": len(unmatched_matches),
-            "problem_matches": len(problem_matches),
-            "match_goals_total": int(total_goals),
-        }
-
-    finally:
-        engine.dispose()
 
 
 def main() -> None:
     print("=" * 72)
-    print("TASK 1 - EPL ESPN FIXTURE/SCORE → SUPABASE")
+    print("EPL OPENFOOTBALL FIXTURE/SCORE/SCORER → SUPABASE")
     print("=" * 72)
     print("Season:", SEASON_SLUG)
-    print("ESPN season seed date:", ESPN_SEASON_SEED_DATE)
-    print("ESPN season start date:", ESPN_SEASON_START_DATE)
-    print("ESPN season end date:", ESPN_SEASON_END_DATE)
+    print("Source URL:", OPENFOOTBALL_URL)
 
-    raw_matches = download_espn_season_events()
+    season_start_year = int(SEASON_SLUG.split("-")[0])
+
+    print("Đang tải dữ liệu (1 request)...")
+    raw_text = fetch_openfootball_text()
+    print("Đã tải xong, kích thước:", len(raw_text), "ký tự")
+
+    raw_matches = parse_openfootball_matches(raw_text, season_start_year)
+    print("Số trận parse được từ file:", len(raw_matches))
+
+    if not raw_matches:
+        raise RuntimeError(
+            "Không parse được trận nào — kiểm tra lại URL/định dạng nguồn."
+        )
 
     team_metadata = load_team_metadata()
+    teams, team_name_to_id = build_teams(raw_matches, team_metadata)
+    matches, matchdays = normalize_matches(raw_matches, team_name_to_id)
 
-    teams, team_name_to_id = build_teams(
-        raw_matches,
-        team_metadata,
-    )
+    validate_dataset(teams, matches, matchdays)
 
-    matches, matchdays = normalize_matches(
-        raw_matches,
-        team_name_to_id,
-    )
-
-    validate_dataset(
-        teams,
-        matches,
-        matchdays,
-    )
-
-    result = sync_database(
-        teams,
-        matches,
-    )
+    result = sync_database(teams, matches)
 
     print("\n" + "=" * 72)
-    print("TASK 1 SYNC THÀNH CÔNG")
+    print("SYNC FIXTURE/SCORE THÀNH CÔNG")
     print("=" * 72)
     print("Số đội trong database:", result["teams"])
     print("Số trận trong database:", result["matches"])
@@ -2338,23 +1244,35 @@ def main() -> None:
     print("Số trận có dữ liệu thay đổi:", result["changed_matches"])
     print("Số prediction được chấm lại:", result["rescored_predictions"])
 
-    print("\n" + "=" * 72)
-    print("TASK 2 - ESPN MATCH GOALS → SUPABASE")
-    print("=" * 72)
-    print("ESPN recent days:", ESPN_RECENT_DAYS)
-    print("ESPN force refresh:", ESPN_FORCE_REFRESH)
+    database_url = get_database_url()
+    engine = create_engine(
+        database_url,
+        poolclass=NullPool,
+        pool_pre_ping=True,
+        connect_args={"connect_timeout": 20},
+    )
 
-    goal_result = sync_espn_match_goals()
+    try:
+        ensure_match_goals_table(engine)
 
-    print("\n" + "=" * 72)
-    print("TASK 2 SYNC THÀNH CÔNG")
-    print("=" * 72)
-    print("Số trận scorer ghi mới:", goal_result["matched_matches"])
-    print("Số trận scorer skip:", goal_result["skipped_matches"])
-    print("Số dòng scorer parse được:", goal_result["goal_rows"])
-    print("Tổng dòng scorer trong DB:", goal_result["match_goals_total"])
-    print("Số trận ESPN không map được:", goal_result["unmatched_matches"])
-    print("Số trận ESPN lệch số bàn:", goal_result["problem_matches"])
+        finished_matches = [row for row in matches if row["is_finished"]]
+        finished_match_ids = [row["match_id"] for row in finished_matches]
+        goal_rows = build_goal_rows(finished_matches)
+
+        write_match_goals(engine, goal_rows, finished_match_ids)
+
+        with engine.connect() as connection:
+            total_goals = connection.execute(
+                text("SELECT COUNT(*) FROM public.match_goals")
+            ).scalar_one()
+
+        print("\n" + "=" * 72)
+        print("SYNC SCORER THÀNH CÔNG")
+        print("=" * 72)
+        print("Tổng dòng scorer trong DB:", int(total_goals))
+
+    finally:
+        engine.dispose()
 
 
 if __name__ == "__main__":
