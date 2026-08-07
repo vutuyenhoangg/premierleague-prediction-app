@@ -3,7 +3,9 @@ from pathlib import Path
 import hashlib
 import json
 import os
+import random
 import re
+import time
 import unicodedata
 from collections import Counter
 from dataclasses import dataclass
@@ -15,6 +17,19 @@ from zoneinfo import ZoneInfo
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+
+# curl_cffi mô phỏng đúng TLS/HTTP2 fingerprint (JA3/JA4) của trình duyệt
+# thật. Đây là điểm khác biệt quan trọng so với `requests` thường: kể cả
+# khi header giống hệt browser, thư viện `requests`/urllib3 vẫn có một
+# "chữ ký" TLS ClientHello rất dễ nhận diện, và trong 2026 Akamai (hạ tầng
+# đứng sau site.api.espn.com) đã đẩy mạnh việc chặn dựa trên chữ ký này.
+# Nếu chưa cài curl_cffi, code sẽ tự động fallback về `requests` như cũ.
+try:
+    from curl_cffi import requests as curl_requests
+
+    _HAS_CURL_CFFI = True
+except ImportError:  # pragma: no cover - optional dependency
+    _HAS_CURL_CFFI = False
 from sqlalchemy import (
     MetaData,
     Table,
@@ -94,31 +109,139 @@ RESULT_STATE_COLUMNS = [
 
 
 
-def create_http_session() -> requests.Session:
-    retry = Retry(
-        total=3,
-        connect=3,
-        read=3,
-        status=3,
-        backoff_factor=1,
-        status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=frozenset(["GET"]),
-        raise_on_status=False,
-    )
+# Header giả lập trình duyệt thật (Chrome trên Windows) thay vì UA tuỳ biến
+# "EPL-Prediction-Arena-Crawler/1.0" — UA tự đặt tên là dấu hiệu bot rất rõ
+# ràng đối với các hệ thống chống bot như Akamai/Cloudflare.
+ESPN_BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://www.espn.com/soccer/scoreboard/_/league/eng.1",
+    "Origin": "https://www.espn.com",
+    "Sec-Fetch-Site": "same-site",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Dest": "empty",
+    "Cache-Control": "no-cache",
+}
 
-    session = requests.Session()
-    session.headers.update(
-        {
-            "User-Agent": "EPL-Prediction-Arena-Crawler/1.0",
-            "Accept": "application/json,text/plain,*/*",
-            "Cache-Control": "no-cache",
-        }
-    )
-    session.mount("https://", HTTPAdapter(max_retries=retry))
+# Các status code coi là "có thể thử lại": 429/5xx là lỗi tạm thời kinh
+# điển, còn 403 được thêm vào vì với ESPN nó thường là bot-block có thể
+# đến rồi đi theo từng request/IP trong pool luân phiên của GitHub Actions,
+# chứ không phải lỗi logic — nên đáng thử lại vài lần trước khi bỏ cuộc.
+ESPN_RETRYABLE_STATUS = {403, 429, 500, 502, 503, 504}
+ESPN_MAX_ATTEMPTS = 5
+
+
+def create_http_session():
+    if _HAS_CURL_CFFI:
+        # impersonate="chrome124" khiến TLS/HTTP2 fingerprint giống hệt
+        # Chrome thật, né được kiểu chặn theo JA3/JA4 mà `requests` thường
+        # không thể né dù header có đúng đến đâu.
+        session = curl_requests.Session(impersonate="chrome124")
+    else:
+        retry = Retry(
+            total=3,
+            connect=3,
+            read=3,
+            status=0,  # tự xử lý retry cho status ở _espn_get_with_retry
+            backoff_factor=1,
+            allowed_methods=frozenset(["GET"]),
+            raise_on_status=False,
+        )
+        session = requests.Session()
+        session.mount("https://", HTTPAdapter(max_retries=retry))
+
+    session.headers.update(ESPN_BROWSER_HEADERS)
     return session
 
 
 HTTP_SESSION = create_http_session()
+
+
+def _describe_block_response(response: Any) -> None:
+    """In ra dấu hiệu nhận diện WAF (Cloudflare/Akamai/DataDome/...) để
+    lần chặn tiếp theo (nếu có) sẽ để lại bằng chứng rõ ràng trong log
+    của GitHub Actions, thay vì chỉ có một dòng 403 trơ trụi."""
+
+    print("---- ESPN block diagnostics ----")
+    try:
+        print("Status:", response.status_code)
+        print("URL:", getattr(response, "url", "?"))
+        headers = response.headers or {}
+        for key in (
+            "server",
+            "cf-ray",
+            "cf-mitigated",
+            "x-akamai-request-id",
+            "akamai-grn",
+            "x-datadome",
+            "via",
+            "x-cache",
+        ):
+            if key in headers:
+                print(f"{key}:", headers[key])
+        body_preview = (response.text or "")[:500]
+        print("Body preview:", body_preview)
+    except Exception as exc:  # noqa: BLE001 - best-effort diagnostics
+        print("(không đọc được chi tiết response):", exc)
+    print("---------------------------------")
+
+
+def _espn_get_with_retry(
+    url: str, params: dict[str, Any]
+) -> Any:
+    """GET tới ESPN kèm retry + backoff-jitter, retry cả với 403 (bot
+    block tạm thời), và in diagnostics chi tiết nếu vẫn thất bại sau khi
+    hết lượt thử."""
+
+    last_response = None
+    last_exc: Exception | None = None
+
+    for attempt in range(1, ESPN_MAX_ATTEMPTS + 1):
+        try:
+            response = HTTP_SESSION.get(
+                url,
+                params=params,
+                timeout=REQUEST_TIMEOUT_SECONDS,
+            )
+        except Exception as exc:  # lỗi mạng/kết nối
+            last_exc = exc
+            last_response = None
+        else:
+            if response.status_code == 200:
+                return response
+            last_response = response
+            last_exc = None
+            if response.status_code not in ESPN_RETRYABLE_STATUS:
+                _describe_block_response(response)
+                response.raise_for_status()
+
+        if attempt == ESPN_MAX_ATTEMPTS:
+            break
+
+        wait_seconds = min(60, 2 ** attempt) + random.uniform(0, 1.5)
+        reason = (
+            f"HTTP {last_response.status_code}"
+            if last_response is not None
+            else repr(last_exc)
+        )
+        print(
+            f"[ESPN] Lần thử {attempt}/{ESPN_MAX_ATTEMPTS} thất bại "
+            f"({reason}). Thử lại sau {wait_seconds:.1f}s..."
+        )
+        time.sleep(wait_seconds)
+
+    if last_response is not None:
+        _describe_block_response(last_response)
+        last_response.raise_for_status()
+
+    raise RuntimeError(
+        "Không kết nối được tới ESPN sau "
+        f"{ESPN_MAX_ATTEMPTS} lần thử."
+    ) from last_exc
 
 
 def normalize_text(value: Any) -> str | None:
@@ -1323,12 +1446,10 @@ class EspnMatchMeta:
 
 
 def fetch_espn_scoreboard(date_yyyymmdd: str) -> dict[str, Any]:
-    response = HTTP_SESSION.get(
+    response = _espn_get_with_retry(
         ESPN_SCOREBOARD_URL,
         params={"dates": date_yyyymmdd},
-        timeout=REQUEST_TIMEOUT_SECONDS,
     )
-    response.raise_for_status()
 
     try:
         payload = response.json()
@@ -1445,12 +1566,10 @@ def download_espn_season_events() -> list[dict[str, Any]]:
 
 
 def fetch_espn_summary(event_id: str) -> dict[str, Any]:
-    response = HTTP_SESSION.get(
+    response = _espn_get_with_retry(
         ESPN_SUMMARY_URL,
         params={"event": event_id},
-        timeout=REQUEST_TIMEOUT_SECONDS,
     )
-    response.raise_for_status()
 
     try:
         payload = response.json()
