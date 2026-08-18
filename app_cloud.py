@@ -6688,14 +6688,38 @@ def inject_match_datepicker_calendar_theme(match_dates):
 
         /* =====================================================
            HOVER
+           Loại trừ luôn today/has-match để không đè mất
+           background riêng của chúng.
            ===================================================== */
 
         body:has(div[class*="st-key-filter_date"])
         div[data-baseweb="calendar"]
-        [role="gridcell"]:not(.epl-calendar-selected):not(.epl-calendar-disabled):hover::before {
+        [role="gridcell"]:not(.epl-calendar-selected):not(.epl-calendar-disabled):not(.epl-calendar-today):not(.epl-calendar-has-match):hover::before {
             width: 28px !important;
             height: 28px !important;
             background: rgba(18, 60, 105, 0.08) !important;
+        }
+
+        /* Hover riêng cho ngày có trận: giữ chữ đậm, thêm vòng nhấn nhẹ. */
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        [role="gridcell"].epl-calendar-has-match:not(.epl-calendar-selected):not(.epl-calendar-disabled):hover::before {
+            width: 28px !important;
+            height: 28px !important;
+            background: rgba(37, 99, 235, 0.12) !important;
+        }
+
+        /*
+         * Hover riêng cho ngày hôm nay: đặt SAU rule has-match để thắng
+         * tie-break khi một ngày vừa là hôm nay vừa có trận (specificity
+         * bằng nhau, thứ tự khai báo quyết định).
+         */
+        body:has(div[class*="st-key-filter_date"])
+        div[data-baseweb="calendar"]
+        [role="gridcell"].epl-calendar-today:not(.epl-calendar-selected):not(.epl-calendar-disabled):hover::before {
+            width: 28px !important;
+            height: 28px !important;
+            background: #D1D5DB !important;
         }
 
         /*
