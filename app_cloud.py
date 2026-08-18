@@ -10813,7 +10813,7 @@ def inject_ai_summary_button_css():
         }}
 
         div[class*="st-key-ai_suggestion_button_"] button:disabled:hover::after,
-        div[class*="st-key-ai_suggestion_button_"] button:disabled:focus-visible::after {
+        div[class*="st-key-ai_suggestion_button_"] button:disabled:focus-visible::after {{
             content: "Tính năng sẽ mở trước trận đấu 3 ngày";
             position: absolute;
             top: 50%;
@@ -10833,16 +10833,15 @@ def inject_ai_summary_button_css():
             box-shadow: 0 8px 20px rgba(15, 23, 42, 0.3);
             z-index: 999;
             pointer-events: none;
-        }
-        
-        @media (max-width: 768px) {
+        }}
+
+        @media (max-width: 768px) {{
             div[class*="st-key-ai_suggestion_button_"] button:disabled:hover::after,
-            div[class*="st-key-ai_suggestion_button_"] button:disabled:focus-visible::after {
+            div[class*="st-key-ai_suggestion_button_"] button:disabled:focus-visible::after {{
                 max-width: 140px;
                 font-size: 11px;
                 padding: 7px 10px;
-            }
-        }
+            }}
         }}
         </style>
         """,
