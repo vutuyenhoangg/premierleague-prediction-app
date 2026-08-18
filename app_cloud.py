@@ -10651,6 +10651,24 @@ def inject_ai_summary_button_css():
         ai_summary_icon_svg.encode("utf-8")
     ).decode("utf-8")
 
+    # Icon khóa dùng cho nút "AI phân tích" khi chưa vào khung
+    # AI_SUGGESTION_MAX_DAYS ngày trước kickoff (trạng thái disabled).
+    ai_locked_icon_svg = """
+    <svg xmlns="http://www.w3.org/2000/svg"
+         width="24"
+         height="24"
+         viewBox="0 0 24 24"
+         fill="currentColor"
+         class="icon icon-tabler icons-tabler-filled icon-tabler-lock">
+        <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+        <path d="M12 2a5 5 0 0 1 5 5v3a3 3 0 0 1 3 3v6a3 3 0 0 1 -3 3h-10a3 3 0 0 1 -3 -3v-6a3 3 0 0 1 3 -3v-3a5 5 0 0 1 5 -5m0 12a2 2 0 0 0 -1.995 1.85l-.005 .15a2 2 0 1 0 2 -2m0 -10a3 3 0 0 0 -3 3v3h6v-3a3 3 0 0 0 -3 -3" />
+    </svg>
+    """
+
+    ai_locked_icon_base64 = base64.b64encode(
+        ai_locked_icon_svg.encode("utf-8")
+    ).decode("utf-8")
+
     st.markdown(
         f"""
         <style>
@@ -10762,6 +10780,57 @@ def inject_ai_summary_button_css():
                 width: 16px;
                 height: 16px;
             }}
+        }}
+
+        /* ==========================================================
+           Trạng thái khóa cho nút "AI phân tích" khi còn hơn
+           AI_SUGGESTION_MAX_DAYS ngày trước kickoff.
+           Đặt SAU các rule :hover/:active phía trên để thắng
+           specificity ngang nhau (cùng dùng !important).
+           ========================================================== */
+        div[class*="st-key-ai_suggestion_button_"] button:disabled {{
+            opacity: 0.55 !important;
+            cursor: not-allowed !important;
+            background: rgba(241, 245, 249, 0.92) !important;
+            border-color: rgba(148, 163, 184, 0.5) !important;
+            box-shadow: none !important;
+            color: #64748B !important;
+            transform: none !important;
+            position: relative !important;
+        }}
+
+        div[class*="st-key-ai_suggestion_button_"] button:disabled:hover {{
+            background: rgba(241, 245, 249, 0.92) !important;
+            border-color: rgba(148, 163, 184, 0.5) !important;
+            box-shadow: none !important;
+            transform: none !important;
+        }}
+
+        div[class*="st-key-ai_suggestion_button_"] button:disabled::before {{
+            background: #94A3B8 !important;
+            -webkit-mask: url("data:image/svg+xml;base64,{ai_locked_icon_base64}") center / contain no-repeat;
+            mask: url("data:image/svg+xml;base64,{ai_locked_icon_base64}") center / contain no-repeat;
+        }}
+
+        div[class*="st-key-ai_suggestion_button_"] button:disabled:hover::after,
+        div[class*="st-key-ai_suggestion_button_"] button:disabled:focus-visible::after {{
+            content: "Tính năng sẽ mở trước trận đấu 3 ngày";
+            position: absolute;
+            bottom: calc(100% + 8px);
+            right: 0;
+            max-width: 190px;
+            white-space: normal;
+            text-align: right;
+            background: #1F2937;
+            color: #F9FAFB;
+            font-size: 11px;
+            font-weight: 500;
+            line-height: 1.35;
+            padding: 6px 10px;
+            border-radius: 8px;
+            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.25);
+            z-index: 40;
+            pointer-events: none;
         }}
         </style>
         """,
@@ -23314,19 +23383,21 @@ def render_match_card(
             elif (
                 ENABLE_AI_FEATURES
                 and status_info.get("status_key") == "open"
-                and can_use_ai_match_suggestion(
+            ):
+                ai_suggestion_unlocked = can_use_ai_match_suggestion(
                     row.get("kickoff_time_utc"),
                     is_finished=is_finished
                 )
-            ):
+
                 ai_suggestion_clicked = st.button(
                     "AI phân tích",
                     key=f"ai_suggestion_button_{match_id}",
                     type="secondary",
-                    use_container_width=True
+                    use_container_width=True,
+                    disabled=not ai_suggestion_unlocked
                 )
             
-                if ai_suggestion_clicked:
+                if ai_suggestion_clicked and ai_suggestion_unlocked:
                     st.session_state["ai_suggestion_match_id"] = match_id
                     st.rerun()
             if (
