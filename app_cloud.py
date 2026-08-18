@@ -7388,6 +7388,7 @@ def inject_match_datepicker_calendar_theme(match_dates):
                         subtree: true,
                         attributes: true,
                         attributeFilter: [
+                            "class",
                             "aria-selected",
                             "data-selected",
                             "aria-disabled",
@@ -7537,6 +7538,33 @@ def inject_match_datepicker_calendar_theme(match_dates):
             }
         };
 
+        /*
+         * Phản ứng ngay khi hover vào một ô ngày, không phải đợi
+         * mutation observer bắt được thay đổi class (BaseWeb ghi đè
+         * class khi hover mà không đổi các attribute khác).
+         */
+        const handleCalendarPointerOver = (
+            event
+        ) => {
+            const target =
+                event.target;
+
+            if (
+                !(target instanceof
+                    parentWindow.Element)
+            ) {
+                return;
+            }
+
+            if (
+                target.closest(
+                    calendarSelector
+                )
+            ) {
+                scheduleApply();
+            }
+        };
+
         parentDocument.addEventListener(
             "click",
             handleDocumentClick,
@@ -7546,6 +7574,12 @@ def inject_match_datepicker_calendar_theme(match_dates):
         parentDocument.addEventListener(
             "focusin",
             handleDocumentFocus,
+            true
+        );
+
+        parentDocument.addEventListener(
+            "pointerover",
+            handleCalendarPointerOver,
             true
         );
 
@@ -7584,6 +7618,13 @@ def inject_match_datepicker_calendar_theme(match_dates):
                     handleDocumentFocus,
                     true
                 );
+
+            parentDocument
+                .removeEventListener(
+                    "pointerover",
+                    handleCalendarPointerOver,
+                    true
+                );
         };
 
         parentWindow[controllerKey] = {
@@ -7612,7 +7653,6 @@ def inject_match_datepicker_calendar_theme(match_dates):
         height=0,
         scrolling=False
     )
-
 def inject_mobile_match_title_css():
     """
     Chỉ điều chỉnh tiêu đề trận đấu trên mobile.
