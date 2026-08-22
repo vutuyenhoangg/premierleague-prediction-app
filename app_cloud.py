@@ -21237,6 +21237,172 @@ def update_match_result(
 
     score_all_predictions(match_season_slug)
 
+def get_match_goals_for_admin(match_id: int) -> pd.DataFrame:
+    """
+    Đọc trực tiếp từ database, không qua cache 15 phút của
+    load_goal_scorers_for_match(), để trang Admin luôn thấy đúng
+    trạng thái mới nhất ngay sau khi thêm/sửa/xóa.
+    """
+    return read_sql(
+        """
+        SELECT
+            goal_key,
+            match_id,
+            team_id,
+            team_name,
+            team_side,
+            player_name,
+            minute,
+            is_penalty,
+            is_own_goal
+        FROM match_goals
+        WHERE match_id = :match_id
+        ORDER BY goal_key ASC
+        """,
+        {
+            "match_id": int(match_id)
+        }
+    )
+
+
+def clear_match_goals_cache():
+    """
+    Xóa cache của load_goal_scorers_for_match() để danh sách ghi bàn
+    hiển thị cho người chơi cập nhật ngay, không phải chờ tối đa 15 phút.
+    """
+    try:
+        _load_goal_scorers_for_match_cached.clear()
+    except Exception:
+        pass
+
+
+def generate_manual_goal_key(match_id: int, team_side: str) -> str:
+    """
+    Tạo goal_key duy nhất cho bàn thắng nhập tay.
+    Dùng tiền tố "manual:" để không bao giờ trùng với goal_key
+    do crawl_epl_data_combined.py tạo (tiền tố "openfootball:").
+    """
+    unique_suffix = secrets.token_hex(4)
+    return f"manual:{int(match_id)}:{team_side}:{unique_suffix}"
+
+
+def add_manual_match_goal(
+    match_id: int,
+    team_id: int | None,
+    team_name: str,
+    team_side: str,
+    player_name: str,
+    minute: str,
+    is_penalty: bool,
+    is_own_goal: bool
+) -> str:
+    """
+    Thêm một bàn thắng nhập tay. Ghi thẳng vào bảng match_goals
+    trên Supabase qua execute_sql() (tự commit khi thành công).
+    """
+    match_id = int(match_id)
+    team_side = str(team_side).strip().lower()
+
+    if team_side not in {"home", "away"}:
+        raise ValueError("Phía ghi bàn không hợp lệ.")
+
+    player_name = str(player_name or "").strip()
+
+    if not player_name:
+        raise ValueError("Tên cầu thủ không được để trống.")
+
+    minute = str(minute or "").strip()
+    goal_key = generate_manual_goal_key(match_id, team_side)
+
+    execute_sql(
+        """
+        INSERT INTO match_goals (
+            goal_key, match_id, team_id, team_name, team_side,
+            player_name, minute, is_penalty, is_own_goal
+        )
+        VALUES (
+            :goal_key, :match_id, :team_id, :team_name, :team_side,
+            :player_name, :minute, :is_penalty, :is_own_goal
+        )
+        """,
+        {
+            "goal_key": goal_key,
+            "match_id": match_id,
+            "team_id": int(team_id) if team_id is not None else None,
+            "team_name": str(team_name or "").strip(),
+            "team_side": team_side,
+            "player_name": player_name,
+            "minute": minute or None,
+            "is_penalty": bool(is_penalty),
+            "is_own_goal": bool(is_own_goal)
+        }
+    )
+
+    clear_match_goals_cache()
+
+    return goal_key
+
+
+def update_match_goal(
+    goal_key: str,
+    player_name: str,
+    minute: str,
+    is_penalty: bool,
+    is_own_goal: bool
+):
+    """
+    Sửa một bàn thắng đã có. Ghi thẳng UPDATE lên Supabase.
+    """
+    goal_key = str(goal_key).strip()
+    player_name = str(player_name or "").strip()
+
+    if not player_name:
+        raise ValueError("Tên cầu thủ không được để trống.")
+
+    minute = str(minute or "").strip()
+
+    existing_row = fetch_one(
+        "SELECT match_id FROM match_goals WHERE goal_key = :goal_key",
+        {"goal_key": goal_key}
+    )
+
+    if existing_row is None:
+        raise ValueError("Không tìm thấy bàn thắng này để cập nhật.")
+
+    execute_sql(
+        """
+        UPDATE match_goals
+        SET
+            player_name = :player_name,
+            minute = :minute,
+            is_penalty = :is_penalty,
+            is_own_goal = :is_own_goal
+        WHERE goal_key = :goal_key
+        """,
+        {
+            "player_name": player_name,
+            "minute": minute or None,
+            "is_penalty": bool(is_penalty),
+            "is_own_goal": bool(is_own_goal),
+            "goal_key": goal_key
+        }
+    )
+
+    clear_match_goals_cache()
+
+
+def delete_match_goal(goal_key: str):
+    """
+    Xóa hẳn một bàn thắng khỏi database.
+    """
+    goal_key = str(goal_key).strip()
+
+    execute_sql(
+        "DELETE FROM match_goals WHERE goal_key = :goal_key",
+        {"goal_key": goal_key}
+    )
+
+    clear_match_goals_cache()
 
 # ============================================================
 # 8. AUTH UI
@@ -33940,17 +34106,19 @@ def page_admin():
 
     st.markdown("---")
 
+    admin_card_css = """
+    {
+        background: rgba(255,255,255,0.94);
+        border: 1px solid rgba(15,23,42,0.08);
+        border-radius: 22px;
+        padding: 20px;
+        box-shadow: 0 14px 34px rgba(15,23,42,0.08);
+    }
+    """
+
     with stylable_container(
         key="admin_update_card",
-        css_styles="""
-        {
-            background: rgba(255,255,255,0.94);
-            border: 1px solid rgba(15,23,42,0.08);
-            border-radius: 22px;
-            padding: 20px;
-            box-shadow: 0 14px 34px rgba(15,23,42,0.08);
-        }
-        """
+        css_styles=admin_card_css
     ):
         st.subheader("Cập nhật kết quả trận đấu")
 
@@ -33977,7 +34145,8 @@ def page_admin():
 
         selected_label = st.selectbox(
             "Chọn trận cần cập nhật kết quả",
-            matches["match_label"].tolist()
+            matches["match_label"].tolist(),
+            key="admin_selected_match_label"
         )
 
         selected_match = matches[matches["match_label"] == selected_label].iloc[0]
@@ -34133,6 +34302,183 @@ def page_admin():
                     )
 
                     st.success("Đã cập nhật kết quả và chấm điểm lại dự đoán.")
+                    st.rerun()
+
+                except ValueError as e:
+                    st.error(str(e))
+
+    st.markdown("---")
+
+    with stylable_container(
+        key="admin_goal_scorers_card",
+        css_styles=admin_card_css
+    ):
+        st.subheader("Quản lý cầu thủ ghi bàn")
+
+        st.caption(
+            f"Đang quản lý bàn thắng cho trận đang chọn ở mục phía trên: "
+            f"**{home_name} vs {away_name}**. Nên cập nhật tỉ số trước, "
+            "sau đó thêm cầu thủ ghi bàn để dữ liệu nhất quán."
+        )
+
+        existing_goals = get_match_goals_for_admin(match_id)
+
+        if existing_goals.empty:
+            st.info("Trận này chưa có dữ liệu cầu thủ ghi bàn nào.")
+        else:
+            st.markdown("#### Danh sách bàn thắng hiện tại")
+
+            for _, goal_row in existing_goals.iterrows():
+                goal_key = str(goal_row["goal_key"])
+                team_side = str(goal_row.get("team_side") or "").strip().lower()
+                side_label = home_name if team_side == "home" else away_name
+
+                with st.form(f"edit_goal_form_{goal_key}"):
+                    label_col, player_col, minute_col, pen_col, og_col, action_col = st.columns(
+                        [1.4, 2.4, 1.1, 0.8, 0.9, 1.1]
+                    )
+
+                    with label_col:
+                        st.markdown(f"**{side_label}**")
+
+                    with player_col:
+                        new_player_name = st.text_input(
+                            "Cầu thủ",
+                            value=str(goal_row.get("player_name") or ""),
+                            key=f"goal_player_{goal_key}",
+                            label_visibility="collapsed"
+                        )
+
+                    with minute_col:
+                        new_minute = st.text_input(
+                            "Phút",
+                            value=str(goal_row.get("minute") or ""),
+                            key=f"goal_minute_{goal_key}",
+                            label_visibility="collapsed",
+                            placeholder="45+2'"
+                        )
+
+                    with pen_col:
+                        new_is_penalty = st.checkbox(
+                            "Pen",
+                            value=to_bool(goal_row.get("is_penalty")),
+                            key=f"goal_pen_{goal_key}"
+                        )
+
+                    with og_col:
+                        new_is_own_goal = st.checkbox(
+                            "Phản lưới",
+                            value=to_bool(goal_row.get("is_own_goal")),
+                            key=f"goal_og_{goal_key}"
+                        )
+
+                    with action_col:
+                        save_sub_col, delete_sub_col = st.columns(2)
+
+                        with save_sub_col:
+                            save_clicked = st.form_submit_button(
+                                "💾",
+                                help="Lưu thay đổi",
+                                use_container_width=True
+                            )
+
+                        with delete_sub_col:
+                            delete_clicked = st.form_submit_button(
+                                "🗑️",
+                                help="Xóa bàn thắng này",
+                                use_container_width=True
+                            )
+
+                    if save_clicked:
+                        try:
+                            update_match_goal(
+                                goal_key=goal_key,
+                                player_name=new_player_name,
+                                minute=new_minute,
+                                is_penalty=new_is_penalty,
+                                is_own_goal=new_is_own_goal
+                            )
+                            st.success("Đã cập nhật bàn thắng.")
+                            st.rerun()
+                        except ValueError as e:
+                            st.error(str(e))
+
+                    if delete_clicked:
+                        delete_match_goal(goal_key)
+                        st.success("Đã xóa bàn thắng.")
+                        st.rerun()
+
+        st.markdown("---")
+        st.markdown("#### Thêm bàn thắng mới")
+
+        with st.form("add_goal_form", clear_on_submit=True):
+            new_goal_side = st.radio(
+                "Đội ghi bàn",
+                options=["home", "away"],
+                format_func=lambda side: home_name if side == "home" else away_name,
+                horizontal=True,
+                key="new_goal_side"
+            )
+
+            add_player_col, add_minute_col = st.columns([2, 1])
+
+            with add_player_col:
+                new_goal_player = st.text_input(
+                    "Tên cầu thủ",
+                    key="new_goal_player"
+                )
+
+            with add_minute_col:
+                new_goal_minute = st.text_input(
+                    "Phút ghi bàn",
+                    placeholder="vd: 23' hoặc 45+2'",
+                    key="new_goal_minute"
+                )
+
+            add_pen_col, add_og_col = st.columns(2)
+
+            with add_pen_col:
+                new_goal_is_penalty = st.checkbox(
+                    "Phạt đền (pen)",
+                    key="new_goal_is_penalty"
+                )
+
+            with add_og_col:
+                new_goal_is_own_goal = st.checkbox(
+                    "Phản lưới nhà (OG)",
+                    key="new_goal_is_own_goal"
+                )
+
+            add_submitted = st.form_submit_button(
+                "Thêm bàn thắng",
+                use_container_width=True
+            )
+
+            if add_submitted:
+                try:
+                    team_id_for_goal = (
+                        home_team_id
+                        if new_goal_side == "home"
+                        else away_team_id
+                    )
+                    team_name_for_goal = (
+                        home_name
+                        if new_goal_side == "home"
+                        else away_name
+                    )
+
+                    add_manual_match_goal(
+                        match_id=match_id,
+                        team_id=team_id_for_goal,
+                        team_name=team_name_for_goal,
+                        team_side=new_goal_side,
+                        player_name=new_goal_player,
+                        minute=new_goal_minute,
+                        is_penalty=new_goal_is_penalty,
+                        is_own_goal=new_goal_is_own_goal
+                    )
+
+                    st.success("Đã thêm bàn thắng.")
                     st.rerun()
 
                 except ValueError as e:
