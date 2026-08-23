@@ -17,7 +17,9 @@ from urllib3.util.retry import Retry
 from sqlalchemy import (
     MetaData,
     Table,
+    and_,
     bindparam,
+    case,
     create_engine,
     inspect,
     select,
@@ -87,6 +89,25 @@ RESULT_STATE_COLUMNS = [
     "is_finished",
     "winner_team_id",
 ]
+
+# Các cột kết quả trận đấu — chỉ cho phép "hạ cấp" is_finished True -> False
+# (tức nguồn tạm thời chưa cập nhật kịp) khi trận đó KHÔNG phải đang finished
+# trong DB. Nếu DB đang finished mà nguồn báo chưa finished, giữ nguyên toàn
+# bộ các cột này — tránh crawl ghi đè NULL lên dữ liệu admin đã sửa tay
+# trong lúc chờ nguồn cập nhật.
+PROTECTED_RESULT_COLUMNS = {
+    "score_ft_home",
+    "score_ft_away",
+    "score_et_home",
+    "score_et_away",
+    "score_pen_home",
+    "score_pen_away",
+    "home_score_for_prediction",
+    "away_score_for_prediction",
+    "is_finished",
+    "winner_team_id",
+    "winner_team_name",
+}
 
 
 # ============================================================
@@ -175,18 +196,27 @@ ROUND_LINE_RE = re.compile(r"^▪\s*(.+?)\s*$")
 DATE_LINE_RE = re.compile(
     r"^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\w{3})\s+(\d{1,2})(?:\s+(\d{4}))?$"
 )
-MATCH_LINE_RE = re.compile(
+# Mùa đang cập nhật theo tuần (vd 2026-27) LUÔN giữ "v" giữa 2 đội, kể cả khi
+# đã có tỉ số — tỉ số được nối thêm SAU tên đội khách, ví dụ:
+#   "20:00  Arsenal FC              v Coventry City FC         3-0 (2-0)"
+# Thử regex này TRƯỚC vì đặc trưng hơn (bắt buộc có " v " tách 2 đội).
+MATCH_WITH_V_RE = re.compile(
+    r"^(?:(\d{1,2}:\d{2})\s+)?"
+    r"(.+?)\s+v\s+(.+?)"
+    r"(?:\s+(\d+)-(\d+)(?:\s*\((\d+)-(\d+)\))?)?"
+    r"\s*$"
+)
+
+# Các mùa đã hoàn tất, không cập nhật theo tuần (vd 2025-26) KHÔNG giữ "v"
+# một khi đã có tỉ số — tỉ số nằm xen giữa 2 tên đội, ví dụ:
+#   "19:00   Liverpool  4-2 (1-0)  Bournemouth"
+# Chỉ thử regex này khi MATCH_WITH_V_RE không khớp.
+MATCH_NO_V_RE = re.compile(
     r"^(?:(\d{1,2}:\d{2})\s+)?"
     r"(.+?)\s+"
     r"(\d+)-(\d+)"
     r"(?:\s*\((\d+)-(\d+)\))?"
     r"\s+(.+?)\s*$"
-)
-# Trận CHƯA đá: openfootball dùng chữ "v" thay cho tỉ số, ví dụ:
-# "20:00  Arsenal FC              v Coventry City FC"
-UNPLAYED_MATCH_LINE_RE = re.compile(
-    r"^(?:(\d{1,2}:\d{2})\s+)?"
-    r"(.+?)\s+v\s+(.+?)\s*$"
 )
 GOAL_ITEM_RE = re.compile(
     r"([A-Za-zÀ-ÖØ-öø-ÿ.'\-]+(?:\s+[A-Za-zÀ-ÖØ-öø-ÿ.'\-]+)*)\s+"
@@ -345,18 +375,35 @@ def parse_openfootball_matches(
                 flush_pending()
             continue
 
-        match_line = MATCH_LINE_RE.match(line)
-        if match_line and current_date is not None:
+        # Thử MATCH_WITH_V_RE trước (đặc trưng hơn, bắt buộc có " v ").
+        # Nếu không khớp mới thử MATCH_NO_V_RE (định dạng mùa cũ, không có "v"
+        # một khi đã có tỉ số).
+        match_with_v = MATCH_WITH_V_RE.match(line)
+        match_no_v = None if match_with_v else MATCH_NO_V_RE.match(line)
+
+        if (match_with_v or match_no_v) and current_date is not None:
             flush_pending()
-            (
-                time_str,
-                home_name,
-                home_score,
-                away_score,
-                ht_home,
-                ht_away,
-                away_name,
-            ) = match_line.groups()
+
+            if match_with_v:
+                (
+                    time_str,
+                    home_name,
+                    away_name,
+                    home_score,
+                    away_score,
+                    ht_home,
+                    ht_away,
+                ) = match_with_v.groups()
+            else:
+                (
+                    time_str,
+                    home_name,
+                    home_score,
+                    away_score,
+                    ht_home,
+                    ht_away,
+                    away_name,
+                ) = match_no_v.groups()
 
             if time_str:
                 current_time = time_str
@@ -367,35 +414,10 @@ def parse_openfootball_matches(
                 "time": current_time or "15:00",
                 "home_name": home_name.strip(),
                 "away_name": away_name.strip(),
-                "home_score": int(home_score),
-                "away_score": int(away_score),
+                "home_score": int(home_score) if home_score is not None else None,
+                "away_score": int(away_score) if away_score is not None else None,
                 "ht_home": int(ht_home) if ht_home is not None else None,
                 "ht_away": int(ht_away) if ht_away is not None else None,
-                "raw_goals": "",
-            }
-            continue
-
-        # Không khớp dòng có tỉ số -> thử dòng CHƯA đá (dùng "v").
-        # Phải thử SAU pattern có tỉ số, vì "Team A  2-1  Team B" cũng
-        # có khoảng trắng bao quanh có thể trông giống nếu thử trước.
-        unplayed_match = UNPLAYED_MATCH_LINE_RE.match(line)
-        if unplayed_match and current_date is not None:
-            flush_pending()
-            time_str, home_name, away_name = unplayed_match.groups()
-
-            if time_str:
-                current_time = time_str
-
-            pending = {
-                "round": current_round,
-                "date": current_date,
-                "time": current_time or "15:00",
-                "home_name": home_name.strip(),
-                "away_name": away_name.strip(),
-                "home_score": None,
-                "away_score": None,
-                "ht_home": None,
-                "ht_away": None,
                 "raw_goals": "",
             }
             continue
@@ -1063,13 +1085,31 @@ def sync_database(
             connection.execute(team_upsert)
 
             match_insert = pg_insert(matches_table).values(clean_matches)
+
+            downgrade_guard = and_(
+                matches_table.c.is_finished.is_(True),
+                match_insert.excluded.is_finished.is_(False),
+            )
+
+            match_set_clause = {}
+
+            for column in MATCH_COLUMNS:
+                if column == "match_id":
+                    continue
+
+                new_value = getattr(match_insert.excluded, column)
+
+                if column in PROTECTED_RESULT_COLUMNS:
+                    match_set_clause[column] = case(
+                        (downgrade_guard, matches_table.c[column]),
+                        else_=new_value,
+                    )
+                else:
+                    match_set_clause[column] = new_value
+
             match_upsert = match_insert.on_conflict_do_update(
                 index_elements=[matches_table.c.match_id],
-                set_={
-                    column: getattr(match_insert.excluded, column)
-                    for column in MATCH_COLUMNS
-                    if column != "match_id"
-                },
+                set_=match_set_clause,
             )
             connection.execute(match_upsert)
 
