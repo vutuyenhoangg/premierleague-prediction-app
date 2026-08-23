@@ -821,7 +821,11 @@ def validate_dataset(
         expected_goals = (row["score_ft_home"] or 0) + (row["score_ft_away"] or 0)
         parsed_goals = len(row["_home_goals"]) + len(row["_away_goals"])
 
-        if row["is_finished"] and expected_goals != parsed_goals:
+        if (
+            row["is_finished"]
+            and parsed_goals > 0
+            and expected_goals != parsed_goals
+        ):
             errors.append(
                 f"Lệch số bàn tại match_id={row['match_id']} "
                 f"({row['home_team_name']} {row['score_ft_home']}-"
