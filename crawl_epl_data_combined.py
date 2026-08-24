@@ -6,7 +6,7 @@ import os
 import re
 import time
 import unicodedata
-from collections import Counter
+from collections import Counter, defaultdict
 import datetime as dt
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -30,6 +30,51 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.pool import NullPool
 
 
+# ============================================================
+# CHANGELOG (v2 — xem lịch sử fix trong PR/issue liên quan)
+# ============================================================
+# 1. FIX GỐC: "source_match_id" (khoá tự nhiên của 1 trận) trước đây
+#    nhúng NGÀY thi đấu vào (vd "2026-08-21|arsenal|coventry city").
+#    Hệ quả: mỗi khi lịch thi đấu bị dời ngày/giờ (rất thường xuyên với
+#    Premier League vì lịch TV, cúp châu Âu...), source_match_id đổi
+#    -> match_id (hash từ source_match_id) đổi theo -> hệ thống hiểu
+#    NHẦM thành 1 trận hoàn toàn mới, trong khi dòng cũ (ngày cũ) vẫn
+#    còn trong DB -> trùng lặp dữ liệu / vi phạm unique constraint.
+#
+#    SỬA: khoá tự nhiên của 1 trận trong 1 mùa giải Premier League chỉ
+#    cần "đội nhà + đội khách" (KHÔNG có ngày) vì đây là giải vòng tròn
+#    2 lượt - mỗi cặp đội với đúng vai trò nhà/khách đó CHỈ gặp nhau
+#    ĐÚNG 1 LẦN trong cả mùa. Khoá này bất biến bất kể lịch bị dời bao
+#    nhiêu lần.
+#
+# 2. TỰ PHỤC HỒI (self-heal) TỪ DATABASE: trước khi tính match_id mới
+#    cho 1 trận, script tra cứu DB xem cặp (home_team_id, away_team_id)
+#    trong mùa giải đó đã có match_id nào chưa, và TÁI SỬ DỤNG match_id
+#    đó nếu có — bất kể trước đây match_id được tính bằng công thức nào.
+#    Nhờ vậy: (a) tự động "chữa lành" dữ liệu cũ bị lỗi ở mục 1 mà không
+#    cần chạy SQL tay, (b) miễn nhiễm nếu SEASON_SLUG/công thức hash có
+#    vô tình lệch giữa các lần chạy trong tương lai.
+#
+# 3. Parser chặt hơn: dòng nào trông giống dòng trận đấu (chứa " v "
+#    hoặc mẫu "số-số") nhưng không khớp được regex sẽ làm crawl DỪNG
+#    LẠI với lỗi rõ ràng, thay vì âm thầm bỏ qua trận đó.
+#
+# 4. Bắt buộc mỗi trận phải có vòng đấu (Matchday) xác định từ nguồn —
+#    bỏ hẳn kiểu suy đoán vòng đấu theo vị trí (silent fallback) vì có
+#    thể sai lệch mà không ai biết.
+#
+# 5. Thêm kiểm tra nội dung tải về không phải trang lỗi (HTML) trước
+#    khi parse, và thêm biến môi trường CRAWL_DRY_RUN=1 để chạy thử
+#    toàn bộ pipeline (fetch/parse/validate/so khớp DB) mà KHÔNG ghi gì
+#    vào database — dùng để kiểm thử an toàn trước khi áp dụng thật.
+#
+# 6. Toàn bộ việc: tra cứu match_id cũ, tính lại dữ liệu trận, validate,
+#    upsert teams/matches, chấm lại prediction — chạy trong ĐÚNG 1
+#    transaction duy nhất (atomic): hỏng ở đâu thì rollback sạch, không
+#    để lại trạng thái nửa vời.
+# ============================================================
+
+
 COMPETITION_KEY = "epl"
 SEASON_SLUG = os.getenv("EPL_SEASON_SLUG", "2026-27").strip()
 
@@ -39,12 +84,19 @@ SOURCE_TIMEZONE = "Europe/London"
 EXPECTED_TEAM_COUNT = 20
 EXPECTED_MATCH_COUNT = 380
 EXPECTED_MATCHDAYS = set(range(1, 39))
+EXPECTED_MATCHES_PER_ROUND = 10
+EXPECTED_HOME_AWAY_PER_TEAM = 19  # 20 đội - 1, đá nhà 19 & khách 19 trận/mùa
 
 BASE_DIR = Path(__file__).resolve().parent
 
 TEAM_METADATA_PATH = BASE_DIR / "data" / "epl_team_metadata.json"
 
 REQUEST_TIMEOUT_SECONDS = 30
+
+# Chạy thử toàn bộ pipeline (tải, parse, validate, so khớp DB, tính
+# toán thay đổi) nhưng KHÔNG ghi gì vào database. Dùng để kiểm thử an
+# toàn: `CRAWL_DRY_RUN=1 python crawl_epl_data_combined.py`
+DRY_RUN = os.getenv("CRAWL_DRY_RUN", "").strip().lower() in {"1", "true", "yes"}
 
 MATCH_COLUMNS = [
     "match_id",
@@ -90,6 +142,16 @@ RESULT_STATE_COLUMNS = [
     "winner_team_id",
 ]
 
+# Các cột dùng để phát hiện & log việc lịch thi đấu (ngày/giờ) bị dời so
+# với lần crawl trước — CHỈ dùng để in log cho người vận hành yên tâm là
+# thay đổi lịch đã được ghi nhận đúng vào ĐÚNG trận cũ, không ảnh hưởng
+# gì đến việc chấm điểm prediction.
+KICKOFF_DIAGNOSTIC_COLUMNS = [
+    "date_source",
+    "time_source",
+    "kickoff_time_utc",
+]
+
 # Các cột kết quả trận đấu — chỉ cho phép "hạ cấp" is_finished True -> False
 # (tức nguồn tạm thời chưa cập nhật kịp) khi trận đó KHÔNG phải đang finished
 # trong DB. Nếu DB đang finished mà nguồn báo chưa finished, giữ nguyên toàn
@@ -129,6 +191,11 @@ OPENFOOTBALL_FILE_PATH = os.getenv(
 ).strip().lstrip("/")
 OPENFOOTBALL_URL = f"{OPENFOOTBALL_BASE_URL}/{OPENFOOTBALL_FILE_PATH}"
 OPENFOOTBALL_MAX_ATTEMPTS = 4
+# Ngưỡng an toàn: file thật của cả mùa EPL luôn > 15KB. Nếu nhỏ hơn hẳn,
+# rất có thể đây là trang lỗi (404/5xx) hoặc file rỗng/placeholder chứ
+# không phải dữ liệu thật — chặn lại thay vì parse ra 0 trận rồi mới báo
+# lỗi khó hiểu ở bước sau.
+MIN_EXPECTED_SOURCE_LENGTH = 5000
 
 
 def create_http_session() -> requests.Session:
@@ -166,7 +233,25 @@ def fetch_openfootball_text() -> str:
                 timeout=REQUEST_TIMEOUT_SECONDS,
             )
             response.raise_for_status()
-            return response.text
+            body = response.text
+
+            stripped = body.strip()
+
+            if len(body) < MIN_EXPECTED_SOURCE_LENGTH:
+                raise RuntimeError(
+                    f"Nội dung tải về quá ngắn ({len(body)} ký tự, kỳ vọng "
+                    f">= {MIN_EXPECTED_SOURCE_LENGTH}). Rất có thể đây là "
+                    f"trang lỗi/placeholder chứ không phải dữ liệu thật. "
+                    f"URL: {OPENFOOTBALL_URL}"
+                )
+
+            if stripped.startswith("<"):
+                raise RuntimeError(
+                    "Nội dung tải về có vẻ là HTML (trang lỗi GitHub), "
+                    f"không phải file text thuần. URL: {OPENFOOTBALL_URL}"
+                )
+
+            return body
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
             if attempt == OPENFOOTBALL_MAX_ATTEMPTS:
@@ -224,25 +309,39 @@ GOAL_ITEM_RE = re.compile(
 )
 GOAL_MINUTE_RE = re.compile(r"(\d+(?:\+\d+)?)'(\((p|og)\))?")
 
+# Nếu 1 dòng không khớp MATCH_WITH_V_RE/MATCH_NO_V_RE nhưng "trông giống"
+# một dòng trận đấu (có " v " tách 2 đội, hoặc có mẫu tỉ số "số-số"), rất
+# có thể định dạng nguồn đã đổi theo cách script chưa xử lý được — DỪNG
+# LẠI với lỗi rõ ràng thay vì âm thầm bỏ qua, làm mất trận mà không ai biết.
+UNRECOGNIZED_MATCH_HINT_RE = re.compile(r"(?:\bv\b)|(?:\d+-\d+)")
+
 
 def parse_round_number(round_text: str) -> int | None:
     match = re.search(r"(\d+)\s*$", round_text)
     return int(match.group(1)) if match else None
 
 
-def infer_year(
-    month: int,
-    season_start_year: int,
-    last_year: int,
-    last_month: int | None,
-) -> int:
-    if last_month is None:
-        return season_start_year
+def infer_year(month: int, season_start_year: int) -> int:
+    """Suy luận năm cho 1 dòng ngày KHÔNG ghi rõ năm.
 
-    if month < last_month - 6:
-        return last_year + 1
+    QUAN TRỌNG: hàm này KHÔNG dựa vào "dòng ngày liền trước" (thứ tự vật
+    lý trong file) mà chỉ dựa thuần vào THÁNG + năm bắt đầu mùa giải.
+    Lý do: khi 1 trận bị hoãn và đá bù rất trễ, nguồn openfootball lặp
+    lại header "▪ Matchday N" ở đúng vị trí (theo ngày đá bù thực tế)
+    trong file — đã xác nhận bằng dữ liệu thật mùa 2015-16 (trận vòng 35
+    đá bù ngày 2016-05-10, SAU CẢ vòng 37 đã đá ngày 2016-05-08). Nếu suy
+    luận năm dựa vào "trạng thái dòng trước" (kiểu last_month/last_year),
+    một trận đá bù nằm ở vị trí bất thường trong file có thể làm suy luận
+    sai năm. Neo thẳng vào THÁNG là cách duy nhất miễn nhiễm hoàn toàn với
+    việc file bị xáo trộn thứ tự do các trận hoãn đá bù.
 
-    return last_year
+    Quy ước mùa giải Anh luôn bắt đầu tháng 8 (season_start_year) và kết
+    thúc muộn nhất khoảng tháng 7 năm sau (trường hợp cực đoan như mùa
+    2019-20 bị hoãn vì COVID, kết thúc tháng 7/2020) -> tháng 8-12 thuộc
+    season_start_year, tháng 1-7 thuộc season_start_year + 1.
+    """
+
+    return season_start_year if month >= 8 else season_start_year + 1
 
 
 def normalize_player_name(raw_name: str) -> str:
@@ -315,8 +414,6 @@ def parse_openfootball_matches(
     current_round: int | None = None
     current_date: dt.date | None = None
     current_time: str | None = None
-    last_year = season_start_year
-    last_month: int | None = None
 
     pending: dict[str, Any] | None = None
     goal_buffer: list[str] = []
@@ -334,7 +431,7 @@ def parse_openfootball_matches(
         goal_buffer = []
         collecting_goals = False
 
-    for raw_line in text_content.splitlines():
+    for line_number, raw_line in enumerate(text_content.splitlines(), start=1):
         line = raw_line.strip()
 
         if not line or line.startswith("=") or line.startswith("#"):
@@ -344,6 +441,11 @@ def parse_openfootball_matches(
         if round_match:
             flush_pending()
             current_round = parse_round_number(round_match.group(1))
+            if current_round is None:
+                raise RuntimeError(
+                    f"Dòng {line_number}: không đọc được số vòng đấu từ "
+                    f"'{line}'. Định dạng nguồn có thể đã thay đổi."
+                )
             continue
 
         date_match = DATE_LINE_RE.match(line)
@@ -354,11 +456,9 @@ def parse_openfootball_matches(
             year = (
                 int(year_str)
                 if year_str
-                else infer_year(month, season_start_year, last_year, last_month)
+                else infer_year(month, season_start_year)
             )
             current_date = dt.date(year, month, int(day))
-            last_year = year
-            last_month = month
             current_time = None
             continue
 
@@ -383,6 +483,14 @@ def parse_openfootball_matches(
 
         if (match_with_v or match_no_v) and current_date is not None:
             flush_pending()
+
+            if current_round is None:
+                raise RuntimeError(
+                    f"Dòng {line_number}: gặp dòng trận đấu '{line}' nhưng "
+                    "chưa xác định được vòng đấu (thiếu header '▪ Matchday "
+                    "N' phía trước). Không đoán vòng đấu để tránh sai lệch "
+                    "âm thầm — hãy kiểm tra lại định dạng file nguồn."
+                )
 
             if match_with_v:
                 (
@@ -421,6 +529,19 @@ def parse_openfootball_matches(
                 "raw_goals": "",
             }
             continue
+
+        # Không khớp round/date/goal-block/match, nhưng "trông giống" một
+        # dòng trận đấu (có " v " hoặc mẫu tỉ số) và đang trong lúc đọc
+        # danh sách trận (đã có current_date) -> rất có thể là lỗi định
+        # dạng chưa xử lý được. Dừng hẳn thay vì âm thầm mất trận.
+        if current_date is not None and UNRECOGNIZED_MATCH_HINT_RE.search(line):
+            raise RuntimeError(
+                f"Dòng {line_number}: '{line}' trông giống dòng trận đấu "
+                "nhưng không khớp được với định dạng đã biết "
+                "(MATCH_WITH_V_RE / MATCH_NO_V_RE). Định dạng nguồn có thể "
+                "đã thay đổi — cần cập nhật regex trước khi chạy tiếp, "
+                "tránh làm mất trận một cách âm thầm."
+            )
 
     flush_pending()
 
@@ -540,6 +661,12 @@ TEAM_NAME_ALIASES = {
     "wolves": "wolverhampton wanderers",
     "wolverhampton": "wolverhampton wanderers",
     "wolverhampton wanderers": "wolverhampton wanderers",
+    "hull": "hull city",
+    "hull city": "hull city",
+    "ipswich": "ipswich town",
+    "ipswich town": "ipswich town",
+    "coventry": "coventry city",
+    "coventry city": "coventry city",
 }
 
 
@@ -634,13 +761,49 @@ def build_teams(
     return records, name_to_id
 
 
+def build_source_match_id(season_slug: str, home_name: str, away_name: str) -> str:
+    """Khoá tự nhiên (bất biến) của 1 trận trong 1 mùa giải: chỉ dựa vào
+    đội nhà + đội khách, KHÔNG có ngày thi đấu. Vì Premier League là
+    vòng tròn 2 lượt, mỗi cặp (đội nhà, đội khách) chỉ xuất hiện đúng 1
+    lần trong cả mùa -> khoá này không bao giờ đổi kể cả khi trận bị dời
+    ngày/giờ bao nhiêu lần đi nữa."""
+
+    return "|".join(
+        [season_slug, clean_team_text(home_name), clean_team_text(away_name)]
+    )
+
+
+def compute_fallback_match_id(source_match_id: str) -> int:
+    """match_id mặc định cho 1 trận CHƯA từng có trong database (lần đầu
+    crawl một mùa giải mới). Với trận ĐÃ có trong DB, luôn ưu tiên tái sử
+    dụng match_id cũ (xem fetch_existing_match_lookup) thay vì hash lại,
+    để không bao giờ đổi ID của 1 trận đã tồn tại."""
+
+    return stable_postgres_integer(
+        "epl-match-v2", f"{COMPETITION_KEY}|{source_match_id}"
+    )
+
+
 def normalize_matches(
     raw_matches: list[dict[str, Any]],
     team_name_to_id: dict[str, int],
-) -> tuple[list[dict[str, Any]], list[int]]:
+    existing_match_lookup: dict[tuple[int, int], int],
+) -> tuple[list[dict[str, Any]], list[int], dict[str, int]]:
+    """Chuẩn hoá dữ liệu trận đấu thô từ nguồn.
+
+    existing_match_lookup: {(home_team_id, away_team_id): match_id} lấy
+    từ database hiện có (cùng season_slug) — dùng để TÁI SỬ DỤNG match_id
+    cũ cho các trận đã tồn tại, thay vì tính hash mới. Đây là bước tự
+    phục hồi (self-heal) cốt lõi giúp lịch thi đấu bị dời ngày/giờ luôn
+    được cập nhật (UPDATE) vào đúng dòng cũ, không bao giờ bị hiểu nhầm
+    thành trận mới.
+    """
+
     records: list[dict[str, Any]] = []
     matchdays: list[int] = []
     team_name_lookup = build_team_name_lookup(set(team_name_to_id))
+
+    stats = {"reused_match_id": 0, "new_match_id": 0}
 
     sorted_matches = sorted(
         raw_matches,
@@ -651,7 +814,7 @@ def normalize_matches(
         ),
     )
 
-    for source_order, match in enumerate(sorted_matches, start=1):
+    for match in sorted_matches:
         home_name = resolve_team_name_from_metadata(
             match["home_name"], team_name_lookup
         )
@@ -664,7 +827,7 @@ def normalize_matches(
                 f"Đội nhà và đội khách trùng nhau tại: {match}"
             )
 
-        matchday = match["round"] or ((source_order - 1) // 10) + 1
+        matchday = match["round"]
         round_name = f"Vòng {matchday}"
 
         naive_kickoff = dt.datetime.combine(
@@ -693,17 +856,19 @@ def normalize_matches(
             team_name_to_id[winner_name] if winner_name is not None else None
         )
 
-        source_match_id = "|".join(
-            [
-                match["date"].isoformat(),
-                clean_team_text(home_name),
-                clean_team_text(away_name),
-            ]
-        )
-        match_id = stable_postgres_integer(
-            "epl-match-v1",
-            "|".join([COMPETITION_KEY, SEASON_SLUG, source_match_id]),
-        )
+        home_team_id = team_name_to_id[home_name]
+        away_team_id = team_name_to_id[away_name]
+
+        source_match_id = build_source_match_id(SEASON_SLUG, home_name, away_name)
+
+        existing_match_id = existing_match_lookup.get((home_team_id, away_team_id))
+
+        if existing_match_id is not None:
+            match_id = existing_match_id
+            stats["reused_match_id"] += 1
+        else:
+            match_id = compute_fallback_match_id(source_match_id)
+            stats["new_match_id"] += 1
 
         matchdays.append(matchday)
 
@@ -730,9 +895,9 @@ def normalize_matches(
                 "kickoff_display_vietnam": kickoff_vietnam.strftime(
                     "%H:%M, %d/%m/%Y"
                 ),
-                "home_team_id": team_name_to_id[home_name],
+                "home_team_id": home_team_id,
                 "home_team_name": home_name,
-                "away_team_id": team_name_to_id[away_name],
+                "away_team_id": away_team_id,
                 "away_team_name": away_name,
                 "venue": None,
                 "city": None,
@@ -754,7 +919,7 @@ def normalize_matches(
 
     records.sort(key=lambda row: (row["kickoff_time_utc"], row["match_id"]))
 
-    return records, matchdays
+    return records, matchdays, stats
 
 
 def validate_dataset(
@@ -772,12 +937,22 @@ def validate_dataset(
 
     match_ids = [row["match_id"] for row in matches]
     source_ids = [row["source_match_id"] for row in matches]
+    team_pairs = [(row["home_team_id"], row["away_team_id"]) for row in matches]
 
     if len(match_ids) != len(set(match_ids)):
-        errors.append("Có match_id bị trùng.")
+        dup = [mid for mid, cnt in Counter(match_ids).items() if cnt > 1]
+        errors.append(f"Có match_id bị trùng: {dup}")
 
     if len(source_ids) != len(set(source_ids)):
-        errors.append("Có source_match_id bị trùng.")
+        dup = [sid for sid, cnt in Counter(source_ids).items() if cnt > 1]
+        errors.append(f"Có source_match_id bị trùng: {dup}")
+
+    if len(team_pairs) != len(set(team_pairs)):
+        dup = [pair for pair, cnt in Counter(team_pairs).items() if cnt > 1]
+        errors.append(
+            "Có cặp (home_team_id, away_team_id) bị trùng — vi phạm giả "
+            f"định vòng tròn 2 lượt: {dup}"
+        )
 
     observed_matchdays = set(matchdays)
 
@@ -790,7 +965,7 @@ def validate_dataset(
     invalid_round_counts = {
         round_no: count
         for round_no, count in matchday_counts.items()
-        if count != 10
+        if count != EXPECTED_MATCHES_PER_ROUND
     }
 
     if invalid_round_counts:
@@ -805,7 +980,10 @@ def validate_dataset(
         home_count = home_counts[name]
         away_count = away_counts[name]
 
-        if home_count != 19 or away_count != 19:
+        if (
+            home_count != EXPECTED_HOME_AWAY_PER_TEAM
+            or away_count != EXPECTED_HOME_AWAY_PER_TEAM
+        ):
             invalid_team_schedules[name] = {"home": home_count, "away": away_count}
 
     if invalid_team_schedules:
@@ -906,29 +1084,124 @@ def ensure_database_schema(engine) -> None:
                 f"Bảng {table_name} thiếu cột: " + ", ".join(missing_columns)
             )
 
+    _warn_if_missing_unique_source_match_id(inspector)
+
+
+def _warn_if_missing_unique_source_match_id(inspector) -> None:
+    """Chỉ cảnh báo (không chặn crawl) nếu không phát hiện được unique
+    constraint/index trên matches.source_match_id — cột này PHẢI unique
+    để tránh việc cùng 1 trận bị insert 2 lần trong trường hợp cơ chế
+    self-heal (existing_match_lookup) vì lý do nào đó không tra được
+    match_id cũ. Một số phiên bản driver/permissions có thể khiến bước
+    inspect này không đọc được đầy đủ index, nên chỉ in cảnh báo, không
+    raise lỗi."""
+
+    try:
+        indexes = inspector.get_indexes("matches", schema="public")
+        has_unique_index = any(
+            idx.get("unique") and list(idx.get("column_names", [])) == ["source_match_id"]
+            for idx in indexes
+        )
+
+        unique_constraints = inspector.get_unique_constraints(
+            "matches", schema="public"
+        )
+        has_unique_constraint = any(
+            list(uc.get("column_names", [])) == ["source_match_id"]
+            for uc in unique_constraints
+        )
+
+        if not (has_unique_index or has_unique_constraint):
+            print(
+                "[CẢNH BÁO] Không phát hiện unique constraint/index trên "
+                "matches.source_match_id. Nếu đúng là chưa có, hãy tạo "
+                "(CREATE UNIQUE INDEX ... ON matches(source_match_id)) để "
+                "đảm bảo không có 2 dòng trùng khoá tự nhiên."
+            )
+    except Exception as exc:  # noqa: BLE001
+        print(f"[CẢNH BÁO] Không kiểm tra được index source_match_id: {exc}")
+
+
+def fetch_existing_match_lookup(
+    connection,
+    matches_table: Table,
+    season_slug: str,
+) -> dict[tuple[int, int], int]:
+    """Tra cứu match_id đã tồn tại trong DB theo cặp (home_team_id,
+    away_team_id) — CHỈ trong đúng season_slug đang xử lý. Đây là bước
+    self-heal cốt lõi: match_id trả về ở đây LUÔN được ưu tiên tái sử
+    dụng thay vì tính hash mới, bất kể trước đây nó được tạo ra bằng
+    công thức/định dạng source_match_id nào (kể cả công thức cũ có nhúng
+    ngày thi đấu). Nhờ vậy, việc đổi công thức tính match_id không bao
+    giờ làm trận đã tồn tại bị hiểu nhầm thành trận mới."""
+
+    statement = select(
+        matches_table.c.match_id,
+        matches_table.c.home_team_id,
+        matches_table.c.away_team_id,
+    ).where(matches_table.c.season_slug == season_slug)
+
+    rows_by_pair: dict[tuple[int, int], list[int]] = defaultdict(list)
+
+    for row in connection.execute(statement).mappings():
+        pair = (int(row["home_team_id"]), int(row["away_team_id"]))
+        rows_by_pair[pair].append(int(row["match_id"]))
+
+    duplicate_pairs = {
+        pair: match_ids
+        for pair, match_ids in rows_by_pair.items()
+        if len(match_ids) > 1
+    }
+
+    if duplicate_pairs:
+        details = "\n".join(
+            f"  - home_team_id={pair[0]}, away_team_id={pair[1]}: "
+            f"match_id={match_ids}"
+            for pair, match_ids in duplicate_pairs.items()
+        )
+        raise RuntimeError(
+            "Phát hiện NHIỀU dòng trong bảng matches cùng season_slug="
+            f"{season_slug!r} có cùng cặp (home_team_id, away_team_id) — "
+            "đây là dữ liệu trùng lặp còn sót lại (có thể từ lần chạy lỗi "
+            "trước khi có cơ chế self-heal này). Script CHỦ ĐỘNG DỪNG LẠI "
+            "thay vì tự đoán nên giữ dòng nào, để tránh làm mất dữ liệu "
+            "predictions/match_goals đang tham chiếu tới match_id sai. "
+            "Vui lòng kiểm tra và gộp/xoá thủ công các dòng trùng sau, "
+            "giữ lại match_id nào đang có predictions/match_goals tham "
+            "chiếu (hoặc match_id có is_finished=true):\n" + details
+        )
+
+    return {pair: match_ids[0] for pair, match_ids in rows_by_pair.items()}
+
+
+def fetch_existing_rows(
+    connection,
+    matches_table: Table,
+    match_ids: list[int],
+    columns: list[str],
+) -> dict[int, tuple[Any, ...]]:
+    if not match_ids:
+        return {}
+
+    statement = select(
+        matches_table.c.match_id,
+        *[matches_table.c[column] for column in columns],
+    ).where(matches_table.c.match_id.in_(match_ids))
+
+    existing: dict[int, tuple[Any, ...]] = {}
+
+    for row in connection.execute(statement).mappings():
+        existing[int(row["match_id"])] = tuple(row[column] for column in columns)
+
+    return existing
+
 
 def result_state(row: dict[str, Any]) -> tuple[Any, ...]:
     return tuple(row.get(column) for column in RESULT_STATE_COLUMNS)
 
 
-def get_existing_result_states(
-    connection,
-    matches_table: Table,
-    match_ids: list[int],
-) -> dict[int, tuple[Any, ...]]:
-    statement = select(
-        matches_table.c.match_id,
-        *[matches_table.c[column] for column in RESULT_STATE_COLUMNS],
-    ).where(matches_table.c.match_id.in_(match_ids))
-
-    existing = {}
-
-    for row in connection.execute(statement).mappings():
-        existing[int(row["match_id"])] = tuple(
-            row[column] for column in RESULT_STATE_COLUMNS
-        )
-
-    return existing
+def kickoff_state(row: dict[str, Any]) -> tuple[Any, ...]:
+    return tuple(row.get(column) for column in KICKOFF_DIAGNOSTIC_COLUMNS)
 
 
 def get_outcome(home_score: int, away_score: int) -> str:
@@ -1034,23 +1307,103 @@ def rescore_predictions(connection, changed_match_ids: list[int]) -> int:
 
 
 def sync_database(
+    engine,
     teams: list[dict[str, Any]],
-    matches: list[dict[str, Any]],
-) -> dict[str, int]:
-    database_url = get_database_url()
-    engine = create_engine(
-        database_url,
-        poolclass=NullPool,
-        pool_pre_ping=True,
-        connect_args={"connect_timeout": 20},
-    )
+    raw_matches: list[dict[str, Any]],
+    team_name_to_id: dict[str, int],
+) -> dict[str, Any]:
+    metadata = MetaData()
+    teams_table = Table("teams", metadata, autoload_with=engine)
+    matches_table = Table("matches", metadata, autoload_with=engine)
 
-    try:
-        ensure_database_schema(engine)
+    with engine.begin() as connection:
+        # 1) Tra cứu match_id cũ theo cặp đội (self-heal) TRƯỚC khi tính
+        #    toán dữ liệu trận — đây là bước quyết định để lịch thi đấu
+        #    bị dời ngày/giờ luôn map đúng về 1 dòng duy nhất trong DB.
+        existing_match_lookup = fetch_existing_match_lookup(
+            connection, matches_table, SEASON_SLUG
+        )
+        print(
+            f"Số cặp (đội nhà, đội khách) đã có trong DB (season "
+            f"{SEASON_SLUG}): {len(existing_match_lookup)}"
+        )
 
-        metadata = MetaData()
-        teams_table = Table("teams", metadata, autoload_with=engine)
-        matches_table = Table("matches", metadata, autoload_with=engine)
+        matches, matchdays, id_stats = normalize_matches(
+            raw_matches, team_name_to_id, existing_match_lookup
+        )
+
+        validate_dataset(teams, matches, matchdays)
+
+        print(
+            "Số trận tái sử dụng match_id cũ (self-heal):",
+            id_stats["reused_match_id"],
+        )
+        print(
+            "Số trận tạo match_id mới (chưa từng có trong DB):",
+            id_stats["new_match_id"],
+        )
+
+        match_ids = [row["match_id"] for row in matches]
+
+        # 2) Lấy trạng thái HIỆN TẠI trong DB (trước khi ghi đè) để biết
+        #    (a) trận nào đổi kết quả -> cần chấm lại prediction, và
+        #    (b) trận nào đổi lịch thi đấu (ngày/giờ) -> chỉ để LOG cho
+        #    người vận hành yên tâm, không ảnh hưởng logic chấm điểm.
+        existing_result_states = fetch_existing_rows(
+            connection, matches_table, match_ids, RESULT_STATE_COLUMNS
+        )
+        existing_kickoff_states = fetch_existing_rows(
+            connection, matches_table, match_ids, KICKOFF_DIAGNOSTIC_COLUMNS
+        )
+
+        changed_match_ids: list[int] = []
+        kickoff_changed_rows: list[dict[str, Any]] = []
+
+        for row in matches:
+            match_id = row["match_id"]
+
+            old_result = existing_result_states.get(match_id)
+            new_result = result_state(row)
+
+            if old_result is not None and old_result != new_result:
+                changed_match_ids.append(match_id)
+            elif old_result is None:
+                # Trận hoàn toàn mới (chưa từng có trong DB) — không cần
+                # rescoring (chưa thể có prediction cho trận chưa tồn
+                # tại), nhưng vẫn tính là "mới" cho mục đích log ở trên.
+                pass
+
+            old_kickoff = existing_kickoff_states.get(match_id)
+            new_kickoff = kickoff_state(row)
+
+            if old_kickoff is not None and old_kickoff != new_kickoff:
+                kickoff_changed_rows.append(
+                    {
+                        "match_id": match_id,
+                        "matchup": f"{row['home_team_name']} vs {row['away_team_name']}",
+                        "old_kickoff_utc": old_kickoff[
+                            KICKOFF_DIAGNOSTIC_COLUMNS.index("kickoff_time_utc")
+                        ],
+                        "new_kickoff_utc": new_kickoff[
+                            KICKOFF_DIAGNOSTIC_COLUMNS.index("kickoff_time_utc")
+                        ],
+                    }
+                )
+
+        if kickoff_changed_rows:
+            print(
+                f"\nPhát hiện {len(kickoff_changed_rows)} trận bị đổi lịch "
+                "thi đấu (ngày/giờ) so với dữ liệu đang lưu — sẽ UPDATE "
+                "đúng dòng cũ (KHÔNG tạo trận mới):"
+            )
+            for change in kickoff_changed_rows:
+                print(
+                    f"  - match_id={change['match_id']} "
+                    f"({change['matchup']}): "
+                    f"{change['old_kickoff_utc']} -> {change['new_kickoff_utc']}"
+                )
+        else:
+            print("\nKhông có trận nào bị đổi lịch thi đấu so với lần crawl trước.")
 
         # Bỏ 2 field nội bộ (_home_goals/_away_goals) trước khi insert
         # vào bảng matches — chúng chỉ dùng để ghi bảng match_goals.
@@ -1059,93 +1412,99 @@ def sync_database(
             for row in matches
         ]
 
-        with engine.begin() as connection:
-            existing_states = get_existing_result_states(
-                connection,
-                matches_table,
-                [row["match_id"] for row in clean_matches],
+        if DRY_RUN:
+            print(
+                "\n[DRY RUN] CRAWL_DRY_RUN đang bật — KHÔNG ghi gì vào "
+                "database. Dừng lại sau bước tính toán/so khớp."
             )
+            return {
+                "teams": len(teams),
+                "matches": len(matches),
+                "predictions": None,
+                "changed_matches": len(changed_match_ids),
+                "kickoff_changed_matches": len(kickoff_changed_rows),
+                "rescored_predictions": 0,
+                "reused_match_id": id_stats["reused_match_id"],
+                "new_match_id": id_stats["new_match_id"],
+                "matches_data": matches,
+                "dry_run": True,
+            }
 
-            changed_match_ids = []
+        team_insert = pg_insert(teams_table).values(teams)
+        team_upsert = team_insert.on_conflict_do_update(
+            index_elements=[teams_table.c.team_id],
+            set_={
+                "team_name": team_insert.excluded.team_name,
+                "short_name": team_insert.excluded.short_name,
+                "logo_path": team_insert.excluded.logo_path,
+                "stadium_name": team_insert.excluded.stadium_name,
+                "stadium_city": team_insert.excluded.stadium_city,
+            },
+        )
+        connection.execute(team_upsert)
 
-            for row in clean_matches:
-                old_state = existing_states.get(row["match_id"])
-                new_state = result_state(row)
+        match_insert = pg_insert(matches_table).values(clean_matches)
 
-                if old_state != new_state:
-                    changed_match_ids.append(row["match_id"])
+        downgrade_guard = and_(
+            matches_table.c.is_finished.is_(True),
+            match_insert.excluded.is_finished.is_(False),
+        )
 
-            team_insert = pg_insert(teams_table).values(teams)
-            team_upsert = team_insert.on_conflict_do_update(
-                index_elements=[teams_table.c.team_id],
-                set_={
-                    "team_name": team_insert.excluded.team_name,
-                    "short_name": team_insert.excluded.short_name,
-                    "logo_path": team_insert.excluded.logo_path,
-                    "stadium_name": team_insert.excluded.stadium_name,
-                    "stadium_city": team_insert.excluded.stadium_city,
-                },
-            )
-            connection.execute(team_upsert)
+        match_set_clause = {}
 
-            match_insert = pg_insert(matches_table).values(clean_matches)
+        for column in MATCH_COLUMNS:
+            if column == "match_id":
+                continue
 
-            downgrade_guard = and_(
-                matches_table.c.is_finished.is_(True),
-                match_insert.excluded.is_finished.is_(False),
-            )
+            new_value = getattr(match_insert.excluded, column)
 
-            match_set_clause = {}
-
-            for column in MATCH_COLUMNS:
-                if column == "match_id":
-                    continue
-
-                new_value = getattr(match_insert.excluded, column)
-
-                if column in PROTECTED_RESULT_COLUMNS:
-                    match_set_clause[column] = case(
-                        (downgrade_guard, matches_table.c[column]),
-                        else_=new_value,
-                    )
-                else:
-                    match_set_clause[column] = new_value
-
-            match_upsert = match_insert.on_conflict_do_update(
-                index_elements=[matches_table.c.match_id],
-                set_=match_set_clause,
-            )
-            connection.execute(match_upsert)
-
-            rescored_predictions = rescore_predictions(
-                connection, changed_match_ids
-            )
-
-            database_counts = (
-                connection.execute(
-                    text(
-                        """
-                        SELECT
-                            (SELECT COUNT(*) FROM teams) AS teams,
-                            (SELECT COUNT(*) FROM matches) AS matches,
-                            (SELECT COUNT(*) FROM predictions) AS predictions
-                        """
-                    )
+            if column in PROTECTED_RESULT_COLUMNS:
+                match_set_clause[column] = case(
+                    (downgrade_guard, matches_table.c[column]),
+                    else_=new_value,
                 )
-                .mappings()
-                .one()
+            else:
+                match_set_clause[column] = new_value
+
+        # Arbiter vẫn là match_id (PK) — nhờ bước self-heal ở trên,
+        # match_id ở đây LUÔN đúng là ID hiện có trong DB cho trận đó
+        # (nếu đã tồn tại), nên ON CONFLICT sẽ khớp đúng dòng cần update
+        # thay vì cố insert dòng mới rồi đụng unique constraint khác.
+        match_upsert = match_insert.on_conflict_do_update(
+            index_elements=[matches_table.c.match_id],
+            set_=match_set_clause,
+        )
+        connection.execute(match_upsert)
+
+        rescored_predictions = rescore_predictions(connection, changed_match_ids)
+
+        database_counts = (
+            connection.execute(
+                text(
+                    """
+                    SELECT
+                        (SELECT COUNT(*) FROM teams) AS teams,
+                        (SELECT COUNT(*) FROM matches) AS matches,
+                        (SELECT COUNT(*) FROM predictions) AS predictions
+                    """
+                )
             )
+            .mappings()
+            .one()
+        )
 
-        return {
-            "teams": int(database_counts["teams"]),
-            "matches": int(database_counts["matches"]),
-            "predictions": int(database_counts["predictions"]),
-            "changed_matches": len(changed_match_ids),
-            "rescored_predictions": rescored_predictions,
-        }
-
-    finally:
-        engine.dispose()
+    return {
+        "teams": int(database_counts["teams"]),
+        "matches": int(database_counts["matches"]),
+        "predictions": int(database_counts["predictions"]),
+        "changed_matches": len(changed_match_ids),
+        "kickoff_changed_matches": len(kickoff_changed_rows),
+        "rescored_predictions": rescored_predictions,
+        "reused_match_id": id_stats["reused_match_id"],
+        "new_match_id": id_stats["new_match_id"],
+        "matches_data": matches,
+        "dry_run": False,
+    }
 
 
 def ensure_match_goals_table(engine) -> None:
@@ -1251,6 +1610,13 @@ def write_match_goals(
         print("Không có trận nào cần ghi scorer.")
         return
 
+    if DRY_RUN:
+        print(
+            f"[DRY RUN] Sẽ refresh scorer cho {len(finished_match_ids)} trận "
+            f"({len(goal_rows)} dòng bàn thắng) — KHÔNG ghi thật vào DB."
+        )
+        return
+
     with engine.begin() as connection:
         connection.execute(
             text(
@@ -1289,6 +1655,8 @@ def main() -> None:
     print("=" * 72)
     print("Season:", SEASON_SLUG)
     print("Source URL:", OPENFOOTBALL_URL)
+    if DRY_RUN:
+        print(">>> CHẾ ĐỘ DRY RUN — sẽ KHÔNG ghi gì vào database <<<")
 
     season_start_year = int(SEASON_SLUG.split("-")[0])
 
@@ -1306,20 +1674,6 @@ def main() -> None:
 
     team_metadata = load_team_metadata()
     teams, team_name_to_id = build_teams(raw_matches, team_metadata)
-    matches, matchdays = normalize_matches(raw_matches, team_name_to_id)
-
-    validate_dataset(teams, matches, matchdays)
-
-    result = sync_database(teams, matches)
-
-    print("\n" + "=" * 72)
-    print("SYNC FIXTURE/SCORE THÀNH CÔNG")
-    print("=" * 72)
-    print("Số đội trong database:", result["teams"])
-    print("Số trận trong database:", result["matches"])
-    print("Số prediction hiện có:", result["predictions"])
-    print("Số trận có dữ liệu thay đổi:", result["changed_matches"])
-    print("Số prediction được chấm lại:", result["rescored_predictions"])
 
     database_url = get_database_url()
     engine = create_engine(
@@ -1330,23 +1684,40 @@ def main() -> None:
     )
 
     try:
+        ensure_database_schema(engine)
         ensure_match_goals_table(engine)
 
+        result = sync_database(engine, teams, raw_matches, team_name_to_id)
+
+        print("\n" + "=" * 72)
+        print("SYNC FIXTURE/SCORE THÀNH CÔNG" + (" (DRY RUN)" if DRY_RUN else ""))
+        print("=" * 72)
+        print("Số đội trong database:", result["teams"])
+        print("Số trận trong database:", result["matches"])
+        print("Số prediction hiện có:", result["predictions"])
+        print("Số trận có dữ liệu kết quả thay đổi:", result["changed_matches"])
+        print("Số trận bị đổi lịch thi đấu:", result["kickoff_changed_matches"])
+        print("Số prediction được chấm lại:", result["rescored_predictions"])
+        print("Số trận tái sử dụng match_id cũ:", result["reused_match_id"])
+        print("Số trận tạo match_id mới:", result["new_match_id"])
+
+        matches = result["matches_data"]
         finished_matches = [row for row in matches if row["is_finished"]]
         finished_match_ids = [row["match_id"] for row in finished_matches]
         goal_rows = build_goal_rows(finished_matches)
 
         write_match_goals(engine, goal_rows, finished_match_ids)
 
-        with engine.connect() as connection:
-            total_goals = connection.execute(
-                text("SELECT COUNT(*) FROM public.match_goals")
-            ).scalar_one()
+        if not DRY_RUN:
+            with engine.connect() as connection:
+                total_goals = connection.execute(
+                    text("SELECT COUNT(*) FROM public.match_goals")
+                ).scalar_one()
 
-        print("\n" + "=" * 72)
-        print("SYNC SCORER THÀNH CÔNG")
-        print("=" * 72)
-        print("Tổng dòng scorer trong DB:", int(total_goals))
+            print("\n" + "=" * 72)
+            print("SYNC SCORER THÀNH CÔNG")
+            print("=" * 72)
+            print("Tổng dòng scorer trong DB:", int(total_goals))
 
     finally:
         engine.dispose()
