@@ -92,6 +92,7 @@ BIG_MATCH_OUTCOME_POINTS = 2
 
 ROUND_CHAMPION_BONUS_POINTS = 5
 EPL_MATCHES_PER_ROUND = 10
+EPL_SEASON_TOTAL_MATCHES = 380
 LEADERBOARD_PAGE_SIZE = 10
 
 CHECKIN_CYCLE_DAYS = 7
@@ -8833,6 +8834,1103 @@ def maybe_render_final_poster_popup(user_id: int) -> bool:
 
     return True
 
+
+# ============================================================
+# 4b. VÔ ĐỊCH VÒNG ĐẤU / VÔ ĐỊCH MÙA GIẢI — POPUP + HUY HIỆU
+# ============================================================
+
+def is_season_finished(season_slug: str) -> bool:
+    """
+    Mùa giải được coi là đã kết thúc khi toàn bộ 380 trận đấu
+    của mùa đó đã có kết quả hợp lệ (is_finished + đủ tỉ số).
+    """
+    try:
+        matches = load_matches(season_slug)
+    except Exception:
+        return False
+
+    if matches.empty or "match_id" not in matches.columns:
+        return False
+
+    total_matches = int(matches["match_id"].nunique())
+
+    if total_matches < EPL_SEASON_TOTAL_MATCHES:
+        return False
+
+    actual_home = pd.to_numeric(
+        matches.get("home_score_for_prediction"),
+        errors="coerce"
+    )
+    actual_away = pd.to_numeric(
+        matches.get("away_score_for_prediction"),
+        errors="coerce"
+    )
+
+    is_complete = (
+        matches["is_finished"].map(to_bool)
+        & actual_home.notna()
+        & actual_away.notna()
+    )
+
+    completed_matches = int(
+        matches.loc[is_complete, "match_id"].nunique()
+    )
+
+    return (
+        total_matches == EPL_SEASON_TOTAL_MATCHES
+        and completed_matches >= EPL_SEASON_TOTAL_MATCHES
+    )
+
+
+@st.cache_data(
+    ttl=10,
+    max_entries=8,
+    show_spinner=False
+)
+def get_round_champions_detail(season_slug: str) -> pd.DataFrame:
+    """
+    Danh sách chi tiết nhà vô địch của từng vòng đã "chốt"
+    (đủ EPL_MATCHES_PER_ROUND trận và tất cả đã có kết quả).
+
+    Khác với build_round_champion_bonus_df (đã gộp theo user cho cả mùa),
+    hàm này giữ nguyên từng dòng (round_name, user_id) để biết chính xác
+    từng vòng ai là nhà vô địch — kể cả trường hợp đồng vô địch.
+
+    Columns: round_name, round_number, user_id, round_points
+    """
+    result_columns = [
+        "round_name",
+        "round_number",
+        "user_id",
+        "round_points"
+    ]
+
+    predictions = load_predictions(season_slug)
+    matches = load_matches(season_slug)
+
+    if predictions.empty or matches.empty:
+        return pd.DataFrame(columns=result_columns)
+
+    required_match_columns = {
+        "match_id",
+        "round_name",
+        "is_finished",
+        "home_score_for_prediction",
+        "away_score_for_prediction"
+    }
+
+    if not required_match_columns.issubset(matches.columns):
+        return pd.DataFrame(columns=result_columns)
+
+    round_matches = (
+        matches[
+            [
+                "match_id",
+                "round_name",
+                "is_finished",
+                "home_score_for_prediction",
+                "away_score_for_prediction"
+            ]
+        ]
+        .drop_duplicates(subset=["match_id"])
+        .copy()
+    )
+
+    round_matches["round_name"] = (
+        round_matches["round_name"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+    )
+
+    round_matches = round_matches[
+        round_matches["round_name"].ne("")
+    ].copy()
+
+    if round_matches.empty:
+        return pd.DataFrame(columns=result_columns)
+
+    actual_home = pd.to_numeric(
+        round_matches["home_score_for_prediction"],
+        errors="coerce"
+    )
+    actual_away = pd.to_numeric(
+        round_matches["away_score_for_prediction"],
+        errors="coerce"
+    )
+
+    round_matches["is_complete"] = (
+        round_matches["is_finished"].map(to_bool)
+        & actual_home.notna()
+        & actual_away.notna()
+    )
+
+    round_status = (
+        round_matches
+        .groupby("round_name", as_index=False)
+        .agg(
+            match_count=("match_id", "nunique"),
+            completed_match_count=("is_complete", "sum")
+        )
+    )
+
+    eligible_round_names = round_status.loc[
+        round_status["match_count"].eq(EPL_MATCHES_PER_ROUND)
+        & round_status["completed_match_count"].eq(
+            round_status["match_count"]
+        ),
+        "round_name"
+    ]
+
+    if eligible_round_names.empty:
+        return pd.DataFrame(columns=result_columns)
+
+    eligible_matches = round_matches.loc[
+        round_matches["round_name"].isin(eligible_round_names),
+        ["match_id", "round_name"]
+    ]
+
+    round_predictions = (
+        predictions[
+            ["prediction_id", "user_id", "match_id", "points"]
+        ]
+        .merge(eligible_matches, on="match_id", how="inner")
+    )
+
+    round_predictions["points"] = pd.to_numeric(
+        round_predictions["points"],
+        errors="coerce"
+    )
+
+    round_predictions = round_predictions[
+        round_predictions["points"].notna()
+    ].copy()
+
+    if round_predictions.empty:
+        return pd.DataFrame(columns=result_columns)
+
+    round_totals = (
+        round_predictions
+        .groupby(["round_name", "user_id"], as_index=False)
+        .agg(
+            round_points=("points", "sum"),
+            prediction_count=("prediction_id", "nunique")
+        )
+    )
+
+    round_totals = round_totals[
+        round_totals["prediction_count"].gt(0)
+    ].copy()
+
+    if round_totals.empty:
+        return pd.DataFrame(columns=result_columns)
+
+    round_totals["top_round_points"] = (
+        round_totals
+        .groupby("round_name")["round_points"]
+        .transform("max")
+    )
+
+    champions = round_totals[
+        round_totals["round_points"].eq(
+            round_totals["top_round_points"]
+        )
+    ].copy()
+
+    champions["round_number"] = champions["round_name"].map(
+        lambda name: get_prediction_round_sort_key(name)[1]
+    )
+
+    return (
+        champions[result_columns]
+        .sort_values(["round_number", "user_id"])
+        .reset_index(drop=True)
+    )
+
+
+def get_season_champion_user_ids(season_slug: str) -> list[int]:
+    """
+    Danh sách user_id đang đứng đầu BXH tổng (total_points), chỉ trả về
+    khi mùa giải đã kết thúc. Đồng hạng nhất -> trả về nhiều user_id.
+    """
+    if not is_season_finished(season_slug):
+        return []
+
+    try:
+        leaderboard = build_leaderboard_df(season_slug)
+    except Exception:
+        return []
+
+    if leaderboard.empty or "total_points" not in leaderboard.columns:
+        return []
+
+    total_points = pd.to_numeric(
+        leaderboard["total_points"],
+        errors="coerce"
+    ).fillna(0)
+
+    if total_points.empty:
+        return []
+
+    top_points = total_points.max()
+
+    champion_ids = leaderboard.loc[
+        total_points.eq(top_points),
+        "user_id"
+    ]
+
+    return [int(x) for x in champion_ids.tolist()]
+
+
+def has_seen_round_champion_popup(
+    user_id: int,
+    season_slug: str,
+    round_name: str
+) -> bool:
+    try:
+        row = fetch_one(
+            """
+            SELECT 1
+            FROM round_champion_popup_views
+            WHERE user_id = :user_id
+              AND season_slug = :season_slug
+              AND round_name = :round_name
+            LIMIT 1
+            """,
+            {
+                "user_id": int(user_id),
+                "season_slug": season_slug,
+                "round_name": round_name
+            }
+        )
+        return row is not None
+    except Exception:
+        # Nếu bảng chưa tồn tại hoặc lỗi tạm thời, không chặn app,
+        # nhưng cũng không hiện popup lặp lại liên tục.
+        return True
+
+
+def mark_round_champion_popup_seen(
+    user_id: int,
+    season_slug: str,
+    round_name: str
+) -> bool:
+    try:
+        execute_sql(
+            """
+            INSERT INTO round_champion_popup_views (
+                user_id,
+                season_slug,
+                round_name
+            )
+            VALUES (
+                :user_id,
+                :season_slug,
+                :round_name
+            )
+            ON CONFLICT (user_id, season_slug, round_name) DO NOTHING
+            """,
+            {
+                "user_id": int(user_id),
+                "season_slug": season_slug,
+                "round_name": round_name
+            }
+        )
+        return True
+    except Exception:
+        return False
+
+
+def has_seen_season_champion_popup(
+    user_id: int,
+    season_slug: str
+) -> bool:
+    try:
+        row = fetch_one(
+            """
+            SELECT 1
+            FROM season_champion_popup_views
+            WHERE user_id = :user_id
+              AND season_slug = :season_slug
+            LIMIT 1
+            """,
+            {
+                "user_id": int(user_id),
+                "season_slug": season_slug
+            }
+        )
+        return row is not None
+    except Exception:
+        return True
+
+
+def mark_season_champion_popup_seen(
+    user_id: int,
+    season_slug: str
+) -> bool:
+    try:
+        execute_sql(
+            """
+            INSERT INTO season_champion_popup_views (
+                user_id,
+                season_slug
+            )
+            VALUES (
+                :user_id,
+                :season_slug
+            )
+            ON CONFLICT (user_id, season_slug) DO NOTHING
+            """,
+            {
+                "user_id": int(user_id),
+                "season_slug": season_slug
+            }
+        )
+        return True
+    except Exception:
+        return False
+
+
+def get_pending_round_champion_notice(
+    user_id: int,
+    season_slug: str
+) -> dict | None:
+    """
+    Trả về thông tin vòng đấu đã chốt vô địch gần nhất (theo thứ tự vòng
+    tăng dần) mà user này CHƯA từng thấy popup, hoặc None nếu không có.
+    """
+    champions_detail = get_round_champions_detail(season_slug)
+
+    if champions_detail.empty:
+        return None
+
+    round_order = (
+        champions_detail[["round_name", "round_number"]]
+        .drop_duplicates()
+        .sort_values("round_number")
+    )
+
+    for _, round_row in round_order.iterrows():
+        round_name = str(round_row["round_name"])
+
+        if has_seen_round_champion_popup(
+            user_id,
+            season_slug,
+            round_name
+        ):
+            continue
+
+        round_champions = champions_detail[
+            champions_detail["round_name"].eq(round_name)
+        ]
+
+        champion_user_ids = [
+            int(x) for x in round_champions["user_id"].tolist()
+        ]
+
+        round_points = float(
+            round_champions["round_points"].iloc[0]
+        )
+
+        return {
+            "season_slug": season_slug,
+            "round_name": round_name,
+            "champion_user_ids": champion_user_ids,
+            "round_points": round_points,
+            "is_current_user_champion": (
+                int(user_id) in champion_user_ids
+            )
+        }
+
+    return None
+
+
+def get_pending_season_champion_notice(
+    user_id: int,
+    season_slug: str
+) -> dict | None:
+    if not is_season_finished(season_slug):
+        return None
+
+    if has_seen_season_champion_popup(user_id, season_slug):
+        return None
+
+    champion_user_ids = get_season_champion_user_ids(season_slug)
+
+    if not champion_user_ids:
+        return None
+
+    try:
+        leaderboard = build_leaderboard_df(season_slug)
+    except Exception:
+        leaderboard = pd.DataFrame()
+
+    total_points = 0
+    round_champion_count = 0
+
+    if not leaderboard.empty:
+        champion_rows = leaderboard[
+            leaderboard["user_id"].astype(int).isin(
+                champion_user_ids
+            )
+        ]
+
+        if not champion_rows.empty:
+            total_points = int(
+                pd.to_numeric(
+                    champion_rows["total_points"],
+                    errors="coerce"
+                ).fillna(0).iloc[0]
+            )
+
+            if "round_champion_count" in champion_rows.columns:
+                first_row = champion_rows[
+                    champion_rows["user_id"].astype(int)
+                    == int(user_id)
+                ]
+
+                if not first_row.empty:
+                    round_champion_count = int(
+                        pd.to_numeric(
+                            first_row["round_champion_count"],
+                            errors="coerce"
+                        ).fillna(0).iloc[0]
+                    )
+
+    return {
+        "season_slug": season_slug,
+        "champion_user_ids": champion_user_ids,
+        "total_points": total_points,
+        "round_champion_count": round_champion_count,
+        "is_current_user_champion": (
+            int(user_id) in champion_user_ids
+        )
+    }
+
+
+def _get_display_names_for_user_ids(user_ids: list[int]) -> list[str]:
+    try:
+        users = load_users()
+    except Exception:
+        users = pd.DataFrame()
+
+    if users.empty:
+        return [f"Người chơi #{uid}" for uid in user_ids]
+
+    name_by_id = dict(
+        zip(
+            users["user_id"].astype(int),
+            users["display_name"].astype(str)
+        )
+    )
+
+    return [
+        name_by_id.get(int(uid), f"Người chơi #{uid}")
+        for uid in user_ids
+    ]
+
+
+@st.dialog(" ")
+def render_round_champion_popup(user_id: int, notice: dict):
+    user_id = int(user_id)
+    season_slug = notice["season_slug"]
+    round_name = notice["round_name"]
+    round_points = notice["round_points"]
+    is_me = notice["is_current_user_champion"]
+
+    champion_names = _get_display_names_for_user_ids(
+        notice["champion_user_ids"]
+    )
+
+    if is_me:
+        others = [
+            name
+            for uid, name in zip(
+                notice["champion_user_ids"],
+                champion_names
+            )
+            if int(uid) != user_id
+        ]
+
+        co_champion_html = (
+            (
+                '<div class="wc-round-champ-co">'
+                'Đồng vô địch cùng: '
+                f'{html.escape(", ".join(others))}'
+                '</div>'
+            )
+            if others
+            else ""
+        )
+
+        popup_html = f"""
+        <style>
+        div[role="dialog"]:has(.wc-round-champ-shell) {{
+            width: min(440px, calc(100vw - 28px)) !important;
+            max-width: min(440px, calc(100vw - 28px)) !important;
+            background: linear-gradient(160deg, #0B2540, #123456) !important;
+            border: 1px solid rgba(245,197,66,0.35) !important;
+            border-radius: 22px !important;
+            box-shadow: 0 24px 60px rgba(0,0,0,0.45) !important;
+        }}
+
+        div[role="dialog"]:has(.wc-round-champ-shell) h2,
+        div[role="dialog"]:has(.wc-round-champ-shell) [data-testid="stDialogHeader"] {{
+            display: none !important;
+        }}
+
+        div[role="dialog"]:has(.wc-round-champ-shell) button[aria-label="Close"] {{
+            color: #FFFFFF !important;
+            background: rgba(7, 17, 31, 0.55) !important;
+            border-radius: 999px !important;
+            top: 14px !important;
+            right: 14px !important;
+        }}
+
+        .wc-round-champ-shell {{
+            padding: 30px 22px 6px 22px;
+            text-align: center;
+        }}
+
+        .wc-round-champ-crown {{
+            font-size: 54px;
+            line-height: 1;
+            filter: drop-shadow(0 4px 10px rgba(245,197,66,0.5));
+            animation: wcRoundChampBounce 1.4s ease-in-out infinite;
+        }}
+
+        @keyframes wcRoundChampBounce {{
+            0%, 100% {{ transform: translateY(0); }}
+            50% {{ transform: translateY(-8px); }}
+        }}
+
+        .wc-round-champ-title {{
+            margin-top: 12px;
+            color: #F5C542;
+            font-size: 22px;
+            font-weight: 950;
+            letter-spacing: -0.01em;
+            line-height: 1.3;
+        }}
+
+        .wc-round-champ-subtitle {{
+            margin-top: 8px;
+            color: #E2E8F0;
+            font-size: 14.5px;
+            line-height: 1.5;
+        }}
+
+        .wc-round-champ-stats {{
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+        }}
+
+        .wc-round-champ-stat {{
+            flex: 1;
+            max-width: 140px;
+            padding: 13px 8px;
+            border-radius: 14px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.10);
+        }}
+
+        .wc-round-champ-stat strong {{
+            display: block;
+            color: #FFD761;
+            font-size: 21px;
+            font-weight: 950;
+            line-height: 1.1;
+        }}
+
+        .wc-round-champ-stat span {{
+            display: block;
+            margin-top: 4px;
+            color: #94A3B8;
+            font-size: 10.5px;
+            font-weight: 750;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+        }}
+
+        .wc-round-champ-co {{
+            margin-top: 16px;
+            color: #94A3B8;
+            font-size: 12.5px;
+            line-height: 1.5;
+        }}
+
+        div[class*="st-key-round_champ_close_"] button {{
+            width: 100% !important;
+            min-height: 50px !important;
+            border-radius: 999px !important;
+            border: none !important;
+            background: linear-gradient(135deg, #F5C542, #FFD761) !important;
+            color: #07111F !important;
+            font-size: 16px !important;
+            font-weight: 950 !important;
+            box-shadow: 0 14px 34px rgba(245, 197, 66, 0.24) !important;
+        }}
+        </style>
+
+        <div class="wc-round-champ-shell">
+            <div class="wc-round-champ-crown">👑</div>
+            <div class="wc-round-champ-title">
+                Chúc mừng vô địch {html.escape(round_name)}!
+            </div>
+            <div class="wc-round-champ-subtitle">
+                Bạn đã dẫn đầu bảng điểm vòng này.
+                Điểm thưởng đã được cộng vào tổng điểm của bạn.
+            </div>
+            <div class="wc-round-champ-stats">
+                <div class="wc-round-champ-stat">
+                    <strong>{int(round_points)}</strong>
+                    <span>Điểm vòng</span>
+                </div>
+                <div class="wc-round-champ-stat">
+                    <strong>+{ROUND_CHAMPION_BONUS_POINTS}</strong>
+                    <span>Thưởng VĐ</span>
+                </div>
+            </div>
+            {co_champion_html}
+        </div>
+        """
+
+        button_label = "Tuyệt vời!"
+        popup_height = 480
+    else:
+        plural_note = (
+            "đồng vô địch"
+            if len(champion_names) > 1
+            else "nhà vô địch"
+        )
+
+        popup_html = f"""
+        <style>
+        div[role="dialog"]:has(.wc-round-notice-shell) {{
+            width: min(400px, calc(100vw - 28px)) !important;
+            max-width: min(400px, calc(100vw - 28px)) !important;
+            border-radius: 20px !important;
+        }}
+
+        div[role="dialog"]:has(.wc-round-notice-shell) h2,
+        div[role="dialog"]:has(.wc-round-notice-shell) [data-testid="stDialogHeader"] {{
+            display: none !important;
+        }}
+
+        .wc-round-notice-shell {{
+            padding: 24px 18px 6px 18px;
+            text-align: center;
+        }}
+
+        .wc-round-notice-icon {{
+            font-size: 38px;
+            line-height: 1;
+        }}
+
+        .wc-round-notice-text {{
+            margin-top: 12px;
+            color: #152638;
+            font-size: 15px;
+            font-weight: 750;
+            line-height: 1.55;
+        }}
+
+        .wc-round-notice-text b {{
+            color: #B8860B;
+        }}
+
+        div[class*="st-key-round_notice_close_"] button {{
+            width: 100% !important;
+            min-height: 46px !important;
+            border-radius: 999px !important;
+            border: 1px solid rgba(14,116,144,0.3) !important;
+            background: rgba(14,116,144,0.08) !important;
+            color: #0A5274 !important;
+            font-weight: 900 !important;
+            margin-top: 20px !important;
+        }}
+        </style>
+
+        <div class="wc-round-notice-shell">
+            <div class="wc-round-notice-icon">🏆</div>
+            <div class="wc-round-notice-text">
+                <b>{html.escape(", ".join(champion_names))}</b>
+                đã trở thành {plural_note} {html.escape(round_name)}!
+            </div>
+        </div>
+        """
+
+        button_label = "Đã hiểu"
+        popup_height = 320
+
+    if hasattr(st, "html"):
+        st.html(popup_html)
+    else:
+        components.html(popup_html, height=popup_height, scrolling=False)
+
+    button_key = (
+        f"round_champ_close_{user_id}_{round_name}"
+        if is_me
+        else f"round_notice_close_{user_id}_{round_name}"
+    )
+
+    if st.button(
+        button_label,
+        key=button_key,
+        use_container_width=True
+    ):
+        mark_round_champion_popup_seen(
+            user_id,
+            season_slug,
+            round_name
+        )
+        st.session_state.pop(
+            f"round_champion_pending_notice_{user_id}",
+            None
+        )
+        rerun_full_app()
+
+
+def maybe_render_round_champion_popup(user_id: int) -> bool:
+    user_id = int(user_id)
+    season_slug = get_selected_season_slug()
+    session_key = f"round_champion_pending_notice_{user_id}"
+
+    notice = st.session_state.get(session_key)
+
+    if notice is None:
+        notice = get_pending_round_champion_notice(
+            user_id,
+            season_slug
+        )
+
+        if notice is None:
+            return False
+
+        st.session_state[session_key] = notice
+
+    render_round_champion_popup(user_id, notice)
+    return True
+
+
+@st.dialog(" ")
+def render_season_champion_popup(user_id: int, notice: dict):
+    user_id = int(user_id)
+    season_slug = notice["season_slug"]
+    season_label = SEASON_LABEL_BY_SLUG.get(season_slug, season_slug)
+    total_points = notice["total_points"]
+    round_champion_count = notice["round_champion_count"]
+    is_me = notice["is_current_user_champion"]
+
+    champion_names = _get_display_names_for_user_ids(
+        notice["champion_user_ids"]
+    )
+
+    if is_me:
+        others = [
+            name
+            for uid, name in zip(
+                notice["champion_user_ids"],
+                champion_names
+            )
+            if int(uid) != user_id
+        ]
+
+        co_champion_html = (
+            (
+                '<div class="wc-season-champ-co">'
+                'Đồng vô địch mùa giải cùng: '
+                f'{html.escape(", ".join(others))}'
+                '</div>'
+            )
+            if others
+            else ""
+        )
+
+        popup_html = f"""
+        <style>
+        div[role="dialog"]:has(.wc-season-champ-shell) {{
+            width: min(480px, calc(100vw - 28px)) !important;
+            max-width: min(480px, calc(100vw - 28px)) !important;
+            background:
+                radial-gradient(
+                    circle at 50% 0%,
+                    rgba(245,197,66,0.22),
+                    transparent 60%
+                ),
+                linear-gradient(165deg, #0B2540, #071627) !important;
+            border: 1px solid rgba(245,197,66,0.55) !important;
+            border-radius: 24px !important;
+            box-shadow: 0 30px 80px rgba(0,0,0,0.55) !important;
+        }}
+
+        div[role="dialog"]:has(.wc-season-champ-shell) h2,
+        div[role="dialog"]:has(.wc-season-champ-shell) [data-testid="stDialogHeader"] {{
+            display: none !important;
+        }}
+
+        div[role="dialog"]:has(.wc-season-champ-shell) button[aria-label="Close"] {{
+            color: #FFFFFF !important;
+            background: rgba(7, 17, 31, 0.55) !important;
+            border-radius: 999px !important;
+            top: 14px !important;
+            right: 14px !important;
+        }}
+
+        .wc-season-champ-shell {{
+            padding: 34px 24px 8px 24px;
+            text-align: center;
+        }}
+
+        .wc-season-champ-badge {{
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(245,197,66,0.45);
+            background: rgba(245,197,66,0.12);
+            color: #FFD761;
+            font-size: 11px;
+            font-weight: 900;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }}
+
+        .wc-season-champ-trophy {{
+            margin-top: 14px;
+            font-size: 68px;
+            line-height: 1;
+            filter: drop-shadow(0 6px 16px rgba(245,197,66,0.55));
+            animation: wcSeasonChampSpin 2.6s ease-in-out infinite;
+        }}
+
+        @keyframes wcSeasonChampSpin {{
+            0%, 100% {{ transform: scale(1) rotate(0deg); }}
+            50% {{ transform: scale(1.1) rotate(-4deg); }}
+        }}
+
+        .wc-season-champ-title {{
+            margin-top: 12px;
+            color: #F5C542;
+            font-size: 25px;
+            font-weight: 950;
+            letter-spacing: -0.01em;
+            line-height: 1.3;
+        }}
+
+        .wc-season-champ-subtitle {{
+            margin-top: 8px;
+            color: #E2E8F0;
+            font-size: 14.5px;
+            line-height: 1.55;
+        }}
+
+        .wc-season-champ-stats {{
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 22px;
+        }}
+
+        .wc-season-champ-stat {{
+            flex: 1;
+            max-width: 150px;
+            padding: 14px 8px;
+            border-radius: 16px;
+            background: rgba(255,255,255,0.07);
+            border: 1px solid rgba(255,255,255,0.12);
+        }}
+
+        .wc-season-champ-stat strong {{
+            display: block;
+            color: #FFD761;
+            font-size: 23px;
+            font-weight: 950;
+            line-height: 1.1;
+        }}
+
+        .wc-season-champ-stat span {{
+            display: block;
+            margin-top: 4px;
+            color: #94A3B8;
+            font-size: 10.5px;
+            font-weight: 750;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+        }}
+
+        .wc-season-champ-co {{
+            margin-top: 18px;
+            color: #94A3B8;
+            font-size: 12.5px;
+            line-height: 1.5;
+        }}
+
+        div[class*="st-key-season_champ_close_"] button {{
+            width: 100% !important;
+            min-height: 52px !important;
+            border-radius: 999px !important;
+            border: none !important;
+            background: linear-gradient(135deg, #F5C542, #FFD761) !important;
+            color: #07111F !important;
+            font-size: 16.5px !important;
+            font-weight: 950 !important;
+            box-shadow: 0 16px 40px rgba(245, 197, 66, 0.3) !important;
+            margin-top: 22px !important;
+        }}
+        </style>
+
+        <div class="wc-season-champ-shell">
+            <span class="wc-season-champ-badge">Mùa giải {html.escape(season_label)}</span>
+            <div class="wc-season-champ-trophy">🏆</div>
+            <div class="wc-season-champ-title">
+                Bạn là Nhà Vô Địch Mùa Giải!
+            </div>
+            <div class="wc-season-champ-subtitle">
+                Chúc mừng bạn đã dẫn đầu toàn bộ mùa giải
+                {html.escape(season_label)}. Một mùa giải xuất sắc!
+            </div>
+            <div class="wc-season-champ-stats">
+                <div class="wc-season-champ-stat">
+                    <strong>{int(total_points)}</strong>
+                    <span>Tổng điểm</span>
+                </div>
+                <div class="wc-season-champ-stat">
+                    <strong>{int(round_champion_count)}</strong>
+                    <span>Vòng vô địch</span>
+                </div>
+            </div>
+            {co_champion_html}
+        </div>
+        """
+
+        button_label = "Nhận vinh quang!"
+        popup_height = 560
+    else:
+        plural_note = (
+            "đồng vô địch"
+            if len(champion_names) > 1
+            else "nhà vô địch"
+        )
+
+        popup_html = f"""
+        <style>
+        div[role="dialog"]:has(.wc-season-notice-shell) {{
+            width: min(420px, calc(100vw - 28px)) !important;
+            max-width: min(420px, calc(100vw - 28px)) !important;
+            border-radius: 20px !important;
+        }}
+
+        div[role="dialog"]:has(.wc-season-notice-shell) h2,
+        div[role="dialog"]:has(.wc-season-notice-shell) [data-testid="stDialogHeader"] {{
+            display: none !important;
+        }}
+
+        .wc-season-notice-shell {{
+            padding: 26px 20px 6px 20px;
+            text-align: center;
+        }}
+
+        .wc-season-notice-icon {{
+            font-size: 44px;
+            line-height: 1;
+        }}
+
+        .wc-season-notice-text {{
+            margin-top: 12px;
+            color: #152638;
+            font-size: 15.5px;
+            font-weight: 750;
+            line-height: 1.55;
+        }}
+
+        .wc-season-notice-text b {{
+            color: #B8860B;
+        }}
+
+        .wc-season-notice-season {{
+            margin-top: 4px;
+            color: #64748B;
+            font-size: 12.5px;
+            font-weight: 650;
+        }}
+
+        div[class*="st-key-season_notice_close_"] button {{
+            width: 100% !important;
+            min-height: 46px !important;
+            border-radius: 999px !important;
+            border: 1px solid rgba(14,116,144,0.3) !important;
+            background: rgba(14,116,144,0.08) !important;
+            color: #0A5274 !important;
+            font-weight: 900 !important;
+            margin-top: 20px !important;
+        }}
+        </style>
+
+        <div class="wc-season-notice-shell">
+            <div class="wc-season-notice-icon">🏆</div>
+            <div class="wc-season-notice-text">
+                <b>{html.escape(", ".join(champion_names))}</b>
+                đã vô địch mùa giải {html.escape(season_label)}!
+            </div>
+            <div class="wc-season-notice-season">
+                Xem Bảng xếp hạng để biết thêm chi tiết.
+            </div>
+        </div>
+        """
+
+        button_label = "Đã hiểu"
+        popup_height = 360
+
+    if hasattr(st, "html"):
+        st.html(popup_html)
+    else:
+        components.html(popup_html, height=popup_height, scrolling=False)
+
+    button_key = (
+        f"season_champ_close_{user_id}_{season_slug}"
+        if is_me
+        else f"season_notice_close_{user_id}_{season_slug}"
+    )
+
+    if st.button(
+        button_label,
+        key=button_key,
+        use_container_width=True
+    ):
+        mark_season_champion_popup_seen(user_id, season_slug)
+        st.session_state.pop(
+            f"season_champion_pending_notice_{user_id}",
+            None
+        )
+        rerun_full_app()
+
+
+def maybe_render_season_champion_popup(user_id: int) -> bool:
+    user_id = int(user_id)
+    season_slug = get_selected_season_slug()
+    session_key = f"season_champion_pending_notice_{user_id}"
+
+    notice = st.session_state.get(session_key)
+
+    if notice is None:
+        notice = get_pending_season_champion_notice(
+            user_id,
+            season_slug
+        )
+
+        if notice is None:
+            return False
+
+        st.session_state[session_key] = notice
+
+    render_season_champion_popup(user_id, notice)
+    return True
+
+
 def render_daily_checkin_shortcut_button(user_id: int):
     """
     Hiển thị nút mở popup điểm danh.
@@ -17140,6 +18238,35 @@ def init_app_tables():
         """
     )
 
+    # Bảng theo dõi popup "chúc mừng vô địch vòng đấu" đã hiển thị cho user nào,
+    # ở vòng nào, mùa nào — để mỗi user chỉ thấy đúng 1 lần cho mỗi vòng đã chốt.
+    execute_sql(
+        """
+        CREATE TABLE IF NOT EXISTS round_champion_popup_views (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+            season_slug TEXT NOT NULL,
+            round_name TEXT NOT NULL,
+            viewed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE (user_id, season_slug, round_name)
+        )
+        """
+    )
+
+    # Bảng theo dõi popup "chúc mừng vô địch mùa giải" đã hiển thị cho user nào,
+    # ở mùa nào — để mỗi user chỉ thấy đúng 1 lần cho mỗi mùa đã kết thúc.
+    execute_sql(
+        """
+        CREATE TABLE IF NOT EXISTS season_champion_popup_views (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+            season_slug TEXT NOT NULL,
+            viewed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE (user_id, season_slug)
+        )
+        """
+    )
+
     # Các index phục vụ trực tiếp những truy vấn đọc thường xuyên nhất.
     # Chỉ chạy trong chế độ migration, không phát sinh DDL ở mỗi app rerun.
     execute_sql(
@@ -17190,6 +18317,16 @@ def init_app_tables():
             IF to_regclass('public.final_poster_popup_views') IS NOT NULL THEN
                 CREATE INDEX IF NOT EXISTS idx_final_poster_views_user_date
                 ON final_poster_popup_views (user_id, popup_date);
+            END IF;
+
+            IF to_regclass('public.round_champion_popup_views') IS NOT NULL THEN
+                CREATE INDEX IF NOT EXISTS idx_round_champion_views_user_season
+                ON round_champion_popup_views (user_id, season_slug);
+            END IF;
+
+            IF to_regclass('public.season_champion_popup_views') IS NOT NULL THEN
+                CREATE INDEX IF NOT EXISTS idx_season_champion_views_user_season
+                ON season_champion_popup_views (user_id, season_slug);
             END IF;
         END $$;
         """
@@ -32649,6 +33786,11 @@ def page_leaderboard():
     if "avatar_key" not in leaderboard.columns:
         leaderboard["avatar_key"] = DEFAULT_AVATAR_KEY
 
+    # Cúp vô địch mùa giải: chỉ có giá trị khi mùa đã kết thúc (đủ 380 trận).
+    season_champion_user_ids = set(
+        get_season_champion_user_ids(season_slug)
+    )
+
     bonus_by_user = get_all_daily_checkin_bonus_counts_cached()
     user_ids = leaderboard["user_id"].astype(int)
 
@@ -32893,6 +34035,33 @@ def page_leaderboard():
             row,
             "round_champion_count"
         )
+
+        is_season_champion_row = (
+            row_user_id is not None
+            and row_user_id in season_champion_user_ids
+        )
+
+        season_trophy_html = (
+            '<span class="season-trophy-badge" '
+            'title="Vô địch mùa giải" '
+            'aria-label="Vô địch mùa giải">🏆</span>'
+            if is_season_champion_row
+            else ""
+        )
+
+        season_crown_html = (
+            (
+                '<span class="season-crown-badge" '
+                f'title="Vô địch {round_champion_count} vòng trong mùa" '
+                f'aria-label="Vô địch {round_champion_count} vòng trong mùa">'
+                '👑'
+                f'<span class="crown-count">{round_champion_count}</span>'
+                '</span>'
+            )
+            if round_champion_count > 0
+            else ""
+        )
+
         num_scored = safe_int(
             row,
             "num_scored"
@@ -32958,6 +34127,8 @@ def page_leaderboard():
                             aria-hidden="true"
                         ></span>
                         <span class="player-name">{escaped_name}</span>
+                        {season_trophy_html}
+                        {season_crown_html}
                         {player_badge}
                     </div>
                 </td>
@@ -33051,6 +34222,8 @@ def page_leaderboard():
                             <span class="epl-mobile-name">
                                 {escaped_name}
                             </span>
+                            {season_trophy_html}
+                            {season_crown_html}
                             {player_badge}
                         </div>
 
@@ -33428,6 +34601,54 @@ def page_leaderboard():
         text-transform: uppercase;
     }}
 
+    .season-crown-badge {{
+        position: relative;
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: 6px;
+        font-size: 17px;
+        line-height: 1;
+        filter: drop-shadow(0 1px 2px rgba(142,94,0,0.22));
+    }}
+
+    .season-crown-badge .crown-count {{
+        position: absolute;
+        bottom: -4px;
+        right: -7px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 14px;
+        height: 14px;
+        padding: 0 3px;
+        border: 1.5px solid #FFFFFF;
+        border-radius: 999px;
+        background: #D64545;
+        color: #FFFFFF;
+        font-size: 8.5px;
+        font-weight: 950;
+        line-height: 1;
+    }}
+
+    .season-trophy-badge {{
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: 6px;
+        font-size: 20px;
+        line-height: 1;
+        filter: drop-shadow(0 2px 5px rgba(184,134,11,0.5));
+        animation: seasonTrophyBadgePulse 2.2s ease-in-out infinite;
+    }}
+
+    @keyframes seasonTrophyBadgePulse {{
+        0%, 100% {{ transform: scale(1); }}
+        50% {{ transform: scale(1.14); }}
+    }}
+
     .total-score-badge {{
         display: inline-flex;
         align-items: center;
@@ -33690,6 +34911,24 @@ def page_leaderboard():
             margin-left: 5px;
             padding: 1px 5px;
             font-size: 7px;
+        }}
+
+        .epl-mobile-name-line .season-crown-badge {{
+            margin-left: 4px;
+            font-size: 15px;
+        }}
+
+        .epl-mobile-name-line .season-crown-badge .crown-count {{
+            min-width: 11px;
+            height: 11px;
+            font-size: 7px;
+            bottom: -3px;
+            right: -5px;
+        }}
+
+        .epl-mobile-name-line .season-trophy-badge {{
+            margin-left: 4px;
+            font-size: 17px;
         }}
 
         .epl-mobile-meta {{
@@ -35981,9 +37220,24 @@ def main():
     render_avatar_popover(user)
     
     daily_checkin_popup_opened = maybe_render_daily_checkin_popup(user["user_id"])
-    
+
+    final_poster_popup_opened = False
     if not daily_checkin_popup_opened:
-        maybe_render_final_poster_popup(user["user_id"])
+        final_poster_popup_opened = maybe_render_final_poster_popup(user["user_id"])
+
+    # Vô địch mùa giải quan trọng/hiếm hơn vô địch vòng nên được ưu tiên trước.
+    season_champion_popup_opened = False
+    if not daily_checkin_popup_opened and not final_poster_popup_opened:
+        season_champion_popup_opened = maybe_render_season_champion_popup(
+            user["user_id"]
+        )
+
+    if (
+        not daily_checkin_popup_opened
+        and not final_poster_popup_opened
+        and not season_champion_popup_opened
+    ):
+        maybe_render_round_champion_popup(user["user_id"])
 
     display_name_edit_clicked = False
 
