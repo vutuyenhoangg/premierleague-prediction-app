@@ -36,8 +36,8 @@ jobs:
       # Có thể tạo Repository Variable tên GEMINI_NEWS_MODEL
       # để thay model mà không cần sửa workflow.
       #
-      # Nếu chưa tạo variable, workflow dùng gemini-3.6-flash.
-      GEMINI_NEWS_MODEL: ${{ vars.GEMINI_NEWS_MODEL || 'gemini-3.6-flash' }}
+      # Nếu chưa tạo variable, workflow dùng gemini-3.8-flash.
+      GEMINI_NEWS_MODEL: ${{ vars.GEMINI_NEWS_MODEL || 'gemini-3.8-flash' }}
 
       # Hiển thị log Python ngay lập tức.
       PYTHONUNBUFFERED: "1"
