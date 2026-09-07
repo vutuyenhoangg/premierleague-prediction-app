@@ -27,7 +27,7 @@ VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
 # Cố định đúng model theo yêu cầu.
 # Script không đọc GEMINI_NEWS_MODEL để tránh workflow cũ ghi đè.
-MODEL_NAME = "gemini-2.5-flash"
+MODEL_NAME = "gemini-3.8-flash"
 
 MIN_ITEMS = 12
 MAX_ITEMS = 15
