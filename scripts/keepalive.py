@@ -27,13 +27,34 @@ from playwright.sync_api import sync_playwright
 WAKE_BUTTON_PATTERN = "get this app back up"
 
 # Container chính của app, chỉ xuất hiện khi tiến trình Python đã chạy.
-APP_READY_SELECTOR = '[data-testid="stAppViewContainer"]'
+# Streamlit đổi data-testid qua các phiên bản nên chấp nhận nhiều biến thể.
+APP_READY_SELECTOR = ", ".join(
+    [
+        '[data-testid="stAppViewContainer"]',
+        '[data-testid="stApp"]',
+        '[data-testid="stMain"]',
+        "section.main"
+    ]
+)
+
+# Dấu hiệu app bị đặt ở chế độ riêng tư và đang đòi đăng nhập.
+PRIVATE_APP_MARKERS = (
+    "sign in to streamlit",
+    "continue with google",
+    "this app is private",
+    "you do not have access",
+    "request access"
+)
 
 # Cold start của Streamlit Cloud có thể mất vài phút vì phải pip install lại.
 APP_READY_TIMEOUT_MS = 240_000
 
 WAKE_BUTTON_TIMEOUT_MS = 10_000
-NAVIGATION_TIMEOUT_MS = 90_000
+
+# Khi app đang ngủ, Streamlit Cloud giữ kết nối trong lúc dựng lại container
+# nên request đầu tiên có thể rất lâu. Timeout ở đây không còn là lỗi chí mạng:
+# trang vẫn tiếp tục tải ngầm và được kiểm tra lại ở bước sau.
+NAVIGATION_TIMEOUT_MS = 180_000
 
 
 def read_app_urls() -> list[str]:
@@ -67,6 +88,113 @@ def build_visit_url(app_url: str) -> str:
     separator = "&" if "?" in app_url else "?"
 
     return f"{app_url}{separator}embed=true"
+
+
+def page_has_real_content(page) -> bool:
+    """
+    Kiểm tra mềm khi selector chính không khớp trong thời gian cho phép.
+
+    Streamlit đổi data-testid giữa các phiên bản, và trang có thể render xong
+    ngay sau khi timeout hết hạn. Nếu body đã có nội dung thật và không phải
+    trang ngủ hay trang đăng nhập của Streamlit Cloud thì coi như app đã thức.
+    """
+    try:
+        body_text = page.inner_text("body", timeout=10_000)
+    except Exception:
+        return False
+
+    normalized_text = " ".join(body_text.split())
+
+    if len(normalized_text) < 60:
+        return False
+
+    lowered_text = normalized_text.casefold()
+
+    if WAKE_BUTTON_PATTERN in lowered_text:
+        return False
+
+    if any(
+        marker in lowered_text
+        for marker in PRIVATE_APP_MARKERS
+    ):
+        return False
+
+    return True
+
+
+def wait_until_app_rendered(page, timeout_ms: int) -> str:
+    """
+    Trả về nhãn trạng thái, hoặc ném lỗi nếu app thật sự chưa render.
+    """
+    try:
+        page.wait_for_selector(
+            APP_READY_SELECTOR,
+            timeout=timeout_ms
+        )
+        return "ready"
+
+    except PlaywrightTimeoutError:
+        # Cho trang thêm một nhịp rồi kiểm tra bằng nội dung thực tế.
+        page.wait_for_timeout(10_000)
+
+        if page_has_real_content(page):
+            return "ready_by_content"
+
+        raise
+
+
+def describe_page(page) -> str:
+    """
+    In ra đủ thông tin để biết trình duyệt đang đứng ở đâu khi lỗi.
+
+    Nhờ vậy log của GitHub Actions tự nói lên nguyên nhân, không cần
+    tải artifact ảnh chụp về xem thủ công.
+    """
+    lines: list[str] = []
+
+    try:
+        lines.append(f"  url   : {page.url}")
+    except Exception:
+        lines.append("  url   : <không đọc được>")
+
+    try:
+        lines.append(f"  title : {page.title()}")
+    except Exception:
+        lines.append("  title : <không đọc được>")
+
+    body_text = ""
+
+    try:
+        body_text = page.inner_text("body", timeout=5_000)
+    except Exception:
+        try:
+            body_text = page.content()[:1_000]
+        except Exception:
+            body_text = ""
+
+    normalized_text = " ".join(body_text.split())
+
+    if normalized_text:
+        lines.append(f"  text  : {normalized_text[:400]}")
+    else:
+        lines.append("  text  : <trang trống hoặc chưa render>")
+
+    lowered_text = normalized_text.casefold()
+
+    matched_markers = [
+        marker
+        for marker in PRIVATE_APP_MARKERS
+        if marker in lowered_text
+    ]
+
+    if matched_markers:
+        lines.append(
+            "  chẩn đoán: app đang ở chế độ riêng tư và yêu cầu đăng nhập. "
+            "Vào share.streamlit.io, mở Settings > Sharing của app "
+            'và đặt thành "Public".'
+        )
+
+    return "\n".join(lines)
 
 
 def save_failure_screenshot(page, app_url: str) -> None:
@@ -114,11 +242,20 @@ def wake_single_app(browser, app_url: str, hold_seconds: int) -> str:
     page.set_default_timeout(NAVIGATION_TIMEOUT_MS)
 
     try:
-        page.goto(
-            build_visit_url(app_url),
-            wait_until="domcontentloaded",
-            timeout=NAVIGATION_TIMEOUT_MS
-        )
+        try:
+            page.goto(
+                build_visit_url(app_url),
+                wait_until="domcontentloaded",
+                timeout=NAVIGATION_TIMEOUT_MS
+            )
+
+        except PlaywrightTimeoutError:
+            # App đang cold start. Trang vẫn tải tiếp ở nền nên đi tiếp
+            # thay vì bỏ cuộc ở đây.
+            print(
+                "  (điều hướng chậm, có thể app đang khởi động lại)",
+                flush=True
+            )
 
         status = "already_awake"
 
@@ -137,15 +274,21 @@ def wake_single_app(browser, app_url: str, hold_seconds: int) -> str:
 
             status = "was_sleeping"
 
+            # Trang hibernate sẽ tự tải lại sau khi bấm.
+            page.wait_for_timeout(5_000)
+
         except PlaywrightTimeoutError:
             # Không có nút nghĩa là app vẫn đang chạy. Đây là trường hợp mong muốn.
             pass
 
         # Chờ tiến trình Python thật sự render ra giao diện.
-        page.wait_for_selector(
-            APP_READY_SELECTOR,
-            timeout=APP_READY_TIMEOUT_MS
+        render_status = wait_until_app_rendered(
+            page,
+            APP_READY_TIMEOUT_MS
         )
+
+        if render_status == "ready_by_content":
+            status = f"{status}+soft_check"
 
         # Giữ WebSocket mở thêm một lúc để Streamlit Cloud ghi nhận traffic.
         page.wait_for_timeout(hold_seconds * 1_000)
@@ -153,6 +296,12 @@ def wake_single_app(browser, app_url: str, hold_seconds: int) -> str:
         return status
 
     except (PlaywrightTimeoutError, PlaywrightError) as error:
+        print(
+            f"\nLỗi khi xử lý {app_url}: {type(error).__name__}",
+            flush=True
+        )
+        print(describe_page(page), flush=True)
+
         save_failure_screenshot(page, app_url)
 
         return f"failed: {type(error).__name__}"
