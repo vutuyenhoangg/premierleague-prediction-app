@@ -1,0 +1,56 @@
+name: Keep Streamlit app awake
+
+on:
+  schedule:
+    # Mỗi 5 giờ. Ngưỡng ngủ của Streamlit Cloud là 12 giờ không có traffic,
+    # nên khoảng cách này vẫn an toàn kể cả khi GitHub trễ lịch 20-30 phút.
+    - cron: "10 */5 * * *"
+
+  # Cho phép bấm chạy thủ công từ tab Actions để kiểm tra.
+  workflow_dispatch:
+
+# Nếu một lần chạy đang treo, lần mới sẽ thay thế thay vì xếp hàng.
+concurrency:
+  group: streamlit-keepalive
+  cancel-in-progress: true
+
+jobs:
+  wake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}
+
+      - name: Install Playwright
+        run: |
+          pip install --no-cache-dir playwright
+          playwright install --with-deps chromium
+
+      - name: Wake app
+        env:
+          APP_URL: ${{ secrets.STREAMLIT_APP_URL }}
+          HOLD_SECONDS: "20"
+          SHOT_DIR: ${{ runner.temp }}/screenshots
+        run: python scripts/keepalive.py
+
+      - name: Upload screenshot on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: keepalive-screenshots
+          path: ${{ runner.temp }}/screenshots
+          if-no-files-found: ignore
+          retention-days: 7
